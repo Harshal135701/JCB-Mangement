@@ -1,5 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
 import { query } from '../../config/db';
+import {
+  reservePartForWorkOrderService,
+  InventoryError,
+} from './inventory.service';
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const SEEDED_PARTS = [
   {
@@ -147,46 +153,109 @@ export const searchParts = async (req: Request, res: Response, next: NextFunctio
 
 export const reservePartForWorkOrder = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    const { work_order_id, part_id, quantity = 1 } = req.body;
+    const user = req.user;
+    if (!user || !user.id) {
+      res.status(401).json({
+        success: false,
+        message: 'Unauthorized: Authentication required.',
+      });
+      return;
+    }
 
-    try {
-      const partRes = await query(`SELECT id, part_number, name, available_stock FROM spare_parts WHERE id = $1 FOR UPDATE`, [part_id]);
-      if (partRes.rows.length === 0) {
-        res.status(404).json({ success: false, message: 'Spare part not found.' });
-        return;
-      }
+    if (!['admin', 'manager', 'technician'].includes(user.role)) {
+      res.status(403).json({
+        success: false,
+        message: `Forbidden: Role '${user.role}' is not authorized to reserve inventory.`,
+      });
+      return;
+    }
 
-      const part = partRes.rows[0];
-      if (part.available_stock < quantity) {
+    const { work_order_id, part_id, quantity } = req.body || {};
+
+    // Input Validation: Require valid work_order_id (UUID)
+    if (!work_order_id || typeof work_order_id !== 'string' || !UUID_REGEX.test(work_order_id.trim())) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid or missing work_order_id. A valid UUID is required.',
+      });
+      return;
+    }
+
+    // Input Validation: Require valid part_id (UUID)
+    if (!part_id || typeof part_id !== 'string' || !UUID_REGEX.test(part_id.trim())) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid or missing part_id. A valid UUID is required.',
+      });
+      return;
+    }
+
+    // Input Validation: Quantity must be a strictly positive integer
+    let parsedQuantity: number;
+    if (typeof quantity === 'number') {
+      if (!Number.isInteger(quantity) || quantity <= 0 || !Number.isFinite(quantity)) {
         res.status(400).json({
           success: false,
-          message: `Stock Out: Only ${part.available_stock} units available in stock. Requested: ${quantity}. Please initiate PR.`,
-          availableStock: part.available_stock,
+          message: 'Invalid quantity. Quantity must be a positive integer.',
         });
         return;
       }
-
-      await query(`UPDATE spare_parts SET reserved_stock = reserved_stock + $1 WHERE id = $2`, [quantity, part_id]);
-
-      const recordRes = await query(
-        `INSERT INTO wo_parts_consumed (work_order_id, part_id, quantity_requested, is_installed)
-         VALUES ($1, $2, $3, false)
-         RETURNING *`,
-        [work_order_id, part_id, quantity]
-      );
-
-      res.json({
-        success: true,
-        message: `Part ${part.part_number} reserved successfully for Work Order.`,
-        data: recordRes.rows[0],
+      parsedQuantity = quantity;
+    } else if (typeof quantity === 'string' && /^\d+$/.test(quantity.trim())) {
+      parsedQuantity = parseInt(quantity.trim(), 10);
+      if (parsedQuantity <= 0) {
+        res.status(400).json({
+          success: false,
+          message: 'Invalid quantity. Quantity must be a positive integer.',
+        });
+        return;
+      }
+    } else {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid quantity. Quantity must be a positive integer.',
       });
       return;
-    } catch (dbErr) {
-      res.json({
+    }
+
+    // Execute reservation workflow inside single database transaction
+    try {
+      const result = await reservePartForWorkOrderService(
+        {
+          work_order_id: work_order_id.trim(),
+          part_id: part_id.trim(),
+          quantity: parsedQuantity,
+        },
+        user
+      );
+
+      res.status(200).json({
         success: true,
-        message: `Part reserved successfully (Demo Mode).`,
-        data: { work_order_id, part_id, quantity_requested: quantity },
+        message: `Part ${result.spare_part.part_number} reserved successfully for Work Order.`,
+        data: {
+          ...result.consumption,
+          part_number: result.spare_part.part_number,
+          reserved_stock: result.spare_part.reserved_stock,
+          available_stock: result.spare_part.available_stock,
+        },
+      });
+    } catch (serviceErr: any) {
+      if (serviceErr instanceof InventoryError) {
+        const errorResponse: { success: boolean; message: string; availableStock?: number } = {
+          success: false,
+          message: serviceErr.message,
+        };
+        if (serviceErr.availableStock !== undefined) {
+          errorResponse.availableStock = serviceErr.availableStock;
+        }
+        res.status(serviceErr.statusCode).json(errorResponse);
+        return;
+      }
+
+      console.error('[Inventory Reservation Error]:', serviceErr?.message || serviceErr);
+      res.status(500).json({
+        success: false,
+        message: 'Internal Enterprise Server Error',
       });
     }
   } catch (err) {

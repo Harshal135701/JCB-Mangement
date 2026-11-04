@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "test": "node --test dist/modules/inventory/inventory.test.js dist/modules/auth/auth.test.js",
+    "test:auth": "node --test dist/modules/auth/auth.test.js",
+    "test:inventory": "node --test dist/modules/inventory/inventory.test.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",
@@ -30,4 +33,3 @@
     "typescript": "^5.7.3"
   }
 }
-
