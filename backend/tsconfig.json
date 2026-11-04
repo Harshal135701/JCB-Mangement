@@ -1,8 +1,10 @@
+
 {
   "compilerOptions": {
     "target": "ES2022",
     "module": "commonjs",
-    "moduleResolution": "node",
+    "moduleResolution": "node10",
+    "ignoreDeprecations": "6.0",
     "rootDir": "./src",
     "outDir": "./dist",
     "esModuleInterop": true,
@@ -12,4 +14,3 @@
   },
   "include": ["src/**/*"]
 }
-
