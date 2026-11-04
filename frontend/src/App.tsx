@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Layout } from './layouts/Layout';
+import { WelcomePage } from './modules/welcome/WelcomePage';
 import { LoginPage } from './modules/auth/LoginPage';
 import { LiveShopFloorDashboard } from './modules/manager/LiveShopFloorDashboard';
 import { TriageQueuePage } from './modules/breakdowns/TriageQueuePage';
@@ -19,7 +20,12 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-zinc-950 text-white text-xs font-bold tracking-widest uppercase">
-        Loading JCB CMMS Platform...
+        <div className="flex flex-col items-center gap-3">
+          <div className="bg-jcb-yellow text-black font-black text-2xl px-3 py-1 rounded shadow-lg tracking-widest">
+            JCB
+          </div>
+          <span className="text-zinc-400">Loading JCB CMMS Platform...</span>
+        </div>
       </div>
     );
   }
@@ -36,27 +42,32 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
+          {/* Public Welcome Page */}
+          <Route path="/" element={<WelcomePage />} />
+
+          {/* Public Login Page */}
           <Route path="/login" element={<LoginPage />} />
 
+          {/* Protected Enterprise CMMS Portal */}
           <Route
-            path="/"
             element={
               <ProtectedRoute>
                 <Layout />
               </ProtectedRoute>
             }
           >
-            <Route index element={<LiveShopFloorDashboard />} />
-            <Route path="triage" element={<TriageQueuePage />} />
-            <Route path="machines" element={<MachineMasterPage />} />
-            <Route path="inventory" element={<InventoryCatalogPage />} />
-            <Route path="procurement" element={<ProcurementPage />} />
-            <Route path="rdc" element={<RDCPage />} />
-            <Route path="pm" element={<PMCalendarPage />} />
-            <Route path="downtime" element={<DowntimeAnalyticsPage />} />
-            <Route path="audit" element={<AuditLogsPage />} />
+            <Route path="/dashboard" element={<LiveShopFloorDashboard />} />
+            <Route path="/triage" element={<TriageQueuePage />} />
+            <Route path="/machines" element={<MachineMasterPage />} />
+            <Route path="/inventory" element={<InventoryCatalogPage />} />
+            <Route path="/procurement" element={<ProcurementPage />} />
+            <Route path="/rdc" element={<RDCPage />} />
+            <Route path="/pm" element={<PMCalendarPage />} />
+            <Route path="/downtime" element={<DowntimeAnalyticsPage />} />
+            <Route path="/audit" element={<AuditLogsPage />} />
           </Route>
 
+          {/* Fallback to Welcome */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

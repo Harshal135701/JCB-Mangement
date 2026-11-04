@@ -1,15 +1,24 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { ShieldCheck, Lock, Mail, AlertCircle } from 'lucide-react';
+import { ShieldCheck, Lock, Mail, AlertCircle, ArrowLeft, CheckCircle2 } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
   const [identifier, setIdentifier] = useState('manager@jcb.com');
   const [password, setPassword] = useState('password123');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const emailParam = searchParams.get('email');
+    if (emailParam) {
+      setIdentifier(emailParam);
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -17,44 +26,58 @@ export const LoginPage: React.FC = () => {
     try {
       setLoading(true);
       await login(identifier, password);
-      navigate('/');
+      navigate('/dashboard');
     } catch (err: any) {
-      setError(err.response?.data?.message || err.message || 'Login failed.');
+      setError(err.response?.data?.message || err.message || 'Login failed. Please check credentials.');
     } finally {
       setLoading(false);
     }
   };
 
-  const setDemo = (role: 'manager' | 'admin' | 'store') => {
+  const setDemo = (role: 'manager' | 'admin' | 'technician' | 'operator') => {
     if (role === 'manager') setIdentifier('manager@jcb.com');
     if (role === 'admin') setIdentifier('admin@jcb.com');
-    if (role === 'store') setIdentifier('store@jcb.com');
+    if (role === 'technician') setIdentifier('technician@jcb.com');
+    if (role === 'operator') setIdentifier('operator@jcb.com');
     setPassword('password123');
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-xl shadow-2xl overflow-hidden border border-slate-700">
-        {/* Brand Banner */}
-        <div className="bg-jcb-charcoal p-6 text-center border-b border-slate-800">
-          <div className="inline-block bg-jcb-yellow text-black font-black text-3xl px-4 py-1 rounded shadow mb-3 tracking-wider">
+    <div className="min-h-screen bg-zinc-950 flex flex-col justify-center items-center p-4 selection:bg-jcb-yellow selection:text-black">
+      {/* Back to Welcome Link */}
+      <div className="max-w-md w-full mb-4">
+        <Link 
+          to="/" 
+          className="inline-flex items-center gap-2 text-xs font-bold text-zinc-400 hover:text-jcb-yellow transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>BACK TO JCB WELCOME PAGE</span>
+        </Link>
+      </div>
+
+      <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl overflow-hidden border border-zinc-800">
+        {/* Brand Banner - Heavy JCB Black */}
+        <div className="bg-black p-6 text-center border-b border-zinc-900 relative">
+          <div className="inline-block bg-jcb-yellow text-black font-black text-3xl px-4 py-1.5 rounded-lg shadow-lg mb-3 tracking-widest border-2 border-jcb-yellowDark">
             JCB
           </div>
-          <h2 className="text-xl font-bold text-white tracking-wide">Smart Machine CMMS</h2>
-          <p className="text-xs text-slate-400 mt-1">Maintenance & Asset Performance Management</p>
+          <h2 className="text-xl font-black text-white tracking-wide">ENTERPRISE CMMS</h2>
+          <p className="text-xs text-zinc-400 mt-1 font-medium">Smart Machine Maintenance Management System</p>
         </div>
 
-        {/* Demo Persona Bar */}
-        <div className="bg-slate-50 px-6 py-3 border-b border-slate-200">
-          <p className="text-xs font-semibold text-slate-600 mb-2">Quick Demo Sign-In:</p>
-          <div className="flex gap-2">
+        {/* 4 Core Roles Quick Select Bar */}
+        <div className="bg-zinc-100 px-6 py-3 border-b border-zinc-200">
+          <p className="text-[11px] font-black text-zinc-600 mb-2 uppercase tracking-wider">
+            Quick Persona 1-Click Select:
+          </p>
+          <div className="grid grid-cols-4 gap-1.5">
             <button
               type="button"
               onClick={() => setDemo('manager')}
-              className={`flex-1 py-1 text-xs font-bold rounded border transition ${
+              className={`py-1.5 text-[11px] font-bold rounded border transition ${
                 identifier.includes('manager')
-                  ? 'bg-amber-100 text-amber-900 border-amber-300'
-                  : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                  ? 'bg-jcb-yellow text-black border-jcb-yellow font-black shadow-sm'
+                  : 'bg-white text-zinc-700 border-zinc-300 hover:bg-zinc-50'
               }`}
             >
               Manager
@@ -62,24 +85,35 @@ export const LoginPage: React.FC = () => {
             <button
               type="button"
               onClick={() => setDemo('admin')}
-              className={`flex-1 py-1 text-xs font-bold rounded border transition ${
+              className={`py-1.5 text-[11px] font-bold rounded border transition ${
                 identifier.includes('admin')
-                  ? 'bg-amber-100 text-amber-900 border-amber-300'
-                  : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                  ? 'bg-jcb-yellow text-black border-jcb-yellow font-black shadow-sm'
+                  : 'bg-white text-zinc-700 border-zinc-300 hover:bg-zinc-50'
               }`}
             >
               Admin
             </button>
             <button
               type="button"
-              onClick={() => setDemo('store')}
-              className={`flex-1 py-1 text-xs font-bold rounded border transition ${
-                identifier.includes('store')
-                  ? 'bg-amber-100 text-amber-900 border-amber-300'
-                  : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+              onClick={() => setDemo('technician')}
+              className={`py-1.5 text-[11px] font-bold rounded border transition ${
+                identifier.includes('technician')
+                  ? 'bg-jcb-yellow text-black border-jcb-yellow font-black shadow-sm'
+                  : 'bg-white text-zinc-700 border-zinc-300 hover:bg-zinc-50'
               }`}
             >
-              Store
+              Tech
+            </button>
+            <button
+              type="button"
+              onClick={() => setDemo('operator')}
+              className={`py-1.5 text-[11px] font-bold rounded border transition ${
+                identifier.includes('operator')
+                  ? 'bg-jcb-yellow text-black border-jcb-yellow font-black shadow-sm'
+                  : 'bg-white text-zinc-700 border-zinc-300 hover:bg-zinc-50'
+              }`}
+            >
+              Operator
             </button>
           </div>
         </div>
@@ -87,56 +121,67 @@ export const LoginPage: React.FC = () => {
         {/* Login Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {error && (
-            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs font-medium">
+            <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-              Employee ID or Email
+            <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1">
+              Employee Code or Email
             </label>
             <div className="relative">
-              <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+              <Mail className="w-4 h-4 text-zinc-400 absolute left-3 top-3" />
               <input
                 type="text"
                 required
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white"
                 placeholder="e.g. manager@jcb.com"
+                className="w-full pl-9 pr-3 py-2.5 bg-zinc-50 border border-zinc-300 rounded-lg text-sm text-zinc-900 focus:outline-none focus:border-jcb-yellow focus:ring-1 focus:ring-jcb-yellow font-medium"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+            <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1">
               Password
             </label>
             <div className="relative">
-              <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+              <Lock className="w-4 h-4 text-zinc-400 absolute left-3 top-3" />
               <input
                 type="password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white"
-                placeholder="Enter password"
+                placeholder="••••••••"
+                className="w-full pl-9 pr-3 py-2.5 bg-zinc-50 border border-zinc-300 rounded-lg text-sm text-zinc-900 focus:outline-none focus:border-jcb-yellow focus:ring-1 focus:ring-jcb-yellow font-medium"
               />
+            </div>
+            <div className="flex justify-between items-center mt-1">
+              <span className="text-[10px] text-zinc-500 font-medium">Default demo password: <code>password123</code></span>
             </div>
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2.5 bg-jcb-yellow hover:bg-jcb-yellowDark text-black font-extrabold rounded-lg text-sm tracking-wider uppercase transition shadow-md hover:shadow flex items-center justify-center gap-2 mt-2"
+            className="w-full bg-jcb-yellow hover:bg-jcb-yellowDark text-black font-black py-3 rounded-xl transition duration-150 uppercase tracking-wider text-sm shadow-md hover:shadow-lg disabled:opacity-50 mt-2"
           >
-            {loading ? 'Authenticating...' : 'Sign In to Management Portal'}
+            {loading ? 'Authenticating...' : 'Sign In To Portal'}
           </button>
+
+          {/* Plant Badges */}
+          <div className="pt-3 border-t border-zinc-100 flex items-center justify-center gap-3 text-[10px] text-zinc-500 font-bold uppercase tracking-wider">
+            <span>Ballabgarh</span>
+            <span>•</span>
+            <span>Pune</span>
+            <span>•</span>
+            <span>Jaipur</span>
+          </div>
         </form>
       </div>
     </div>
   );
 };
-

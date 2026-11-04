@@ -20,7 +20,7 @@ export const Layout: React.FC = () => {
   const location = useLocation();
 
   const navLinks = [
-    { name: 'Live Shopfloor', path: '/', icon: LayoutDashboard },
+    { name: 'Live Shopfloor', path: '/dashboard', icon: LayoutDashboard },
     { name: 'Breakdown Triage', path: '/triage', icon: AlertTriangle },
     { name: '1,000+ Machines', path: '/machines', icon: Cpu },
     { name: '160k Spare Parts', path: '/inventory', icon: Package },
