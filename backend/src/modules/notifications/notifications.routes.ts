@@ -10,3 +10,4 @@ router.get('/', getMyNotifications);
 router.put('/:id/read', markAsRead);
 
 export default router;
+

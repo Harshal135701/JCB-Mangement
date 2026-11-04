@@ -106,3 +106,4 @@ export const getInspectionRecords = async (req: Request, res: Response, next: Ne
     next(err);
   }
 };
+

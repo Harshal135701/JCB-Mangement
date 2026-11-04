@@ -103,3 +103,4 @@ export const DowntimeAnalyticsPage: React.FC = () => {
     </div>
   );
 };
+

@@ -9,3 +9,4 @@ router.use(authenticateJWT);
 router.get('/', getDowntimeAnalytics);
 
 export default router;
+

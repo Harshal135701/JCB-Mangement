@@ -11,3 +11,4 @@ router.use(requireRoles('admin', 'manager'));
 router.get('/', getAuditLogs);
 
 export default router;
+

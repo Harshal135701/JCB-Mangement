@@ -51,3 +51,4 @@ export const getDowntimeAnalytics = async (req: Request, res: Response, next: Ne
     next(err);
   }
 };
+

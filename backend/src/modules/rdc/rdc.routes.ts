@@ -17,3 +17,4 @@ router.put('/:id/approve', approveAndDispatchRDC);
 router.post('/:id/return', recordRDCReturn);
 
 export default router;
+

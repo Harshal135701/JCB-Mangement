@@ -11,3 +11,4 @@ router.post('/submit', submitInspection);
 router.get('/records', getInspectionRecords);
 
 export default router;
+

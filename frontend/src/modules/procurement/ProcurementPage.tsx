@@ -113,3 +113,4 @@ export const ProcurementPage: React.FC = () => {
     </div>
   );
 };
+
