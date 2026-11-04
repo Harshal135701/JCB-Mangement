@@ -1,5 +1,6 @@
 import express, { Application, Request, Response } from 'express';
 import cors from 'cors';
+import { config } from './config/env';
 import { errorHandler } from './middlewares/error.middleware';
 
 // All 14 Enterprise Modules
@@ -20,11 +21,31 @@ import reportRoutes from './modules/reports/reports.routes';
 
 const app: Application = express();
 
-// Middlewares
-app.use(cors({
-  origin: '*',
+// Trust reverse proxy only when explicitly configured via TRUST_PROXY (e.g. 1, true, or loopback)
+if (process.env.TRUST_PROXY) {
+  const trustVal = process.env.TRUST_PROXY.trim();
+  app.set('trust proxy', trustVal === 'true' ? true : !isNaN(Number(trustVal)) ? Number(trustVal) : trustVal);
+}
+
+// Secure CORS configuration using environment-configurable origin allowlist
+const corsOptions: cors.CorsOptions = {
+  origin: (origin, callback) => {
+    // Permit requests with no origin (mobile applications, curl, server-to-server)
+    if (!origin) {
+      return callback(null, true);
+    }
+    if (config.allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    // Origin not allowed: omit CORS headers
+    return callback(null, false);
+  },
   credentials: true,
-}));
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+};
+
+app.use(cors(corsOptions));
 app.use(express.json({ limit: '15mb' }));
 app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 

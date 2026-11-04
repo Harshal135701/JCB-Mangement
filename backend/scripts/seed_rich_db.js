@@ -1,7 +1,12 @@
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 
-const DATABASE_URL = 'postgresql://postgres:Aniket%407075@db.enarwtsppwwwldvtmoee.supabase.co:5432/postgres';
+require('dotenv').config();
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) {
+  console.error('[Seeding Error]: DATABASE_URL environment variable is required.');
+  process.exit(1);
+}
 
 const pool = new Pool({
   connectionString: DATABASE_URL,

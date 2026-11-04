@@ -1,8 +1,14 @@
+require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
 const { Pool } = require('pg');
 
-const DATABASE_URL = 'postgresql://postgres:Aniket%407075@db.enarwtsppwwwldvtmoee.supabase.co:5432/postgres';
+const DATABASE_URL = process.env.DATABASE_URL;
+
+if (!DATABASE_URL) {
+  console.error('[Migration Error]: DATABASE_URL environment variable is required.');
+  process.exit(1);
+}
 
 const pool = new Pool({
   connectionString: DATABASE_URL,
@@ -11,7 +17,7 @@ const pool = new Pool({
 
 async function main() {
   try {
-    console.log('Connecting to Supabase PostgreSQL...');
+    console.log('Connecting to PostgreSQL...');
     const test = await pool.query('SELECT NOW()');
     console.log('Connected! Server time:', test.rows[0].now);
 
@@ -28,7 +34,7 @@ async function main() {
     console.log('Seed data inserted successfully!');
 
     const tablesRes = await pool.query("SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name");
-    console.log('All Public Tables in Supabase:', tablesRes.rows.map(r => r.table_name));
+    console.log('All Public Tables in Database:', tablesRes.rows.map(r => r.table_name));
 
     const usersRes = await pool.query('SELECT email, role, full_name FROM users');
     console.log('Seeded Users in DB:', usersRes.rows);
@@ -40,11 +46,10 @@ async function main() {
     console.log('Seeded Spare Parts Count:', partsRes.rows[0].count);
 
   } catch (err) {
-    console.error('Migration failed:', err);
+    console.error('Migration failed:', err.message);
   } finally {
     await pool.end();
   }
 }
 
 main();
-

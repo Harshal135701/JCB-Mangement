@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { 
   login, 
+  refreshToken,
   getProfile, 
   getUsers, 
   createUser, 
@@ -9,13 +10,15 @@ import {
 } from './auth.controller';
 import { authenticateJWT } from '../../middlewares/auth.middleware';
 import { requireRoles } from '../../middlewares/rbac.middleware';
+import { loginRateLimiter } from '../../middlewares/rateLimiter.middleware';
 
 const router = Router();
 
-// Public
-router.post('/login', login);
+// Public Authentication endpoints (protected by brute-force rate limiter)
+router.post('/login', loginRateLimiter, login);
+router.post('/refresh-token', refreshToken);
 
-// Authenticated
+// Authenticated Session Endpoints
 router.get('/profile', authenticateJWT, getProfile);
 
 // Admin-only User Governance CRUD

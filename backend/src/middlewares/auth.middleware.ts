@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import { config } from '../config/env';
 
 export interface AuthenticatedUser {
   id: string;
@@ -29,18 +30,24 @@ export const authenticateJWT = (req: Request, res: Response, next: NextFunction)
     return;
   }
 
-  const token = authHeader.split(' ')[1];
-  const secret = process.env.JWT_SECRET || 'jcb_enterprise_cmms_jwt_secret_key_2026_super_secure';
+  const token = authHeader.substring(7).trim();
+  if (!token) {
+    res.status(401).json({
+      success: false,
+      message: 'Access Denied: Missing or invalid authorization token.',
+    });
+    return;
+  }
 
   try {
-    const decoded = jwt.verify(token, secret) as AuthenticatedUser;
+    const decoded = jwt.verify(token, config.jwtSecret) as AuthenticatedUser;
     req.user = decoded;
     next();
   } catch (err: any) {
+    // Fail safely with generic message; never leak token contents or internal errors
     res.status(401).json({
       success: false,
       message: 'Invalid or expired session token.',
-      error: err.message,
     });
   }
 };
