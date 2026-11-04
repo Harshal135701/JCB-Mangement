@@ -43,19 +43,19 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 flex flex-col justify-center items-center p-4 selection:bg-jcb-yellow selection:text-black">
+    <div className="min-h-screen bg-zinc-100 flex flex-col justify-center items-center p-4 selection:bg-jcb-yellow selection:text-black">
       {/* Back to Welcome Link */}
       <div className="max-w-md w-full mb-4">
         <Link 
           to="/" 
-          className="inline-flex items-center gap-2 text-xs font-bold text-zinc-400 hover:text-jcb-yellow transition-colors"
+          className="inline-flex items-center gap-2 text-xs font-bold text-zinc-600 hover:text-black transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           <span>BACK TO JCB WELCOME PAGE</span>
         </Link>
       </div>
 
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl overflow-hidden border border-zinc-800">
+      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-hidden border-2 border-zinc-200">
         {/* Brand Banner - Heavy JCB Black */}
         <div className="bg-black p-6 text-center border-b border-zinc-900 relative">
           <div className="inline-block bg-jcb-yellow text-black font-black text-3xl px-4 py-1.5 rounded-lg shadow-lg mb-3 tracking-widest border-2 border-jcb-yellowDark">
