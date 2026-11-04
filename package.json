@@ -9,6 +9,7 @@
     "mobile"
   ],
   "scripts": {
+    "build": "npm --prefix backend run build && npm --prefix frontend run build",
     "dev:backend": "npm --prefix backend run dev",
     "dev:frontend": "npm --prefix frontend run dev",
     "mobile:start": "npm --prefix mobile run start",

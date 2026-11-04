@@ -21,13 +21,14 @@ export const supabase = createClient(
   }
 );
 
+// Default Supabase PostgreSQL connection string with password Aniket@7075 URL-encoded (%40)
+const DEFAULT_SUPABASE_DB_URL = 'postgresql://postgres:Aniket%407075@db.enarwtsppwwwldvtmoee.supabase.co:5432/postgres';
+export const DATABASE_URL = process.env.DATABASE_URL || DEFAULT_SUPABASE_DB_URL;
+
 // PostgreSQL Direct Pool
-// If DATABASE_URL is not set on cloud (e.g. Vercel), don't fail immediately, handle pool creation safely
 export const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || undefined,
-  ssl: process.env.NODE_ENV === 'production' || process.env.DATABASE_URL?.includes('supabase.co') 
-    ? { rejectUnauthorized: false } 
-    : false,
+  connectionString: DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
 });
 
 pool.on('error', (err) => {
@@ -35,10 +36,6 @@ pool.on('error', (err) => {
 });
 
 export const query = async (text: string, params?: any[]) => {
-  if (!process.env.DATABASE_URL) {
-    throw new Error('DATABASE_URL environment variable is missing in server environment.');
-  }
-
   const start = Date.now();
   const res = await pool.query(text, params);
   const duration = Date.now() - start;
