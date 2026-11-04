@@ -12,7 +12,7 @@ export const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY |
 // Supabase Admin Client
 export const supabase = createClient(
   SUPABASE_URL,
-  SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY,
+  SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY || 'dummy_key_for_init',
   {
     auth: {
       persistSession: false,
@@ -21,19 +21,24 @@ export const supabase = createClient(
   }
 );
 
-// PostgreSQL Direct Pool (for migrations, complex transactions, and triggers)
+// PostgreSQL Direct Pool
+// If DATABASE_URL is not set on cloud (e.g. Vercel), don't fail immediately, handle pool creation safely
 export const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: process.env.DATABASE_URL || undefined,
   ssl: process.env.NODE_ENV === 'production' || process.env.DATABASE_URL?.includes('supabase.co') 
     ? { rejectUnauthorized: false } 
     : false,
 });
 
 pool.on('error', (err) => {
-  console.error('[Database Pool Error]:', err.message);
+  console.warn('[PostgreSQL Pool Warning]:', err.message);
 });
 
 export const query = async (text: string, params?: any[]) => {
+  if (!process.env.DATABASE_URL) {
+    throw new Error('DATABASE_URL environment variable is missing in server environment.');
+  }
+
   const start = Date.now();
   const res = await pool.query(text, params);
   const duration = Date.now() - start;
