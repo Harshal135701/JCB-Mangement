@@ -180,3 +180,150 @@ export const getMachineById = async (req: Request, res: Response, next: NextFunc
     next(err);
   }
 };
+
+export const createMachine = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { 
+      machine_code, 
+      name, 
+      shop_id, 
+      category, 
+      oem_manufacturer, 
+      model_number, 
+      serial_number, 
+      bay_line_location, 
+      criticality = 'class_b',
+      status = 'running',
+      operating_hours = 0
+    } = req.body;
+
+    if (!machine_code || !name) {
+      res.status(400).json({ success: false, message: 'machine_code and name are required.' });
+      return;
+    }
+
+    const qr_code_uid = `QR-JCB-${machine_code}-${Date.now()}`;
+
+    let targetShopId = shop_id;
+    if (!targetShopId) {
+      const shopRes = await query('SELECT id FROM shops LIMIT 1');
+      targetShopId = shopRes.rows[0]?.id;
+    }
+
+    const result = await query(
+      `INSERT INTO machines (
+        shop_id, machine_code, name, category, oem_manufacturer, 
+        model_number, serial_number, bay_line_location, criticality, status, operating_hours, qr_code_uid
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      RETURNING *`,
+      [
+        targetShopId, 
+        machine_code, 
+        name, 
+        category || 'General Machinery', 
+        oem_manufacturer || 'JCB Equipment', 
+        model_number || 'N/A', 
+        serial_number || `SN-${Date.now()}`, 
+        bay_line_location || 'Main Bay', 
+        criticality, 
+        status, 
+        operating_hours, 
+        qr_code_uid
+      ]
+    );
+
+    res.status(201).json({
+      success: true,
+      message: `Machine ${machine_code} registered successfully by Admin.`,
+      data: result.rows[0],
+    });
+  } catch (err: any) {
+    if (err.code === '23505') {
+      res.status(409).json({ success: false, message: 'Machine Code or Serial Number already exists.' });
+      return;
+    }
+    next(err);
+  }
+};
+
+export const updateMachine = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { 
+      name, 
+      category, 
+      oem_manufacturer, 
+      model_number, 
+      serial_number, 
+      bay_line_location, 
+      criticality, 
+      status, 
+      operating_hours 
+    } = req.body;
+
+    const result = await query(
+      `UPDATE machines 
+       SET name = COALESCE($1, name),
+           category = COALESCE($2, category),
+           oem_manufacturer = COALESCE($3, oem_manufacturer),
+           model_number = COALESCE($4, model_number),
+           serial_number = COALESCE($5, serial_number),
+           bay_line_location = COALESCE($6, bay_line_location),
+           criticality = COALESCE($7, criticality),
+           status = COALESCE($8, status),
+           operating_hours = COALESCE($9, operating_hours),
+           updated_at = NOW()
+       WHERE id = $10
+       RETURNING *`,
+      [name, category, oem_manufacturer, model_number, serial_number, bay_line_location, criticality, status, operating_hours, id]
+    );
+
+    if (result.rows.length === 0) {
+      res.status(404).json({ success: false, message: 'Machine not found.' });
+      return;
+    }
+
+    res.json({
+      success: true,
+      message: `Machine updated successfully.`,
+      data: result.rows[0],
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const deleteMachine = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { id } = req.params;
+    
+    const checkWo = await query('SELECT count(*) FROM work_orders WHERE machine_id = $1', [id]);
+    if (parseInt(checkWo.rows[0]?.count || '0', 10) > 0) {
+      const updateRes = await query(
+        `UPDATE machines SET status = 'decommissioned', updated_at = NOW() WHERE id = $1 RETURNING *`,
+        [id]
+      );
+      res.json({
+        success: true,
+        message: 'Machine has work history. Decommissioned safely rather than deleted.',
+        data: updateRes.rows[0],
+      });
+      return;
+    }
+
+    const delRes = await query('DELETE FROM machines WHERE id = $1 RETURNING id, machine_code', [id]);
+    if (delRes.rows.length === 0) {
+      res.status(404).json({ success: false, message: 'Machine not found.' });
+      return;
+    }
+
+    res.json({
+      success: true,
+      message: `Machine ${delRes.rows[0].machine_code} deleted successfully.`,
+      data: delRes.rows[0],
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+

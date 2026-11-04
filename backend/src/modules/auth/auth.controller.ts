@@ -169,3 +169,121 @@ export const getProfile = async (req: Request, res: Response, next: NextFunction
     next(err);
   }
 };
+
+export const getUsers = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const result = await query(
+      `SELECT id, employee_code, full_name, email, phone, role, department, designation, shift, is_active, created_at
+       FROM users
+       ORDER BY created_at DESC`
+    );
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const createUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const {
+      employee_code,
+      full_name,
+      email,
+      phone,
+      role = 'operator',
+      department,
+      designation,
+      shift = 'Shift A',
+      password = 'password123',
+    } = req.body;
+
+    if (!employee_code || !full_name || !email) {
+      res.status(400).json({ success: false, message: 'employee_code, full_name, and email are required.' });
+      return;
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const password_hash = await bcrypt.hash(password, salt);
+
+    const result = await query(
+      `INSERT INTO users (
+        employee_code, full_name, email, phone, role, department, designation, shift, password_hash
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING id, employee_code, full_name, email, role, department, designation, shift, is_active`,
+      [employee_code, full_name, email, phone || null, role, department || null, designation || null, shift, password_hash]
+    );
+
+    res.status(201).json({
+      success: true,
+      message: `User ${full_name} (${employee_code}) created successfully by Admin.`,
+      data: result.rows[0],
+    });
+  } catch (err: any) {
+    if (err.code === '23505') {
+      res.status(409).json({ success: false, message: 'Employee Code or Email already exists.' });
+      return;
+    }
+    next(err);
+  }
+};
+
+export const updateUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { full_name, phone, role, department, designation, shift, is_active } = req.body;
+
+    const result = await query(
+      `UPDATE users
+       SET full_name = COALESCE($1, full_name),
+           phone = COALESCE($2, phone),
+           role = COALESCE($3, role),
+           department = COALESCE($4, department),
+           designation = COALESCE($5, designation),
+           shift = COALESCE($6, shift),
+           is_active = COALESCE($7, is_active),
+           updated_at = NOW()
+       WHERE id = $8
+       RETURNING id, employee_code, full_name, email, role, department, designation, shift, is_active`,
+      [full_name, phone, role, department, designation, shift, is_active, id]
+    );
+
+    if (result.rows.length === 0) {
+      res.status(404).json({ success: false, message: 'User not found.' });
+      return;
+    }
+
+    res.json({
+      success: true,
+      message: 'User updated successfully.',
+      data: result.rows[0],
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const deleteUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    // Soft delete: deactivate user
+    const result = await query(
+      `UPDATE users SET is_active = false, updated_at = NOW() WHERE id = $1 RETURNING id, employee_code, full_name, is_active`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      res.status(404).json({ success: false, message: 'User not found.' });
+      return;
+    }
+
+    res.json({
+      success: true,
+      message: `User ${result.rows[0].full_name} deactivated successfully.`,
+      data: result.rows[0],
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+

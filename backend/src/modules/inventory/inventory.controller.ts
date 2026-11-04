@@ -193,3 +193,192 @@ export const reservePartForWorkOrder = async (req: Request, res: Response, next:
     next(err);
   }
 };
+
+export const createSparePart = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const {
+      part_number,
+      oem_part_number,
+      name,
+      description,
+      category,
+      subcategory,
+      uom = 'Nos',
+      warehouse_zone = 'Main Store',
+      bin_location,
+      current_physical_stock = 0,
+      min_reorder_level = 5,
+      max_stock_level = 100,
+      unit_cost = 0,
+      supplier_name,
+    } = req.body;
+
+    if (!part_number || !name || !bin_location) {
+      res.status(400).json({ success: false, message: 'part_number, name, and bin_location are required.' });
+      return;
+    }
+
+    const result = await query(
+      `INSERT INTO spare_parts (
+        part_number, oem_part_number, name, description, category, subcategory,
+        uom, warehouse_zone, bin_location, current_physical_stock, min_reorder_level,
+        max_stock_level, unit_cost, supplier_name
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      RETURNING *`,
+      [
+        part_number,
+        oem_part_number || null,
+        name,
+        description || null,
+        category || 'Mechanical',
+        subcategory || null,
+        uom,
+        warehouse_zone,
+        bin_location,
+        parseInt(current_physical_stock, 10) || 0,
+        parseInt(min_reorder_level, 10) || 5,
+        parseInt(max_stock_level, 10) || 100,
+        parseFloat(unit_cost) || 0,
+        supplier_name || 'JCB India Genuine Spares',
+      ]
+    );
+
+    res.status(201).json({
+      success: true,
+      message: `Spare Part ${part_number} added to master ledger by Admin.`,
+      data: result.rows[0],
+    });
+  } catch (err: any) {
+    if (err.code === '23505') {
+      res.status(409).json({ success: false, message: 'Part Number already exists in catalog.' });
+      return;
+    }
+    next(err);
+  }
+};
+
+export const updateSparePart = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const {
+      name,
+      description,
+      category,
+      bin_location,
+      min_reorder_level,
+      max_stock_level,
+      unit_cost,
+      supplier_name,
+    } = req.body;
+
+    const result = await query(
+      `UPDATE spare_parts
+       SET name = COALESCE($1, name),
+           description = COALESCE($2, description),
+           category = COALESCE($3, category),
+           bin_location = COALESCE($4, bin_location),
+           min_reorder_level = COALESCE($5, min_reorder_level),
+           max_stock_level = COALESCE($6, max_stock_level),
+           unit_cost = COALESCE($7, unit_cost),
+           supplier_name = COALESCE($8, supplier_name),
+           updated_at = NOW()
+       WHERE id = $9
+       RETURNING *`,
+      [name, description, category, bin_location, min_reorder_level, max_stock_level, unit_cost, supplier_name, id]
+    );
+
+    if (result.rows.length === 0) {
+      res.status(404).json({ success: false, message: 'Part not found.' });
+      return;
+    }
+
+    res.json({
+      success: true,
+      message: 'Spare part updated successfully.',
+      data: result.rows[0],
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const deleteSparePart = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    const checkUsage = await query('SELECT count(*) FROM wo_parts_consumed WHERE part_id = $1', [id]);
+    if (parseInt(checkUsage.rows[0]?.count || '0', 10) > 0) {
+      const updateRes = await query(
+        `UPDATE spare_parts SET status = 'inactive', updated_at = NOW() WHERE id = $1 RETURNING *`,
+        [id]
+      );
+      res.json({
+        success: true,
+        message: 'Part has historical work order usage. Marked inactive rather than hard deleted.',
+        data: updateRes.rows[0],
+      });
+      return;
+    }
+
+    const delRes = await query('DELETE FROM spare_parts WHERE id = $1 RETURNING id, part_number', [id]);
+    if (delRes.rows.length === 0) {
+      res.status(404).json({ success: false, message: 'Spare part not found.' });
+      return;
+    }
+
+    res.json({
+      success: true,
+      message: `Part ${delRes.rows[0].part_number} deleted successfully.`,
+      data: delRes.rows[0],
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const adjustStock = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { part_id, adjustment_quantity, reason } = req.body;
+    const performed_by = (req as any).user?.id;
+
+    if (!part_id || adjustment_quantity === undefined) {
+      res.status(400).json({ success: false, message: 'part_id and adjustment_quantity are required.' });
+      return;
+    }
+
+    const updateRes = await query(
+      `UPDATE spare_parts 
+       SET current_physical_stock = current_physical_stock + $1, updated_at = NOW() 
+       WHERE id = $2 
+       RETURNING *`,
+      [adjustment_quantity, part_id]
+    );
+
+    if (updateRes.rows.length === 0) {
+      res.status(404).json({ success: false, message: 'Spare part not found.' });
+      return;
+    }
+
+    // Record immutable audit transaction
+    if (performed_by) {
+      try {
+        await query(
+          `INSERT INTO inventory_transactions (part_id, transaction_type, quantity, performed_by, remarks)
+           VALUES ($1, 'ADJUSTMENT', $2, $3, $4)`,
+          [part_id, adjustment_quantity, performed_by, reason || 'Physical stock audit adjustment']
+        );
+      } catch (txErr) {
+        console.warn('Transaction audit log warning:', txErr);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Stock adjusted by ${adjustment_quantity} units.`,
+      data: updateRes.rows[0],
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
