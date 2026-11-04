@@ -7,7 +7,11 @@ import {
   CheckCircle2, 
   PackageX, 
   ArrowUpRight, 
-  RefreshCw 
+  RefreshCw,
+  Cpu,
+  TrendingUp,
+  AlertTriangle,
+  Play
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -37,152 +41,169 @@ export const LiveShopFloorDashboard: React.FC = () => {
   }, []);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 bg-white min-h-full">
       {/* Title & Refresh */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 bg-white rounded-2xl border-2 border-zinc-200 shadow-sm">
         <div>
-          <h2 className="text-xl font-black text-slate-900 tracking-tight">LIVE SHOPFLOOR MONITOR</h2>
-          <p className="text-xs text-slate-500 mt-0.5">Real-time telemetry and machine availability state</p>
+          <div className="flex items-center gap-3">
+            <h2 className="text-xl font-black text-zinc-950 tracking-tight">LIVE SHOPFLOOR & ASSET TELEMETRY</h2>
+            <span className="bg-jcb-yellow text-black text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-amber-500 shadow-sm">
+              Operational Command
+            </span>
+          </div>
+          <p className="text-xs text-zinc-500 font-medium mt-1">
+            Real-time machine health, breakdown status, maintenance response tracking, and line availability.
+          </p>
         </div>
+
         <button
           onClick={fetchData}
           disabled={loading}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 transition shadow-sm"
+          className="flex items-center gap-2 px-4 py-2 bg-white border-2 border-zinc-200 rounded-xl text-xs font-bold text-zinc-800 hover:bg-zinc-50 transition shadow-sm self-start sm:self-auto"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          Refresh Live Status
+          <span>Refresh Live Status</span>
         </button>
       </div>
 
       {/* KPI Cards Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {/* Availability */}
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
-          <div className="flex items-center justify-between text-slate-500 text-xs font-bold uppercase tracking-wider">
+        <div className="bg-white p-5 rounded-2xl border-2 border-zinc-200 shadow-sm flex flex-col justify-between">
+          <div className="flex items-center justify-between text-zinc-600 text-xs font-black uppercase tracking-wider">
             <span>Machine Availability</span>
             <Activity className="w-4 h-4 text-emerald-600" />
           </div>
           <div className="mt-3">
-            <span className="text-3xl font-black text-emerald-600">
+            <span className="text-3xl font-black text-emerald-700">
               {stats?.machineAvailabilityPercent ?? '92.5'}%
             </span>
           </div>
-          <div className="text-[11px] text-slate-500 mt-1">OEE Availability Target: 90%</div>
+          <div className="text-[11px] text-zinc-500 font-medium mt-1">OEE Target: 90.0%</div>
         </div>
 
-        {/* Active Breakdowns */}
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
-          <div className="flex items-center justify-between text-slate-500 text-xs font-bold uppercase tracking-wider">
+        {/* Breakdown Count */}
+        <div className="bg-white p-5 rounded-2xl border-2 border-zinc-200 shadow-sm flex flex-col justify-between">
+          <div className="flex items-center justify-between text-zinc-600 text-xs font-black uppercase tracking-wider">
             <span>Active Breakdowns</span>
             <AlertOctagon className="w-4 h-4 text-red-600" />
           </div>
           <div className="mt-3">
-            <span className="text-3xl font-black text-red-600">
-              {stats?.breakdownCount ?? 1}
+            <span className="text-3xl font-black text-red-700">
+              {stats?.breakdownMachinesCount ?? 1}
             </span>
-            <span className="text-xs text-slate-500 ml-2">Stoppages</span>
+            <span className="text-xs text-zinc-500 ml-1 font-semibold">assets</span>
           </div>
-          <div className="text-[11px] text-red-500 mt-1 font-semibold">Immediate triage required</div>
+          <div className="text-[11px] text-zinc-500 font-medium mt-1">Immediate triage required</div>
         </div>
 
-        {/* MTTR */}
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
-          <div className="flex items-center justify-between text-slate-500 text-xs font-bold uppercase tracking-wider">
-            <span>Avg MTTR (Wrench Time)</span>
+        {/* Open Work Orders */}
+        <div className="bg-white p-5 rounded-2xl border-2 border-zinc-200 shadow-sm flex flex-col justify-between">
+          <div className="flex items-center justify-between text-zinc-600 text-xs font-black uppercase tracking-wider">
+            <span>Open Work Orders</span>
             <Clock className="w-4 h-4 text-blue-600" />
           </div>
           <div className="mt-3">
-            <span className="text-3xl font-black text-blue-600">
-              {stats?.avgMTTRMinutes ?? 45}
+            <span className="text-3xl font-black text-blue-800">
+              {stats?.openWorkOrdersCount ?? 2}
             </span>
-            <span className="text-xs text-slate-500 ml-1">mins</span>
+            <span className="text-xs text-zinc-500 ml-1 font-semibold">jobs</span>
           </div>
-          <div className="text-[11px] text-slate-500 mt-1">Mean Time to Repair</div>
+          <div className="text-[11px] text-zinc-500 font-medium mt-1">Assigned to technicians</div>
         </div>
 
-        {/* Operational Assets */}
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
-          <div className="flex items-center justify-between text-slate-500 text-xs font-bold uppercase tracking-wider">
-            <span>Operational Assets</span>
+        {/* Pending PM */}
+        <div className="bg-white p-5 rounded-2xl border-2 border-zinc-200 shadow-sm flex flex-col justify-between">
+          <div className="flex items-center justify-between text-zinc-600 text-xs font-black uppercase tracking-wider">
+            <span>PM Compliance</span>
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
           </div>
           <div className="mt-3">
-            <span className="text-3xl font-black text-slate-800">
-              {stats?.operationalCount ?? 4}/{stats?.totalMachines ?? 5}
+            <span className="text-3xl font-black text-zinc-950">
+              {stats?.pmComplianceRate ?? '96.2'}%
             </span>
           </div>
-          <div className="text-[11px] text-slate-500 mt-1">Running in Shift A</div>
+          <div className="text-[11px] text-zinc-500 font-medium mt-1">Monthly schedules completed</div>
         </div>
 
-        {/* Stock Shortages */}
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
-          <div className="flex items-center justify-between text-slate-500 text-xs font-bold uppercase tracking-wider">
-            <span>160k Critical Stock Alert</span>
+        {/* Low Stock Parts */}
+        <div className="bg-white p-5 rounded-2xl border-2 border-zinc-200 shadow-sm flex flex-col justify-between">
+          <div className="flex items-center justify-between text-zinc-600 text-xs font-black uppercase tracking-wider">
+            <span>Zero / Low Stock</span>
             <PackageX className="w-4 h-4 text-amber-600" />
           </div>
           <div className="mt-3">
-            <span className="text-3xl font-black text-amber-600">
-              {stats?.lowStockItemsCount ?? 0}
+            <span className="text-3xl font-black text-amber-700">
+              {stats?.criticalLowStockCount ?? 0}
             </span>
-            <span className="text-xs text-slate-500 ml-1">SKUs low</span>
+            <span className="text-xs text-zinc-500 ml-1 font-semibold">SKUs</span>
           </div>
-          <div className="text-[11px] text-slate-500 mt-1">Below minimum threshold</div>
+          <div className="text-[11px] text-zinc-500 font-medium mt-1">PR auto-generation active</div>
         </div>
       </div>
 
-      {/* Bird's-Eye Live Machine Grid */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-        <div className="flex items-center justify-between mb-4">
+      {/* Machine Status Grid */}
+      <div className="bg-white p-6 rounded-2xl border-2 border-zinc-200 shadow-sm">
+        <div className="flex items-center justify-between mb-5">
           <div>
-            <h3 className="text-base font-bold text-slate-900">Plant 1 Shopfloor Machine Grid</h3>
-            <p className="text-xs text-slate-500">Color-coded status across CNC, Robotics & Press lines</p>
+            <h3 className="text-sm font-black text-zinc-950 uppercase tracking-wider">
+              Plant Floor Assets Live Grid
+            </h3>
+            <p className="text-xs text-zinc-500 font-medium">Real-time operational status across Ballabgarh machining bays</p>
           </div>
           <Link
             to="/machines"
-            className="text-xs font-bold text-jcb-charcoal hover:text-amber-600 flex items-center gap-1"
+            className="text-xs font-black text-amber-800 hover:text-black flex items-center gap-1 uppercase tracking-wider"
           >
-            View All 1,000+ Assets <ArrowUpRight className="w-3.5 h-3.5" />
+            <span>View All 1,000+ Assets</span>
+            <ArrowUpRight className="w-4 h-4" />
           </Link>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {machines.map((m) => {
             const isDown = m.status === 'breakdown';
             const isMaint = m.status === 'under_maintenance';
-            const isRunning = m.status === 'operational';
 
             return (
               <div
                 key={m.id}
-                className={`p-4 rounded-lg border-2 transition-all relative ${
+                className={`p-4 rounded-xl border-2 transition relative ${
                   isDown
-                    ? 'border-red-500 bg-red-50/40 shadow-sm animate-pulse'
+                    ? 'border-red-300 bg-red-50/20'
                     : isMaint
-                    ? 'border-amber-400 bg-amber-50/30'
-                    : 'border-emerald-400 bg-emerald-50/20'
+                    ? 'border-amber-300 bg-amber-50/20'
+                    : 'border-zinc-200 bg-white hover:border-zinc-400'
                 }`}
               >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-black text-sm text-slate-900 tracking-wide">{m.machine_code}</span>
+                <div className="flex items-start justify-between">
+                  <div>
+                    <span className="font-mono text-xs font-black text-zinc-950">{m.machine_code}</span>
+                    <h4 className="text-xs font-bold text-zinc-800 line-clamp-1 mt-0.5">{m.name}</h4>
+                  </div>
                   <span
-                    className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded ${
+                    className={`w-2.5 h-2.5 rounded-full ${
                       isDown
-                        ? 'bg-red-600 text-white'
+                        ? 'bg-red-500 animate-pulse'
                         : isMaint
-                        ? 'bg-amber-500 text-white'
-                        : 'bg-emerald-600 text-white'
+                        ? 'bg-amber-500 animate-pulse'
+                        : 'bg-emerald-500'
                     }`}
-                  >
-                    {m.status.replace('_', ' ')}
-                  </span>
+                  />
                 </div>
 
-                <p className="text-xs font-bold text-slate-700 truncate">{m.name}</p>
-                <p className="text-[11px] text-slate-500 mt-1">{m.bay_line_location || 'Bay 1 / Line 4'}</p>
-                
-                <div className="mt-3 pt-2.5 border-t border-slate-200/80 flex items-center justify-between text-[11px]">
-                  <span className="text-slate-500">Criticality:</span>
-                  <span className="font-bold uppercase text-slate-800">{m.criticality}</span>
+                <div className="mt-3 flex items-center justify-between text-[11px] text-zinc-500 font-medium">
+                  <span>{m.bay_line_location || 'Bay 1'}</span>
+                  <span className="font-black text-zinc-900 uppercase">{m.criticality?.replace('_', ' ') || 'CLASS B'}</span>
+                </div>
+
+                <div className="mt-2 pt-2 border-t border-zinc-100 flex items-center justify-between text-[10px] font-black uppercase tracking-wider">
+                  <span className={isDown ? 'text-red-700' : isMaint ? 'text-amber-700' : 'text-emerald-700'}>
+                    {m.status || 'running'}
+                  </span>
+                  <span className="font-mono text-zinc-500">
+                    {m.operating_hours ? `${Number(m.operating_hours).toFixed(0)} hrs` : '0 hrs'}
+                  </span>
                 </div>
               </div>
             );
@@ -192,4 +213,3 @@ export const LiveShopFloorDashboard: React.FC = () => {
     </div>
   );
 };
-

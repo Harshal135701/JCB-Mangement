@@ -5,7 +5,8 @@ import { io } from '../../server';
 export const createWorkOrderFromComplaint = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const managerId = req.user?.id;
-    const { complaint_id, technician_id, sla_hours = 4, work_instructions, is_major_breakdown = false } = req.body;
+    const complaint_id = req.body.complaint_id || req.body.ticket_id;
+    const { technician_id, sla_hours = 4, work_instructions, is_major_breakdown = false } = req.body;
 
     if (!complaint_id || !technician_id) {
       res.status(400).json({ success: false, message: 'Complaint ID and Technician ID are required.' });

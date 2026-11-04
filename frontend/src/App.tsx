@@ -13,18 +13,19 @@ import { RDCPage } from './modules/rdc/RDCPage';
 import { PMCalendarPage } from './modules/pm/PMCalendarPage';
 import { DowntimeAnalyticsPage } from './modules/downtime/DowntimeAnalyticsPage';
 import { AuditLogsPage } from './modules/audit/AuditLogsPage';
+import { UserManagementPage } from './modules/users/UserManagementPage';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, isLoading } = useAuth();
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-zinc-950 text-white text-xs font-bold tracking-widest uppercase">
+      <div className="min-h-screen flex items-center justify-center bg-white text-zinc-900 text-xs font-bold tracking-widest uppercase">
         <div className="flex flex-col items-center gap-3">
-          <div className="bg-jcb-yellow text-black font-black text-2xl px-3 py-1 rounded shadow-lg tracking-widest">
+          <div className="bg-jcb-yellow text-black font-black text-2xl px-4 py-1.5 rounded shadow tracking-widest border border-jcb-yellowDark">
             JCB
           </div>
-          <span className="text-zinc-400">Loading JCB CMMS Platform...</span>
+          <span className="text-zinc-600 font-bold">Initializing CMMS Platform...</span>
         </div>
       </div>
     );
@@ -65,6 +66,7 @@ export default function App() {
             <Route path="/pm" element={<PMCalendarPage />} />
             <Route path="/downtime" element={<DowntimeAnalyticsPage />} />
             <Route path="/audit" element={<AuditLogsPage />} />
+            <Route path="/users" element={<UserManagementPage />} />
           </Route>
 
           {/* Fallback to Welcome */}
