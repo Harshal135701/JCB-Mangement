@@ -323,7 +323,7 @@ async function seedRichDatabase() {
     console.log('Seeding Preventive Maintenance Schedules...');
     await client.query(`
       INSERT INTO pm_plans (
-        plan_code, machine_id, title, frequency, interval_days, operating_hour_threshold, next_pm_date, status
+        plan_code, machine_id, title, frequency, interval_days, operating_hour_threshold, next_pm_date, is_active
       )
       VALUES (
         'PM-2026-0001',
@@ -333,14 +333,14 @@ async function seedRichDatabase() {
         30,
         500,
         CURRENT_DATE + INTERVAL '4 days',
-        'active'
+        true
       )
       ON CONFLICT (plan_code) DO NOTHING;
     `, [machineMap['PRS-101']]);
 
     await client.query(`
       INSERT INTO pm_plans (
-        plan_code, machine_id, title, frequency, interval_days, operating_hour_threshold, next_pm_date, status
+        plan_code, machine_id, title, frequency, interval_days, operating_hour_threshold, next_pm_date, is_active
       )
       VALUES (
         'PM-2026-0002',
@@ -350,7 +350,7 @@ async function seedRichDatabase() {
         20,
         250,
         CURRENT_DATE - INTERVAL '1 day',
-        'active'
+        true
       )
       ON CONFLICT (plan_code) DO NOTHING;
     `, [machineMap['CNC-001']]);
