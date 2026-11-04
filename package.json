@@ -1,0 +1,30 @@
+{
+  "name": "jcb-cmms-platform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "JCB Smart Machine Maintenance Management System (CMMS)",
+  "workspaces": [
+    "backend",
+    "frontend",
+    "mobile"
+  ],
+  "scripts": {
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "mobile:start": "npm --prefix mobile run start",
+    "mobile:android": "npm --prefix mobile run android",
+    "build:apk": "npm --prefix mobile run build:apk"
+  },
+  "keywords": [
+    "jcb",
+    "cmms",
+    "maintenance",
+    "react",
+    "react-native",
+    "android",
+    "node",
+    "postgresql"
+  ],
+  "author": "JCB Enterprise Team",
+  "license": "UNLICENSED"
+}

@@ -1,0 +1,8 @@
+<resources>
+    <!-- Base application theme with JCB Industrial Black StatusBar -->
+    <style name="AppTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:statusBarColor">#1E1E1E</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
+
