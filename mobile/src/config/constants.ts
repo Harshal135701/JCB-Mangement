@@ -1,11 +1,10 @@
 /**
  * JCB Smart CMMS Mobile Application Configuration
- * Direct constants without .env native dependencies
+ * Official JCB Brand Palette:
+ * - JCB Yellow: #F9B101 (Pantone 7549 C / RAL 1007)
+ * - JCB Black: #000000 (Pantone Black 6 C)
  */
 
-// API Configuration
-// - Android Emulator default: http://10.0.2.2:5000/api/v1
-// - Physical Android device via Wi-Fi: replace with your computer's local IP (e.g. http://192.168.1.100:5000/api/v1)
 export const CONFIG = {
   API_BASE_URL: 'http://10.0.2.2:5000/api/v1',
   SOCKET_URL: 'http://10.0.2.2:5000',
@@ -13,7 +12,6 @@ export const CONFIG = {
   VERSION: '1.0.0',
 };
 
-// Storage Keys for AsyncStorage
 export const STORAGE_KEYS = {
   AUTH_TOKEN: '@jcb_cmms_token',
   REFRESH_TOKEN: '@jcb_cmms_refresh_token',
@@ -21,22 +19,22 @@ export const STORAGE_KEYS = {
   OFFLINE_OUTBOX: '@jcb_cmms_outbox',
 };
 
-// JCB Industrial Design Tokens
+// Official JCB Industrial Design Tokens
 export const COLORS = {
-  primary: '#F5B324',       // JCB Iconic Yellow
-  primaryDark: '#D99B1A',
-  secondary: '#1E1E1E',     // Industrial Charcoal / Black
-  background: '#F8FAFC',    // Soft anti-glare light grey
+  primary: '#F9B101',       // Official Classic JCB Yellow
+  primaryDark: '#E09E00',
+  secondary: '#000000',     // Official JCB Black (Chassis & Counterweights)
+  charcoal: '#1A1A1A',
+  background: '#F8FAFC',    // Anti-glare clean light grey
   card: '#FFFFFF',
-  text: '#1E293B',
+  text: '#000000',
   textMuted: '#64748B',
   border: '#E2E8F0',
   
-  // Status Indicator Colors
+  // High-Visibility Status Colors
   statusRunning: '#16A34A',      // 🟢 Operational / Restored
-  statusBreakdown: '#DC2626',    // 🔴 Breakdown / Critical Stop
-  statusMaintenance: '#EA580C',  // 🟠 Under Maintenance / Repair
-  statusAwaiting: '#2563EB',     // 🔵 Awaiting Parts / PR Delivery
+  statusBreakdown: '#DC2626',    // 🔴 Breakdown / Immediate Stoppage
+  statusMaintenance: '#EA580C',  // 🟠 Under Maintenance / Active Wrench
+  statusAwaiting: '#2563EB',     // 🔵 Waiting for Spare Parts / PR
   statusIdle: '#94A3B8',         // ⚪ Idle
 };
-

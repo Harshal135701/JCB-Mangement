@@ -7,14 +7,19 @@ import { LiveShopFloorDashboard } from './modules/manager/LiveShopFloorDashboard
 import { TriageQueuePage } from './modules/breakdowns/TriageQueuePage';
 import { InventoryCatalogPage } from './modules/inventory/InventoryCatalogPage';
 import { MachineMasterPage } from './modules/machines/MachineMasterPage';
+import { ProcurementPage } from './modules/procurement/ProcurementPage';
+import { RDCPage } from './modules/rdc/RDCPage';
+import { PMCalendarPage } from './modules/pm/PMCalendarPage';
+import { DowntimeAnalyticsPage } from './modules/downtime/DowntimeAnalyticsPage';
+import { AuditLogsPage } from './modules/audit/AuditLogsPage';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, isLoading } = useAuth();
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white text-sm">
-        Loading JCB CMMS...
+      <div className="min-h-screen flex items-center justify-center bg-zinc-950 text-white text-xs font-bold tracking-widest uppercase">
+        Loading JCB CMMS Platform...
       </div>
     );
   }
@@ -45,7 +50,11 @@ export default function App() {
             <Route path="triage" element={<TriageQueuePage />} />
             <Route path="machines" element={<MachineMasterPage />} />
             <Route path="inventory" element={<InventoryCatalogPage />} />
-            <Route path="analytics" element={<LiveShopFloorDashboard />} />
+            <Route path="procurement" element={<ProcurementPage />} />
+            <Route path="rdc" element={<RDCPage />} />
+            <Route path="pm" element={<PMCalendarPage />} />
+            <Route path="downtime" element={<DowntimeAnalyticsPage />} />
+            <Route path="audit" element={<AuditLogsPage />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />
@@ -54,4 +63,3 @@ export default function App() {
     </AuthProvider>
   );
 }
-

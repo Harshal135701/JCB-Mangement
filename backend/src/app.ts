@@ -2,37 +2,46 @@ import express, { Application, Request, Response } from 'express';
 import cors from 'cors';
 import { errorHandler } from './middlewares/error.middleware';
 
-// Module Routes
+// All 14 Enterprise Modules
 import authRoutes from './modules/auth/auth.routes';
+import orgRoutes from './modules/org/org.routes';
 import machineRoutes from './modules/machines/machines.routes';
 import breakdownRoutes from './modules/breakdowns/breakdowns.routes';
 import workOrderRoutes from './modules/work-orders/work-orders.routes';
 import inventoryRoutes from './modules/inventory/inventory.routes';
-import orgRoutes from './modules/org/org.routes';
+import procurementRoutes from './modules/procurement/procurement.routes';
+import rdcRoutes from './modules/rdc/rdc.routes';
+import pmRoutes from './modules/pm/pm.routes';
+import inspectionRoutes from './modules/inspections/inspections.routes';
+import notificationRoutes from './modules/notifications/notifications.routes';
+import auditRoutes from './modules/audit/audit.routes';
+import downtimeRoutes from './modules/downtime/downtime.routes';
 import reportRoutes from './modules/reports/reports.routes';
 
 const app: Application = express();
 
-// Global Middlewares
+// Middlewares
 app.use(cors({
-  origin: '*', // Allows Web Frontend and React Native Mobile App
+  origin: '*',
   credentials: true,
 }));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '15mb' }));
+app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
-// Health Check
+// Health & Root Status
 app.get('/health', (req: Request, res: Response) => {
   res.json({
     status: 'HEALTHY',
-    service: 'JCB Smart Machine Maintenance Management System API',
+    service: 'JCB Smart Machine Maintenance Management System (CMMS) Backend API',
+    uptime: process.uptime(),
     timestamp: new Date().toISOString(),
   });
 });
 
 app.get('/api/v1', (req: Request, res: Response) => {
   res.json({
-    message: 'Welcome to JCB Enterprise CMMS API v1',
+    name: 'JCB Enterprise CMMS API',
+    version: '1.0.0',
     modules: [
       'auth',
       'org',
@@ -40,22 +49,35 @@ app.get('/api/v1', (req: Request, res: Response) => {
       'breakdowns',
       'work-orders',
       'inventory',
+      'procurement',
+      'rdc',
+      'pm',
+      'inspections',
+      'notifications',
+      'audit',
+      'downtime',
       'reports',
     ],
   });
 });
 
-// Register Modular Routes
+// Register All Module Routes
 app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/org', orgRoutes);
 app.use('/api/v1/machines', machineRoutes);
 app.use('/api/v1/breakdowns', breakdownRoutes);
 app.use('/api/v1/work-orders', workOrderRoutes);
 app.use('/api/v1/inventory', inventoryRoutes);
-app.use('/api/v1/org', orgRoutes);
+app.use('/api/v1/procurement', procurementRoutes);
+app.use('/api/v1/rdc', rdcRoutes);
+app.use('/api/v1/pm', pmRoutes);
+app.use('/api/v1/inspections', inspectionRoutes);
+app.use('/api/v1/notifications', notificationRoutes);
+app.use('/api/v1/audit', auditRoutes);
+app.use('/api/v1/downtime', downtimeRoutes);
 app.use('/api/v1/reports', reportRoutes);
 
 // Global Error Handler
 app.use(errorHandler);
 
 export default app;
-
