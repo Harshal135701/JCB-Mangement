@@ -1,79 +1,49 @@
 import { Request, Response, NextFunction } from 'express';
 import { query } from '../../config/db';
 import { io } from '../../server';
+import {
+  createWorkOrderFromComplaintService,
+  WorkOrderServiceError,
+} from './work-orders.service';
 
-export const createWorkOrderFromComplaint = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const createWorkOrderFromComplaint = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
   try {
     const managerId = req.user?.id;
     const complaint_id = req.body.complaint_id || req.body.ticket_id;
-    const { technician_id, sla_hours = 4, work_instructions, is_major_breakdown = false } = req.body;
+    const { technician_id, sla_hours = 4, work_instructions, is_major_breakdown = false } = req.body || {};
 
     if (!complaint_id || !technician_id) {
       res.status(400).json({ success: false, message: 'Complaint ID and Technician ID are required.' });
       return;
     }
 
-    // 1. Fetch complaint
-    const cmpRes = await query(`SELECT * FROM maintenance_requests WHERE id = $1`, [complaint_id]);
-    if (cmpRes.rows.length === 0) {
-      res.status(404).json({ success: false, message: 'Complaint not found.' });
-      return;
-    }
-    const complaint = cmpRes.rows[0];
-
-    // 2. Generate WO Number (e.g. WO-2026-00001)
-    const countRes = await query('SELECT COUNT(*) FROM work_orders');
-    const seq = parseInt(countRes.rows[0].count, 10) + 1;
-    const wo_number = `WO-${new Date().getFullYear()}-${String(seq).padStart(5, '0')}`;
-
-    const slaDeadline = new Date(Date.now() + sla_hours * 3600 * 1000);
-
-    // 3. Insert Work Order
-    const woRes = await query(
-      `INSERT INTO work_orders (
-        wo_number, complaint_id, machine_id, assigned_technician_id, assigned_manager_id,
-        priority, status, is_major_breakdown, sla_deadline, work_instructions,
-        breakdown_time, reported_time, manager_ack_time, technician_assigned_time
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, 'assigned', $7, $8, $9, $10, $11, NOW(), NOW())
-      RETURNING *`,
-      [
-        wo_number,
-        complaint_id,
-        complaint.machine_id,
-        technician_id,
-        managerId,
-        complaint.priority,
-        is_major_breakdown,
-        slaDeadline,
-        work_instructions || 'Diagnose and restore machine operation following JCB safety SOPs.',
-        complaint.breakdown_occurred_at,
-        complaint.reported_at,
-      ]
-    );
-
-    const workOrder = woRes.rows[0];
-
-    // 4. Update Complaint status to 'work_order_created'
-    await query(
-      `UPDATE maintenance_requests SET status = 'work_order_created', updated_at = NOW() WHERE id = $1`,
-      [complaint_id]
-    );
-
-    // 5. Emit socket alert to technician
-    if (io) {
-      io.emit(`technician:${technician_id}:assigned`, {
-        workOrder,
-        message: `New Work Order ${wo_number} assigned. SLA: ${sla_hours} hours`,
-      });
-    }
+    const result = await createWorkOrderFromComplaintService({
+      complaint_id,
+      technician_id,
+      manager_id: managerId,
+      user: req.user,
+      sla_hours: Number(sla_hours) || 4,
+      work_instructions,
+      is_major_breakdown: Boolean(is_major_breakdown),
+    });
 
     res.status(201).json({
       success: true,
       message: 'Work order allocated and dispatched to technician.',
-      data: workOrder,
+      data: result.workOrder,
     });
-  } catch (err) {
+  } catch (err: any) {
+    if (err instanceof WorkOrderServiceError) {
+      res.status(err.statusCode).json({
+        success: false,
+        message: err.message,
+      });
+      return;
+    }
     next(err);
   }
 };
