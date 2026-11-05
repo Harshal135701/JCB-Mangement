@@ -1,51 +1,79 @@
 import { Request, Response, NextFunction } from 'express';
-import { query } from '../../config/db';
-import { io } from '../../server';
+import {
+  createPurchaseRequisitionService,
+  getPurchaseRequisitionsService,
+  getPurchaseRequisitionDetailsService,
+  updatePRStatusService,
+  createPurchaseOrderService,
+  getPurchaseOrdersService,
+  cancelPurchaseRequisitionService,
+  processGRNInwardService,
+  getVendorsService,
+  getProcurementDashboardService,
+  ProcurementServiceError,
+  setProcurementServiceDb,
+  resetProcurementServiceDb,
+  setProcurementServiceIo,
+  resetProcurementServiceIo,
+} from './procurement.service';
 
-// 1. Create Purchase Requisition (Technician or Manager when part is zero-stock)
-export const createPurchaseRequisition = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const setProcurementDb = setProcurementServiceDb;
+export const resetProcurementDb = resetProcurementServiceDb;
+export const setProcurementIo = setProcurementServiceIo;
+export const resetProcurementIo = resetProcurementServiceIo;
+
+// ---------------------------------------------------------------------------
+// Error Handling Helper
+// ---------------------------------------------------------------------------
+function handleControllerError(err: any, res: Response, next: NextFunction): void {
+  if (err instanceof ProcurementServiceError) {
+    res.status(err.statusCode).json({
+      success: false,
+      message: err.message,
+      details: err.details,
+    });
+    return;
+  }
+  next(err);
+}
+
+// ---------------------------------------------------------------------------
+// 1. Create Purchase Requisition (POST /api/v1/procurement/pr)
+// ---------------------------------------------------------------------------
+export const createPurchaseRequisition = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
   try {
-    const userId = req.user?.id;
+    const user = req.user;
+    if (!user || !user.id) {
+      res.status(401).json({ success: false, message: 'Unauthorized: Authentication required.' });
+      return;
+    }
+
     const {
       work_order_id,
       machine_id,
       part_id,
       quantity_required,
-      urgency = 'high',
+      urgency,
       technical_justification,
-    } = req.body;
+      expected_delivery_date,
+    } = req.body || {};
 
-    if (!part_id || !quantity_required) {
-      res.status(400).json({ success: false, message: 'Part ID and required quantity are mandatory.' });
-      return;
-    }
-
-    // Auto-generate PR Number (e.g. PR-2026-00001)
-    const countRes = await query('SELECT COUNT(*) FROM purchase_requisitions');
-    const seq = parseInt(countRes.rows[0].count, 10) + 1;
-    const pr_number = `PR-${new Date().getFullYear()}-${String(seq).padStart(5, '0')}`;
-
-    const insertRes = await query(
-      `INSERT INTO purchase_requisitions (
-        pr_number, work_order_id, machine_id, part_id, quantity_required,
-        urgency, technical_justification, status, requested_by
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, 'new', $8)
-      RETURNING *`,
-      [pr_number, work_order_id || null, machine_id || null, part_id, quantity_required, urgency, technical_justification || '', userId]
+    const pr = await createPurchaseRequisitionService(
+      {
+        work_order_id,
+        machine_id,
+        part_id,
+        quantity_required,
+        urgency,
+        technical_justification,
+        expected_delivery_date,
+      },
+      user
     );
-
-    const pr = insertRes.rows[0];
-
-    // If linked to a work order, update WO status to 'waiting_for_parts'
-    if (work_order_id) {
-      await query(`UPDATE work_orders SET status = 'waiting_for_parts', updated_at = NOW() WHERE id = $1`, [work_order_id]);
-    }
-
-    // Socket alert to Purchase/Manager queue
-    if (io) {
-      io.emit('pr:created', { pr, message: `New Purchase Requisition ${pr_number} created for critical parts.` });
-    }
 
     res.status(201).json({
       success: true,
@@ -53,126 +81,448 @@ export const createPurchaseRequisition = async (req: Request, res: Response, nex
       data: pr,
     });
   } catch (err) {
-    next(err);
+    handleControllerError(err, res, next);
   }
 };
 
-// 2. Get All Purchase Requisitions
-export const getPurchaseRequisitions = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+// ---------------------------------------------------------------------------
+// 2. Get All Purchase Requisitions (GET /api/v1/procurement/pr)
+// ---------------------------------------------------------------------------
+export const getPurchaseRequisitions = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
   try {
-    const { status, urgency } = req.query;
-    let sql = `
-      SELECT pr.*, sp.part_number, sp.name as part_name, sp.unit_cost, sp.available_stock,
-             u.full_name as requested_by_name, m.machine_code
-      FROM purchase_requisitions pr
-      JOIN spare_parts sp ON pr.part_id = sp.id
-      JOIN users u ON pr.requested_by = u.id
-      LEFT JOIN machines m ON pr.machine_id = m.id
-      WHERE 1=1
-    `;
-    const params: any[] = [];
-    if (status) {
-      params.push(status);
-      sql += ` AND pr.status = $${params.length}`;
+    const user = req.user;
+    if (!user || !user.id) {
+      res.status(401).json({ success: false, message: 'Unauthorized: Authentication required.' });
+      return;
     }
-    if (urgency) {
-      params.push(urgency);
-      sql += ` AND pr.urgency = $${params.length}`;
-    }
-    sql += ` ORDER BY pr.created_at DESC`;
 
-    const result = await query(sql, params);
-    res.json({ success: true, data: result.rows });
+    const {
+      status,
+      urgency,
+      plant_id,
+      shop_id,
+      requested_by,
+      machine_id,
+      work_order_id,
+      search,
+      page,
+      limit,
+      sortBy,
+      sortOrder,
+    } = req.query;
+
+    const result = await getPurchaseRequisitionsService(
+      {
+        status: status ? String(status) : undefined,
+        urgency: urgency ? String(urgency) : undefined,
+        plant_id: plant_id ? String(plant_id) : undefined,
+        shop_id: shop_id ? String(shop_id) : undefined,
+        requested_by: requested_by ? String(requested_by) : undefined,
+        machine_id: machine_id ? String(machine_id) : undefined,
+        work_order_id: work_order_id ? String(work_order_id) : undefined,
+        search: search ? String(search) : undefined,
+        page: page ? Number(page) : 1,
+        limit: limit ? Number(limit) : 20,
+        sortBy: sortBy ? String(sortBy) : undefined,
+        sortOrder: sortOrder === 'ASC' ? 'ASC' : 'DESC',
+      },
+      user
+    );
+
+    res.json({
+      success: true,
+      data: result.data,
+      pagination: result.pagination,
+    });
   } catch (err) {
-    next(err);
+    handleControllerError(err, res, next);
   }
 };
 
-// 3. Update PR Status (Quotation, PO Creation, Vendor Selection)
-export const updatePRStatus = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+// ---------------------------------------------------------------------------
+// 3. Get Purchase Requisition Details (GET /api/v1/procurement/pr/:id)
+// ---------------------------------------------------------------------------
+export const getPurchaseRequisitionDetails = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
   try {
-    const managerId = req.user?.id;
+    const user = req.user;
+    if (!user || !user.id) {
+      res.status(401).json({ success: false, message: 'Unauthorized: Authentication required.' });
+      return;
+    }
+
     const { id } = req.params;
-    const { status, po_number, supplier_name, unit_price, expected_delivery_date } = req.body;
+    const pr = await getPurchaseRequisitionDetailsService(id, user);
 
-    const result = await query(
-      `UPDATE purchase_requisitions
-       SET status = COALESCE($2, status),
-           po_number = COALESCE($3, po_number),
-           supplier_name = COALESCE($4, supplier_name),
-           unit_price = COALESCE($5, unit_price),
-           expected_delivery_date = COALESCE($6, expected_delivery_date),
-           approved_by = $7,
-           updated_at = NOW()
-       WHERE id = $1
-       RETURNING *`,
-      [id, status, po_number, supplier_name, unit_price, expected_delivery_date, managerId]
-    );
-
-    if (result.rows.length === 0) {
-      res.status(404).json({ success: false, message: 'PR not found.' });
-      return;
-    }
-
-    res.json({ success: true, message: 'Purchase requisition updated.', data: result.rows[0] });
+    res.json({
+      success: true,
+      data: pr,
+    });
   } catch (err) {
-    next(err);
+    handleControllerError(err, res, next);
   }
 };
 
-// 4. Goods Receipt Note (GRN) Inwarding & Stock Increment
-export const processGRNInward = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+// ---------------------------------------------------------------------------
+// 4. Update PR Status (PUT /api/v1/procurement/pr/:id)
+// ---------------------------------------------------------------------------
+export const updatePRStatus = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    const { id } = req.params; // PR ID
-    const { received_quantity, remarks } = req.body;
-
-    const prRes = await query(`SELECT * FROM purchase_requisitions WHERE id = $1`, [id]);
-    if (prRes.rows.length === 0) {
-      res.status(404).json({ success: false, message: 'PR not found.' });
+    const user = req.user;
+    if (!user || !user.id) {
+      res.status(401).json({ success: false, message: 'Unauthorized: Authentication required.' });
       return;
     }
-    const pr = prRes.rows[0];
-    const qty = parseInt(received_quantity || pr.quantity_required, 10);
 
-    // 1. Increment physical stock
-    await query(
-      `UPDATE spare_parts SET current_physical_stock = current_physical_stock + $1, updated_at = NOW() WHERE id = $2`,
-      [qty, pr.part_id]
+    const { id } = req.params;
+    const { status, po_number, supplier_name, unit_price, expected_delivery_date, remarks } = req.body || {};
+
+    const updatedPR = await updatePRStatusService(
+      id,
+      {
+        status,
+        po_number,
+        supplier_name,
+        unit_price,
+        expected_delivery_date,
+        remarks,
+      },
+      user
     );
 
-    // 2. Record immutable stock transaction
-    await query(
-      `INSERT INTO inventory_transactions (part_id, transaction_type, quantity, reference_work_order_id, performed_by, remarks)
-       VALUES ($1, 'STOCK_IN', $2, $3, $4, $5)`,
-      [pr.part_id, qty, pr.work_order_id, userId, remarks || `GRN posted against PO: ${pr.po_number || pr.pr_number}`]
+    res.json({
+      success: true,
+      message: 'Purchase requisition updated.',
+      data: updatedPR,
+    });
+  } catch (err) {
+    handleControllerError(err, res, next);
+  }
+};
+
+// ---------------------------------------------------------------------------
+// 5. Approve Purchase Requisition (POST /api/v1/procurement/pr/:id/approve)
+// ---------------------------------------------------------------------------
+export const approvePurchaseRequisition = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user || !user.id) {
+      res.status(401).json({ success: false, message: 'Unauthorized: Authentication required.' });
+      return;
+    }
+
+    const { id } = req.params;
+    const { remarks, next_status = 'vendor_selected' } = req.body || {};
+
+    const updatedPR = await updatePRStatusService(
+      id,
+      {
+        status: next_status,
+        remarks: remarks || 'Requisition approved by management.',
+      },
+      user
     );
 
-    // 3. Mark PR as fully_received
-    const updatedPR = await query(
-      `UPDATE purchase_requisitions 
-       SET status = 'fully_received', received_date = CURRENT_DATE, updated_at = NOW() 
-       WHERE id = $1 RETURNING *`,
-      [id]
+    res.json({
+      success: true,
+      message: 'Purchase requisition approved successfully.',
+      data: updatedPR,
+    });
+  } catch (err) {
+    handleControllerError(err, res, next);
+  }
+};
+
+// ---------------------------------------------------------------------------
+// 6. Reject Purchase Requisition (POST /api/v1/procurement/pr/:id/reject)
+// ---------------------------------------------------------------------------
+export const rejectPurchaseRequisition = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user || !user.id) {
+      res.status(401).json({ success: false, message: 'Unauthorized: Authentication required.' });
+      return;
+    }
+
+    const { id } = req.params;
+    const { reason, remarks } = req.body || {};
+    const rejectionReason = reason || remarks;
+
+    const updatedPR = await cancelPurchaseRequisitionService(id, rejectionReason, user);
+
+    res.json({
+      success: true,
+      message: 'Purchase requisition rejected.',
+      data: updatedPR,
+    });
+  } catch (err) {
+    handleControllerError(err, res, next);
+  }
+};
+
+// ---------------------------------------------------------------------------
+// 7. Cancel Purchase Requisition (POST /api/v1/procurement/pr/:id/cancel)
+// ---------------------------------------------------------------------------
+export const cancelPurchaseRequisition = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user || !user.id) {
+      res.status(401).json({ success: false, message: 'Unauthorized: Authentication required.' });
+      return;
+    }
+
+    const { id } = req.params;
+    const { reason } = req.body || {};
+
+    const updatedPR = await cancelPurchaseRequisitionService(id, reason, user);
+
+    res.json({
+      success: true,
+      message: 'Purchase requisition cancelled.',
+      data: updatedPR,
+    });
+  } catch (err) {
+    handleControllerError(err, res, next);
+  }
+};
+
+// ---------------------------------------------------------------------------
+// 8. Create Purchase Order (POST /api/v1/procurement/pr/:id/po)
+// ---------------------------------------------------------------------------
+export const createPurchaseOrder = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user || !user.id) {
+      res.status(401).json({ success: false, message: 'Unauthorized: Authentication required.' });
+      return;
+    }
+
+    const { id } = req.params;
+    const { po_number, supplier_name, unit_price, expected_delivery_date, remarks, mark_as_ordered } = req.body || {};
+
+    const updatedPR = await createPurchaseOrderService(
+      id,
+      {
+        po_number,
+        supplier_name,
+        unit_price,
+        expected_delivery_date,
+        remarks,
+        mark_as_ordered,
+      },
+      user
     );
 
-    // 4. If linked to work order, notify technician that part has arrived and resume WO
-    if (pr.work_order_id) {
-      await query(`UPDATE work_orders SET status = 'in_progress', updated_at = NOW() WHERE id = $1`, [pr.work_order_id]);
-      if (io) {
-        io.emit(`workorder:${pr.work_order_id}:part_arrived`, {
-          message: `Required part has arrived at store for WO. Repair can resume.`,
-        });
-      }
+    res.status(201).json({
+      success: true,
+      message: `Purchase Order ${updatedPR.po_number} created successfully.`,
+      data: updatedPR,
+    });
+  } catch (err) {
+    handleControllerError(err, res, next);
+  }
+};
+
+// ---------------------------------------------------------------------------
+// 9. Get Purchase Orders (GET /api/v1/procurement/po)
+// ---------------------------------------------------------------------------
+export const getPurchaseOrders = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user || !user.id) {
+      res.status(401).json({ success: false, message: 'Unauthorized: Authentication required.' });
+      return;
+    }
+
+    const { status, supplier_name, is_overdue, search, page, limit } = req.query;
+
+    const result = await getPurchaseOrdersService(
+      {
+        status: status ? String(status) : undefined,
+        supplier_name: supplier_name ? String(supplier_name) : undefined,
+        is_overdue: is_overdue === 'true',
+        search: search ? String(search) : undefined,
+        page: page ? Number(page) : 1,
+        limit: limit ? Number(limit) : 20,
+      },
+      user
+    );
+
+    res.json({
+      success: true,
+      data: result.data,
+      pagination: result.pagination,
+    });
+  } catch (err) {
+    handleControllerError(err, res, next);
+  }
+};
+
+// ---------------------------------------------------------------------------
+// 10. Get Purchase Order Details (GET /api/v1/procurement/po/:id)
+// ---------------------------------------------------------------------------
+export const getPurchaseOrderDetails = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user || !user.id) {
+      res.status(401).json({ success: false, message: 'Unauthorized: Authentication required.' });
+      return;
+    }
+
+    const { id } = req.params;
+    const poDetails = await getPurchaseRequisitionDetailsService(id, user);
+
+    if (!poDetails.po_number) {
+      res.status(404).json({ success: false, message: 'Purchase Order not found for this requisition.' });
+      return;
     }
 
     res.json({
       success: true,
-      message: `GRN processed successfully. ${qty} units added to physical stock ledger.`,
-      data: updatedPR.rows[0],
+      data: poDetails,
     });
   } catch (err) {
-    next(err);
+    handleControllerError(err, res, next);
   }
 };
 
+// ---------------------------------------------------------------------------
+// 11. Goods Receipt Note (GRN) Inwarding (POST /api/v1/procurement/pr/:id/grn)
+// ---------------------------------------------------------------------------
+export const processGRNInward = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user || !user.id) {
+      res.status(401).json({ success: false, message: 'Unauthorized: Authentication required.' });
+      return;
+    }
+
+    const { id } = req.params;
+    const {
+      received_quantity,
+      accepted_quantity,
+      rejected_quantity,
+      rejection_reason,
+      remarks,
+      delivery_note_number,
+    } = req.body || {};
+
+    const result = await processGRNInwardService(
+      id,
+      {
+        received_quantity,
+        accepted_quantity,
+        rejected_quantity,
+        rejection_reason,
+        remarks,
+        delivery_note_number,
+      },
+      user
+    );
+
+    res.json({
+      success: true,
+      message: `GRN processed successfully. ${result.accepted_quantity} units added to physical stock ledger.`,
+      data: result.pr,
+      receipt_details: {
+        accepted_quantity: result.accepted_quantity,
+        rejected_quantity: result.rejected_quantity,
+        total_inwarded: result.total_inwarded,
+        remaining_quantity: result.remaining_quantity,
+      },
+    });
+  } catch (err) {
+    handleControllerError(err, res, next);
+  }
+};
+
+// ---------------------------------------------------------------------------
+// 12. Vendor Directory & Performance (GET /api/v1/procurement/vendors)
+// ---------------------------------------------------------------------------
+export const getVendors = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user || !user.id) {
+      res.status(401).json({ success: false, message: 'Unauthorized: Authentication required.' });
+      return;
+    }
+
+    const vendors = await getVendorsService(user);
+
+    res.json({
+      success: true,
+      data: vendors,
+    });
+  } catch (err) {
+    handleControllerError(err, res, next);
+  }
+};
+
+// ---------------------------------------------------------------------------
+// 13. Procurement Dashboard & Reports (GET /api/v1/procurement/dashboard)
+// ---------------------------------------------------------------------------
+export const getProcurementDashboard = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user || !user.id) {
+      res.status(401).json({ success: false, message: 'Unauthorized: Authentication required.' });
+      return;
+    }
+
+    const metrics = await getProcurementDashboardService(user);
+
+    res.json({
+      success: true,
+      data: metrics,
+    });
+  } catch (err) {
+    handleControllerError(err, res, next);
+  }
+};
