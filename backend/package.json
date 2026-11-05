@@ -7,13 +7,14 @@
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "test": "node --test dist/modules/inventory/inventory.test.js dist/modules/auth/auth.test.js dist/modules/breakdowns/breakdowns.test.js dist/modules/work-orders/work-orders.test.js dist/modules/procurement/procurement.test.js dist/modules/downtime/downtime.test.js",
+    "test": "node --test dist/modules/inventory/inventory.test.js dist/modules/auth/auth.test.js dist/modules/breakdowns/breakdowns.test.js dist/modules/work-orders/work-orders.test.js dist/modules/procurement/procurement.test.js dist/modules/downtime/downtime.test.js dist/modules/pm/pm.test.js",
     "test:auth": "node --test dist/modules/auth/auth.test.js",
     "test:inventory": "node --test dist/modules/inventory/inventory.test.js",
     "test:breakdowns": "node --test dist/modules/breakdowns/breakdowns.test.js",
     "test:work-orders": "node --test dist/modules/work-orders/work-orders.test.js",
     "test:procurement": "node --test dist/modules/procurement/procurement.test.js",
-    "test:downtime": "node --test dist/modules/downtime/downtime.test.js"
+    "test:downtime": "node --test dist/modules/downtime/downtime.test.js",
+    "test:pm": "node --test dist/modules/pm/pm.test.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",

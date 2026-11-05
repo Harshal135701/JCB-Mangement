@@ -73,6 +73,23 @@ export interface CreateWorkOrderResult {
   complaint: any;
 }
 
+export interface CreatePMWorkOrderInput {
+  pm_plan_id: string;
+  machine_id: string;
+  plan_code?: string;
+  plan_title?: string;
+  work_instructions?: string;
+  priority?: WorkOrderPriority;
+  technician_id?: string;
+  manager_id?: string;
+  sla_hours?: number;
+  user?: AuthenticatedUser;
+}
+
+export interface CreatePMWorkOrderResult {
+  workOrder: any;
+}
+
 export interface GetWorkOrdersFilter {
   page?: number | string;
   limit?: number | string;
@@ -437,6 +454,209 @@ export async function createWorkOrderFromComplaintService(
   try {
     await client.query('BEGIN');
     const result = await executeCreateWorkOrderTransaction(client, input, ioInstance);
+    await client.query('COMMIT');
+    return result;
+  } catch (err) {
+    try {
+      await client.query('ROLLBACK');
+    } catch {
+      // Safe rollback suppression
+    }
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Transactional creation of a Preventive Maintenance Work Order.
+ * Generates sequential WO number under PostgreSQL transaction-level advisory lock,
+ * inserts work order with regular_maintenance classification, records milestone event,
+ * audit log, and notifies assigned technician.
+ */
+export async function executeCreatePMWorkOrderTransaction(
+  client: DbClientLike,
+  input: CreatePMWorkOrderInput,
+  ioInstance?: any
+): Promise<CreatePMWorkOrderResult> {
+  const { pm_plan_id, machine_id, plan_code, plan_title, technician_id, manager_id, user } = input;
+  const priority = input.priority || 'medium';
+  const slaHoursNum = typeof input.sla_hours === 'number' && input.sla_hours > 0 ? input.sla_hours : 48;
+
+  if (!machine_id || !isUUID(machine_id)) {
+    throw new WorkOrderServiceError('Valid machine ID is required for PM work order.', 400);
+  }
+
+  // 1. Fetch machine and shop/plant details
+  const mRes = await client.query(
+    `SELECT m.*, s.plant_id, s.shop_name 
+     FROM machines m 
+     JOIN shops s ON m.shop_id = s.id 
+     WHERE m.id = $1`,
+    [machine_id]
+  );
+  if (mRes.rows.length === 0) {
+    throw new WorkOrderServiceError('Machine not found for PM work order.', 404);
+  }
+  const machine = mRes.rows[0];
+
+  // 2. Org scope validation (if user provided)
+  if (user && user.role !== 'admin') {
+    if (user.plant_id && user.plant_id !== machine.plant_id) {
+      throw new WorkOrderServiceError('Unauthorized for this plant.', 403);
+    }
+    if (user.shop_id && user.shop_id !== machine.shop_id) {
+      throw new WorkOrderServiceError('Unauthorized for this shop.', 403);
+    }
+  }
+
+  // 3. Technician validation if provided
+  if (technician_id) {
+    if (!isUUID(technician_id)) {
+      throw new WorkOrderServiceError('Invalid technician ID format.', 400);
+    }
+    const techRes = await client.query(
+      `SELECT id, full_name, email, role, is_active FROM users WHERE id = $1`,
+      [technician_id]
+    );
+    if (techRes.rows.length === 0 || !techRes.rows[0].is_active) {
+      throw new WorkOrderServiceError('Assigned technician not found or inactive.', 400);
+    }
+    if (techRes.rows[0].role !== 'technician') {
+      throw new WorkOrderServiceError('Assigned user must have technician role.', 400);
+    }
+  }
+
+  // 4. Concurrency-safe Work Order numbering using PostgreSQL transaction-level advisory locking
+  const currentYear = new Date().getFullYear();
+  const woLockKey = `wo_seq:${currentYear}`;
+
+  // Acquire machine-level PM generation advisory lock to serialize concurrent PM generation
+  if (pm_plan_id) {
+    await client.query(
+      `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
+      [`pm_gen:${machine_id}`]
+    );
+
+    // Concurrency guard: verify no active open PM work order already exists for this plan
+    const dupCheck = await client.query(
+      `SELECT id, wo_number, status 
+       FROM work_orders 
+       WHERE machine_id = $1 
+         AND classification = 'regular_maintenance' 
+         AND status NOT IN ('verified_closed', 'completed')
+         AND (work_instructions LIKE '%' || $2 || '%' OR work_instructions LIKE '%' || $3 || '%')
+       LIMIT 1`,
+      [machine_id, plan_code || '', pm_plan_id || '']
+    );
+
+    if (dupCheck.rows.length > 0) {
+      await client.query('ROLLBACK');
+      return {
+        workOrder: dupCheck.rows[0],
+              };
+    }
+  }
+
+  await client.query(
+    `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
+    [woLockKey]
+  );
+
+  const countRes = await client.query(
+    `SELECT COALESCE(MAX(SUBSTRING(wo_number FROM '[0-9]+$')::int), 0) + 1 AS next_seq
+     FROM work_orders
+     WHERE wo_number LIKE $1`,
+    [`WO-${currentYear}-%`]
+  );
+  const nextSeq = countRes.rows[0]?.next_seq || 1;
+  const wo_number = `WO-${currentYear}-${String(nextSeq).padStart(5, '0')}`;
+  const slaDeadline = new Date(Date.now() + slaHoursNum * 3600 * 1000);
+
+  const formattedInstructions = input.work_instructions ||
+    `[PM Plan: ${plan_code || 'PM-SCHEDULED'} | Plan ID: ${pm_plan_id}] ${plan_title || 'Preventive Maintenance Service'}. Execute mandatory maintenance checklist.`;
+
+  // 5. Insert Work Order
+  const woRes = await client.query(
+    `INSERT INTO work_orders (
+      wo_number, machine_id, assigned_technician_id, assigned_manager_id,
+      priority, status, classification, is_major_breakdown, sla_deadline, work_instructions,
+      created_at, updated_at
+    )
+    VALUES ($1, $2, $3, $4, $5, 'assigned', 'regular_maintenance', FALSE, $6, $7, NOW(), NOW())
+    RETURNING *`,
+    [
+      wo_number,
+      machine_id,
+      technician_id || null,
+      manager_id || (user?.role === 'manager' ? user.id : null),
+      priority,
+      slaDeadline,
+      formattedInstructions,
+    ]
+  );
+
+  const workOrder = woRes.rows[0];
+
+  // 6. Record Milestone Event
+  await client.query(
+    `INSERT INTO work_order_events (work_order_id, event_type, performed_by, notes, timestamp)
+     VALUES ($1, 'PM_WORK_ORDER_GENERATED', $2, $3, NOW())`,
+    [
+      workOrder.id,
+      user?.id || manager_id || '00000000-0000-0000-0000-000000000001',
+      `Automated PM work order generated for plan ${plan_code || pm_plan_id}`,
+    ]
+  );
+
+  // 7. Audit log
+  await recordAuditLog(
+    client,
+    workOrder.id,
+    'CREATE_PM_WORK_ORDER',
+    user?.id || manager_id || null,
+    null,
+    {
+      wo_number,
+      pm_plan_id,
+      machine_id,
+      classification: 'regular_maintenance',
+    }
+  );
+
+  // 8. Notification if technician assigned
+  if (technician_id) {
+    await sendNotificationAndEmit(
+      client,
+      technician_id,
+      'New PM Work Order Assigned',
+      `Preventive Maintenance Work Order ${wo_number} assigned for machine ${machine.machine_code}.`,
+      'assignment',
+      `/work-orders/${workOrder.id}`,
+      'technician:assigned',
+      {
+        workOrder,
+        message: `New PM Work Order ${wo_number} assigned`,
+      },
+      ioInstance
+    );
+  }
+
+  return { workOrder };
+}
+
+/**
+ * Dedicated top-level service for creating PM Work Orders with connection management and rollback safety.
+ */
+export async function createPMWorkOrderService(
+  input: CreatePMWorkOrderInput,
+  dbPool: DbPoolLike = activePool,
+  ioInstance?: any
+): Promise<CreatePMWorkOrderResult> {
+  const client = await dbPool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await executeCreatePMWorkOrderTransaction(client, input, ioInstance);
     await client.query('COMMIT');
     return result;
   } catch (err) {

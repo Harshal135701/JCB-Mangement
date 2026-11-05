@@ -1,142 +1,676 @@
 import { Request, Response, NextFunction } from 'express';
-import { query } from '../../config/db';
+import {
+  PMServiceError,
+  setPmServiceDb,
+  resetPmServiceDb,
+  setPmServiceIo,
+  resetPmServiceIo,
+  DbPoolLike,
+  createPMPlanService,
+  getPMPlansService,
+  getPMPlanByIdService,
+  updatePMPlanService,
+  togglePMPlanStatusService,
+  getPMScheduleListService,
+  getPMUpcomingService,
+  getPMDueService,
+  getPMOverdueService,
+  getPMCalendarService,
+  reschedulePMService,
+  deferPMService,
+  skipPMService,
+  generateDuePMWorkOrdersService,
+  getPMExecutionsService,
+  getPMExecutionDetailsService,
+  submitPMChecklistService,
+  completePMExecutionService,
+  verifyPMExecutionService,
+  getMachinePMHistoryService,
+  getPMDashboardService,
+  getPMComplianceService,
+  getPMTrendsService,
+  getPMByMachineService,
+  getPMByPlantService,
+  getPMByShopService,
+} from './pm.service';
 
+export const setPmDb = (db: DbPoolLike): void => setPmServiceDb(db);
+export const resetPmDb = (): void => resetPmServiceDb();
+export const setPmIo = (io: any): void => setPmServiceIo(io);
+export const resetPmIo = (): void => resetPmServiceIo();
+
+// ---------------------------------------------------------------------------
+// Error Helper
+// ---------------------------------------------------------------------------
+function handlePMError(err: unknown, res: Response, next: NextFunction): void {
+  if (err instanceof PMServiceError) {
+    res.status(err.statusCode).json({
+      success: false,
+      message: err.message,
+    });
+    return;
+  }
+  next(err);
+}
+
+// ---------------------------------------------------------------------------
+// 1. PM Plan Management
+// ---------------------------------------------------------------------------
 export const createPMPlan = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const {
-      machine_id,
-      title,
-      frequency = 'monthly',
-      interval_days = 30,
-      operating_hour_threshold,
-      checklist_template = [],
-      grace_period_days = 3,
-    } = req.body;
-
-    if (!machine_id || !title) {
-      res.status(400).json({ success: false, message: 'Machine ID and Plan title are required.' });
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ success: false, message: 'Authentication required.' });
       return;
     }
 
-    const countRes = await query('SELECT COUNT(*) FROM pm_plans');
-    const seq = parseInt(countRes.rows[0].count, 10) + 1;
-    const plan_code = `PM-${new Date().getFullYear()}-${String(seq).padStart(4, '0')}`;
-
-    const nextDue = new Date(Date.now() + interval_days * 86400 * 1000);
-
-    const insertRes = await query(
-      `INSERT INTO pm_plans (
-        plan_code, machine_id, title, frequency, interval_days,
-        operating_hour_threshold, checklist_template, next_pm_date, grace_period_days
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      RETURNING *`,
-      [
-        plan_code,
-        machine_id,
-        title,
-        frequency,
-        interval_days,
-        operating_hour_threshold || null,
-        JSON.stringify(checklist_template),
-        nextDue,
-        grace_period_days,
-      ]
-    );
-
+    const plan = await createPMPlanService(req.body, user);
     res.status(201).json({
       success: true,
-      message: 'Preventive Maintenance Plan configured.',
-      data: insertRes.rows[0],
+      message: 'Preventive Maintenance Plan configured successfully.',
+      data: plan,
     });
   } catch (err) {
-    next(err);
+    handlePMError(err, res, next);
   }
 };
 
 export const getPMPlans = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { machine_id } = req.query;
-    let sql = `
-      SELECT p.*, m.machine_code, m.name as machine_name, m.operating_hours as current_machine_hours
-      FROM pm_plans p
-      JOIN machines m ON p.machine_id = m.id
-      WHERE p.is_active = true
-    `;
-    const params: any[] = [];
-    if (machine_id) {
-      params.push(machine_id);
-      sql += ` AND p.machine_id = $${params.length}`;
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ success: false, message: 'Authentication required.' });
+      return;
     }
-    sql += ` ORDER BY p.next_pm_date ASC`;
 
-    const result = await query(sql, params);
-    res.json({ success: true, data: result.rows });
+    const result = await getPMPlansService(req.query, user);
+    res.json({
+      success: true,
+      data: result.data,
+      pagination: result.pagination,
+    });
   } catch (err) {
-    next(err);
+    handlePMError(err, res, next);
   }
 };
 
-// Automatic PM Work Order Engine
+export const getPMPlanById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ success: false, message: 'Authentication required.' });
+      return;
+    }
+
+    const plan = await getPMPlanByIdService(req.params.id, user);
+    res.json({
+      success: true,
+      data: plan,
+    });
+  } catch (err) {
+    handlePMError(err, res, next);
+  }
+};
+
+export const updatePMPlan = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ success: false, message: 'Authentication required.' });
+      return;
+    }
+
+    const plan = await updatePMPlanService(req.params.id, req.body, user);
+    res.json({
+      success: true,
+      message: 'PM plan updated successfully.',
+      data: plan,
+    });
+  } catch (err) {
+    handlePMError(err, res, next);
+  }
+};
+
+export const activatePMPlan = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ success: false, message: 'Authentication required.' });
+      return;
+    }
+
+    const plan = await togglePMPlanStatusService(req.params.id, true, user);
+    res.json({
+      success: true,
+      message: 'PM plan activated.',
+      data: plan,
+    });
+  } catch (err) {
+    handlePMError(err, res, next);
+  }
+};
+
+export const deactivatePMPlan = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ success: false, message: 'Authentication required.' });
+      return;
+    }
+
+    const plan = await togglePMPlanStatusService(req.params.id, false, user);
+    res.json({
+      success: true,
+      message: 'PM plan deactivated.',
+      data: plan,
+    });
+  } catch (err) {
+    handlePMError(err, res, next);
+  }
+};
+
+export const getPMPlanHistory = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ success: false, message: 'Authentication required.' });
+      return;
+    }
+
+    const plan = await getPMPlanByIdService(req.params.id, user);
+    const history = await getMachinePMHistoryService(plan.machine_id, user);
+    res.json({
+      success: true,
+      data: history,
+    });
+  } catch (err) {
+    handlePMError(err, res, next);
+  }
+};
+
+export const getPMPlanWorkOrders = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ success: false, message: 'Authentication required.' });
+      return;
+    }
+
+    const plan = await getPMPlanByIdService(req.params.id, user);
+    const workOrders = await getMachinePMHistoryService(plan.machine_id, user);
+    res.json({
+      success: true,
+      data: workOrders,
+    });
+  } catch (err) {
+    handlePMError(err, res, next);
+  }
+};
+
+// ---------------------------------------------------------------------------
+// 2. PM Scheduling and Due Management
+// ---------------------------------------------------------------------------
+export const getPMSchedule = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ success: false, message: 'Authentication required.' });
+      return;
+    }
+
+    const result = await getPMScheduleListService(req.query, user);
+    res.json({
+      success: true,
+      data: result.data,
+      pagination: result.pagination,
+    });
+  } catch (err) {
+    handlePMError(err, res, next);
+  }
+};
+
+export const getPMUpcoming = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ success: false, message: 'Authentication required.' });
+      return;
+    }
+
+    const days = parseInt(String(req.query.days || '7'), 10) || 7;
+    const upcoming = await getPMUpcomingService(days, req.query, user);
+    res.json({
+      success: true,
+      window_days: days,
+      count: upcoming.length,
+      data: upcoming,
+    });
+  } catch (err) {
+    handlePMError(err, res, next);
+  }
+};
+
+export const getPMDue = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ success: false, message: 'Authentication required.' });
+      return;
+    }
+
+    const due = await getPMDueService(req.query, user);
+    res.json({
+      success: true,
+      count: due.length,
+      data: due,
+    });
+  } catch (err) {
+    handlePMError(err, res, next);
+  }
+};
+
+export const getPMOverdue = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ success: false, message: 'Authentication required.' });
+      return;
+    }
+
+    const overdue = await getPMOverdueService(req.query, user);
+    res.json({
+      success: true,
+      count: overdue.length,
+      data: overdue,
+    });
+  } catch (err) {
+    handlePMError(err, res, next);
+  }
+};
+
+export const getPMCalendar = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ success: false, message: 'Authentication required.' });
+      return;
+    }
+
+    const month = req.query.month as string | undefined;
+    const calendar = await getPMCalendarService(month, user);
+    res.json({
+      success: true,
+      month: month || new Date().toISOString().substring(0, 7),
+      data: calendar,
+    });
+  } catch (err) {
+    handlePMError(err, res, next);
+  }
+};
+
+export const reschedulePM = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ success: false, message: 'Authentication required.' });
+      return;
+    }
+
+    const { new_date, reason } = req.body;
+    const result = await reschedulePMService(req.params.id, new_date, reason, user);
+    res.json({
+      success: true,
+      message: 'PM schedule updated successfully.',
+      data: result,
+    });
+  } catch (err) {
+    handlePMError(err, res, next);
+  }
+};
+
+export const deferPM = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ success: false, message: 'Authentication required.' });
+      return;
+    }
+
+    const { days = 7, reason } = req.body;
+    const result = await deferPMService(req.params.id, Number(days), reason, user);
+    res.json({
+      success: true,
+      message: `PM deferred by ${days} days.`,
+      data: result,
+    });
+  } catch (err) {
+    handlePMError(err, res, next);
+  }
+};
+
+export const skipPM = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ success: false, message: 'Authentication required.' });
+      return;
+    }
+
+    const { reason } = req.body;
+    const result = await skipPMService(req.params.id, reason, user);
+    res.json({
+      success: true,
+      message: 'PM maintenance cycle skipped.',
+      data: result,
+    });
+  } catch (err) {
+    handlePMError(err, res, next);
+  }
+};
+
+// ---------------------------------------------------------------------------
+// 3. Automatic PM Work Order Generation
+// ---------------------------------------------------------------------------
 export const generateDuePMWorkOrders = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    // Select PM plans due within the next 3 days or operating hours threshold exceeded
-    const duePlans = await query(`
-      SELECT p.*, m.operating_hours, m.shop_id
-      FROM pm_plans p
-      JOIN machines m ON p.machine_id = m.id
-      WHERE p.is_active = true 
-        AND (p.next_pm_date <= CURRENT_DATE + INTERVAL '3 days' 
-             OR (p.operating_hour_threshold IS NOT NULL AND m.operating_hours >= p.operating_hour_threshold))
-    `);
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ success: false, message: 'Authentication required.' });
+      return;
+    }
 
-    const generatedWOs = [];
+    const { window_days = 3, plan_id, machine_id, technician_id } = req.body;
+    const result = await generateDuePMWorkOrdersService(
+      {
+        window_days: Number(window_days),
+        plan_id,
+        machine_id,
+        technician_id,
+      },
+      user
+    );
 
-    for (const plan of duePlans.rows) {
-      // Prevent duplicate open PM work order
-      const existingWO = await query(`
-        SELECT id FROM work_orders 
-        WHERE machine_id = $1 AND classification = 'regular_maintenance' AND status NOT IN ('verified_closed', 'completed')
-      `, [plan.machine_id]);
+    res.json({
+      success: true,
+      message: `PM Engine completed. Generated ${result.generated_count} work order(s). ${result.already_existing_count} had active open work orders.`,
+      data: result,
+    });
+  } catch (err) {
+    handlePMError(err, res, next);
+  }
+};
 
-      if (existingWO.rows.length === 0) {
-        const countRes = await query('SELECT COUNT(*) FROM work_orders');
-        const seq = parseInt(countRes.rows[0].count, 10) + 1;
-        const wo_number = `WO-PM-${new Date().getFullYear()}-${String(seq).padStart(5, '0')}`;
+// ---------------------------------------------------------------------------
+// 4. PM Execution & Completion Tracking
+// ---------------------------------------------------------------------------
+export const getPMExecutions = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ success: false, message: 'Authentication required.' });
+      return;
+    }
 
-        const woRes = await query(`
-          INSERT INTO work_orders (
-            wo_number, machine_id, priority, status, classification,
-            work_instructions, sla_deadline
-          )
-          VALUES ($1, $2, 'medium', 'assigned', 'regular_maintenance', $3, NOW() + INTERVAL '48 hours')
-          RETURNING *
-        `, [
-          wo_number,
-          plan.machine_id,
-          `Automated PM Service: ${plan.title}. Execute mandatory maintenance checklist.`,
-        ]);
+    const result = await getPMExecutionsService(req.query, user);
+    res.json({
+      success: true,
+      data: result.data,
+      pagination: result.pagination,
+    });
+  } catch (err) {
+    handlePMError(err, res, next);
+  }
+};
 
-        generatedWOs.push(woRes.rows[0]);
+export const getPMExecutionDetails = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ success: false, message: 'Authentication required.' });
+      return;
+    }
 
-        // Advance next PM date
-        await query(`
-          UPDATE pm_plans 
-          SET last_pm_date = CURRENT_DATE, 
-              next_pm_date = CURRENT_DATE + (interval_days || ' days')::interval,
-              updated_at = NOW() 
-          WHERE id = $1
-        `, [plan.id]);
+    const execution = await getPMExecutionDetailsService(req.params.id, user);
+    res.json({
+      success: true,
+      data: execution,
+    });
+  } catch (err) {
+    handlePMError(err, res, next);
+  }
+};
+
+export const getPMExecutionChecklist = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ success: false, message: 'Authentication required.' });
+      return;
+    }
+
+    const execution = await getPMExecutionDetailsService(req.params.id, user);
+    let checklist: any = null;
+    if (execution.diagnosis) {
+      try {
+        checklist = typeof execution.diagnosis === 'string' ? JSON.parse(execution.diagnosis) : execution.diagnosis;
+      } catch {
+        checklist = null;
       }
     }
 
     res.json({
       success: true,
-      message: `Engine processed. Generated ${generatedWOs.length} scheduled PM work orders.`,
-      data: generatedWOs,
+      execution_id: execution.id,
+      wo_number: execution.wo_number,
+      machine_code: execution.machine_code,
+      checklist,
     });
   } catch (err) {
-    next(err);
+    handlePMError(err, res, next);
   }
 };
 
+export const submitPMExecutionChecklist = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ success: false, message: 'Authentication required.' });
+      return;
+    }
+
+    const responses = req.body.responses || req.body.checklist;
+    const overall_status = req.body.overall_status || 'pass';
+    const result = await submitPMChecklistService(req.params.id, responses, overall_status, user);
+    res.json({
+      success: true,
+      message: 'PM checklist submitted successfully.',
+      data: result,
+    });
+  } catch (err) {
+    handlePMError(err, res, next);
+  }
+};
+
+export const completePMExecution = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ success: false, message: 'Authentication required.' });
+      return;
+    }
+
+    const { work_performed, technician_remarks, parts_used } = req.body;
+    const result = await completePMExecutionService(
+      req.params.id,
+      { work_performed, technician_remarks, parts_used },
+      user
+    );
+
+    res.json({
+      success: true,
+      message: 'PM execution completed and submitted for manager verification.',
+      data: result,
+    });
+  } catch (err) {
+    handlePMError(err, res, next);
+  }
+};
+
+export const verifyPMExecution = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ success: false, message: 'Authentication required.' });
+      return;
+    }
+
+    const status = req.body.status || req.body.action;
+    const verification_remarks = req.body.verification_remarks || req.body.remarks;
+    const result = await verifyPMExecutionService(
+      req.params.id,
+      { status, verification_remarks },
+      user
+    );
+
+    res.json({
+      success: true,
+      message: result.message,
+      data: result,
+    });
+  } catch (err) {
+    handlePMError(err, res, next);
+  }
+};
+
+export const getMachinePMHistory = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ success: false, message: 'Authentication required.' });
+      return;
+    }
+
+    const history = await getMachinePMHistoryService(req.params.machineId, user);
+    res.json({
+      success: true,
+      count: history.length,
+      data: history,
+    });
+  } catch (err) {
+    handlePMError(err, res, next);
+  }
+};
+
+// ---------------------------------------------------------------------------
+// 5. PM Dashboard, Compliance & Trends Analytics
+// ---------------------------------------------------------------------------
+export const getPMDashboard = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ success: false, message: 'Authentication required.' });
+      return;
+    }
+
+    const dashboard = await getPMDashboardService(req.query, user);
+    res.json({
+      success: true,
+      data: dashboard,
+    });
+  } catch (err) {
+    handlePMError(err, res, next);
+  }
+};
+
+export const getPMCompliance = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ success: false, message: 'Authentication required.' });
+      return;
+    }
+
+    const compliance = await getPMComplianceService(req.query, user);
+    res.json({
+      success: true,
+      data: compliance,
+    });
+  } catch (err) {
+    handlePMError(err, res, next);
+  }
+};
+
+export const getPMTrends = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ success: false, message: 'Authentication required.' });
+      return;
+    }
+
+    const trends = await getPMTrendsService(req.query, user);
+    res.json({
+      success: true,
+      data: trends,
+    });
+  } catch (err) {
+    handlePMError(err, res, next);
+  }
+};
+
+export const getPMByMachine = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ success: false, message: 'Authentication required.' });
+      return;
+    }
+
+    const byMachine = await getPMByMachineService(req.query, user);
+    res.json({
+      success: true,
+      count: byMachine.length,
+      data: byMachine,
+    });
+  } catch (err) {
+    handlePMError(err, res, next);
+  }
+};
+
+export const getPMByPlant = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ success: false, message: 'Authentication required.' });
+      return;
+    }
+
+    const byPlant = await getPMByPlantService(req.query, user);
+    res.json({
+      success: true,
+      count: byPlant.length,
+      data: byPlant,
+    });
+  } catch (err) {
+    handlePMError(err, res, next);
+  }
+};
+
+export const getPMByShop = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ success: false, message: 'Authentication required.' });
+      return;
+    }
+
+    const byShop = await getPMByShopService(req.query, user);
+    res.json({
+      success: true,
+      count: byShop.length,
+      data: byShop,
+    });
+  } catch (err) {
+    handlePMError(err, res, next);
+  }
+};
