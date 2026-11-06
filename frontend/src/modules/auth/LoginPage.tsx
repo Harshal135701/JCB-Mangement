@@ -1,17 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
-import { ShieldCheck, Lock, Mail, AlertCircle, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { useAuth, getRoleHomeRoute, UserRole } from '../../context/AuthContext';
+import { Lock, Mail, AlertCircle, ArrowLeft, Eye, EyeOff, Loader2 } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
-  const { login } = useAuth();
+  const { login, user } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
   const [identifier, setIdentifier] = useState('manager@jcb.com');
   const [password, setPassword] = useState('password123');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // If already logged in, redirect to user's home dashboard
+  useEffect(() => {
+    if (user) {
+      navigate(getRoleHomeRoute(user.role), { replace: true });
+    }
+  }, [user, navigate]);
 
   useEffect(() => {
     const emailParam = searchParams.get('email');
@@ -23,27 +31,46 @@ export const LoginPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    const cleanIdentifier = identifier.trim();
+    if (!cleanIdentifier) {
+      setError('Please enter your Employee Code or Email address.');
+      return;
+    }
+
+    if (!password) {
+      setError('Please enter your account password.');
+      return;
+    }
+
     try {
       setLoading(true);
-      await login(identifier, password);
-      navigate('/dashboard');
+      const loggedInUser = await login(cleanIdentifier, password);
+      // Navigate directly to role-appropriate dashboard
+      const targetRoute = getRoleHomeRoute(loggedInUser.role);
+      navigate(targetRoute, { replace: true });
     } catch (err: any) {
-      setError(err.response?.data?.message || err.message || 'Login failed. Please check credentials.');
+      setError(
+        err.response?.data?.message ||
+        err.message ||
+        'Authentication failed. Please verify credentials.'
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  const setDemo = (role: 'manager' | 'admin' | 'technician' | 'operator') => {
+  const setDemo = (role: UserRole) => {
     if (role === 'manager') setIdentifier('manager@jcb.com');
     if (role === 'admin') setIdentifier('admin@jcb.com');
     if (role === 'technician') setIdentifier('technician@jcb.com');
     if (role === 'operator') setIdentifier('operator@jcb.com');
     setPassword('password123');
+    setError('');
   };
 
   return (
-    <div className="min-h-screen bg-zinc-100 flex flex-col justify-center items-center p-4 selection:bg-jcb-yellow selection:text-black">
+    <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center p-4 selection:bg-jcb-yellow selection:text-black">
       {/* Back to Welcome Link */}
       <div className="max-w-md w-full mb-4">
         <Link 
@@ -51,7 +78,7 @@ export const LoginPage: React.FC = () => {
           className="inline-flex items-center gap-2 text-xs font-bold text-zinc-600 hover:text-black transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>BACK TO JCB WELCOME PAGE</span>
+          <span>BACK TO JCB CMMS PORTAL</span>
         </Link>
       </div>
 
@@ -61,8 +88,8 @@ export const LoginPage: React.FC = () => {
           <div className="inline-block bg-jcb-yellow text-black font-black text-3xl px-4 py-1.5 rounded-lg shadow-lg mb-3 tracking-widest border-2 border-jcb-yellowDark">
             JCB
           </div>
-          <h2 className="text-xl font-black text-white tracking-wide">ENTERPRISE CMMS</h2>
-          <p className="text-xs text-zinc-400 mt-1 font-medium">Smart Machine Maintenance Management System</p>
+          <h2 className="text-xl font-black text-white tracking-wide">SMART CMMS</h2>
+          <p className="text-xs text-zinc-400 mt-1 font-medium">Machine Maintenance Management System</p>
         </div>
 
         {/* 4 Core Roles Quick Select Bar */}
@@ -132,13 +159,13 @@ export const LoginPage: React.FC = () => {
               Employee Code or Email
             </label>
             <div className="relative">
-              <Mail className="w-4 h-4 text-zinc-400 absolute left-3 top-3" />
+              <Mail className="w-4 h-4 text-zinc-400 absolute left-3 top-3.5" />
               <input
                 type="text"
                 required
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
-                placeholder="e.g. manager@jcb.com"
+                placeholder="e.g. manager@jcb.com or EMP-MGR-001"
                 className="w-full pl-9 pr-3 py-2.5 bg-zinc-50 border border-zinc-300 rounded-lg text-sm text-zinc-900 focus:outline-none focus:border-jcb-yellow focus:ring-1 focus:ring-jcb-yellow font-medium"
               />
             </div>
@@ -149,27 +176,45 @@ export const LoginPage: React.FC = () => {
               Password
             </label>
             <div className="relative">
-              <Lock className="w-4 h-4 text-zinc-400 absolute left-3 top-3" />
+              <Lock className="w-4 h-4 text-zinc-400 absolute left-3 top-3.5" />
               <input
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full pl-9 pr-3 py-2.5 bg-zinc-50 border border-zinc-300 rounded-lg text-sm text-zinc-900 focus:outline-none focus:border-jcb-yellow focus:ring-1 focus:ring-jcb-yellow font-medium"
+                className="w-full pl-9 pr-10 py-2.5 bg-zinc-50 border border-zinc-300 rounded-lg text-sm text-zinc-900 focus:outline-none focus:border-jcb-yellow focus:ring-1 focus:ring-jcb-yellow font-medium"
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-3 text-zinc-400 hover:text-zinc-600 focus:outline-none"
+                tabIndex={-1}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
             </div>
             <div className="flex justify-between items-center mt-1">
-              <span className="text-[10px] text-zinc-500 font-medium">Default demo password: <code>password123</code></span>
+              <span className="text-[10px] text-zinc-500 font-medium">
+                Demo Password: <code className="font-bold text-zinc-700">password123</code>
+              </span>
             </div>
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-jcb-yellow hover:bg-jcb-yellowDark text-black font-black py-3 rounded-xl transition duration-150 uppercase tracking-wider text-sm shadow-md hover:shadow-lg disabled:opacity-50 mt-2"
+            className="w-full bg-jcb-yellow hover:bg-jcb-yellowDark text-black font-black py-3 rounded-xl transition duration-150 uppercase tracking-wider text-sm shadow-md hover:shadow-lg disabled:opacity-50 mt-2 flex items-center justify-center gap-2"
           >
-            {loading ? 'Authenticating...' : 'Sign In To Portal'}
+            {loading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Authenticating...</span>
+              </>
+            ) : (
+              <span>Sign In To Portal</span>
+            )}
           </button>
 
           {/* Plant Badges */}
@@ -185,3 +230,4 @@ export const LoginPage: React.FC = () => {
     </div>
   );
 };
+

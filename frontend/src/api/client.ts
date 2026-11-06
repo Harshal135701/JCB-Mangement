@@ -24,8 +24,9 @@ apiClient.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('jcb_token');
+      localStorage.removeItem('jcb_refresh_token');
       localStorage.removeItem('jcb_user');
-      if (window.location.pathname !== '/login') {
+      if (window.location.pathname !== '/login' && window.location.pathname !== '/') {
         window.location.href = '/login';
       }
     }
