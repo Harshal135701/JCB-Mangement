@@ -1,49 +1,65 @@
 import React, { useState, useEffect } from 'react';
 import apiClient from '../../api/client';
-import { StatusBadge } from '../../components/common/StatusBadge';
-import { MaintenanceOverviewChart } from '../../components/dashboard/MaintenanceOverviewChart';
-import { WorkOrderStatusDonut } from '../../components/dashboard/WorkOrderStatusDonut';
-import { UpcomingPMActivities } from '../../components/dashboard/UpcomingPMActivities';
-import { WorkOrdersQueueTable } from '../../components/dashboard/WorkOrdersQueueTable';
-import { MachineAssetHealthWidget } from '../../components/dashboard/MachineAssetHealthWidget';
 import { 
-  Activity, 
-  AlertOctagon, 
-  Clock, 
+  Truck, 
   CheckCircle2, 
-  RefreshCw,
-  AlertTriangle,
-  Wrench,
-  Flame,
-  ArrowRight,
-  Truck,
-  Calendar,
-  Layers,
-  ArrowUp,
-  Cpu
+  Wrench, 
+  ClipboardList, 
+  Clock, 
+  RefreshCw 
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { DashboardHeader } from '../../components/dashboard/DashboardHeader';
+import { TopKPICard } from '../../components/dashboard/TopKPICard';
+import { MachineStatusDonut } from '../../components/dashboard/MachineStatusDonut';
+import { MaintenanceTrendChart } from '../../components/dashboard/MaintenanceTrendChart';
+import { DowntimeAnalysisCard } from '../../components/dashboard/DowntimeAnalysisCard';
+import { RecentMaintenanceRequestsTable, MaintenanceRequestItem } from '../../components/dashboard/RecentMaintenanceRequestsTable';
+import { UpcomingPMTable, PMTableItem } from '../../components/dashboard/UpcomingPMTable';
 
 export const LiveShopFloorDashboard: React.FC = () => {
+  const [plant, setPlant] = useState('Pune Plant');
+  const [timeframe, setTimeframe] = useState('Last 30 Days');
+  const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState<any>(null);
-  const [machines, setMachines] = useState<any[]>([]);
-  const [recentBreakdowns, setRecentBreakdowns] = useState<any[]>([]);
-  const [workOrders, setWorkOrders] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [recentRequests, setRecentRequests] = useState<MaintenanceRequestItem[]>([]);
+  const [upcomingPMs, setUpcomingPMs] = useState<PMTableItem[]>([]);
 
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [kpiRes, machinesRes, breakdownsRes, woRes] = await Promise.all([
-        apiClient.get('/reports/dashboard-kpis'),
-        apiClient.get('/machines?limit=8'),
-        apiClient.get('/breakdowns?limit=5'),
-        apiClient.get('/work-orders?limit=6').catch(() => ({ data: { data: [] } })),
+      const [kpiRes, breakdownsRes, pmRes] = await Promise.all([
+        apiClient.get('/reports/dashboard-kpis').catch(() => ({ data: { data: null } })),
+        apiClient.get('/breakdowns?limit=5').catch(() => ({ data: { data: [] } })),
+        apiClient.get('/pm?limit=5').catch(() => ({ data: { data: [] } })),
       ]);
-      setStats(kpiRes.data.data);
-      setMachines(machinesRes.data.data || []);
-      setRecentBreakdowns(breakdownsRes.data.data || []);
-      setWorkOrders(woRes.data?.data || []);
+
+      if (kpiRes.data?.data) {
+        setStats(kpiRes.data.data);
+      }
+
+      // If backend returns real breakdowns, map them to table items
+      if (breakdownsRes.data?.data && breakdownsRes.data.data.length > 0) {
+        const mapped = breakdownsRes.data.data.map((b: any) => ({
+          id: b.complaint_number || b.id?.slice(0, 8) || 'MR-10025',
+          machine: b.machine?.code || b.machine_id || 'JCB-205',
+          issue: b.description || b.reported_problem || 'Hydraulic Leak',
+          priority: b.priority ? b.priority.charAt(0).toUpperCase() + b.priority.slice(1) : 'Critical',
+          status: b.status === 'open' ? 'In Progress' : b.status === 'in_progress' ? 'In Progress' : 'Pending',
+          date: b.created_at ? new Date(b.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' }) : '30 Apr, 10:20 AM',
+        }));
+        setRecentRequests(mapped);
+      }
+
+      // If backend returns real PM records, map them
+      if (pmRes.data?.data && pmRes.data.data.length > 0) {
+        const mappedPM = pmRes.data.data.map((p: any) => ({
+          machine: p.machine?.code || 'JCB-143',
+          activity: p.title || p.task_name || 'Filter Replacement',
+          dueDate: p.next_due_date ? new Date(p.next_due_date).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : '01 May, 2025',
+          status: p.status === 'overdue' ? 'Due Soon' : 'Scheduled',
+        }));
+        setUpcomingPMs(mappedPM);
+      }
     } catch (err) {
       console.error('Failed to load manager dashboard:', err);
     } finally {
@@ -53,257 +69,179 @@ export const LiveShopFloorDashboard: React.FC = () => {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [plant, timeframe]);
 
-  const criticalBreakdownsCount = recentBreakdowns.filter(
-    (b) => b.priority === 'critical' && b.status !== 'resolved' && b.status !== 'rejected'
-  ).length;
+  // Derived or Image 2 baseline KPI metrics
+  const totalMachines = stats?.total_machines ?? 120;
+  const runningMachines = stats?.running_machines ?? 98;
+  const breakdownMachines = stats?.breakdown_machines ?? 12;
+  const pendingRequests = stats?.pending_requests ?? 18;
+  const activeWorkOrders = stats?.active_work_orders ?? 22;
 
   return (
     <div className="space-y-6 min-h-full pb-8">
       {/* =========================================================================
-          TOP COMMAND BANNER (Hero style matching Image 4 - NO IMAGES)
+          TOP HEADER: Manager Dashboard & Dropdowns (Image 2)
           ========================================================================= */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-zinc-950 via-zinc-900 to-zinc-950 border-2 border-zinc-800 text-white p-6 sm:p-8 shadow-sm">
-        {/* Subtle industrial grid accent */}
-        <div className="absolute inset-0 bg-[radial-gradient(#3F3F46_1px,transparent_1px)] [background-size:16px_16px] opacity-25 pointer-events-none" />
+      <DashboardHeader
+        title="Manager Dashboard"
+        subtitle="Overview of maintenance operations across your plant"
+        selectedPlant={plant}
+        onPlantChange={setPlant}
+        selectedTimeframe={timeframe}
+        onTimeframeChange={setTimeframe}
+        actions={
+          <button
+            onClick={fetchData}
+            disabled={loading}
+            className="flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200/90 rounded-xl text-xs font-bold text-zinc-700 hover:bg-slate-50 transition shadow-2xs cursor-pointer"
+            title="Refresh shop floor telemetry"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-amber-600' : 'text-zinc-500'}`} />
+            <span className="hidden sm:inline">Refresh</span>
+          </button>
+        }
+      />
 
-        <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2 max-w-2xl">
-            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-md bg-amber-500/10 border border-amber-500/30 text-jcb-yellow text-[11px] font-bold uppercase tracking-wider">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span>Keep Machines Running. Always.</span>
-            </div>
+      {/* =========================================================================
+          ROW 1: 5 TOP KPI METRIC CARDS (Image 2)
+          ========================================================================= */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+        {/* Card 1: Total Machines */}
+        <TopKPICard
+          icon={Truck}
+          iconBgColor="bg-amber-100/70"
+          iconColor="text-amber-700"
+          label="Total Machines"
+          value={totalMachines}
+          trend="↑ 2%"
+          trendColor="text-emerald-600"
+        />
 
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight uppercase">
-              JCB Smart Machine Maintenance System
-            </h1>
+        {/* Card 2: Running Machines */}
+        <TopKPICard
+          icon={CheckCircle2}
+          iconBgColor="bg-zinc-900"
+          iconColor="text-white"
+          label="Running Machines"
+          value={runningMachines}
+          trend="↑ 1%"
+          trendColor="text-emerald-600"
+        />
 
-            <p className="text-xs sm:text-sm text-zinc-400 font-medium">
-              Plan • Monitor • Maintain — Plant 1: Ballabgarh Works Telemetry
-            </p>
-          </div>
+        {/* Card 3: Breakdown Machines */}
+        <TopKPICard
+          icon={Wrench}
+          iconBgColor="bg-slate-100"
+          iconColor="text-zinc-700"
+          label="Breakdown Machines"
+          value={breakdownMachines}
+          trend="↓ 1%"
+          trendColor="text-red-500"
+        />
 
-          <div className="flex flex-wrap items-center gap-3">
-            <Link
-              to="/triage"
-              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-black rounded-xl transition shadow-xs uppercase tracking-wider flex items-center gap-2"
-            >
-              <AlertTriangle className="w-3.5 h-3.5" />
-              <span>Triage Queue</span>
-            </Link>
+        {/* Card 4: Pending Requests */}
+        <TopKPICard
+          icon={ClipboardList}
+          iconBgColor="bg-slate-100"
+          iconColor="text-zinc-700"
+          label="Pending Requests"
+          value={pendingRequests}
+          trend="↑ 3%"
+          trendColor="text-emerald-600"
+        />
 
-            <Link
-              to="/work-orders"
-              className="px-4 py-2 bg-jcb-yellow hover:bg-amber-400 text-black text-xs font-black rounded-xl transition border border-amber-500 shadow-xs uppercase tracking-wider flex items-center gap-2"
-            >
-              <Wrench className="w-3.5 h-3.5" />
-              <span>Work Orders</span>
-            </Link>
-
-            <button
-              onClick={fetchData}
-              disabled={loading}
-              className="p-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl border border-zinc-700 transition"
-              title="Refresh Telemetry"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-jcb-yellow' : ''}`} />
-            </button>
-          </div>
-        </div>
+        {/* Card 5: Active Work Orders */}
+        <TopKPICard
+          icon={Clock}
+          iconBgColor="bg-slate-100"
+          iconColor="text-zinc-700"
+          label="Active Work Orders"
+          value={activeWorkOrders}
+          trend="↑ 5%"
+          trendColor="text-emerald-600"
+        />
       </div>
 
       {/* =========================================================================
-          TOP 4 KPI CARDS (Matching Image 4: 48 Machines, 12 WOs, 94% Uptime, 3 Alerts)
+          ROW 2: 3 MIDDLE ANALYTICS CARDS (Image 2)
           ========================================================================= */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* CARD 1: Total Machines */}
-        <div className="bg-white rounded-2xl border-2 border-slate-200 p-5 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <div className="w-11 h-11 rounded-full bg-amber-100 text-amber-900 border border-amber-300 flex items-center justify-center shrink-0">
-              <Truck className="w-5 h-5 text-amber-800" />
-            </div>
-            <div className="flex items-center gap-1 text-[11px] font-bold text-emerald-600">
-              <ArrowUp className="w-3.5 h-3.5" />
-              <span>+2%</span>
-            </div>
-          </div>
-          <div className="mt-3">
-            <span className="text-3xl font-black text-zinc-950 font-mono tracking-tight">
-              {stats?.totalMachines ?? 48}
-            </span>
-            <div className="text-xs font-bold text-zinc-500 mt-0.5">
-              Total Machines
-            </div>
-          </div>
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        {/* Card 1: Machine Status Donut */}
+        <MachineStatusDonut
+          title="Machine Status Overview"
+          totalLabel="Total"
+          totalCount={totalMachines}
+          segments={[
+            { label: 'Running', count: 98, percentage: 81.7, color: '#10B981' },
+            { label: 'Idle', count: 8, percentage: 6.7, color: '#F59E0B' },
+            { label: 'Breakdown', count: 12, percentage: 10.0, color: '#EF4444' },
+            { label: 'Under Maintenance', count: 2, percentage: 1.6, color: '#1E293B' },
+          ]}
+        />
 
-        {/* CARD 2: Open Work Orders */}
-        <div className="bg-white rounded-2xl border-2 border-slate-200 p-5 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <div className="w-11 h-11 rounded-full bg-zinc-950 text-white flex items-center justify-center shrink-0">
-              <Wrench className="w-5 h-5 text-jcb-yellow" />
-            </div>
-            <div className="flex items-center gap-1 text-[11px] font-bold text-emerald-600">
-              <ArrowUp className="w-3.5 h-3.5" />
-              <span>+1%</span>
-            </div>
-          </div>
-          <div className="mt-3">
-            <span className="text-3xl font-black text-zinc-950 font-mono tracking-tight">
-              {stats?.openWorkOrders ?? 12}
-            </span>
-            <div className="text-xs font-bold text-zinc-500 mt-0.5">
-              Open Work Orders
-            </div>
-          </div>
-        </div>
+        {/* Card 2: Maintenance Trend Spline Chart */}
+        <MaintenanceTrendChart
+          title="Maintenance Trend"
+          series1Name="Corrective"
+          series2Name="Preventive"
+          series1Color="#18181B"
+          series2Color="#EAB308"
+          data={[
+            { label: 'Week 1', series1: 20, series2: 13 },
+            { label: 'Week 2', series1: 27, series2: 20 },
+            { label: 'Week 3', series1: 25, series2: 18 },
+            { label: 'Week 4', series1: 32, series2: 25 },
+          ]}
+          maxY={40}
+        />
 
-        {/* CARD 3: Uptime */}
-        <div className="bg-white rounded-2xl border-2 border-slate-200 p-5 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <div className="w-11 h-11 rounded-full bg-amber-100 text-amber-900 border border-amber-300 flex items-center justify-center shrink-0">
-              <Calendar className="w-5 h-5 text-amber-800" />
-            </div>
-            <div className="flex items-center gap-1 text-[11px] font-bold text-emerald-600">
-              <ArrowUp className="w-3.5 h-3.5" />
-              <span>+0.5%</span>
-            </div>
-          </div>
-          <div className="mt-3">
-            <span className="text-3xl font-black text-zinc-950 font-mono tracking-tight">
-              {stats?.machineAvailabilityPercent ? `${stats.machineAvailabilityPercent}%` : '94%'}
-            </span>
-            <div className="text-xs font-bold text-zinc-500 mt-0.5">
-              Uptime
-            </div>
-          </div>
-        </div>
-
-        {/* CARD 4: Critical Alerts */}
-        <div className="bg-white rounded-2xl border-2 border-slate-200 p-5 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <div className="w-11 h-11 rounded-full bg-zinc-950 text-red-500 flex items-center justify-center shrink-0">
-              <AlertTriangle className="w-5 h-5 text-red-500" />
-            </div>
-            <div className="flex items-center gap-1 text-[11px] font-bold text-red-600">
-              <ArrowUp className="w-3.5 h-3.5" />
-              <span>+1%</span>
-            </div>
-          </div>
-          <div className="mt-3">
-            <span className="text-3xl font-black text-red-700 font-mono tracking-tight">
-              {criticalBreakdownsCount > 0 ? criticalBreakdownsCount : 3}
-            </span>
-            <div className="text-xs font-bold text-zinc-500 mt-0.5">
-              Critical Alerts
-            </div>
-          </div>
-        </div>
+        {/* Card 3: Downtime Analysis Gauge Card */}
+        <DowntimeAnalysisCard
+          title="Downtime Analysis"
+          rateValue="2.8%"
+          rateLabel="Downtime Rate"
+          percentage={28}
+          gaugeColor="#F59E0B"
+          metrics={[
+            {
+              icon: Clock,
+              label: 'Total Downtime',
+              value: '48 Hrs',
+              change: '↓ 12%',
+              isPositiveChange: true,
+            },
+            {
+              icon: Clock,
+              label: 'Avg. Repair Time',
+              value: '2.1 Hrs',
+              change: '↓ 8%',
+              isPositiveChange: true,
+            },
+          ]}
+        />
       </div>
 
       {/* =========================================================================
-          MIDDLE ROW: Maintenance Overview Spline, Donut Status, Upcoming PM
+          ROW 3: BOTTOM ROW 2-COLUMN SPLIT (Image 2: ~60% Left, ~40% Right)
           ========================================================================= */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* Left: Maintenance Overview (5 cols) */}
-        <div className="lg:col-span-5">
-          <MaintenanceOverviewChart />
-        </div>
-
-        {/* Middle: Work Order Status Donut (3.5 cols) */}
-        <div className="lg:col-span-3.5">
-          <WorkOrderStatusDonut
-            totalCount={68}
-            openCount={24}
-            inProgressCount={20}
-            completedCount={18}
-            overdueCount={6}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        {/* Left Column (~60%): Recent Maintenance Requests */}
+        <div className="lg:col-span-7">
+          <RecentMaintenanceRequestsTable
+            title="Recent Maintenance Requests"
+            viewAllLink="/triage"
+            requests={recentRequests.length > 0 ? recentRequests : undefined}
           />
         </div>
 
-        {/* Right: Upcoming PM Activities (3.5 cols) */}
-        <div className="lg:col-span-3.5">
-          <UpcomingPMActivities />
-        </div>
-      </div>
-
-      {/* =========================================================================
-          BOTTOM ROW: Work Orders Queue Table (Left) & Machine Asset Health (Right)
-          ========================================================================= */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* Left: Work Orders Queue (7.5 cols) */}
-        <div className="lg:col-span-7.5">
-          <WorkOrdersQueueTable liveOrders={workOrders} />
-        </div>
-
-        {/* Right: Machine Asset Health Widget (4.5 cols - NO IMAGES) */}
-        <div className="lg:col-span-4.5">
-          <MachineAssetHealthWidget />
-        </div>
-      </div>
-
-      {/* =========================================================================
-          PLANT TELEMETRY: Real-Time Machine Fleet Grid & Response Statistics
-          ========================================================================= */}
-      <div className="bg-white p-5 sm:p-6 rounded-2xl border-2 border-slate-200 shadow-xs">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="text-sm font-black text-zinc-950 uppercase tracking-wider">
-              Ballabgarh Live Fleet Grid ({machines.length} active nodes)
-            </h3>
-            <p className="text-xs text-zinc-500 font-medium">Real-time status across Ballabgarh Shop Floor bays</p>
-          </div>
-          <Link
-            to="/machines"
-            className="text-xs font-black text-amber-800 hover:text-black flex items-center gap-1 uppercase tracking-wider"
-          >
-            <span>View All 1,000+ Assets</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-          {machines.map((m) => {
-            const isDown = m.status === 'breakdown';
-            const isMaint = m.status === 'under_maintenance';
-
-            return (
-              <div
-                key={m.id}
-                className={`p-3.5 rounded-xl border-2 transition relative ${
-                  isDown
-                    ? 'border-red-300 bg-red-50/30'
-                    : isMaint
-                    ? 'border-amber-300 bg-amber-50/30'
-                    : 'border-slate-200 bg-white hover:border-slate-400'
-                }`}
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <span className="font-mono text-xs font-black text-zinc-950">{m.machine_code}</span>
-                    <h4 className="text-xs font-bold text-zinc-800 line-clamp-1 mt-0.5">{m.name}</h4>
-                  </div>
-                  <span
-                    className={`w-2.5 h-2.5 rounded-full ${
-                      isDown
-                        ? 'bg-red-500 animate-pulse'
-                        : isMaint
-                        ? 'bg-amber-500 animate-pulse'
-                        : 'bg-emerald-500'
-                    }`}
-                  />
-                </div>
-
-                <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] font-black uppercase tracking-wider">
-                  <StatusBadge status={m.status || 'running'} />
-                  <span className="font-mono text-zinc-500">
-                    {m.operating_hours ? `${Number(m.operating_hours).toFixed(0)} hrs` : '0 hrs'}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
+        {/* Right Column (~40%): Upcoming Preventive Maintenance */}
+        <div className="lg:col-span-5">
+          <UpcomingPMTable
+            title="Upcoming Preventive Maintenance"
+            viewCalendarLink="/pm"
+            activities={upcomingPMs.length > 0 ? upcomingPMs : undefined}
+          />
         </div>
       </div>
     </div>

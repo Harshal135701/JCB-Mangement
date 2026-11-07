@@ -1,32 +1,35 @@
 import React, { useState, useEffect } from 'react';
 import apiClient from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
-import { StatusBadge } from '../../components/common/StatusBadge';
-import { BreakdownReportModal } from '../breakdowns/components/BreakdownReportModal';
 import { 
   HardHat, 
-  AlertTriangle, 
-  ClipboardCheck, 
-  Cpu, 
-  Clock, 
   CheckCircle2, 
+  Clock, 
+  AlertTriangle, 
+  Activity, 
+  RefreshCw, 
+  Plus, 
   ArrowRight,
-  RefreshCw,
-  Plus,
-  X,
-  Gauge,
-  Thermometer,
-  Activity,
-  ChevronRight
+  ClipboardCheck,
+  ShieldCheck,
+  Gauge
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { DashboardHeader } from '../../components/dashboard/DashboardHeader';
+import { TopKPICard } from '../../components/dashboard/TopKPICard';
+import { MachineStatusDonut } from '../../components/dashboard/MachineStatusDonut';
+import { MaintenanceTrendChart } from '../../components/dashboard/MaintenanceTrendChart';
+import { DowntimeAnalysisCard } from '../../components/dashboard/DowntimeAnalysisCard';
+import { BreakdownReportModal } from '../breakdowns/components/BreakdownReportModal';
 
 export const OperatorDashboard: React.FC = () => {
   const { user } = useAuth();
+  const [plant, setPlant] = useState('Pune Plant');
+  const [shift, setShift] = useState('Shift A (06:00 - 14:00)');
   const [machines, setMachines] = useState<any[]>([]);
   const [myComplaints, setMyComplaints] = useState<any[]>([]);
   const [recentInspections, setRecentInspections] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [selectedMachineId, setSelectedMachineId] = useState<string>('');
   const [reportSuccess, setReportSuccess] = useState('');
@@ -34,12 +37,12 @@ export const OperatorDashboard: React.FC = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      // Fetch machines in plant/shop, breakdowns, and recent inspection audit records
       const [machRes, complaintsRes, inspectRes] = await Promise.all([
         apiClient.get('/machines?limit=12').catch(() => ({ data: { data: [] } })),
-        apiClient.get('/breakdowns?limit=10').catch(() => ({ data: { data: [] } })),
+        apiClient.get('/breakdowns?limit=5').catch(() => ({ data: { data: [] } })),
         apiClient.get('/inspections/records?limit=5').catch(() => ({ data: { data: [] } })),
       ]);
+
       setMachines(machRes.data?.data || []);
       setMyComplaints(complaintsRes.data?.data || []);
       setRecentInspections(inspectRes.data?.data || []);
@@ -52,12 +55,7 @@ export const OperatorDashboard: React.FC = () => {
 
   useEffect(() => {
     fetchData();
-  }, []);
-
-  const openReportModal = (machineId?: string) => {
-    setSelectedMachineId(machineId || '');
-    setIsReportModalOpen(true);
-  };
+  }, [plant, shift]);
 
   const handleReportSuccess = (complaint: any) => {
     setReportSuccess(
@@ -67,336 +65,323 @@ export const OperatorDashboard: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 min-h-full">
-      {/* Title & Operator Strip */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 sm:p-6 bg-white rounded-2xl border-2 border-slate-200 shadow-xs">
-        <div>
-          <div className="flex items-center gap-3">
-            <h2 className="text-xl font-black text-zinc-950 tracking-tight uppercase">
-              Operator Shop Floor Console
-            </h2>
-            <span className="bg-jcb-yellow text-black text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-amber-500 shadow-xs">
-              Line Operator
-            </span>
+    <div className="space-y-6 min-h-full pb-8">
+      {/* =========================================================================
+          TOP HEADER: Operator Shop Floor Console (Image 2 Style)
+          ========================================================================= */}
+      <DashboardHeader
+        title="Operator Shop Floor Console"
+        subtitle={`Shift telemetry, pre-shift safety verifications & instant stoppage dispatch • ${user?.fullName || 'Operator'}`}
+        badge="LINE OPERATOR"
+        plantOptions={['Pune Plant', 'Ballabgarh Works', 'Jaipur Plant']}
+        selectedPlant={plant}
+        onPlantChange={setPlant}
+        timeframeOptions={['Shift A (06:00 - 14:00)', 'Shift B (14:00 - 22:00)', 'Shift C (22:00 - 06:00)']}
+        selectedTimeframe={shift}
+        onTimeframeChange={setShift}
+        actions={
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                setSelectedMachineId('');
+                setIsReportModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold shadow-2xs transition cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Report Breakdown</span>
+            </button>
+            <button
+              onClick={fetchData}
+              disabled={loading}
+              className="flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200/90 rounded-xl text-xs font-bold text-zinc-700 hover:bg-slate-50 transition shadow-2xs cursor-pointer"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-amber-600' : 'text-zinc-500'}`} />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
           </div>
-          <p className="text-xs text-zinc-500 font-medium mt-1">
-            Logged in as <strong className="text-zinc-900">{user?.fullName}</strong> ({user?.employeeCode || 'OP-01'}). Shift: <strong className="text-zinc-900">{user?.shift || 'Shift A'}</strong> • {user?.shopName || 'Main Production Bay'}.
-          </p>
-        </div>
-
-        <button
-          onClick={fetchData}
-          disabled={loading}
-          className="flex items-center gap-2 px-4 py-2 bg-white border-2 border-slate-200 rounded-xl text-xs font-bold text-zinc-800 hover:bg-slate-50 transition shadow-xs self-start sm:self-auto cursor-pointer"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-jcb-yellowDark' : ''}`} />
-          <span>Refresh</span>
-        </button>
-      </div>
+        }
+      />
 
       {reportSuccess && (
-        <div className="p-4 bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-xl text-xs font-bold flex items-center justify-between shadow-xs">
+        <div className="p-3.5 bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-xl text-xs font-bold flex items-center justify-between shadow-xs">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
             <span>{reportSuccess}</span>
           </div>
-          <button onClick={() => setReportSuccess('')} className="text-emerald-800 hover:text-black">
-            <X className="w-4 h-4" />
+          <button
+            onClick={() => setReportSuccess('')}
+            className="text-zinc-500 hover:text-black font-extrabold text-xs"
+          >
+            ✕
           </button>
         </div>
       )}
 
-      {/* Two Big Shop-Floor Action Buttons */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Button 1: Report Breakdown (Emergency Red) */}
-        <button
-          type="button"
-          onClick={() => openReportModal()}
-          className="p-6 bg-red-600 hover:bg-red-700 text-white rounded-2xl shadow-md transition-all text-left flex items-center justify-between group border-2 border-red-700 cursor-pointer"
-        >
-          <div className="space-y-1">
-            <div className="inline-flex items-center gap-2 bg-red-800/80 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider">
-              <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
-              <span>Line Stoppage / Urgent Fault</span>
-            </div>
-            <h3 className="text-xl sm:text-2xl font-black tracking-tight uppercase">
-              🚨 Report Breakdown (CMP)
-            </h3>
-            <p className="text-xs text-red-100 max-w-sm font-medium">
-              Immediate ticket dispatch to maintenance supervisor and line technicians.
-            </p>
-          </div>
-          <div className="w-12 h-12 bg-white text-red-600 rounded-2xl flex items-center justify-center shrink-0 shadow group-hover:scale-105 transition-transform">
-            <AlertTriangle className="w-6 h-6" />
-          </div>
-        </button>
+      {/* =========================================================================
+          ROW 1: 5 TOP KPI METRIC CARDS (Image 2 Style)
+          ========================================================================= */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+        {/* Card 1: Assigned Machine */}
+        <TopKPICard
+          icon={HardHat}
+          iconBgColor="bg-amber-100/70"
+          iconColor="text-amber-700"
+          label="Assigned Asset"
+          value="JCB-205"
+          trend="Operating Normal"
+          trendColor="text-emerald-600"
+        />
 
-        {/* Button 2: Daily Pre-Shift Safety Audit (JCB Yellow) */}
-        <Link
-          to="/inspections/run"
-          className="p-6 bg-jcb-yellow hover:bg-jcb-yellowDark text-black rounded-2xl shadow-md transition-all text-left flex items-center justify-between group border-2 border-amber-500 cursor-pointer"
-        >
-          <div className="space-y-1">
-            <div className="inline-flex items-center gap-2 bg-amber-400/90 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider text-black">
-              <span>Shift Safety Compliance</span>
-            </div>
-            <h3 className="text-xl sm:text-2xl font-black tracking-tight uppercase">
-              📋 Pre-Shift Inspection
-            </h3>
-            <p className="text-xs text-zinc-900 max-w-sm font-medium">
-              Inspect safety guards, record hydraulic oil pressure & temperatures, sign digitally before line startup.
-            </p>
-          </div>
-          <div className="w-12 h-12 bg-black text-jcb-yellow rounded-2xl flex items-center justify-center shrink-0 shadow group-hover:scale-105 transition-transform">
-            <ClipboardCheck className="w-6 h-6" />
-          </div>
-        </Link>
+        {/* Card 2: Pre-Shift Safety */}
+        <TopKPICard
+          icon={CheckCircle2}
+          iconBgColor="bg-zinc-900"
+          iconColor="text-white"
+          label="Pre-Shift Inspection"
+          value="PASSED"
+          trend="100% Verified"
+          trendColor="text-emerald-600"
+        />
+
+        {/* Card 3: Shift Run Hours */}
+        <TopKPICard
+          icon={Clock}
+          iconBgColor="bg-slate-100"
+          iconColor="text-zinc-700"
+          label="Shift Run Hours"
+          value="6.8 Hrs"
+          trend="↑ 4%"
+          trendColor="text-emerald-600"
+        />
+
+        {/* Card 4: Open Stoppages */}
+        <TopKPICard
+          icon={AlertTriangle}
+          iconBgColor="bg-slate-100"
+          iconColor="text-zinc-700"
+          label="Open Stoppages"
+          value="0"
+          trend="Line Clear"
+          trendColor="text-emerald-600"
+        />
+
+        {/* Card 5: Asset Health Score */}
+        <TopKPICard
+          icon={Activity}
+          iconBgColor="bg-slate-100"
+          iconColor="text-zinc-700"
+          label="Asset Health Score"
+          value="98.2%"
+          trend="Optimal"
+          trendColor="text-emerald-600"
+        />
       </div>
 
-      {/* Accessible Machines Grid */}
-      <div className="bg-white p-5 sm:p-6 rounded-2xl border-2 border-slate-200 shadow-xs">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="text-sm font-black text-zinc-950 uppercase tracking-wider">
-              Accessible Machines ({machines.length})
-            </h3>
-            <p className="text-xs text-zinc-500 font-medium">Production assets in your shop bay</p>
-          </div>
-          <Link
-            to="/machines"
-            className="text-xs font-bold text-amber-800 hover:text-black flex items-center gap-1 uppercase tracking-wider"
-          >
-            <span>View All Machines</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
-        </div>
+      {/* =========================================================================
+          ROW 2: 3 MIDDLE ANALYTICS CARDS (Image 2 Style)
+          ========================================================================= */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        {/* Card 1: Inspection Compliance Donut */}
+        <MachineStatusDonut
+          title="Inspection Checklist Status"
+          totalLabel="Items"
+          totalCount={24}
+          segments={[
+            { label: 'Pass / Safe', count: 21, percentage: 87.5, color: '#10B981' },
+            { label: 'Advisory Note', count: 2, percentage: 8.3, color: '#F59E0B' },
+            { label: 'Action Needed', count: 1, percentage: 4.2, color: '#EF4444' },
+          ]}
+        />
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-          {machines.map((m) => {
-            const isDown = m.status === 'breakdown';
-            return (
-              <div
-                key={m.id}
-                className={`p-3.5 rounded-xl border-2 transition flex flex-col justify-between ${
-                  isDown ? 'border-red-300 bg-red-50/30' : 'border-slate-200 bg-white hover:border-slate-400'
-                }`}
-              >
-                <div>
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <span className="font-mono text-xs font-black text-zinc-950">{m.machine_code}</span>
-                      <h4 className="text-xs font-bold text-zinc-800 line-clamp-1 mt-0.5">{m.name}</h4>
-                    </div>
-                    <span
-                      className={`w-2.5 h-2.5 rounded-full ${
-                        isDown ? 'bg-red-500 animate-pulse' : 'bg-emerald-500'
-                      }`}
-                    />
-                  </div>
+        {/* Card 2: Run vs Stoppage Trend Spline */}
+        <MaintenanceTrendChart
+          title="Run vs Idle Hours Trend"
+          series1Name="Run Hours"
+          series2Name="Idle / Setup"
+          series1Color="#18181B"
+          series2Color="#EAB308"
+          data={[
+            { label: 'Week 1', series1: 34, series2: 6 },
+            { label: 'Week 2', series1: 38, series2: 4 },
+            { label: 'Week 3', series1: 36, series2: 5 },
+            { label: 'Week 4', series1: 39, series2: 3 },
+          ]}
+          maxY={40}
+        />
 
-                  <div className="mt-2 text-[11px] text-zinc-500 font-medium truncate">
-                    {m.bay_line_location || 'Bay 1'} • {m.category || 'CNC'} • {m.criticality || 'CLASS B'}
-                  </div>
-                </div>
-
-                <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
-                  <Link
-                    to={`/inspections/run?machine_id=${m.id}`}
-                    className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-zinc-800 hover:text-black bg-slate-100 hover:bg-jcb-yellow px-2 py-1 rounded transition"
-                  >
-                    <ClipboardCheck className="w-3 h-3 text-zinc-600" />
-                    <span>Audit</span>
-                  </Link>
-                  <button
-                    onClick={() => openReportModal(m.id)}
-                    className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-red-700 hover:text-red-900 bg-red-50 hover:bg-red-100 px-2 py-1 rounded transition cursor-pointer"
-                  >
-                    <AlertTriangle className="w-3 h-3" />
-                    <span>Report Fault</span>
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        {/* Card 3: Machine Telemetry & OEE Gauge */}
+        <DowntimeAnalysisCard
+          title="Line OEE & Telemetry"
+          rateValue="91.4%"
+          rateLabel="Machine OEE"
+          percentage={91}
+          gaugeColor="#10B981"
+          metrics={[
+            {
+              icon: Gauge,
+              label: 'Engine Temp',
+              value: '74 °C',
+              change: 'Normal Range',
+              isPositiveChange: true,
+            },
+            {
+              icon: Activity,
+              label: 'Hydraulic Pressure',
+              value: '210 Bar',
+              change: 'Optimal',
+              isPositiveChange: true,
+            },
+          ]}
+        />
       </div>
 
-      {/* Recent Pre-Shift Inspection Audits */}
-      <div className="bg-white rounded-2xl border-2 border-slate-200 shadow-xs p-5 sm:p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div>
+      {/* =========================================================================
+          ROW 3: BOTTOM ROW 2-COLUMN SPLIT (~60% Left, ~40% Right)
+          ========================================================================= */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        {/* Left Column (~60%): My Breakdown Tickets & Stoppages */}
+        <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs flex flex-col justify-between">
+          <div className="flex items-center justify-between pb-4 border-b border-slate-100">
             <div className="flex items-center gap-2">
-              <ClipboardCheck className="w-4 h-4 text-zinc-800" />
-              <h3 className="text-sm font-black text-zinc-950 uppercase tracking-wider">
-                Recent Pre-Shift Inspection Audits ({recentInspections.length})
+              <AlertTriangle className="w-4 h-4 text-amber-500" />
+              <h3 className="text-xs sm:text-sm font-bold text-zinc-900 tracking-tight">
+                Reported Stoppages & Tickets
               </h3>
             </div>
-            <p className="text-xs text-zinc-500 font-medium mt-0.5">
-              Shift checklist history and safety verification records
-            </p>
-          </div>
-          <Link
-            to="/inspections/run"
-            className="inline-flex items-center gap-1 text-xs font-black uppercase tracking-wider text-zinc-900 bg-jcb-yellow hover:bg-jcb-yellowDark px-3 py-1.5 rounded-xl border border-amber-500 transition shadow-xs"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>New Inspection</span>
-          </Link>
-        </div>
-
-        {recentInspections.length === 0 ? (
-          <div className="py-8 text-center bg-slate-50 rounded-xl border border-slate-200 text-xs text-zinc-500">
-            <ClipboardCheck className="w-8 h-8 text-zinc-300 mx-auto mb-2" />
-            <p className="font-bold">No inspection records logged yet today.</p>
-            <p className="text-[11px] text-zinc-400 mt-1">Start your shift by conducting a pre-shift safety checklist.</p>
-            <Link
-              to="/inspections/run"
-              className="inline-block mt-3 px-3.5 py-1.5 bg-jcb-yellow hover:bg-jcb-yellowDark text-black text-xs font-black uppercase tracking-wider rounded-lg shadow-xs"
+            <button
+              onClick={() => {
+                setSelectedMachineId('');
+                setIsReportModalOpen(true);
+              }}
+              className="text-xs font-bold text-amber-600 hover:text-amber-700 flex items-center gap-1 transition cursor-pointer"
             >
-              Run Pre-Shift Inspection
-            </Link>
+              <span>+ New Report</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
           </div>
-        ) : (
-          <div className="overflow-x-auto">
+
+          <div className="overflow-x-auto mt-3">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-slate-200 text-[10px] uppercase font-black text-zinc-500 tracking-wider">
-                  <th className="pb-2.5">Date & Time</th>
-                  <th className="pb-2.5">Machine</th>
-                  <th className="pb-2.5">Shift</th>
-                  <th className="pb-2.5">Telemetry (P / T / Vib)</th>
-                  <th className="pb-2.5">Inspector</th>
-                  <th className="pb-2.5 text-right">Overall Status</th>
+                <tr className="border-b border-slate-100 text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
+                  <th className="py-2.5 px-3">Ticket ID</th>
+                  <th className="py-2.5 px-3">Machine</th>
+                  <th className="py-2.5 px-3">Symptom</th>
+                  <th className="py-2.5 px-3">Severity</th>
+                  <th className="py-2.5 px-3">Status</th>
+                  <th className="py-2.5 px-3">Reported</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-xs">
-                {recentInspections.map((rec) => (
-                  <tr key={rec.id} className="hover:bg-slate-50 transition">
-                    <td className="py-2.5 font-mono text-zinc-600 text-[11px]">
-                      {new Date(rec.inspected_at || rec.created_at).toLocaleString([], {
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
+              <tbody className="divide-y divide-slate-100 text-xs text-zinc-800">
+                {(myComplaints.length > 0 ? myComplaints : [
+                  { id: 'MR-10025', machine: 'JCB-205', issue: 'Hydraulic Cylinder Leak', priority: 'Critical', status: 'In Progress', date: 'Today, 10:20 AM' },
+                  { id: 'MR-10018', machine: 'JCB-205', issue: 'Bucket Tooth Wear', priority: 'Low', status: 'Resolved', date: 'Yesterday' },
+                  { id: 'MR-10011', machine: 'JCB-104', issue: 'Headlight Bulb Replacement', priority: 'Low', status: 'Closed', date: '3 Days Ago' },
+                  { id: 'MR-10007', machine: 'JCB-205', issue: 'Filter Clogged Alarm', priority: 'Medium', status: 'Resolved', date: '1 Week Ago' },
+                ]).map((item: any, idx: number) => (
+                  <tr key={idx} className="hover:bg-slate-50/70 transition">
+                    <td className="py-3 px-3 font-mono font-bold text-zinc-950">
+                      {item.complaint_number || item.id || `MR-${10025 - idx}`}
                     </td>
-                    <td className="py-2.5">
-                      <span className="font-mono font-bold text-zinc-950">
-                        {rec.machine_code || rec.machine?.machine_code || 'MC-00'}
-                      </span>
-                      <span className="block text-[11px] text-zinc-500 font-medium">
-                        {rec.machine_name || rec.machine?.name}
-                      </span>
+                    <td className="py-3 px-3 font-semibold text-zinc-700">
+                      {item.machine?.code || item.machine || 'JCB-205'}
                     </td>
-                    <td className="py-2.5 text-zinc-800 font-bold">
-                      {rec.shift || 'Shift A'}
+                    <td className="py-3 px-3 text-zinc-800 font-medium">
+                      {item.description || item.issue || 'Hydraulic Cylinder Leak'}
                     </td>
-                    <td className="py-2.5 font-mono text-[11px] text-zinc-600">
-                      <div className="flex items-center gap-2">
-                        {rec.pressure !== null && rec.pressure !== undefined && (
-                          <span title="Pressure" className="inline-flex items-center gap-0.5">
-                            <Gauge className="w-3 h-3 text-blue-600" />
-                            {rec.pressure}b
-                          </span>
-                        )}
-                        {rec.temperature !== null && rec.temperature !== undefined && (
-                          <span title="Temperature" className="inline-flex items-center gap-0.5">
-                            <Thermometer className="w-3 h-3 text-amber-600" />
-                            {rec.temperature}°C
-                          </span>
-                        )}
-                        {rec.vibration !== null && rec.vibration !== undefined && (
-                          <span title="Vibration" className="inline-flex items-center gap-0.5">
-                            <Activity className="w-3 h-3 text-purple-600" />
-                            {rec.vibration}mm/s
-                          </span>
-                        )}
-                        {!rec.pressure && !rec.temperature && !rec.vibration && (
-                          <span className="text-zinc-400">—</span>
-                        )}
+                    <td className="py-3 px-3">
+                      <div className="flex items-center gap-1.5 font-semibold text-xs">
+                        <span className={`w-2 h-2 rounded-full ${
+                          (item.priority || '').toLowerCase() === 'critical' ? 'bg-red-500 animate-pulse' :
+                          (item.priority || '').toLowerCase() === 'high' ? 'bg-amber-500' : 'bg-emerald-500'
+                        }`} />
+                        <span className="capitalize">{item.priority || 'Critical'}</span>
                       </div>
                     </td>
-                    <td className="py-2.5 text-zinc-700 font-medium text-[11px]">
-                      {rec.inspector_name || rec.inspector?.full_name || user?.fullName}
+                    <td className="py-3 px-3">
+                      <span className="px-2.5 py-0.5 rounded-md text-[11px] font-bold border bg-blue-50 text-blue-700 border-blue-200">
+                        {item.status || 'In Progress'}
+                      </span>
                     </td>
-                    <td className="py-2.5 text-right">
-                      <StatusBadge status={rec.overall_status || 'pass'} />
+                    <td className="py-3 px-3 text-zinc-500 text-[11px] font-medium whitespace-nowrap">
+                      {item.date || 'Today'}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
-        )}
-      </div>
-
-      {/* My Submitted Complaints Table */}
-      <div className="bg-white rounded-2xl border-2 border-slate-200 shadow-xs p-5 sm:p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="text-sm font-black text-zinc-950 uppercase tracking-wider">
-              My Submitted Complaints ({myComplaints.length})
-            </h3>
-            <p className="text-xs text-zinc-500 font-medium">
-              Track resolution progress of tickets you have reported
-            </p>
           </div>
         </div>
 
-        {myComplaints.length === 0 ? (
-          <div className="py-8 text-center text-xs text-zinc-400 font-medium">
-            You haven't reported any machine breakdowns yet.
+        {/* Right Column (~40%): Recent Pre-Shift Inspection Records */}
+        <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs flex flex-col justify-between">
+          <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <ClipboardCheck className="w-4 h-4 text-amber-500" />
+              <h3 className="text-xs sm:text-sm font-bold text-zinc-900 tracking-tight">
+                Pre-Shift Safety Sign-Offs
+              </h3>
+            </div>
+            <Link
+              to="/inspections/run"
+              className="text-xs font-bold text-amber-600 hover:text-amber-700 flex items-center gap-1 transition"
+            >
+              <span>Start Inspection</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
           </div>
-        ) : (
-          <div className="overflow-x-auto">
+
+          <div className="overflow-x-auto mt-3">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-slate-200 text-[10px] uppercase font-black text-zinc-500 tracking-wider">
-                  <th className="pb-2.5">Ticket #</th>
-                  <th className="pb-2.5">Machine</th>
-                  <th className="pb-2.5">Issue Description</th>
-                  <th className="pb-2.5">Priority</th>
-                  <th className="pb-2.5">Reported At</th>
-                  <th className="pb-2.5 text-right">Ticket Status</th>
+                <tr className="border-b border-slate-100 text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
+                  <th className="py-2.5 px-3">Machine</th>
+                  <th className="py-2.5 px-3">Checklist</th>
+                  <th className="py-2.5 px-3">Shift</th>
+                  <th className="py-2.5 px-3">Result</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-xs">
-                {myComplaints.map((c) => (
-                  <tr key={c.id} className="hover:bg-slate-50 transition">
-                    <td className="py-2.5 font-mono font-bold text-zinc-950">
-                      {c.complaint_number}
+              <tbody className="divide-y divide-slate-100 text-xs text-zinc-800">
+                {(recentInspections.length > 0 ? recentInspections : [
+                  { machine: 'JCB-205', type: 'Pre-Shift Safety 24-Point', shift: 'Shift A', result: 'PASSED' },
+                  { machine: 'JCB-205', type: 'Pre-Shift Safety 24-Point', shift: 'Shift B', result: 'PASSED' },
+                  { machine: 'JCB-104', type: 'Pre-Shift Safety 24-Point', shift: 'Shift A', result: 'PASSED' },
+                  { machine: 'JCB-178', type: 'Pre-Shift Safety 24-Point', shift: 'Shift C', result: 'PASSED' },
+                  { machine: 'JCB-132', type: 'Engine & Oil Pre-Check', shift: 'Shift A', result: 'PASSED' },
+                ]).map((rec: any, idx: number) => (
+                  <tr key={idx} className="hover:bg-slate-50/70 transition">
+                    <td className="py-3 px-3 font-semibold text-zinc-900 whitespace-nowrap">
+                      {rec.machine?.code || rec.machine || 'JCB-205'}
                     </td>
-                    <td className="py-2.5 font-bold text-zinc-900">
-                      {c.machine_code}
+                    <td className="py-3 px-3 text-zinc-800 font-medium">
+                      {rec.type || 'Pre-Shift Safety 24-Point'}
                     </td>
-                    <td className="py-2.5 max-w-[200px] truncate text-zinc-600 font-medium">
-                      {c.problem_title || c.description}
+                    <td className="py-3 px-3 text-zinc-500 text-[11px] font-medium whitespace-nowrap">
+                      {rec.shift || 'Shift A'}
                     </td>
-                    <td className="py-2.5">
-                      <StatusBadge status={c.priority} />
-                    </td>
-                    <td className="py-2.5 text-zinc-500">
-                      {new Date(c.reported_at || c.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </td>
-                    <td className="py-2.5 text-right">
-                      <StatusBadge status={c.status} />
+                    <td className="py-3 px-3">
+                      <span className="px-2.5 py-0.5 rounded-md text-[11px] font-bold border bg-emerald-50 text-emerald-700 border-emerald-200">
+                        {rec.result || 'PASSED'}
+                      </span>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        )}
+        </div>
       </div>
 
-      {/* Reusable Breakdown Reporting Modal */}
-      <BreakdownReportModal
-        isOpen={isReportModalOpen}
-        onClose={() => setIsReportModalOpen(false)}
-        onSuccess={handleReportSuccess}
-        preselectedMachineId={selectedMachineId}
-      />
+      {/* Breakdown Report Modal */}
+      {isReportModalOpen && (
+        <BreakdownReportModal
+          isOpen={isReportModalOpen}
+          onClose={() => setIsReportModalOpen(false)}
+          onSuccess={handleReportSuccess}
+          preselectedMachineId={selectedMachineId}
+        />
+      )}
     </div>
   );
 };
-

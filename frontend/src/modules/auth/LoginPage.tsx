@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { useAuth, getRoleHomeRoute, UserRole } from '../../context/AuthContext';
-import { Lock, Mail, AlertCircle, ArrowLeft, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { useAuth, getRoleHomeRoute } from '../../context/AuthContext';
+import { Lock, User, AlertCircle, ArrowLeft, Eye, EyeOff, Loader2, ArrowRight } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
   const { login, user } = useAuth();
@@ -11,6 +11,7 @@ export const LoginPage: React.FC = () => {
   const [identifier, setIdentifier] = useState('manager@jcb.com');
   const [password, setPassword] = useState('password123');
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -34,7 +35,7 @@ export const LoginPage: React.FC = () => {
 
     const cleanIdentifier = identifier.trim();
     if (!cleanIdentifier) {
-      setError('Please enter your Employee Code or Email address.');
+      setError('Please enter your Employee ID or Email address.');
       return;
     }
 
@@ -53,181 +54,213 @@ export const LoginPage: React.FC = () => {
       setError(
         err.response?.data?.message ||
         err.message ||
-        'Authentication failed. Please verify credentials.'
+        'Authentication failed. Please verify your Employee ID and password.'
       );
     } finally {
       setLoading(false);
     }
   };
 
-  const setDemo = (role: UserRole) => {
-    if (role === 'manager') setIdentifier('manager@jcb.com');
-    if (role === 'admin') setIdentifier('admin@jcb.com');
-    if (role === 'technician') setIdentifier('technician@jcb.com');
-    if (role === 'operator') setIdentifier('operator@jcb.com');
-    setPassword('password123');
-    setError('');
-  };
-
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center p-4 selection:bg-jcb-yellow selection:text-black">
-      {/* Back to Welcome Link */}
-      <div className="max-w-md w-full mb-4">
-        <Link 
-          to="/" 
-          className="inline-flex items-center gap-2 text-xs font-bold text-zinc-600 hover:text-black transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>BACK TO JCB CMMS PORTAL</span>
-        </Link>
-      </div>
+    <div className="min-h-screen bg-[#F4F5F7] relative overflow-hidden flex items-center justify-center p-4 sm:p-6 lg:p-12 font-sans selection:bg-amber-400 selection:text-black">
+      {/* =========================================================================
+          JCB INDUSTRIAL CORNER ACCENTS (Top-Left & Bottom-Right Yellow Triangles)
+          ========================================================================= */}
+      <div 
+        className="absolute -top-12 -left-12 w-48 h-48 bg-jcb-yellow rotate-12 pointer-events-none shadow-sm"
+        style={{ clipPath: 'polygon(0 0, 100% 0, 0 100%)' }}
+      />
+      <div 
+        className="absolute -bottom-12 -right-12 w-48 h-48 bg-jcb-yellow rotate-12 pointer-events-none shadow-sm"
+        style={{ clipPath: 'polygon(100% 0, 100% 100%, 0 100%)' }}
+      />
+      {/* Secondary subtle black diagonal lines */}
+      <div 
+        className="absolute top-0 left-0 w-32 h-32 bg-black pointer-events-none"
+        style={{ clipPath: 'polygon(0 0, 60% 0, 0 60%)' }}
+      />
+      <div 
+        className="absolute bottom-0 right-0 w-32 h-32 bg-black pointer-events-none"
+        style={{ clipPath: 'polygon(100% 40%, 100% 100%, 40% 100%)' }}
+      />
 
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-hidden border-2 border-zinc-200">
-        {/* Brand Banner - Heavy JCB Black */}
-        <div className="bg-black p-6 text-center border-b border-zinc-900 relative">
-          <div className="inline-block bg-jcb-yellow text-black font-black text-3xl px-4 py-1.5 rounded-lg shadow-lg mb-3 tracking-widest border-2 border-jcb-yellowDark">
-            JCB
-          </div>
-          <h2 className="text-xl font-black text-white tracking-wide">SMART CMMS</h2>
-          <p className="text-xs text-zinc-400 mt-1 font-medium">Machine Maintenance Management System</p>
-        </div>
-
-        {/* 4 Core Roles Quick Select Bar */}
-        <div className="bg-zinc-100 px-6 py-3 border-b border-zinc-200">
-          <p className="text-[11px] font-black text-zinc-600 mb-2 uppercase tracking-wider">
-            Quick Persona 1-Click Select:
-          </p>
-          <div className="grid grid-cols-4 gap-1.5">
-            <button
-              type="button"
-              onClick={() => setDemo('manager')}
-              className={`py-1.5 text-[11px] font-bold rounded border transition ${
-                identifier.includes('manager')
-                  ? 'bg-jcb-yellow text-black border-jcb-yellow font-black shadow-sm'
-                  : 'bg-white text-zinc-700 border-zinc-300 hover:bg-zinc-50'
-              }`}
-            >
-              Manager
-            </button>
-            <button
-              type="button"
-              onClick={() => setDemo('admin')}
-              className={`py-1.5 text-[11px] font-bold rounded border transition ${
-                identifier.includes('admin')
-                  ? 'bg-jcb-yellow text-black border-jcb-yellow font-black shadow-sm'
-                  : 'bg-white text-zinc-700 border-zinc-300 hover:bg-zinc-50'
-              }`}
-            >
-              Admin
-            </button>
-            <button
-              type="button"
-              onClick={() => setDemo('technician')}
-              className={`py-1.5 text-[11px] font-bold rounded border transition ${
-                identifier.includes('technician')
-                  ? 'bg-jcb-yellow text-black border-jcb-yellow font-black shadow-sm'
-                  : 'bg-white text-zinc-700 border-zinc-300 hover:bg-zinc-50'
-              }`}
-            >
-              Tech
-            </button>
-            <button
-              type="button"
-              onClick={() => setDemo('operator')}
-              className={`py-1.5 text-[11px] font-bold rounded border transition ${
-                identifier.includes('operator')
-                  ? 'bg-jcb-yellow text-black border-jcb-yellow font-black shadow-sm'
-                  : 'bg-white text-zinc-700 border-zinc-300 hover:bg-zinc-50'
-              }`}
-            >
-              Operator
-            </button>
-          </div>
-        </div>
-
-        {/* Login Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {error && (
-            <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{error}</span>
-            </div>
-          )}
-
-          <div>
-            <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1">
-              Employee Code or Email
-            </label>
-            <div className="relative">
-              <Mail className="w-4 h-4 text-zinc-400 absolute left-3 top-3.5" />
-              <input
-                type="text"
-                required
-                value={identifier}
-                onChange={(e) => setIdentifier(e.target.value)}
-                placeholder="e.g. manager@jcb.com or EMP-MGR-001"
-                className="w-full pl-9 pr-3 py-2.5 bg-zinc-50 border border-zinc-300 rounded-lg text-sm text-zinc-900 focus:outline-none focus:border-jcb-yellow focus:ring-1 focus:ring-jcb-yellow font-medium"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1">
-              Password
-            </label>
-            <div className="relative">
-              <Lock className="w-4 h-4 text-zinc-400 absolute left-3 top-3.5" />
-              <input
-                type={showPassword ? 'text' : 'password'}
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full pl-9 pr-10 py-2.5 bg-zinc-50 border border-zinc-300 rounded-lg text-sm text-zinc-900 focus:outline-none focus:border-jcb-yellow focus:ring-1 focus:ring-jcb-yellow font-medium"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-3 text-zinc-400 hover:text-zinc-600 focus:outline-none"
-                tabIndex={-1}
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
-              >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-            <div className="flex justify-between items-center mt-1">
-              <span className="text-[10px] text-zinc-500 font-medium">
-                Demo Password: <code className="font-bold text-zinc-700">password123</code>
-              </span>
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-jcb-yellow hover:bg-jcb-yellowDark text-black font-black py-3 rounded-xl transition duration-150 uppercase tracking-wider text-sm shadow-md hover:shadow-lg disabled:opacity-50 mt-2 flex items-center justify-center gap-2"
+      <div className="max-w-6xl w-full mx-auto relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+        
+        {/* =========================================================================
+            LEFT COLUMN: BRANDING & HEAVY EXCAVATOR (Matching Image 1)
+            ========================================================================= */}
+        <div className="lg:col-span-6 flex flex-col justify-between space-y-6">
+          {/* Back link */}
+          <Link
+            to="/"
+            className="inline-flex items-center gap-2 text-xs font-bold text-zinc-500 hover:text-black transition-colors w-fit"
           >
-            {loading ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Authenticating...</span>
-              </>
-            ) : (
-              <span>Sign In To Portal</span>
-            )}
-          </button>
+            <ArrowLeft className="w-4 h-4" />
+            <span>Back to Portal Home</span>
+          </Link>
 
-          {/* Plant Badges */}
-          <div className="pt-3 border-t border-zinc-100 flex items-center justify-center gap-3 text-[10px] text-zinc-500 font-bold uppercase tracking-wider">
-            <span>Ballabgarh</span>
-            <span>•</span>
-            <span>Pune</span>
-            <span>•</span>
-            <span>Jaipur</span>
+          {/* JCB Brand & Subhead */}
+          <div className="space-y-4">
+            {/* JCB Logo Badge */}
+            <div className="inline-block bg-jcb-yellow text-black font-extrabold text-3xl sm:text-4xl px-4 py-1.5 rounded-md shadow-md tracking-widest border-2 border-black">
+              JCB
+            </div>
+
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-zinc-950 tracking-tight leading-snug">
+              Smart Machine <br />
+              Maintenance Management System
+            </h1>
+
+            {/* Yellow Accent Bar */}
+            <div className="w-20 h-1.5 bg-jcb-yellow rounded-full" />
+
+            <p className="text-sm font-semibold text-zinc-600 tracking-wide">
+              Keep Machines Running. Always.
+            </p>
           </div>
-        </form>
+
+          {/* Heavy Excavator Visual Display */}
+          <div className="relative pt-4 max-w-lg">
+            <div className="relative rounded-2xl overflow-hidden shadow-lg border border-slate-200 bg-zinc-950">
+              <img
+                src="/hero-excavator-sunset.jpg"
+                alt="JCB Heavy Excavator"
+                className="w-full h-56 sm:h-64 object-cover object-center"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
+              <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between text-white text-xs">
+                <span className="font-bold text-jcb-yellow uppercase tracking-wider text-[11px]">
+                  Heavy Plant Reliability
+                </span>
+                <span className="text-[10px] text-zinc-300 font-medium">
+                  Ballabgarh • Pune • Jaipur
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* =========================================================================
+            RIGHT COLUMN: CLEAN LOGIN FORM (Image 1 - NO MODULE BUTTONS, NO "BACK")
+            ========================================================================= */}
+        <div className="lg:col-span-6 flex justify-center lg:justify-end">
+          <div className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-slate-200/80 p-8 sm:p-10 relative">
+            
+            {/* Card Header (Welcome - NO "Back", as circled in red!) */}
+            <div className="text-center mb-7">
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-zinc-950 tracking-tight">
+                Welcome
+              </h2>
+              <p className="text-xs sm:text-sm text-zinc-500 font-medium mt-1">
+                Sign in to continue
+              </p>
+            </div>
+
+            {/* Error Banner */}
+            {error && (
+              <div className="mb-5 p-3.5 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            {/* Form */}
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Employee ID / Email */}
+              <div>
+                <label className="block text-[11px] font-bold text-zinc-600 uppercase tracking-wider mb-1.5">
+                  Employee ID
+                </label>
+                <div className="relative">
+                  <User className="w-4 h-4 text-zinc-400 absolute left-3.5 top-3.5" />
+                  <input
+                    type="text"
+                    required
+                    value={identifier}
+                    onChange={(e) => setIdentifier(e.target.value)}
+                    placeholder="Enter Employee ID or Email"
+                    className="w-full pl-10 pr-3.5 py-3 bg-white border border-slate-300 rounded-xl text-xs sm:text-sm text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 font-medium transition shadow-2xs"
+                  />
+                </div>
+              </div>
+
+              {/* Password */}
+              <div>
+                <label className="block text-[11px] font-bold text-zinc-600 uppercase tracking-wider mb-1.5">
+                  Password
+                </label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-zinc-400 absolute left-3.5 top-3.5" />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter Password"
+                    className="w-full pl-10 pr-10 py-3 bg-white border border-slate-300 rounded-xl text-xs sm:text-sm text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 font-medium transition shadow-2xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3.5 top-3.5 text-zinc-400 hover:text-zinc-600 focus:outline-none"
+                    tabIndex={-1}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Remember Me & Forgot Password */}
+              <div className="flex items-center justify-between text-xs pt-1">
+                <label className="flex items-center gap-2 cursor-pointer select-none text-zinc-600 font-medium">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 border-slate-300"
+                  />
+                  <span>Remember Me</span>
+                </label>
+
+                <button
+                  type="button"
+                  onClick={() => alert('Password reset is managed by Plant IT Governance. Please contact system admin at admin@jcb.com.')}
+                  className="text-amber-700 hover:text-amber-800 font-semibold transition"
+                >
+                  Forgot Password?
+                </button>
+              </div>
+
+              {/* Login Button (Matching Image 1: Yellow with Arrow) */}
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-jcb-yellow hover:bg-amber-400 text-black font-extrabold py-3.5 rounded-xl transition duration-150 text-sm shadow-sm hover:shadow-md disabled:opacity-50 mt-3 flex items-center justify-center gap-2 border border-amber-500 cursor-pointer"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-black" />
+                    <span>Signing in...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Login</span>
+                    <ArrowRight className="w-4 h-4 text-black" />
+                  </>
+                )}
+              </button>
+            </form>
+
+            {/* Quick Demo Credential Helper (Subtle bottom text) */}
+            <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-[11px] text-zinc-400">
+              <span>Demo Password: <strong className="text-zinc-600 font-mono">password123</strong></span>
+              <span className="font-semibold text-zinc-600">JCB India</span>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   );
 };
-
