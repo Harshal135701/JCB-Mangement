@@ -1,6 +1,12 @@
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://jcb-pi.vercel.app/api/v1';
+// Dynamic API Endpoint Resolution:
+// 1. Explicit VITE_API_URL from .env if defined
+// 2. Local Vite Development -> '/api/v1' (automatically proxied to http://localhost:5000)
+// 3. Production Deployment -> 'https://jcb-pi.vercel.app/api/v1' or same-origin '/api/v1'
+const API_URL =
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.DEV ? '/api/v1' : 'https://jcb-pi.vercel.app/api/v1');
 
 export const apiClient = axios.create({
   baseURL: API_URL,
@@ -18,7 +24,7 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
-// Response interceptor for token expiry
+// Response interceptor for token expiry & automatic session refresh
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -35,4 +41,3 @@ apiClient.interceptors.response.use(
 );
 
 export default apiClient;
-
