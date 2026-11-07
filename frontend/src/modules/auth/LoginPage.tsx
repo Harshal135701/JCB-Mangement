@@ -63,29 +63,29 @@ export const LoginPage: React.FC = () => {
   return (
     <div className="min-h-screen relative overflow-hidden flex items-center justify-center p-4 sm:p-6 lg:p-12 font-sans selection:bg-amber-400 selection:text-black">
       {/* =========================================================================
-          FULL PAGE BACKGROUND IMAGE & INDUSTRIAL GRADIENT OVERLAY
-          (Instead of floating image card, image fills background so page is put together)
+          FULL PAGE BACKGROUND IMAGE (BRIGHT, VIBRANT & CLEARLY VISIBLE)
+          Light gradient wash so the excavator and sunset are fully seen!
           ========================================================================= */}
       <div className="absolute inset-0 z-0">
         <img
           src="/hero-excavator-sunset.jpg"
           alt="JCB Heavy Excavator Background"
-          className="w-full h-full object-cover object-center filter brightness-[0.6] contrast-[1.15]"
+          className="w-full h-full object-cover object-center filter brightness-100 contrast-105"
         />
-        {/* Cinematic dark gradients for legibility & focus */}
-        <div className="absolute inset-0 bg-gradient-to-r from-zinc-950/95 via-zinc-950/80 to-zinc-950/65" />
-        <div className="absolute inset-0 bg-black/30 backdrop-blur-[0.5px]" />
+        {/* Soft light gradient overlay: bright off-white on left for dark text legibility, 
+            softly fading so the excavator and sunset shine through brightly */}
+        <div className="absolute inset-0 bg-gradient-to-r from-white/92 via-white/75 to-white/35" />
       </div>
 
       {/* =========================================================================
           JCB INDUSTRIAL CORNER ACCENTS (Top-Left & Bottom-Right Yellow Triangles)
           ========================================================================= */}
       <div 
-        className="absolute -top-12 -left-12 w-48 h-48 bg-jcb-yellow rotate-12 pointer-events-none z-10 shadow-lg"
+        className="absolute -top-12 -left-12 w-48 h-48 bg-jcb-yellow rotate-12 pointer-events-none z-10 shadow-md"
         style={{ clipPath: 'polygon(0 0, 100% 0, 0 100%)' }}
       />
       <div 
-        className="absolute -bottom-12 -right-12 w-48 h-48 bg-jcb-yellow rotate-12 pointer-events-none z-10 shadow-lg"
+        className="absolute -bottom-12 -right-12 w-48 h-48 bg-jcb-yellow rotate-12 pointer-events-none z-10 shadow-md"
         style={{ clipPath: 'polygon(100% 0, 100% 100%, 0 100%)' }}
       />
       {/* Secondary subtle black diagonal lines */}
@@ -103,53 +103,53 @@ export const LoginPage: React.FC = () => {
           ========================================================================= */}
       <div className="max-w-6xl w-full mx-auto relative z-20 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-16 items-center">
         
-        {/* LEFT COLUMN: BRANDING & TEXT (Directly over the background image) */}
-        <div className="lg:col-span-6 flex flex-col justify-between space-y-8">
+        {/* LEFT COLUMN: BRANDING & TEXT (Crisp dark text over the bright background) */}
+        <div className="lg:col-span-6 flex flex-col justify-between space-y-6">
           {/* Back link */}
           <Link
             to="/"
-            className="inline-flex items-center gap-2 text-xs font-bold text-zinc-300 hover:text-jcb-yellow transition-colors w-fit"
+            className="inline-flex items-center gap-2 text-xs font-bold text-zinc-600 hover:text-black transition-colors w-fit"
           >
             <ArrowLeft className="w-4 h-4" />
             <span>Back to Portal Home</span>
           </Link>
 
           {/* JCB Brand & Subhead */}
-          <div className="space-y-5">
+          <div className="space-y-4">
             {/* JCB Logo Badge */}
             <div className="inline-block bg-jcb-yellow text-black font-extrabold text-3xl sm:text-4xl px-4 py-1.5 rounded-md shadow-md tracking-widest border-2 border-black">
               JCB
             </div>
 
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-tight drop-shadow-md">
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-zinc-950 tracking-tight leading-tight">
               Smart Machine <br />
-              <span className="text-white">Maintenance Management System</span>
+              <span className="text-zinc-900">Maintenance Management System</span>
             </h1>
 
             {/* Yellow Accent Bar */}
             <div className="w-24 h-2 bg-jcb-yellow rounded-full shadow-sm" />
 
-            <p className="text-base sm:text-lg font-semibold text-zinc-200 tracking-wide drop-shadow-sm max-w-lg">
+            <p className="text-base sm:text-lg font-bold text-zinc-700 tracking-wide max-w-lg">
               Keep Machines Running. Always.
             </p>
           </div>
 
           {/* Industrial Plant Trust Badges */}
-          <div className="pt-2 flex flex-wrap items-center gap-3 text-xs text-zinc-300">
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-900/80 border border-zinc-700/80 backdrop-blur-sm shadow-xs">
-              <ShieldCheck className="w-4 h-4 text-jcb-yellow shrink-0" />
-              <span className="font-semibold text-white">Heavy Plant Reliability</span>
+          <div className="pt-1 flex flex-wrap items-center gap-3 text-xs">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/90 border border-slate-300/80 shadow-xs backdrop-blur-xs">
+              <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0" />
+              <span className="font-bold text-zinc-900">Heavy Plant Reliability</span>
             </div>
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-900/80 border border-zinc-700/80 backdrop-blur-sm shadow-xs">
-              <Activity className="w-4 h-4 text-emerald-400 shrink-0" />
-              <span className="font-semibold text-white">Ballabgarh • Pune • Jaipur</span>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/90 border border-slate-300/80 shadow-xs backdrop-blur-xs">
+              <Activity className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span className="font-bold text-zinc-900">Ballabgarh • Pune • Jaipur</span>
             </div>
           </div>
         </div>
 
-        {/* RIGHT COLUMN: CLEAN LOGIN FORM CARD */}
+        {/* RIGHT COLUMN: CLEAN WHITE LOGIN FORM CARD */}
         <div className="lg:col-span-6 flex justify-center lg:justify-end">
-          <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-100 p-8 sm:p-10 relative">
+          <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-200/90 p-8 sm:p-10 relative">
             
             {/* Card Header (Welcome - NO "Back", NO Role Switcher Buttons) */}
             <div className="text-center mb-7">

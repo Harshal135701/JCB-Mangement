@@ -164,43 +164,24 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
         />
       )}
 
-      {/* Sidebar Aside */}
+      {/* Sidebar Aside: Compact, perfectly proportioned so ALL fields are visible without scrolling */}
       <aside
-        className={`fixed lg:static inset-y-0 left-0 z-50 w-64 h-screen bg-[#111318] text-white flex flex-col justify-between shrink-0 border-r border-zinc-800 transition-transform duration-200 ease-in-out relative overflow-hidden select-none ${
+        className={`fixed lg:static inset-y-0 left-0 z-50 w-64 h-screen bg-[#111318] text-white flex flex-col justify-between shrink-0 border-r border-zinc-800 transition-transform duration-200 ease-in-out relative select-none ${
           isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
       >
-        {/* =========================================================================
-            BACKGROUND IMAGE LAYER (Sky at Top/Upside, JCB Excavator at Bottom/Down)
-            Elongated to cover the entire sidebar background
-            ========================================================================= */}
-        <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
-          <img
-            src="/hero-excavator-sunset.jpg"
-            alt="JCB Equipment Background"
-            className="w-full h-full object-cover object-bottom filter brightness-[0.75] contrast-[1.15]"
-          />
-          {/* Dark gradient for the sky area so nav items and brand are razor-sharp */}
-          <div className="absolute inset-0 bg-gradient-to-b from-zinc-950 via-zinc-950/85 to-transparent" />
-          {/* Subtle bottom shadow gradient to anchor the user profile */}
-          <div className="absolute bottom-0 inset-x-0 h-28 bg-gradient-to-t from-zinc-950 via-zinc-950/90 to-transparent" />
-          
-          {/* Yellow corner triangle accent at lower right */}
-          <div 
-            className="absolute bottom-16 right-0 w-8 h-8 bg-jcb-yellow pointer-events-none opacity-80"
-            style={{ clipPath: 'polygon(100% 0, 100% 100%, 0 100%)' }}
-          />
-        </div>
+        {/* Subtle Sky Glow in Background */}
+        <div className="absolute inset-0 bg-gradient-to-b from-amber-950/20 via-zinc-950 to-black pointer-events-none z-0" />
 
         {/* =========================================================================
             TOP SECTION: BRAND HEADER & NAVIGATION ITEMS
-            (Positioned on the upper sky/dark gradient background)
+            Every field is visible at once (NO scrollbar needed!)
             ========================================================================= */}
-        <div className="relative z-10 flex flex-col min-h-0 flex-1">
+        <div className="relative z-10 flex flex-col flex-1 min-h-0">
           {/* Brand Header */}
-          <div className="p-4 flex items-center justify-between border-b border-zinc-800/80 bg-zinc-950/90 backdrop-blur-xs shrink-0">
+          <div className="px-4 py-3 flex items-center justify-between border-b border-zinc-800 bg-zinc-950/90 shrink-0">
             <Link to="/" className="flex items-center gap-3">
-              <div className="bg-jcb-yellow text-black font-black text-xl px-2.5 py-1 rounded shadow-md tracking-widest flex items-center justify-center border border-jcb-yellowDark">
+              <div className="bg-jcb-yellow text-black font-black text-xl px-2.5 py-0.5 rounded shadow-md tracking-widest flex items-center justify-center border border-jcb-yellowDark">
                 JCB
               </div>
               <div>
@@ -221,8 +202,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
             </button>
           </div>
 
-          {/* Role Navigation Links (Sleek scrollbar, stops above JCB machine) */}
-          <nav className="p-3 space-y-1 overflow-y-auto max-h-[calc(100vh-280px)] scrollbar-none hover:scrollbar-thin">
+          {/* Navigation Links: Compact spacing so all items fit on screen without scrolling */}
+          <nav className="p-2 space-y-0.5 overflow-hidden flex-1 flex flex-col justify-start">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = location.pathname === item.path;
@@ -231,13 +212,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
                   key={item.path + item.name}
                   to={item.path}
                   onClick={onMobileClose}
-                  className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all relative ${
+                  className={`flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[12px] font-bold transition-all relative shrink-0 ${
                     isActive
                       ? 'bg-jcb-yellow text-black font-black shadow-sm'
-                      : 'text-zinc-200 hover:bg-zinc-900/80 hover:text-white'
+                      : 'text-zinc-300 hover:bg-zinc-900 hover:text-white'
                   }`}
                 >
-                  <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-black' : 'text-zinc-400'}`} />
+                  <Icon className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-black' : 'text-zinc-400'}`} />
                   <span className="truncate flex-1">{item.name}</span>
 
                   {/* Badge if present */}
@@ -258,20 +239,37 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
         </div>
 
         {/* =========================================================================
-            MIDDLE-BOTTOM AREA: UNOBSTRUCTED JCB EXCAVATOR MACHINE
-            "dont add anything on jcb image"
-            This spacer ensures the excavator in the background is clearly visible!
+            BOTTOM SECTION: BRIGHT, RECOGNIZABLE JCB EXCAVATOR + USER PROFILE
             ========================================================================= */}
-        <div className="relative z-0 h-28 pointer-events-none" />
+        <div className="relative z-10 p-2.5 border-t border-zinc-800 bg-zinc-950 shrink-0">
+          {/* JCB Excavator Card: BRIGHT & 100% RECOGNIZABLE */}
+          <div className="relative rounded-xl overflow-hidden border border-zinc-700 bg-zinc-900 shadow-md mb-2">
+            <img
+              src="/hero-excavator-sunset.jpg"
+              alt="JCB Heavy Excavator"
+              className="w-full h-24 object-cover object-center filter brightness-105 contrast-105 hover:scale-105 transition-transform duration-500"
+            />
+            {/* Subtle bottom vignette for text contrast */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
 
-        {/* =========================================================================
-            BOTTOM USER PROFILE FOOTER: ADMIN NAME & ROLE
-            Anchored, Solid & ALWAYS 100% VISIBLE (Never cut off!)
-            ========================================================================= */}
-        <div className="relative z-10 p-3.5 border-t border-zinc-800/90 bg-zinc-950/95 backdrop-blur-md shrink-0">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-8 h-8 rounded-lg bg-jcb-yellow text-black font-black text-xs flex items-center justify-center shrink-0 border border-amber-500 shadow-xs">
+            {/* Yellow Corner Triangle Accent */}
+            <div 
+              className="absolute bottom-0 right-0 w-7 h-7 bg-jcb-yellow pointer-events-none shadow-sm"
+              style={{ clipPath: 'polygon(100% 0, 100% 100%, 0 100%)' }}
+            />
+
+            {/* Motto */}
+            <div className="absolute bottom-1.5 left-2 right-4 pointer-events-none">
+              <span className="text-[10px] font-black tracking-tight text-white uppercase block leading-tight drop-shadow-md">
+                Building a <span className="text-jcb-yellow">Smarter Tomorrow</span>
+              </span>
+            </div>
+          </div>
+
+          {/* User Profile Card: PROMINENT & NEVER CUT OFF */}
+          <div className="px-1 pt-1 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-7 h-7 rounded-lg bg-jcb-yellow text-black font-black text-xs flex items-center justify-center shrink-0 border border-amber-500 shadow-xs">
                 {user?.fullName?.charAt(0) || 'A'}
               </div>
               <div className="min-w-0">
