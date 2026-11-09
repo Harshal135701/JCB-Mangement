@@ -120,62 +120,57 @@ export const AdminDashboard: React.FC = () => {
       />
 
       {/* =========================================================================
-          ROW 1: 5 TOP KPI METRIC CARDS (Image 2 Style)
+          ROW 1: 5 TOP KPI METRIC CARDS
           ========================================================================= */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-5">
         {/* Card 1: Enrolled Personnel */}
         <TopKPICard
           icon={Users}
-          iconBgColor="bg-amber-100/70"
-          iconColor="text-amber-700"
+          iconBgColor="bg-amber-100"
+          iconColor="text-amber-800"
           label="Enrolled Personnel"
           value={totalUsers}
           trend="↑ 4%"
-          trendColor="text-emerald-600"
         />
 
         {/* Card 2: Operating Plants */}
         <TopKPICard
           icon={Building2}
-          iconBgColor="bg-zinc-900"
-          iconColor="text-white"
+          iconBgColor="bg-blue-100"
+          iconColor="text-blue-800"
           label="Operating Plants"
           value={plantsCount}
           trend="100% Online"
-          trendColor="text-emerald-600"
         />
 
         {/* Card 3: Monitored Machines */}
         <TopKPICard
           icon={Cpu}
-          iconBgColor="bg-slate-100"
-          iconColor="text-zinc-700"
+          iconBgColor="bg-zinc-100"
+          iconColor="text-zinc-800"
           label="Monitored Machines"
           value={totalAssets}
           trend="↑ 2%"
-          trendColor="text-emerald-600"
         />
 
         {/* Card 4: Audit Security Logs */}
         <TopKPICard
           icon={ShieldCheck}
-          iconBgColor="bg-slate-100"
-          iconColor="text-zinc-700"
+          iconBgColor="bg-emerald-100"
+          iconColor="text-emerald-800"
           label="Audit Security Logs"
           value="1,420"
           trend="↑ 12%"
-          trendColor="text-emerald-600"
         />
 
         {/* Card 5: Platform Reliability */}
         <TopKPICard
           icon={Activity}
-          iconBgColor="bg-slate-100"
-          iconColor="text-zinc-700"
+          iconBgColor="bg-amber-100"
+          iconColor="text-amber-800"
           label="Platform Reliability"
           value="99.9%"
           trend="↑ 0.1%"
-          trendColor="text-emerald-600"
         />
       </div>
 

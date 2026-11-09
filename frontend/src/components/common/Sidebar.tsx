@@ -15,7 +15,6 @@ import {
   Wrench, 
   HardHat, 
   ClipboardCheck,
-  LogOut,
   X,
   ChevronRight
 } from 'lucide-react';
@@ -35,7 +34,7 @@ interface NavItem {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose }) => {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const location = useLocation();
 
   const allNavItems: NavItem[] = [
@@ -125,7 +124,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
       icon: ShoppingCart, 
       roles: ['admin', 'manager'],
       badge: 2,
-      badgeColor: 'bg-amber-500 text-black font-bold'
+      badgeColor: 'bg-red-500 text-white'
     },
     // Gate Passes (RDC)
     { 
@@ -164,29 +163,34 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
         />
       )}
 
-      {/* Sidebar Aside: Compact, perfectly proportioned so ALL fields are visible without scrolling */}
+      {/* Sidebar Aside: Full-height JCB Excavator Background properly adjusted from very top to bottom */}
       <aside
-        className={`fixed lg:static inset-y-0 left-0 z-50 w-64 h-screen bg-[#111318] text-white flex flex-col justify-between shrink-0 border-r border-zinc-800 transition-transform duration-200 ease-in-out relative select-none ${
+        className={`fixed lg:static inset-y-0 left-0 z-50 w-64 h-screen text-white flex flex-col justify-between shrink-0 border-r border-zinc-800 transition-transform duration-200 ease-in-out select-none shadow-2xl overflow-hidden relative ${
           isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
+        style={{
+          backgroundImage: `url('/jcb-excavator-adjusted.jpg')`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center bottom',
+          backgroundRepeat: 'no-repeat',
+        }}
       >
-        {/* Subtle Sky Glow in Background */}
-        <div className="absolute inset-0 bg-gradient-to-b from-amber-950/20 via-zinc-950 to-black pointer-events-none z-0" />
+        {/* Subtle dark overlay so menu text and icons remain clearly readable */}
+        <div className="absolute inset-0 bg-[#070A12]/30 pointer-events-none z-0" />
 
         {/* =========================================================================
-            TOP SECTION: BRAND HEADER & NAVIGATION ITEMS
-            Every field is visible at once (NO scrollbar needed!)
+            BRAND HEADER & NAVIGATION ITEMS (Displayed above full-height background)
             ========================================================================= */}
         <div className="relative z-10 flex flex-col flex-1 min-h-0">
           {/* Brand Header */}
-          <div className="px-4 py-3 flex items-center justify-between border-b border-zinc-800 bg-zinc-950/90 shrink-0">
-            <Link to="/" className="flex items-center gap-3">
-              <div className="bg-jcb-yellow text-black font-black text-xl px-2.5 py-0.5 rounded shadow-md tracking-widest flex items-center justify-center border border-jcb-yellowDark">
+          <div className="px-4 py-4 flex items-center justify-between border-b border-white/10 bg-black/25 backdrop-blur-xs shrink-0">
+            <Link to="/" className="flex items-center gap-3 group">
+              <div className="bg-jcb-yellow text-black font-black text-xl px-2.5 py-0.5 rounded shadow-md tracking-widest flex items-center justify-center border border-jcb-yellowDark group-hover:scale-105 transition-transform">
                 JCB
               </div>
-              <div>
+              <div className="min-w-0">
                 <h1 className="font-black text-xs tracking-wider text-white">SMART CMMS</h1>
-                <p className="text-[10px] text-zinc-400 font-semibold truncate max-w-[130px]">
+                <p className="text-[10px] text-zinc-300 font-semibold truncate max-w-[130px]">
                   {user?.plantName || 'Plant 1: Ballabgarh'}
                 </p>
               </div>
@@ -195,15 +199,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
             {/* Mobile Close Button */}
             <button
               onClick={onMobileClose}
-              className="lg:hidden p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition"
+              className="lg:hidden p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition cursor-pointer"
               aria-label="Close menu"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
-          {/* Navigation Links: Compact spacing so all items fit on screen without scrolling */}
-          <nav className="p-2 space-y-0.5 overflow-hidden flex-1 flex flex-col justify-start">
+          {/* Navigation Links: Increased vertical spacing between items with comfortable padding */}
+          <nav className="p-3 space-y-2 overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = location.pathname === item.path;
@@ -212,87 +216,37 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
                   key={item.path + item.name}
                   to={item.path}
                   onClick={onMobileClose}
-                  className={`flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[12px] font-bold transition-all relative shrink-0 ${
+                  className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all relative shrink-0 group ${
                     isActive
-                      ? 'bg-jcb-yellow text-black font-black shadow-sm'
-                      : 'text-zinc-300 hover:bg-zinc-900 hover:text-white'
+                      ? 'bg-jcb-yellow text-zinc-950 font-black shadow-md'
+                      : 'text-zinc-200 hover:bg-white/15 hover:text-white'
                   }`}
                 >
-                  <Icon className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-black' : 'text-zinc-400'}`} />
-                  <span className="truncate flex-1">{item.name}</span>
+                  <Icon className={`w-4 h-4 shrink-0 transition-colors ${isActive ? 'text-zinc-950 font-bold' : 'text-zinc-300 group-hover:text-white'}`} />
+                  <span className="truncate flex-1 tracking-tight">{item.name}</span>
 
-                  {/* Badge if present */}
+                  {/* Badge if present (Red badge matching reference) */}
                   {item.badge && !isActive && (
-                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold shrink-0 ${item.badgeColor || 'bg-red-500 text-white'}`}>
+                    <span className="text-[10px] px-1.5 py-0.2 rounded-full font-bold shrink-0 bg-red-500 text-white">
                       {item.badge}
                     </span>
                   )}
 
                   {/* Active Right Chevron */}
                   {isActive && (
-                    <ChevronRight className="w-3.5 h-3.5 text-black shrink-0 ml-auto" />
+                    <ChevronRight className="w-4 h-4 text-zinc-950 shrink-0 ml-auto" />
                   )}
                 </Link>
               );
             })}
           </nav>
-        </div>
 
-        {/* =========================================================================
-            BOTTOM SECTION: BRIGHT, RECOGNIZABLE JCB EXCAVATOR + USER PROFILE
-            ========================================================================= */}
-        <div className="relative z-10 p-2.5 border-t border-zinc-800 bg-zinc-950 shrink-0">
-          {/* JCB Excavator Card: BRIGHT & 100% RECOGNIZABLE */}
-          <div className="relative rounded-xl overflow-hidden border border-zinc-700 bg-zinc-900 shadow-md mb-2">
-            <img
-              src="/hero-excavator-sunset.jpg"
-              alt="JCB Heavy Excavator"
-              className="w-full h-24 object-cover object-center filter brightness-105 contrast-105 hover:scale-105 transition-transform duration-500"
-            />
-            {/* Subtle bottom vignette for text contrast */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
-
-            {/* Yellow Corner Triangle Accent */}
-            <div 
-              className="absolute bottom-0 right-0 w-7 h-7 bg-jcb-yellow pointer-events-none shadow-sm"
-              style={{ clipPath: 'polygon(100% 0, 100% 100%, 0 100%)' }}
-            />
-
-            {/* Motto */}
-            <div className="absolute bottom-1.5 left-2 right-4 pointer-events-none">
-              <span className="text-[10px] font-black tracking-tight text-white uppercase block leading-tight drop-shadow-md">
-                Building a <span className="text-jcb-yellow">Smarter Tomorrow</span>
-              </span>
-            </div>
-          </div>
-
-          {/* User Profile Card: PROMINENT & NEVER CUT OFF */}
-          <div className="px-1 pt-1 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="w-7 h-7 rounded-lg bg-jcb-yellow text-black font-black text-xs flex items-center justify-center shrink-0 border border-amber-500 shadow-xs">
-                {user?.fullName?.charAt(0) || 'A'}
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs font-black truncate text-white leading-tight">
-                  {user?.fullName || 'Rajesh Admin'}
-                </p>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 animate-pulse" />
-                  <p className="text-[10px] text-zinc-400 uppercase font-bold tracking-wider truncate">
-                    {user?.role || 'ADMIN'} {user?.employeeCode ? `• ${user.employeeCode}` : '• EMP-ADM-001'}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Sign Out Button */}
-            <button
-              onClick={logout}
-              className="p-1.5 hover:bg-zinc-800 text-zinc-400 hover:text-red-400 rounded-lg transition shrink-0 cursor-pointer"
-              title="Sign Out"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
+          {/* Subtle Bottom Slogan: Building a Smarter Tomorrow */}
+          <div className="px-4 pb-3 pt-1 shrink-0 pointer-events-none select-none">
+            <span className="text-[11px] font-black uppercase tracking-tight text-white block drop-shadow-md">
+              Building a <span className="text-jcb-yellow">Smarter Tomorrow</span>
+            </span>
+            <div className="w-8 h-0.5 bg-jcb-yellow mt-1 rounded-full shadow-sm" />
           </div>
         </div>
 

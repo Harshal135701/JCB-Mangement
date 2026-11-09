@@ -151,62 +151,59 @@ export const TechnicianDashboard: React.FC = () => {
       )}
 
       {/* =========================================================================
-          ROW 1: 5 TOP KPI METRIC CARDS (Image 2 Style)
+          ROW 1: 5 TOP KPI METRIC CARDS
           ========================================================================= */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-5">
         {/* Card 1: Assigned Work Orders */}
         <TopKPICard
           icon={Wrench}
-          iconBgColor="bg-amber-100/70"
-          iconColor="text-amber-700"
+          iconBgColor="bg-amber-100"
+          iconColor="text-amber-800"
           label="Assigned Work Orders"
           value={totalAssignedCount}
           trend="↑ 2%"
-          trendColor="text-emerald-600"
         />
 
         {/* Card 2: Active In-Progress Repairs */}
         <TopKPICard
           icon={Clock}
-          iconBgColor="bg-zinc-900"
-          iconColor="text-white"
+          iconBgColor="bg-blue-100"
+          iconColor="text-blue-800"
           label="Active In-Progress"
           value={activeCount}
           trend="In Progress"
-          trendColor="text-amber-500"
+          trendColor="bg-amber-50 text-amber-700 border border-amber-200"
         />
 
         {/* Card 3: Pending Acceptance */}
         <TopKPICard
           icon={AlertTriangle}
-          iconBgColor="bg-slate-100"
-          iconColor="text-zinc-700"
+          iconBgColor="bg-red-100"
+          iconColor="text-red-800"
           label="Pending Acceptance"
           value={pendingCount}
           trend="Action Needed"
-          trendColor="text-red-500"
+          trendColor="bg-red-50 text-red-700 border border-red-200"
         />
 
         {/* Card 4: Reserved Spare Parts */}
         <TopKPICard
           icon={Package}
-          iconBgColor="bg-slate-100"
-          iconColor="text-zinc-700"
+          iconBgColor="bg-purple-100"
+          iconColor="text-purple-800"
           label="Spares Reserved"
           value="8"
           trend="Ready"
-          trendColor="text-emerald-600"
         />
 
         {/* Card 5: First-Time Fix Rate */}
         <TopKPICard
           icon={CheckCircle2}
-          iconBgColor="bg-slate-100"
-          iconColor="text-zinc-700"
+          iconBgColor="bg-emerald-100"
+          iconColor="text-emerald-800"
           label="First-Time Fix Rate"
           value="92.4%"
           trend="↑ 3.2%"
-          trendColor="text-emerald-600"
         />
       </div>
 

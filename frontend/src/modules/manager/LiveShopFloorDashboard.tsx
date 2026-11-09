@@ -131,62 +131,59 @@ export const LiveShopFloorDashboard: React.FC = () => {
       />
 
       {/* =========================================================================
-          ROW 1: 5 TOP KPI METRIC CARDS (Image 2)
+          ROW 1: 5 TOP KPI METRIC CARDS (Matches Reference Screenshot)
           ========================================================================= */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-5">
         {/* Card 1: Total Machines */}
         <TopKPICard
           icon={Truck}
-          iconBgColor="bg-amber-100/70"
-          iconColor="text-amber-700"
+          iconBgColor="bg-amber-100"
+          iconColor="text-amber-800"
           label="Total Machines"
           value={totalMachines}
           trend="↑ 2%"
-          trendColor="text-emerald-600"
         />
 
         {/* Card 2: Running Machines */}
         <TopKPICard
           icon={CheckCircle2}
-          iconBgColor="bg-zinc-900"
-          iconColor="text-white"
+          iconBgColor="bg-emerald-100"
+          iconColor="text-emerald-800"
           label="Running Machines"
           value={runningMachines}
           trend="↑ 1%"
-          trendColor="text-emerald-600"
         />
 
         {/* Card 3: Breakdown Machines */}
         <TopKPICard
           icon={Wrench}
-          iconBgColor="bg-slate-100"
-          iconColor="text-zinc-700"
+          iconBgColor="bg-red-100"
+          iconColor="text-red-800"
           label="Breakdown Machines"
           value={breakdownMachines}
           trend="↓ 1%"
-          trendColor="text-red-500"
+          trendColor="bg-red-50 text-red-600 border border-red-200"
         />
 
         {/* Card 4: Pending Requests */}
         <TopKPICard
           icon={ClipboardList}
-          iconBgColor="bg-slate-100"
-          iconColor="text-zinc-700"
+          iconBgColor="bg-amber-100"
+          iconColor="text-amber-800"
           label="Pending Requests"
           value={pendingRequests}
           trend="↑ 3%"
-          trendColor="text-emerald-600"
+          trendColor="bg-amber-50 text-amber-800 border border-amber-200"
         />
 
         {/* Card 5: Active Work Orders */}
         <TopKPICard
           icon={Clock}
-          iconBgColor="bg-slate-100"
-          iconColor="text-zinc-700"
+          iconBgColor="bg-blue-100"
+          iconColor="text-blue-800"
           label="Active Work Orders"
           value={activeWorkOrders}
           trend="↑ 5%"
-          trendColor="text-emerald-600"
         />
       </div>
 

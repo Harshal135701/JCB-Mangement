@@ -144,60 +144,60 @@ export const OperatorDashboard: React.FC = () => {
       {/* =========================================================================
           ROW 1: 5 TOP KPI METRIC CARDS (Image 2 Style)
           ========================================================================= */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-5">
         {/* Card 1: Assigned Machine */}
         <TopKPICard
           icon={HardHat}
-          iconBgColor="bg-amber-100/70"
-          iconColor="text-amber-700"
+          iconBgColor="bg-amber-100"
+          iconColor="text-amber-800"
           label="Assigned Asset"
           value="JCB-205"
           trend="Operating Normal"
-          trendColor="text-emerald-600"
+          trendColor="bg-emerald-50 text-emerald-700 border border-emerald-200"
         />
 
         {/* Card 2: Pre-Shift Safety */}
         <TopKPICard
           icon={CheckCircle2}
-          iconBgColor="bg-zinc-900"
-          iconColor="text-white"
+          iconBgColor="bg-emerald-100"
+          iconColor="text-emerald-800"
           label="Pre-Shift Inspection"
           value="PASSED"
           trend="100% Verified"
-          trendColor="text-emerald-600"
+          trendColor="bg-emerald-50 text-emerald-700 border border-emerald-200"
         />
 
         {/* Card 3: Shift Run Hours */}
         <TopKPICard
           icon={Clock}
-          iconBgColor="bg-slate-100"
-          iconColor="text-zinc-700"
+          iconBgColor="bg-blue-100"
+          iconColor="text-blue-800"
           label="Shift Run Hours"
           value="6.8 Hrs"
           trend="↑ 4%"
-          trendColor="text-emerald-600"
+          trendColor="bg-emerald-50 text-emerald-700 border border-emerald-200"
         />
 
         {/* Card 4: Open Stoppages */}
         <TopKPICard
           icon={AlertTriangle}
-          iconBgColor="bg-slate-100"
-          iconColor="text-zinc-700"
+          iconBgColor="bg-amber-100"
+          iconColor="text-amber-800"
           label="Open Stoppages"
           value="0"
           trend="Line Clear"
-          trendColor="text-emerald-600"
+          trendColor="bg-emerald-50 text-emerald-700 border border-emerald-200"
         />
 
         {/* Card 5: Asset Health Score */}
         <TopKPICard
           icon={Activity}
-          iconBgColor="bg-slate-100"
-          iconColor="text-zinc-700"
+          iconBgColor="bg-emerald-100"
+          iconColor="text-emerald-800"
           label="Asset Health Score"
           value="98.2%"
           trend="Optimal"
-          trendColor="text-emerald-600"
+          trendColor="bg-emerald-50 text-emerald-700 border border-emerald-200"
         />
       </div>
 
