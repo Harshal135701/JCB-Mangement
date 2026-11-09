@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import apiClient from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import { StatusBadge } from '../../components/common/StatusBadge';
@@ -15,40 +15,42 @@ import {
   UserCheck, 
   RotateCcw, 
   Package, 
-  History, 
-  Calendar, 
   Cpu, 
   X, 
-  Loader2,
-  FileText,
-  AlertCircle,
-  ExternalLink,
-  ChevronRight,
-  Activity,
-  Gauge,
-  Thermometer,
-  Zap,
-  User,
-  Info,
-  RefreshCw
+  FileText, 
+  AlertCircle, 
+  ExternalLink, 
+  Activity, 
+  Zap, 
+  User, 
+  RefreshCw 
 } from 'lucide-react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 
 export const WorkOrderDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
   const { user } = useAuth();
 
   const isManagerOrAdmin = user?.role === 'manager' || user?.role === 'admin';
   const isTechnician = user?.role === 'technician';
 
+  // Work order state
   const [workOrder, setWorkOrder] = useState<any | null>(null);
-  const [parts, setParts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [actionLoading, setActionLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'parts' | 'timeline'>('overview');
+
+  // Spare parts state (independent fetch)
+  const [parts, setParts] = useState<any[]>([]);
+  const [partsLoading, setPartsLoading] = useState(false);
+  const [partsError, setPartsError] = useState('');
+
+  // Technicians state for reassignment
+  const [techniciansList, setTechniciansList] = useState<any[]>([]);
+  const [techsLoading, setTechsLoading] = useState(false);
+  const [techsError, setTechsError] = useState('');
 
   // Modals state
   const [isCompleteModalOpen, setIsCompleteModalOpen] = useState(false);
@@ -56,6 +58,8 @@ export const WorkOrderDetailPage: React.FC = () => {
   const [isReassignModalOpen, setIsReassignModalOpen] = useState(false);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [isProgressModalOpen, setIsProgressModalOpen] = useState(false);
+  const [isDeclineModalOpen, setIsDeclineModalOpen] = useState(false);
+  const [isReopenModalOpen, setIsReopenModalOpen] = useState(false);
 
   // Form states
   const [completeForm, setCompleteForm] = useState({
@@ -87,67 +91,103 @@ export const WorkOrderDetailPage: React.FC = () => {
 
   const [reassignForm, setReassignForm] = useState({
     new_technician_id: '',
-    notes: 'Reassigned for specialized mechanical / electrical expertise.',
+    notes: 'Reassigned for specialized expertise.',
     work_instructions: '',
   });
 
-  const [techniciansList, setTechniciansList] = useState<any[]>([]);
+  const [declineReason, setDeclineReason] = useState('');
+  const [reopenReason, setReopenReason] = useState('');
 
-  const fetchWorkOrderData = async () => {
+  // Ref to discard stale responses when ID changes rapidly
+  const activeFetchIdRef = useRef<string | undefined>(id);
+  useEffect(() => {
+    activeFetchIdRef.current = id;
+  }, [id]);
+
+  // Fetch Work Order Details
+  const fetchWorkOrderData = useCallback(async () => {
     if (!id) return;
     try {
       setLoading(true);
       setError('');
-      const [woRes, partsRes] = await Promise.all([
-        apiClient.get(`/work-orders/${id}`),
-        apiClient.get(`/work-orders/${id}/parts`).catch(() => ({ data: { data: [] } })),
-      ]);
 
-      if (woRes.data?.success) {
-        setWorkOrder(woRes.data.data);
+      const res = await apiClient.get(`/work-orders/${id}`);
+      if (activeFetchIdRef.current !== id) return; // Discard stale response
+
+      if (res.data?.success) {
+        setWorkOrder(res.data.data);
+      } else {
+        setError(res.data?.message || 'Work order could not be loaded.');
       }
-      setParts(partsRes.data?.data || []);
     } catch (err: any) {
+      if (activeFetchIdRef.current !== id) return;
       setError(err.response?.data?.message || 'Failed to load work order details.');
     } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchTechnicians = async () => {
-    try {
-      const usersRes = await apiClient.get('/auth/users?role=technician').catch(() => null);
-      if (usersRes?.data?.success && Array.isArray(usersRes.data.data)) {
-        setTechniciansList(usersRes.data.data);
-        if (usersRes.data.data.length > 0 && !reassignForm.new_technician_id) {
-          setReassignForm((prev) => ({ ...prev, new_technician_id: usersRes.data.data[0].id }));
-        }
-      } else {
-        // Fallback seed technicians
-        const fallback = [
-          { id: 'f0000000-0000-0000-0000-000000000003', full_name: 'Sunil Yadav', employee_code: 'EMP-TCH-001', department: 'Mechanical Maintenance' },
-          { id: 'f0000000-0000-0000-0000-000000000004', full_name: 'Anil Kumar', employee_code: 'EMP-TCH-002', department: 'Electrical & PLC Automation' },
-          { id: 'f0000000-0000-0000-0000-000000000005', full_name: 'Suresh Patil', employee_code: 'EMP-TCH-003', department: 'Hydraulics & Tooling' },
-          { id: 'f0000000-0000-0000-0000-000000000006', full_name: 'Vikram Singh', employee_code: 'EMP-TCH-004', department: 'Robotic Welding Maintenance' },
-        ];
-        setTechniciansList(fallback);
-        if (!reassignForm.new_technician_id) {
-          setReassignForm((prev) => ({ ...prev, new_technician_id: fallback[0].id }));
-        }
+      if (activeFetchIdRef.current === id) {
+        setLoading(false);
       }
-    } catch {
-      // Ignored
-    }
-  };
-
-  useEffect(() => {
-    fetchWorkOrderData();
-    if (isManagerOrAdmin) {
-      fetchTechnicians();
     }
   }, [id]);
 
-  // Execute Technician Milestone
+  // Fetch Spare Parts independently (does not overwrite workOrder on error)
+  const fetchPartsData = useCallback(async () => {
+    if (!id) return;
+    try {
+      setPartsLoading(true);
+      setPartsError('');
+
+      const res = await apiClient.get(`/work-orders/${id}/parts`);
+      if (activeFetchIdRef.current !== id) return;
+
+      if (res.data?.success && Array.isArray(res.data.data)) {
+        setParts(res.data.data);
+      } else {
+        setParts([]);
+      }
+    } catch (err: any) {
+      if (activeFetchIdRef.current !== id) return;
+      setPartsError(err.response?.data?.message || 'Failed to load spare parts records.');
+    } finally {
+      if (activeFetchIdRef.current === id) {
+        setPartsLoading(false);
+      }
+    }
+  }, [id]);
+
+  // Fetch Active Technicians (for managers/admins)
+  const fetchTechnicians = useCallback(async () => {
+    try {
+      setTechsLoading(true);
+      setTechsError('');
+
+      const res = await apiClient.get('/auth/users?role=technician');
+      if (res.data?.success && Array.isArray(res.data.data)) {
+        // Filter strictly active technicians
+        const activeTechs = res.data.data.filter((t: any) => t.is_active !== false);
+        setTechniciansList(activeTechs);
+        if (activeTechs.length > 0 && !reassignForm.new_technician_id) {
+          setReassignForm((prev) => ({ ...prev, new_technician_id: activeTechs[0].id }));
+        }
+      } else {
+        setTechniciansList([]);
+      }
+    } catch (err: any) {
+      setTechsError(err.response?.data?.message || 'Failed to retrieve active technicians.');
+      setTechniciansList([]);
+    } finally {
+      setTechsLoading(false);
+    }
+  }, [reassignForm.new_technician_id]);
+
+  useEffect(() => {
+    fetchWorkOrderData();
+    fetchPartsData();
+    if (isManagerOrAdmin) {
+      fetchTechnicians();
+    }
+  }, [fetchWorkOrderData, fetchPartsData, fetchTechnicians, isManagerOrAdmin]);
+
+  // Technician Milestone Handler
   const handleMilestoneAction = async (action: string, payload: any = {}) => {
     if (!id) return;
     try {
@@ -165,6 +205,7 @@ export const WorkOrderDetailPage: React.FC = () => {
         setIsCompleteModalOpen(false);
         setIsScheduleModalOpen(false);
         setIsProgressModalOpen(false);
+        setIsDeclineModalOpen(false);
         await fetchWorkOrderData();
       }
     } catch (err: any) {
@@ -174,7 +215,7 @@ export const WorkOrderDetailPage: React.FC = () => {
     }
   };
 
-  // Execute Manager Verification
+  // Manager Verification Handler
   const handleVerifySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!id) return;
@@ -210,10 +251,15 @@ export const WorkOrderDetailPage: React.FC = () => {
     }
   };
 
-  // Execute Reassignment
+  // Reassignment Handler
   const handleReassignSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!id || !reassignForm.new_technician_id) return;
+    if (!id) return;
+
+    if (!reassignForm.new_technician_id) {
+      setError('Please select a valid technician for reassignment.');
+      return;
+    }
 
     try {
       setActionLoading(true);
@@ -222,17 +268,49 @@ export const WorkOrderDetailPage: React.FC = () => {
 
       const res = await apiClient.post(`/work-orders/${id}/reassign`, {
         new_technician_id: reassignForm.new_technician_id,
-        notes: reassignForm.notes,
-        work_instructions: reassignForm.work_instructions,
+        notes: reassignForm.notes?.trim() || undefined,
+        work_instructions: reassignForm.work_instructions?.trim() || undefined,
       });
 
       if (res.data?.success) {
-        setSuccessMsg('Work order reassigned successfully to new technician.');
+        setSuccessMsg('Work order reassigned successfully to target technician.');
         setIsReassignModalOpen(false);
         await fetchWorkOrderData();
       }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Reassignment failed.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Reopen Handler
+  const handleReopenSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!id) return;
+
+    if (!reopenReason.trim()) {
+      setError('A reason explaining why the work order is being reopened is mandatory.');
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      setError('');
+      setSuccessMsg('');
+
+      const res = await apiClient.post(`/work-orders/${id}/reopen`, {
+        reason: reopenReason.trim(),
+      });
+
+      if (res.data?.success) {
+        setSuccessMsg('Work order reopened successfully. Target machine placed under maintenance.');
+        setIsReopenModalOpen(false);
+        setReopenReason('');
+        await fetchWorkOrderData();
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to reopen work order.');
     } finally {
       setActionLoading(false);
     }
@@ -253,9 +331,9 @@ export const WorkOrderDetailPage: React.FC = () => {
     return (
       <div className="p-8 bg-white rounded-2xl border-2 border-slate-200 text-center space-y-4">
         <AlertTriangle className="w-10 h-10 text-red-600 mx-auto" />
-        <h3 className="text-base font-black text-zinc-950 uppercase">Work Order Not Found</h3>
+        <h3 className="text-base font-black text-zinc-950 uppercase">Work Order Not Accessible</h3>
         <p className="text-xs text-zinc-500 max-w-md mx-auto">
-          The requested work order could not be located or you lack permissions to view it.
+          {error || 'The requested work order could not be located or you lack permissions to view it.'}
         </p>
         <Link
           to="/work-orders"
@@ -268,50 +346,94 @@ export const WorkOrderDetailPage: React.FC = () => {
     );
   }
 
+  // Work Order Status Flags
   const isClosed = workOrder.status === 'verified_closed';
+  const isCompleted = workOrder.status === 'completed';
   const isSubmitted = workOrder.status === 'submitted_verification';
   const isRework = workOrder.status === 'rework_required';
   const isWaitingParts = workOrder.status === 'waiting_for_parts';
+  const isOnHold = workOrder.status === 'on_hold';
   const isInProgress = workOrder.status === 'in_progress';
   const isDiagnosis = workOrder.status === 'under_diagnosis';
   const isAccepted = workOrder.status === 'accepted';
   const isAssigned = workOrder.status === 'assigned';
   const isScheduled = workOrder.status === 'scheduled';
+  const isReopened = workOrder.status === 'reopened';
 
-  // Primary Milestone Stages for Visual Stepper
+  // Strict Technician Execution Authorization:
+  // Must be technician role AND assigned to this exact work order
+  const isAssignedTechnician = isTechnician && user?.id === workOrder.assigned_technician_id;
+
+  // Filter technicians eligible for reassignment (same plant if plant_id present)
+  const eligibleTechnicians = techniciansList.filter((t) => {
+    if (workOrder.plant_id && t.plant_id && t.plant_id !== workOrder.plant_id) {
+      return false;
+    }
+    return t.id !== workOrder.assigned_technician_id;
+  });
+
+  // Visual Stepper Stages
   const milestoneSteps = [
-    { key: 'assigned', label: 'Assigned', icon: UserCheck },
-    { key: 'accepted', label: 'Accepted', icon: Check },
-    { key: 'scheduled_or_diagnosis', label: 'Arrival / Diagnosis', icon: Activity },
-    { key: 'in_progress', label: 'Repair In Progress', icon: Wrench },
-    { key: 'submitted_verification', label: 'Verification Pending', icon: ShieldCheck },
-    { key: 'verified_closed', label: 'Verified & Closed', icon: CheckCircle2 },
+    { key: 'assigned', label: '1. Assigned', icon: UserCheck },
+    { key: 'accepted', label: '2. Accepted', icon: Check },
+    { key: 'diagnosis', label: '3. Arrival & Diagnosis', icon: Activity },
+    { key: 'in_progress', label: '4. Repair In Progress', icon: Wrench },
+    { key: 'verification', label: '5. Quality Verification', icon: ShieldCheck },
+    { key: 'closed', label: '6. Restored & Closed', icon: CheckCircle2 },
   ];
 
-  const getStepStatus = (stepKey: string) => {
-    const statusOrder: Record<string, number> = {
+  const getStepState = (stepKey: string) => {
+    const statusRanks: Record<string, number> = {
       assigned: 0,
       accepted: 1,
       scheduled: 1,
       under_diagnosis: 2,
       in_progress: 3,
       waiting_for_parts: 3,
+      waiting_for_approval: 3,
+      on_hold: 3,
       rework_required: 3,
+      reopened: 3,
       submitted_verification: 4,
+      completed: 5,
       verified_closed: 5,
     };
 
-    const currentIdx = statusOrder[workOrder.status] ?? 0;
+    const currentRank = statusRanks[workOrder.status] ?? 0;
 
-    if (stepKey === 'assigned') return currentIdx >= 0 ? 'completed' : 'pending';
-    if (stepKey === 'accepted') return currentIdx >= 1 ? 'completed' : 'pending';
-    if (stepKey === 'scheduled_or_diagnosis') return currentIdx >= 2 ? 'completed' : 'pending';
-    if (stepKey === 'in_progress') return currentIdx >= 3 ? 'completed' : 'pending';
-    if (stepKey === 'submitted_verification') return currentIdx >= 4 ? 'completed' : 'pending';
-    if (stepKey === 'verified_closed') return currentIdx >= 5 ? 'completed' : 'pending';
+    let targetRank = 0;
+    if (stepKey === 'assigned') targetRank = 0;
+    else if (stepKey === 'accepted') targetRank = 1;
+    else if (stepKey === 'diagnosis') targetRank = 2;
+    else if (stepKey === 'in_progress') targetRank = 3;
+    else if (stepKey === 'verification') targetRank = 4;
+    else if (stepKey === 'closed') targetRank = 5;
 
+    if (currentRank > targetRank) return 'completed';
+    if (currentRank === targetRank) return 'current';
     return 'pending';
   };
+
+  // Downtime metrics helpers handling numeric 0 truthfully
+  const hasDowntime = typeof workOrder.total_downtime_minutes === 'number';
+  const totalDowntimeDisplay = hasDowntime
+    ? `${workOrder.total_downtime_minutes} mins`
+    : isClosed || isCompleted
+    ? '0 mins'
+    : 'Clock Running...';
+
+  const hasResponseTime = typeof workOrder.maintenance_response_minutes === 'number';
+  const responseTimeDisplay = hasResponseTime
+    ? `${workOrder.maintenance_response_minutes} mins`
+    : 'Pending arrival';
+
+  const hasLabourHours = typeof workOrder.labour_hours === 'number';
+  const hasActiveRepair = typeof workOrder.active_repair_minutes === 'number';
+  const labourDisplay = hasLabourHours
+    ? `${workOrder.labour_hours} hrs`
+    : hasActiveRepair
+    ? `${workOrder.active_repair_minutes} mins`
+    : '0 mins';
 
   return (
     <div className="space-y-6 min-h-full">
@@ -333,14 +455,20 @@ export const WorkOrderDetailPage: React.FC = () => {
             </h2>
             <StatusBadge status={workOrder.status} size="md" />
             <StatusBadge status={workOrder.priority} size="md" />
+            {Boolean(workOrder.is_major_breakdown) && (
+              <span className="bg-red-600 text-white text-[10px] px-2 py-0.5 rounded font-black uppercase tracking-wider">
+                Major Breakdown
+              </span>
+            )}
           </div>
           <p className="text-xs text-zinc-500 font-medium mt-1">
-            Target Asset: <strong className="text-zinc-900">{workOrder.machine_code}</strong> ({workOrder.machine_name}) • {workOrder.bay_line_location || workOrder.shop_name}
+            Target Asset: <strong className="text-zinc-900">{workOrder.machine_code || 'Not specified'}</strong> ({workOrder.machine_name || 'Machine'}) • {workOrder.bay_line_location || workOrder.shop_name || 'Location unavailable'}
           </p>
         </div>
 
         <div className="flex items-center gap-2 self-start sm:self-auto">
-          {isManagerOrAdmin && !isClosed && (
+          {/* Manager / Admin Reassignment Button */}
+          {isManagerOrAdmin && !isClosed && !isCompleted && (
             <button
               onClick={() => setIsReassignModalOpen(true)}
               className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-zinc-800 text-xs font-bold rounded-xl transition cursor-pointer"
@@ -349,8 +477,22 @@ export const WorkOrderDetailPage: React.FC = () => {
             </button>
           )}
 
+          {/* Manager / Admin Reopen Button */}
+          {isManagerOrAdmin && (isClosed || isCompleted) && (
+            <button
+              onClick={() => setIsReopenModalOpen(true)}
+              className="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-black text-xs font-black uppercase tracking-wider rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Reopen Ticket</span>
+            </button>
+          )}
+
           <button
-            onClick={fetchWorkOrderData}
+            onClick={() => {
+              fetchWorkOrderData();
+              fetchPartsData();
+            }}
             disabled={actionLoading}
             className="flex items-center gap-2 px-3.5 py-2 bg-white border-2 border-slate-200 rounded-xl text-xs font-bold text-zinc-800 hover:bg-slate-50 transition shadow-xs cursor-pointer"
           >
@@ -397,15 +539,28 @@ export const WorkOrderDetailPage: React.FC = () => {
         </div>
       )}
 
+      {/* Reopened Notice Banner */}
+      {isReopened && (
+        <div className="p-4 bg-orange-50 border-2 border-orange-300 rounded-2xl text-orange-950 text-xs shadow-xs space-y-1">
+          <div className="flex items-center gap-2 font-black uppercase tracking-wider text-orange-800">
+            <RotateCcw className="w-4 h-4 text-orange-600" />
+            <span>Work Order Reopened for Supplemental Maintenance</span>
+          </div>
+          <p className="font-medium text-orange-900">
+            This job was reopened after prior closure. Please inspect machine status and execute required adjustments.
+          </p>
+        </div>
+      )}
+
       {/* Waiting for Parts Notice Banner */}
-      {isWaitingParts && (
+      {(isWaitingParts || isOnHold) && (
         <div className="p-4 bg-red-50 border-2 border-red-200 rounded-2xl text-red-900 text-xs shadow-xs space-y-1">
           <div className="flex items-center gap-2 font-black uppercase tracking-wider">
             <Package className="w-4 h-4 text-red-600" />
-            <span>Work Paused: Waiting for Replacement Parts</span>
+            <span>Work Paused: Awaiting Spares / Authorization</span>
           </div>
           <p className="font-medium text-red-700">
-            Work order execution is on hold pending spares issuance from the warehouse or Purchase Request fulfillment.
+            Work order execution is temporarily paused pending replacement part issuance or supervisor clearance.
           </p>
         </div>
       )}
@@ -417,39 +572,33 @@ export const WorkOrderDetailPage: React.FC = () => {
             Milestone Lifecycle Progression
           </h3>
           <span className="text-[11px] font-mono text-zinc-500 font-bold">
-            Current: {workOrder.status?.replace('_', ' ').toUpperCase()}
+            Current: {workOrder.status?.replace(/_/g, ' ').toUpperCase()}
           </span>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
           {milestoneSteps.map((step, idx) => {
             const Icon = step.icon;
-            const status = getStepStatus(step.key);
-            const isCompleted = status === 'completed';
-            const isCurrent = 
-              (step.key === 'assigned' && isAssigned) ||
-              (step.key === 'accepted' && (isAccepted || isScheduled)) ||
-              (step.key === 'scheduled_or_diagnosis' && isDiagnosis) ||
-              (step.key === 'in_progress' && (isInProgress || isWaitingParts || isRework)) ||
-              (step.key === 'submitted_verification' && isSubmitted) ||
-              (step.key === 'verified_closed' && isClosed);
+            const state = getStepState(step.key);
+            const isCompletedStep = state === 'completed';
+            const isCurrentStep = state === 'current';
 
             return (
               <div
                 key={step.key}
                 className={`p-3.5 rounded-xl border-2 transition-all flex flex-col justify-between ${
-                  isCurrent
+                  isCurrentStep
                     ? 'border-jcb-yellowDark bg-amber-50/40 shadow-xs'
-                    : isCompleted
+                    : isCompletedStep
                     ? 'border-emerald-200 bg-emerald-50/20'
                     : 'border-slate-100 bg-slate-50 opacity-60'
                 }`}
               >
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-mono font-black text-zinc-400">0{idx + 1}</span>
-                  {isCompleted ? (
+                  {isCompletedStep ? (
                     <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  ) : isCurrent ? (
+                  ) : isCurrentStep ? (
                     <span className="w-2.5 h-2.5 rounded-full bg-jcb-yellow animate-pulse border border-amber-600" />
                   ) : (
                     <span className="w-2 h-2 rounded-full bg-slate-300" />
@@ -459,7 +608,7 @@ export const WorkOrderDetailPage: React.FC = () => {
                 <div className="mt-3">
                   <Icon
                     className={`w-4 h-4 mb-1 ${
-                      isCurrent ? 'text-zinc-950' : isCompleted ? 'text-emerald-700' : 'text-zinc-400'
+                      isCurrentStep ? 'text-zinc-950' : isCompletedStep ? 'text-emerald-700' : 'text-zinc-400'
                     }`}
                   />
                   <h4 className="text-xs font-bold text-zinc-900 leading-tight">{step.label}</h4>
@@ -470,7 +619,7 @@ export const WorkOrderDetailPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Execution Actions Strip (Technician & Manager Workspaces) */}
+      {/* Action Control Station: STRICT Role-Based Separation */}
       <div className="p-5 sm:p-6 bg-zinc-950 text-white rounded-2xl border-2 border-zinc-800 shadow-md space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
@@ -478,143 +627,172 @@ export const WorkOrderDetailPage: React.FC = () => {
               Action Control Station
             </span>
             <h3 className="text-base font-black tracking-wide uppercase">
-              {isClosed ? 'Work Order Verified & Completed' : 'Next Authorized Milestone Action'}
+              {isClosed || isCompleted
+                ? 'Work Order Verified & Completed'
+                : isAssignedTechnician
+                ? 'Technician Milestone Operations'
+                : isManagerOrAdmin
+                ? 'Supervisor Quality Verification'
+                : 'Work Order Execution Status'}
             </h3>
           </div>
 
-          {/* Action Buttons dynamically rendered based on state */}
           <div className="flex flex-wrap items-center gap-2.5">
-            {/* When Assigned: Technician Accepts or Schedules */}
-            {isAssigned && (
+            {/* ======================================================= */}
+            {/* TECHNICIAN OPERATIONS: ONLY FOR ASSIGNED TECHNICIAN     */}
+            {/* ======================================================= */}
+            {isAssignedTechnician && (
               <>
-                <button
-                  type="button"
-                  onClick={() => handleMilestoneAction('ACCEPT')}
-                  disabled={actionLoading}
-                  className="px-4 py-2 bg-jcb-yellow hover:bg-jcb-yellowDark text-black font-black text-xs uppercase tracking-wider rounded-xl transition shadow border border-amber-500 cursor-pointer"
-                >
-                  Accept Job (Acknowledge)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsScheduleModalOpen(true)}
-                  disabled={actionLoading}
-                  className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition border border-zinc-700 cursor-pointer"
-                >
-                  Schedule Visit
-                </button>
+                {/* Stage 1: Assigned */}
+                {isAssigned && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleMilestoneAction('ACCEPT')}
+                      disabled={actionLoading}
+                      className="px-4 py-2 bg-jcb-yellow hover:bg-jcb-yellowDark text-black font-black text-xs uppercase tracking-wider rounded-xl transition shadow border border-amber-500 cursor-pointer disabled:opacity-50"
+                    >
+                      Accept Job (Acknowledge)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsScheduleModalOpen(true)}
+                      disabled={actionLoading}
+                      className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition border border-zinc-700 cursor-pointer disabled:opacity-50"
+                    >
+                      Schedule Visit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsDeclineModalOpen(true)}
+                      disabled={actionLoading}
+                      className="px-3.5 py-2 bg-red-950 hover:bg-red-900 text-red-200 font-bold text-xs uppercase tracking-wider rounded-xl transition border border-red-800 cursor-pointer disabled:opacity-50"
+                    >
+                      Decline
+                    </button>
+                  </>
+                )}
+
+                {/* Stage 2: Accepted or Scheduled */}
+                {(isAccepted || isScheduled) && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleMilestoneAction('ARRIVED')}
+                      disabled={actionLoading}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition shadow cursor-pointer disabled:opacity-50"
+                    >
+                      Mark Arrived on Site
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleMilestoneAction('START_WORK')}
+                      disabled={actionLoading}
+                      className="px-4 py-2 bg-jcb-yellow hover:bg-jcb-yellowDark text-black font-black text-xs uppercase tracking-wider rounded-xl transition shadow border border-amber-500 cursor-pointer disabled:opacity-50"
+                    >
+                      Start Work
+                    </button>
+                  </>
+                )}
+
+                {/* Stage 3: Under Diagnosis */}
+                {isDiagnosis && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleMilestoneAction('START_WORK')}
+                      disabled={actionLoading}
+                      className="px-4 py-2 bg-jcb-yellow hover:bg-jcb-yellowDark text-black font-black text-xs uppercase tracking-wider rounded-xl transition shadow border border-amber-500 cursor-pointer disabled:opacity-50"
+                    >
+                      Start Active Repair
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsProgressModalOpen(true)}
+                      disabled={actionLoading}
+                      className="px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs uppercase rounded-xl border border-zinc-700 cursor-pointer disabled:opacity-50"
+                    >
+                      Log Intermediate Findings
+                    </button>
+                  </>
+                )}
+
+                {/* Stage 4: In Progress */}
+                {isInProgress && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleMilestoneAction('PAUSE', { notes: 'Awaiting spare parts issuance' })}
+                      disabled={actionLoading}
+                      className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs uppercase rounded-xl transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                    >
+                      <Pause className="w-3.5 h-3.5" />
+                      <span>Pause (Waiting Spares)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsProgressModalOpen(true)}
+                      disabled={actionLoading}
+                      className="px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs uppercase rounded-xl border border-zinc-700 cursor-pointer disabled:opacity-50"
+                    >
+                      Progress Notes
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsCompleteModalOpen(true)}
+                      disabled={actionLoading}
+                      className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition shadow cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Complete Repair & Submit</span>
+                    </button>
+                  </>
+                )}
+
+                {/* Resuming from Waiting for Parts or On Hold */}
+                {(isWaitingParts || isOnHold) && (
+                  <button
+                    type="button"
+                    onClick={() => handleMilestoneAction('RESUME')}
+                    disabled={actionLoading}
+                    className="px-5 py-2 bg-jcb-yellow hover:bg-jcb-yellowDark text-black font-black text-xs uppercase tracking-wider rounded-xl transition shadow border border-amber-500 cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    <Play className="w-4 h-4" />
+                    <span>Resume Work</span>
+                  </button>
+                )}
+
+                {/* Restarting from Rework Required or Reopened */}
+                {(isRework || isReopened) && (
+                  <button
+                    type="button"
+                    onClick={() => handleMilestoneAction('START_WORK')}
+                    disabled={actionLoading}
+                    className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-black font-black text-xs uppercase tracking-wider rounded-xl transition shadow border border-amber-600 cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    <span>Start Work</span>
+                  </button>
+                )}
               </>
             )}
 
-            {/* When Accepted or Scheduled: Technician records site arrival or starts work */}
-            {(isAccepted || isScheduled) && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => handleMilestoneAction('ARRIVED')}
-                  disabled={actionLoading}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition shadow cursor-pointer"
-                >
-                  Mark Arrived on Site
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleMilestoneAction('START_WORK')}
-                  disabled={actionLoading}
-                  className="px-4 py-2 bg-jcb-yellow hover:bg-jcb-yellowDark text-black font-black text-xs uppercase tracking-wider rounded-xl transition shadow border border-amber-500 cursor-pointer"
-                >
-                  Start Work
-                </button>
-              </>
+            {/* If logged in user is a technician NOT assigned to this work order */}
+            {isTechnician && !isAssignedTechnician && (
+              <span className="text-xs text-zinc-400 font-medium italic">
+                Read-only: Assigned to {workOrder.technician_name || 'another technician'}.
+              </span>
             )}
 
-            {/* When Under Diagnosis: Start active repair or record progress */}
-            {isDiagnosis && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => handleMilestoneAction('START_WORK')}
-                  disabled={actionLoading}
-                  className="px-4 py-2 bg-jcb-yellow hover:bg-jcb-yellowDark text-black font-black text-xs uppercase tracking-wider rounded-xl transition shadow border border-amber-500 cursor-pointer"
-                >
-                  Start Active Repair
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsProgressModalOpen(true)}
-                  disabled={actionLoading}
-                  className="px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs uppercase rounded-xl border border-zinc-700 cursor-pointer"
-                >
-                  Log Intermediate Findings
-                </button>
-              </>
-            )}
-
-            {/* When In Progress: Pause, Update Progress, Complete */}
-            {isInProgress && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => handleMilestoneAction('PAUSE', { notes: 'Awaiting spare parts issuance' })}
-                  disabled={actionLoading}
-                  className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs uppercase rounded-xl transition cursor-pointer flex items-center gap-1.5"
-                >
-                  <Pause className="w-3.5 h-3.5" />
-                  <span>Pause (Waiting Spares)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsProgressModalOpen(true)}
-                  disabled={actionLoading}
-                  className="px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs uppercase rounded-xl border border-zinc-700 cursor-pointer"
-                >
-                  Progress Notes
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsCompleteModalOpen(true)}
-                  disabled={actionLoading}
-                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition shadow cursor-pointer flex items-center gap-1.5"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Complete Repair & Submit</span>
-                </button>
-              </>
-            )}
-
-            {/* When Waiting for Parts: Resume */}
-            {isWaitingParts && (
-              <button
-                type="button"
-                onClick={() => handleMilestoneAction('RESUME')}
-                disabled={actionLoading}
-                className="px-5 py-2 bg-jcb-yellow hover:bg-jcb-yellowDark text-black font-black text-xs uppercase tracking-wider rounded-xl transition shadow border border-amber-500 cursor-pointer flex items-center gap-1.5"
-              >
-                <Play className="w-4 h-4" />
-                <span>Resume Work</span>
-              </button>
-            )}
-
-            {/* When Rework Required: Restart Work */}
-            {isRework && (
-              <button
-                type="button"
-                onClick={() => handleMilestoneAction('START_WORK')}
-                disabled={actionLoading}
-                className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-black font-black text-xs uppercase tracking-wider rounded-xl transition shadow border border-amber-600 cursor-pointer flex items-center gap-1.5"
-              >
-                <RotateCcw className="w-4 h-4" />
-                <span>Restart Rework Job</span>
-              </button>
-            )}
-
-            {/* When Submitted for Verification: Manager Quality Sign-off */}
+            {/* ======================================================= */}
+            {/* MANAGER / ADMIN QUALITY VERIFICATION                    */}
+            {/* ======================================================= */}
             {isSubmitted && isManagerOrAdmin && (
               <button
                 type="button"
                 onClick={() => setIsVerifyModalOpen(true)}
                 disabled={actionLoading}
-                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition shadow cursor-pointer flex items-center gap-1.5"
+                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition shadow cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
               >
                 <ShieldCheck className="w-4 h-4" />
                 <span>Quality Verification & Sign-off</span>
@@ -623,11 +801,11 @@ export const WorkOrderDetailPage: React.FC = () => {
 
             {isSubmitted && !isManagerOrAdmin && (
               <span className="text-xs text-zinc-400 font-medium italic">
-                Awaiting maintenance manager review and production sign-off.
+                Awaiting maintenance manager inspection and production sign-off.
               </span>
             )}
 
-            {isClosed && (
+            {(isClosed || isCompleted) && (
               <span className="inline-flex items-center gap-1.5 text-xs text-emerald-400 font-black uppercase tracking-wider">
                 <CheckCircle2 className="w-4 h-4" />
                 <span>Order Closed • Machine Operational</span>
@@ -697,16 +875,16 @@ export const WorkOrderDetailPage: React.FC = () => {
                       </h4>
                     </div>
                     <span className="text-[11px] text-zinc-400 font-medium">
-                      Reported: {new Date(workOrder.reported_time || workOrder.created_at).toLocaleString()}
+                      Reported: {workOrder.reported_time ? new Date(workOrder.reported_time).toLocaleString() : new Date(workOrder.created_at).toLocaleString()}
                     </span>
                   </div>
 
                   <div>
                     <h5 className="text-xs font-bold text-zinc-800 uppercase tracking-wide">
-                      {workOrder.problem_title}
+                      {workOrder.problem_title || 'Breakdown Notification'}
                     </h5>
                     <p className="text-xs text-zinc-600 mt-1 font-medium bg-slate-50 p-3 rounded-xl border border-slate-200">
-                      {workOrder.complaint_description || 'No additional operator observation remarks.'}
+                      {workOrder.complaint_description || 'No additional operator observation remarks provided.'}
                     </p>
                   </div>
                 </div>
@@ -716,14 +894,14 @@ export const WorkOrderDetailPage: React.FC = () => {
               <div className="p-5 bg-white rounded-2xl border-2 border-slate-200 shadow-xs space-y-2">
                 <h4 className="text-xs font-black text-zinc-900 uppercase tracking-wider flex items-center gap-2">
                   <FileText className="w-4 h-4 text-zinc-600" />
-                  <span>Work Instructions & Mandatory Safety SOP</span>
+                  <span>Work Instructions & Safety SOP</span>
                 </h4>
                 <p className="text-xs text-zinc-700 font-medium bg-amber-50/50 p-3.5 rounded-xl border border-amber-200">
-                  {workOrder.work_instructions || 'Diagnose machine fault, isolate hydraulic pressure lines, verify LOTO safety interlocks, and restore machine cycle time tolerances.'}
+                  {workOrder.work_instructions || 'No specific work instructions recorded.'}
                 </p>
               </div>
 
-              {/* Technician Completion Report (if completed or closed) */}
+              {/* Technician Completion Report */}
               {(workOrder.diagnosis || workOrder.corrective_action) && (
                 <div className="p-5 bg-white rounded-2xl border-2 border-slate-200 shadow-xs space-y-3">
                   <h4 className="text-xs font-black text-emerald-950 uppercase tracking-wider flex items-center gap-2">
@@ -736,14 +914,14 @@ export const WorkOrderDetailPage: React.FC = () => {
                       <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">
                         Technical Diagnosis
                       </span>
-                      <p className="font-semibold text-zinc-900">{workOrder.diagnosis}</p>
+                      <p className="font-semibold text-zinc-900">{workOrder.diagnosis || 'Not recorded'}</p>
                     </div>
 
                     <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
                       <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">
                         Corrective Action Taken
                       </span>
-                      <p className="font-semibold text-zinc-900">{workOrder.corrective_action}</p>
+                      <p className="font-semibold text-zinc-900">{workOrder.corrective_action || 'Not recorded'}</p>
                     </div>
 
                     {workOrder.affected_component && (
@@ -777,7 +955,7 @@ export const WorkOrderDetailPage: React.FC = () => {
                   {workOrder.technician_remarks && (
                     <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs">
                       <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">
-                        Technician Closing Remarks
+                        Technician Remarks
                       </span>
                       <p className="font-semibold text-zinc-900">{workOrder.technician_remarks}</p>
                     </div>
@@ -787,7 +965,7 @@ export const WorkOrderDetailPage: React.FC = () => {
             </div>
           )}
 
-          {/* TAB 2: SPARE PARTS */}
+          {/* TAB 2: SPARE PARTS (Independent error & loading state) */}
           {activeTab === 'parts' && (
             <div className="bg-white rounded-2xl border-2 border-slate-200 shadow-xs p-5 space-y-4">
               <div className="flex items-center justify-between">
@@ -799,21 +977,49 @@ export const WorkOrderDetailPage: React.FC = () => {
                     Materials deducted from plant warehouse for this maintenance order
                   </p>
                 </div>
-                <Link
-                  to="/inventory"
-                  className="text-xs font-bold text-amber-800 hover:text-black flex items-center gap-1 uppercase"
-                >
-                  <span>160k Catalog</span>
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </Link>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={fetchPartsData}
+                    disabled={partsLoading}
+                    className="text-xs font-bold text-zinc-600 hover:text-black flex items-center gap-1 cursor-pointer"
+                    title="Retry / Refresh parts"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${partsLoading ? 'animate-spin text-jcb-yellowDark' : ''}`} />
+                    <span>Refresh</span>
+                  </button>
+                  <Link
+                    to="/inventory"
+                    className="text-xs font-bold text-amber-800 hover:text-black flex items-center gap-1 uppercase"
+                  >
+                    <span>Warehouse Catalog</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </Link>
+                </div>
               </div>
 
-              {parts.length === 0 ? (
+              {partsError && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-center justify-between">
+                  <span>{partsError}</span>
+                  <button
+                    onClick={fetchPartsData}
+                    className="px-2 py-1 bg-red-600 text-white rounded text-[10px] font-bold uppercase hover:bg-red-700"
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
+
+              {partsLoading ? (
+                <div className="py-12 text-center text-xs text-zinc-400 font-bold space-y-2">
+                  <RefreshCw className="w-6 h-6 animate-spin text-jcb-yellowDark mx-auto" />
+                  <p>Loading spare parts consumed...</p>
+                </div>
+              ) : parts.length === 0 ? (
                 <div className="py-12 text-center text-xs text-zinc-400 font-bold space-y-1">
                   <Package className="w-8 h-8 text-zinc-300 mx-auto mb-1" />
                   <p>No spare parts billed to this work order yet.</p>
                   <p className="text-[11px] text-zinc-400 font-medium">
-                    Technicians can request parts from inventory in Phase 4.
+                    Technicians can request parts from inventory during execution.
                   </p>
                 </div>
               ) : (
@@ -832,9 +1038,9 @@ export const WorkOrderDetailPage: React.FC = () => {
                     <tbody className="divide-y divide-slate-100">
                       {parts.map((p, idx) => (
                         <tr key={idx} className="hover:bg-slate-50 transition">
-                          <td className="py-2.5 font-mono font-bold text-zinc-900">{p.part_number}</td>
-                          <td className="py-2.5 font-bold text-zinc-800">{p.part_name}</td>
-                          <td className="py-2.5 text-zinc-500 uppercase text-[11px]">{p.part_category || 'Hydraulics'}</td>
+                          <td className="py-2.5 font-mono font-bold text-zinc-900">{p.part_number || '—'}</td>
+                          <td className="py-2.5 font-bold text-zinc-800">{p.part_name || 'Item'}</td>
+                          <td className="py-2.5 text-zinc-500 uppercase text-[11px]">{p.part_category || 'General'}</td>
                           <td className="py-2.5 font-mono font-bold">
                             {p.quantity} {p.unit_of_measure || 'NOS'}
                           </td>
@@ -859,7 +1065,7 @@ export const WorkOrderDetailPage: React.FC = () => {
                   Audit Ledger & Execution History
                 </h4>
                 <p className="text-[11px] text-zinc-500 font-medium">
-                  Immutable chronological milestones logged during ticket lifecycle
+                  Chronological lifecycle events logged by technicians and supervisors
                 </p>
               </div>
 
@@ -881,9 +1087,9 @@ export const WorkOrderDetailPage: React.FC = () => {
                             {new Date(evt.timestamp).toLocaleString()}
                           </span>
                         </div>
-                        <p className="text-zinc-600 font-medium">{evt.notes || 'Milestone updated.'}</p>
+                        <p className="text-zinc-600 font-medium">{evt.notes || 'Milestone event recorded.'}</p>
                         <div className="text-[10px] text-zinc-400 font-bold">
-                          By: {evt.performed_by_name || 'System Operator'} ({evt.performed_by_role || 'Technician'})
+                          By: {evt.performed_by_name || 'System'}{evt.performed_by_role ? ` (${evt.performed_by_role})` : ''}
                         </div>
                       </div>
                     </div>
@@ -894,7 +1100,7 @@ export const WorkOrderDetailPage: React.FC = () => {
           )}
         </div>
 
-        {/* Right Column (1 col): Machine Meta, Technician & Dual Downtime Clocks */}
+        {/* Right Column (1 col): Downtime Metrics, Machine Profile, Personnel */}
         <div className="space-y-6">
           {/* Dual Downtime Clocks */}
           <div className="bg-white p-5 rounded-2xl border-2 border-slate-200 shadow-xs space-y-4">
@@ -911,7 +1117,7 @@ export const WorkOrderDetailPage: React.FC = () => {
                     Total Machine Downtime
                   </span>
                   <span className="text-lg font-black text-red-950 font-mono">
-                    {workOrder.total_downtime_minutes ? `${workOrder.total_downtime_minutes} mins` : 'Clock Running...'}
+                    {totalDowntimeDisplay}
                   </span>
                 </div>
                 <Clock className="w-6 h-6 text-red-400" />
@@ -924,7 +1130,7 @@ export const WorkOrderDetailPage: React.FC = () => {
                     Response Arrival Time
                   </span>
                   <span className="text-lg font-black text-blue-950 font-mono">
-                    {workOrder.maintenance_response_minutes ? `${workOrder.maintenance_response_minutes} mins` : 'Pending arrival'}
+                    {responseTimeDisplay}
                   </span>
                 </div>
                 <Zap className="w-6 h-6 text-blue-400" />
@@ -937,7 +1143,7 @@ export const WorkOrderDetailPage: React.FC = () => {
                     Active Repair Labor
                   </span>
                   <span className="text-lg font-black text-amber-950 font-mono">
-                    {workOrder.labour_hours ? `${workOrder.labour_hours} hrs` : `${workOrder.active_repair_minutes || 0} mins`}
+                    {labourDisplay}
                   </span>
                 </div>
                 <Wrench className="w-6 h-6 text-amber-400" />
@@ -945,45 +1151,49 @@ export const WorkOrderDetailPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Machine Profile Card */}
+          {/* Machine Profile Card (Truthful Data, No Fake Fallbacks) */}
           <div className="bg-white p-5 rounded-2xl border-2 border-slate-200 shadow-xs space-y-3">
             <div className="flex items-center justify-between">
               <h4 className="text-xs font-black text-zinc-950 uppercase tracking-wider flex items-center gap-2">
                 <Cpu className="w-4 h-4 text-zinc-600" />
                 <span>Production Machine</span>
               </h4>
-              <StatusBadge status={workOrder.machine_status || 'running'} />
+              <StatusBadge status={workOrder.machine_status || 'unknown'} />
             </div>
 
             <div className="space-y-2 text-xs">
               <div className="flex items-center justify-between py-1 border-b border-slate-100">
                 <span className="text-zinc-500 font-medium">Machine Code</span>
-                <span className="font-mono font-black text-zinc-950">{workOrder.machine_code}</span>
+                <span className="font-mono font-black text-zinc-950">{workOrder.machine_code || 'Not specified'}</span>
               </div>
               <div className="flex items-center justify-between py-1 border-b border-slate-100">
                 <span className="text-zinc-500 font-medium">Asset Name</span>
-                <span className="font-bold text-zinc-900">{workOrder.machine_name}</span>
+                <span className="font-bold text-zinc-900">{workOrder.machine_name || 'Machine'}</span>
               </div>
               <div className="flex items-center justify-between py-1 border-b border-slate-100">
                 <span className="text-zinc-500 font-medium">Category</span>
-                <span className="font-semibold text-zinc-800">{workOrder.machine_category || 'CNC Machining'}</span>
+                <span className="font-semibold text-zinc-800">{workOrder.machine_category || 'Not specified'}</span>
               </div>
               <div className="flex items-center justify-between py-1 border-b border-slate-100">
                 <span className="text-zinc-500 font-medium">Criticality</span>
-                <span className="font-black text-zinc-950 uppercase">{workOrder.criticality || 'CLASS B'}</span>
+                <span className="font-black text-zinc-950 uppercase">
+                  {workOrder.criticality ? workOrder.criticality.replace(/_/g, ' ').toUpperCase() : 'Not specified'}
+                </span>
               </div>
               <div className="flex items-center justify-between py-1 border-b border-slate-100">
                 <span className="text-zinc-500 font-medium">Shop / Bay</span>
-                <span className="font-semibold text-zinc-800">{workOrder.bay_line_location || workOrder.shop_name}</span>
+                <span className="font-semibold text-zinc-800">{workOrder.bay_line_location || workOrder.shop_name || 'Location unavailable'}</span>
               </div>
               <div className="flex items-center justify-between py-1">
                 <span className="text-zinc-500 font-medium">Operating Hours</span>
-                <span className="font-mono font-bold text-zinc-950">{workOrder.operating_hours || 0} hrs</span>
+                <span className="font-mono font-bold text-zinc-950">
+                  {typeof workOrder.operating_hours === 'number' ? `${workOrder.operating_hours} hrs` : '0 hrs'}
+                </span>
               </div>
             </div>
           </div>
 
-          {/* Assigned Personnel Card */}
+          {/* Assigned Personnel Card (No Fabricated Names or Codes) */}
           <div className="bg-white p-5 rounded-2xl border-2 border-slate-200 shadow-xs space-y-3">
             <h4 className="text-xs font-black text-zinc-950 uppercase tracking-wider flex items-center gap-2">
               <User className="w-4 h-4 text-zinc-600" />
@@ -999,9 +1209,11 @@ export const WorkOrderDetailPage: React.FC = () => {
                 <p className="font-black text-zinc-900 mt-0.5">
                   {workOrder.technician_name || 'Unassigned'}
                 </p>
-                <p className="text-[11px] font-mono text-zinc-500">
-                  {workOrder.technician_code || 'EMP-TCH-001'} • {workOrder.technician_email || ''}
-                </p>
+                {workOrder.technician_code && (
+                  <p className="text-[11px] font-mono text-zinc-500">
+                    {workOrder.technician_code} {workOrder.technician_email ? `• ${workOrder.technician_email}` : ''}
+                  </p>
+                )}
               </div>
 
               {/* Manager */}
@@ -1010,11 +1222,13 @@ export const WorkOrderDetailPage: React.FC = () => {
                   Authorizing Supervisor
                 </span>
                 <p className="font-black text-zinc-900 mt-0.5">
-                  {workOrder.manager_name || 'Vikas Verma'}
+                  {workOrder.manager_name || 'Not assigned'}
                 </p>
-                <p className="text-[11px] font-mono text-zinc-500">
-                  {workOrder.manager_code || 'EMP-MGR-001'}
-                </p>
+                {workOrder.manager_code && (
+                  <p className="text-[11px] font-mono text-zinc-500">
+                    {workOrder.manager_code}
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -1032,7 +1246,7 @@ export const WorkOrderDetailPage: React.FC = () => {
                   Complete Repair & Submit for Quality Verification
                 </h3>
               </div>
-              <button onClick={() => setIsCompleteModalOpen(false)} className="text-zinc-400 hover:text-white">
+              <button onClick={() => setIsCompleteModalOpen(false)} className="text-zinc-400 hover:text-white cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1040,7 +1254,22 @@ export const WorkOrderDetailPage: React.FC = () => {
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                handleMilestoneAction('COMPLETE', completeForm);
+                if (!completeForm.diagnosis.trim()) {
+                  setError('Technical Diagnosis is mandatory to complete repair.');
+                  return;
+                }
+                if (!completeForm.corrective_action.trim()) {
+                  setError('Corrective Action Taken is mandatory to complete repair.');
+                  return;
+                }
+                handleMilestoneAction('COMPLETE', {
+                  diagnosis: completeForm.diagnosis.trim(),
+                  corrective_action: completeForm.corrective_action.trim(),
+                  affected_component: completeForm.affected_component.trim() || undefined,
+                  fault_category: completeForm.fault_category || undefined,
+                  root_cause_analysis: completeForm.root_cause_analysis.trim() || undefined,
+                  technician_remarks: completeForm.technician_remarks.trim() || undefined,
+                });
               }}
               className="p-5 space-y-4 overflow-y-auto"
             >
@@ -1098,7 +1327,10 @@ export const WorkOrderDetailPage: React.FC = () => {
                     <option value="hydraulic">Hydraulic</option>
                     <option value="electrical">Electrical</option>
                     <option value="pneumatic">Pneumatic</option>
-                    <option value="electronic">Electronic / Sensor</option>
+                    <option value="software">Software / Control</option>
+                    <option value="structural">Structural</option>
+                    <option value="safety">Safety System</option>
+                    <option value="general">General</option>
                   </select>
                 </div>
               </div>
@@ -1133,14 +1365,14 @@ export const WorkOrderDetailPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsCompleteModalOpen(false)}
-                  className="px-4 py-2 border border-slate-300 rounded-xl text-xs font-bold text-zinc-700 hover:bg-slate-50"
+                  className="px-4 py-2 border border-slate-300 rounded-xl text-xs font-bold text-zinc-700 hover:bg-slate-50 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={actionLoading}
-                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow disabled:opacity-50"
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow disabled:opacity-50 cursor-pointer"
                 >
                   {actionLoading ? 'Submitting...' : 'Submit for Verification'}
                 </button>
@@ -1161,7 +1393,7 @@ export const WorkOrderDetailPage: React.FC = () => {
                   Manager Quality Verification & Sign-off
                 </h3>
               </div>
-              <button onClick={() => setIsVerifyModalOpen(false)} className="text-zinc-400 hover:text-white">
+              <button onClick={() => setIsVerifyModalOpen(false)} className="text-zinc-400 hover:text-white cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1169,9 +1401,9 @@ export const WorkOrderDetailPage: React.FC = () => {
             <form onSubmit={handleVerifySubmit} className="p-5 space-y-4">
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1">
                 <span className="text-[10px] uppercase font-bold text-zinc-500">Submitted Diagnosis:</span>
-                <p className="font-bold text-zinc-900">{workOrder.diagnosis}</p>
+                <p className="font-bold text-zinc-900">{workOrder.diagnosis || 'None recorded'}</p>
                 <span className="text-[10px] uppercase font-bold text-zinc-500 mt-1 block">Corrective Action:</span>
-                <p className="font-bold text-zinc-900">{workOrder.corrective_action}</p>
+                <p className="font-bold text-zinc-900">{workOrder.corrective_action || 'None recorded'}</p>
               </div>
 
               <div>
@@ -1182,7 +1414,7 @@ export const WorkOrderDetailPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setVerifyForm({ ...verifyForm, result: 'APPROVED' })}
-                    className={`p-3 rounded-xl border-2 text-xs font-black uppercase flex items-center justify-center gap-2 transition ${
+                    className={`p-3 rounded-xl border-2 text-xs font-black uppercase flex items-center justify-center gap-2 transition cursor-pointer ${
                       verifyForm.result === 'APPROVED'
                         ? 'border-emerald-600 bg-emerald-50 text-emerald-900 shadow-xs'
                         : 'border-slate-200 text-zinc-600 hover:bg-slate-50'
@@ -1195,7 +1427,7 @@ export const WorkOrderDetailPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setVerifyForm({ ...verifyForm, result: 'REJECTED' })}
-                    className={`p-3 rounded-xl border-2 text-xs font-black uppercase flex items-center justify-center gap-2 transition ${
+                    className={`p-3 rounded-xl border-2 text-xs font-black uppercase flex items-center justify-center gap-2 transition cursor-pointer ${
                       verifyForm.result === 'REJECTED'
                         ? 'border-red-600 bg-red-50 text-red-900 shadow-xs'
                         : 'border-slate-200 text-zinc-600 hover:bg-slate-50'
@@ -1229,14 +1461,14 @@ export const WorkOrderDetailPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsVerifyModalOpen(false)}
-                  className="px-4 py-2 border border-slate-300 rounded-xl text-xs font-bold text-zinc-700 hover:bg-slate-50"
+                  className="px-4 py-2 border border-slate-300 rounded-xl text-xs font-bold text-zinc-700 hover:bg-slate-50 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={actionLoading}
-                  className={`px-5 py-2 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow disabled:opacity-50 ${
+                  className={`px-5 py-2 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow disabled:opacity-50 cursor-pointer ${
                     verifyForm.result === 'APPROVED'
                       ? 'bg-emerald-600 hover:bg-emerald-700'
                       : 'bg-red-600 hover:bg-red-700'
@@ -1250,7 +1482,7 @@ export const WorkOrderDetailPage: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL 3: Reassign Work Order (Manager) */}
+      {/* MODAL 3: Reassign Work Order (Manager / Admin) */}
       {isReassignModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div className="bg-white rounded-2xl max-w-md w-full border-2 border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-150">
@@ -1261,29 +1493,53 @@ export const WorkOrderDetailPage: React.FC = () => {
                   Reassign Work Order to Technician
                 </h3>
               </div>
-              <button onClick={() => setIsReassignModalOpen(false)} className="text-zinc-400 hover:text-white">
+              <button onClick={() => setIsReassignModalOpen(false)} className="text-zinc-400 hover:text-white cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleReassignSubmit} className="p-5 space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1">
-                  Select New Lead Technician *
-                </label>
-                <select
-                  required
-                  value={reassignForm.new_technician_id}
-                  onChange={(e) => setReassignForm({ ...reassignForm, new_technician_id: e.target.value })}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-zinc-900"
-                >
-                  {techniciansList.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.full_name} ({t.employee_code || 'TECH'}) - {t.department || 'Maintenance'}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {techsError && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-center justify-between">
+                  <span>{techsError}</span>
+                  <button
+                    type="button"
+                    onClick={fetchTechnicians}
+                    className="underline text-[10px] font-bold"
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
+
+              {techsLoading ? (
+                <div className="py-6 text-center text-xs text-zinc-500 font-bold space-y-1">
+                  <RefreshCw className="w-5 h-5 animate-spin text-jcb-yellowDark mx-auto" />
+                  <p>Loading active technician roster...</p>
+                </div>
+              ) : eligibleTechnicians.length === 0 ? (
+                <div className="p-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl text-xs font-bold text-center">
+                  No other active technicians available in this facility.
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1">
+                    Select New Lead Technician *
+                  </label>
+                  <select
+                    required
+                    value={reassignForm.new_technician_id}
+                    onChange={(e) => setReassignForm({ ...reassignForm, new_technician_id: e.target.value })}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                  >
+                    {eligibleTechnicians.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.full_name} ({t.employee_code || 'TECH'})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1">
@@ -1293,7 +1549,20 @@ export const WorkOrderDetailPage: React.FC = () => {
                   rows={2}
                   value={reassignForm.notes}
                   onChange={(e) => setReassignForm({ ...reassignForm, notes: e.target.value })}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-medium text-zinc-900"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-medium text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1">
+                  Updated Work Instructions (Optional)
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Leave blank to preserve existing work instructions..."
+                  value={reassignForm.work_instructions}
+                  onChange={(e) => setReassignForm({ ...reassignForm, work_instructions: e.target.value })}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-medium text-zinc-900 focus:outline-none focus:border-jcb-yellow"
                 />
               </div>
 
@@ -1301,14 +1570,14 @@ export const WorkOrderDetailPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsReassignModalOpen(false)}
-                  className="px-4 py-2 border border-slate-300 rounded-xl text-xs font-bold text-zinc-700 hover:bg-slate-50"
+                  className="px-4 py-2 border border-slate-300 rounded-xl text-xs font-bold text-zinc-700 hover:bg-slate-50 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={actionLoading}
-                  className="px-5 py-2 bg-jcb-yellow hover:bg-jcb-yellowDark text-black rounded-xl text-xs font-black uppercase tracking-wider shadow disabled:opacity-50"
+                  disabled={actionLoading || eligibleTechnicians.length === 0}
+                  className="px-5 py-2 bg-jcb-yellow hover:bg-jcb-yellowDark text-black rounded-xl text-xs font-black uppercase tracking-wider shadow disabled:opacity-50 cursor-pointer"
                 >
                   {actionLoading ? 'Updating...' : 'Confirm Reassignment'}
                 </button>
@@ -1326,7 +1595,7 @@ export const WorkOrderDetailPage: React.FC = () => {
               <h3 className="text-sm font-black uppercase tracking-wider">
                 Schedule On-Site Maintenance Visit
               </h3>
-              <button onClick={() => setIsScheduleModalOpen(false)} className="text-zinc-400 hover:text-white">
+              <button onClick={() => setIsScheduleModalOpen(false)} className="text-zinc-400 hover:text-white cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1341,7 +1610,7 @@ export const WorkOrderDetailPage: React.FC = () => {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1">
-                    Scheduled Date
+                    Scheduled Date *
                   </label>
                   <input
                     type="date"
@@ -1353,7 +1622,7 @@ export const WorkOrderDetailPage: React.FC = () => {
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1">
-                    Scheduled Time
+                    Scheduled Time *
                   </label>
                   <input
                     type="time"
@@ -1373,7 +1642,7 @@ export const WorkOrderDetailPage: React.FC = () => {
                   rows={2}
                   value={scheduleForm.notes}
                   onChange={(e) => setScheduleForm({ ...scheduleForm, notes: e.target.value })}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-medium text-zinc-900"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-medium text-zinc-900 focus:outline-none focus:border-jcb-yellow"
                 />
               </div>
 
@@ -1381,16 +1650,16 @@ export const WorkOrderDetailPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsScheduleModalOpen(false)}
-                  className="px-4 py-2 border border-slate-300 rounded-xl text-xs font-bold text-zinc-700 hover:bg-slate-50"
+                  className="px-4 py-2 border border-slate-300 rounded-xl text-xs font-bold text-zinc-700 hover:bg-slate-50 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={actionLoading}
-                  className="px-5 py-2 bg-jcb-yellow hover:bg-jcb-yellowDark text-black rounded-xl text-xs font-black uppercase tracking-wider shadow"
+                  className="px-5 py-2 bg-jcb-yellow hover:bg-jcb-yellowDark text-black rounded-xl text-xs font-black uppercase tracking-wider shadow cursor-pointer"
                 >
-                  Save Schedule
+                  {actionLoading ? 'Scheduling...' : 'Save Schedule'}
                 </button>
               </div>
             </form>
@@ -1406,7 +1675,7 @@ export const WorkOrderDetailPage: React.FC = () => {
               <h3 className="text-sm font-black uppercase tracking-wider">
                 Log Intermediate Diagnosis & Progress
               </h3>
-              <button onClick={() => setIsProgressModalOpen(false)} className="text-zinc-400 hover:text-white">
+              <button onClick={() => setIsProgressModalOpen(false)} className="text-zinc-400 hover:text-white cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1414,7 +1683,12 @@ export const WorkOrderDetailPage: React.FC = () => {
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                handleMilestoneAction('PROGRESS', progressForm);
+                handleMilestoneAction('PROGRESS', {
+                  diagnosis: progressForm.diagnosis.trim() || undefined,
+                  affected_component: progressForm.affected_component.trim() || undefined,
+                  technician_remarks: progressForm.technician_remarks.trim() || undefined,
+                  notes: progressForm.notes.trim() || undefined,
+                });
               }}
               className="p-5 space-y-4"
             >
@@ -1427,7 +1701,7 @@ export const WorkOrderDetailPage: React.FC = () => {
                   placeholder="Disassembled pump manifold. Found metal debris in suction strainer."
                   value={progressForm.diagnosis}
                   onChange={(e) => setProgressForm({ ...progressForm, diagnosis: e.target.value })}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-medium text-zinc-900"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-medium text-zinc-900 focus:outline-none focus:border-jcb-yellow"
                 />
               </div>
 
@@ -1444,20 +1718,151 @@ export const WorkOrderDetailPage: React.FC = () => {
                 />
               </div>
 
+              <div>
+                <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1">
+                  Progress Notes / Action Taken
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Flushed oil lines. Awaiting new filter element from store."
+                  value={progressForm.notes}
+                  onChange={(e) => setProgressForm({ ...progressForm, notes: e.target.value })}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-medium text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                />
+              </div>
+
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setIsProgressModalOpen(false)}
-                  className="px-4 py-2 border border-slate-300 rounded-xl text-xs font-bold text-zinc-700 hover:bg-slate-50"
+                  className="px-4 py-2 border border-slate-300 rounded-xl text-xs font-bold text-zinc-700 hover:bg-slate-50 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={actionLoading}
-                  className="px-5 py-2 bg-jcb-yellow hover:bg-jcb-yellowDark text-black rounded-xl text-xs font-black uppercase tracking-wider shadow"
+                  className="px-5 py-2 bg-jcb-yellow hover:bg-jcb-yellowDark text-black rounded-xl text-xs font-black uppercase tracking-wider shadow cursor-pointer"
                 >
-                  Log Progress
+                  {actionLoading ? 'Recording...' : 'Log Progress'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 6: Decline Work Order (Technician) */}
+      {isDeclineModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-md w-full border-2 border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-150">
+            <div className="p-4 bg-zinc-950 text-white flex items-center justify-between border-b border-zinc-800">
+              <h3 className="text-sm font-black uppercase tracking-wider text-red-400">
+                Decline Work Order Assignment
+              </h3>
+              <button onClick={() => setIsDeclineModalOpen(false)} className="text-zinc-400 hover:text-white cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!declineReason.trim()) {
+                  setError('A reason explaining why you cannot accept the job is mandatory.');
+                  return;
+                }
+                handleMilestoneAction('DECLINE', {
+                  notes: declineReason.trim(),
+                  reason: declineReason.trim(),
+                });
+              }}
+              className="p-5 space-y-4"
+            >
+              <div>
+                <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1">
+                  Reason for Declining *
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  placeholder="e.g. Currently occupied on critical Line 1 stoppage or lack high-voltage electrical certification..."
+                  value={declineReason}
+                  onChange={(e) => setDeclineReason(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-medium text-zinc-900 focus:outline-none focus:border-red-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsDeclineModalOpen(false)}
+                  className="px-4 py-2 border border-slate-300 rounded-xl text-xs font-bold text-zinc-700 hover:bg-slate-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={actionLoading}
+                  className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow cursor-pointer disabled:opacity-50"
+                >
+                  {actionLoading ? 'Submitting...' : 'Confirm Decline'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 7: Reopen Work Order (Manager / Admin) */}
+      {isReopenModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-md w-full border-2 border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-150">
+            <div className="p-4 bg-zinc-950 text-white flex items-center justify-between border-b border-zinc-800">
+              <div className="flex items-center gap-2">
+                <RotateCcw className="w-5 h-5 text-amber-500" />
+                <h3 className="text-sm font-black uppercase tracking-wider">
+                  Reopen Closed Work Order
+                </h3>
+              </div>
+              <button onClick={() => setIsReopenModalOpen(false)} className="text-zinc-400 hover:text-white cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleReopenSubmit} className="p-5 space-y-4">
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 font-medium">
+                Reopening this closed ticket will transition its status to <strong>Reopened</strong>, revert machine status to <strong>Under Maintenance</strong>, and notify the assigned technician.
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1">
+                  Reason for Reopening *
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  placeholder="e.g. Machine exhibited recurring vibration during trial run; secondary torque check required."
+                  value={reopenReason}
+                  onChange={(e) => setReopenReason(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-medium text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsReopenModalOpen(false)}
+                  className="px-4 py-2 border border-slate-300 rounded-xl text-xs font-bold text-zinc-700 hover:bg-slate-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={actionLoading}
+                  className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-black rounded-xl text-xs font-black uppercase tracking-wider shadow cursor-pointer disabled:opacity-50"
+                >
+                  {actionLoading ? 'Reopening...' : 'Confirm Reopen'}
                 </button>
               </div>
             </form>

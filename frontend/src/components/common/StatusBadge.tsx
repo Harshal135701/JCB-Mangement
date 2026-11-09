@@ -16,6 +16,9 @@ export type StatusType =
   | 'submitted_verification' 
   | 'verified_closed' 
   | 'rework_required' 
+  | 'on_hold'
+  | 'reopened'
+  | 'completed'
   | 'pass' 
   | 'flagged' 
   | 'fail'
@@ -44,10 +47,20 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, label, size = 
     dotColor = 'bg-red-500 animate-pulse';
   } 
   // Amber / Warning statuses
-  else if (['under_maintenance', 'awaiting_parts', 'high', 'flagged', 'waiting_for_parts', 'rework_required'].includes(norm)) {
+  else if (['under_maintenance', 'awaiting_parts', 'high', 'flagged', 'waiting_for_parts', 'rework_required', 'on_hold', 'waiting_for_approval'].includes(norm)) {
     colorClasses = 'bg-amber-50 text-amber-900 border-amber-300';
     dotColor = 'bg-amber-500';
   } 
+  // Purple / Verification statuses
+  else if (['submitted_verification', 'verification_pending'].includes(norm)) {
+    colorClasses = 'bg-purple-50 text-purple-900 border-purple-300';
+    dotColor = 'bg-purple-500';
+  }
+  // Orange / Reopened statuses
+  else if (['reopened'].includes(norm)) {
+    colorClasses = 'bg-orange-50 text-orange-900 border-orange-300';
+    dotColor = 'bg-orange-500';
+  }
   // Blue / Info statuses
   else if (['new', 'pending_review', 'assigned', 'accepted', 'scheduled', 'under_diagnosis', 'in_progress', 'medium'].includes(norm)) {
     colorClasses = 'bg-blue-50 text-blue-800 border-blue-300';

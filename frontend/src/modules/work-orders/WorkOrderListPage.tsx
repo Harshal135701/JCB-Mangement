@@ -1,23 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import apiClient from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { 
   Wrench, 
   Search, 
-  Filter, 
-  Clock, 
-  AlertTriangle, 
-  CheckCircle2, 
   RefreshCw, 
-  ArrowRight,
-  ExternalLink,
+  AlertTriangle, 
   ChevronLeft,
   ChevronRight,
-  Cpu,
   User,
-  Calendar,
-  Layers,
   ArrowUpDown
 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -26,26 +18,56 @@ export const WorkOrderListPage: React.FC = () => {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
 
+  // Active query parameters derived from URL searchParams
+  const page = useMemo(() => {
+    const p = parseInt(searchParams.get('page') || '1', 10);
+    return isNaN(p) || p < 1 ? 1 : p;
+  }, [searchParams]);
+
+  const limit = useMemo(() => {
+    const l = parseInt(searchParams.get('limit') || '15', 10);
+    return isNaN(l) || l < 1 ? 15 : l;
+  }, [searchParams]);
+
+  const searchParam = useMemo(() => searchParams.get('search') || '', [searchParams]);
+  const statusFilter = useMemo(() => searchParams.get('status') || '', [searchParams]);
+  const priorityFilter = useMemo(() => searchParams.get('priority') || '', [searchParams]);
+  const sortBy = useMemo(() => searchParams.get('sortBy') || searchParams.get('sort_by') || 'created_at', [searchParams]);
+  const sortOrder = useMemo<'ASC' | 'DESC'>(() => {
+    const so = (searchParams.get('sortOrder') || searchParams.get('sort_order') || 'DESC').toUpperCase();
+    return so === 'ASC' ? 'ASC' : 'DESC';
+  }, [searchParams]);
+
+  // Controlled search input field
+  const [searchInput, setSearchInput] = useState(searchParam);
+
+  // Sync search input if URL changes externally
+  useEffect(() => {
+    setSearchInput(searchParam);
+  }, [searchParam]);
+
   const [workOrders, setWorkOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-
-  // Pagination state
-  const [page, setPage] = useState(parseInt(searchParams.get('page') || '1', 10));
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
-  const limit = 15;
 
-  // Filters state
-  const [search, setSearch] = useState(searchParams.get('search') || '');
-  const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || '');
-  const [priorityFilter, setPriorityFilter] = useState(searchParams.get('priority') || '');
-  const [sortBy, setSortBy] = useState(searchParams.get('sortBy') || 'created_at');
-  const [sortOrder, setSortOrder] = useState<'ASC' | 'DESC'>(
-    (searchParams.get('sortOrder')?.toUpperCase() as 'ASC' | 'DESC') || 'DESC'
-  );
+  // Update URL helper that preserves other params and handles page resets
+  const updateParams = useCallback((newParams: Record<string, string | null>) => {
+    setSearchParams((prev) => {
+      const updated = new URLSearchParams(prev);
+      Object.entries(newParams).forEach(([key, val]) => {
+        if (val === null || val === undefined || val === '') {
+          updated.delete(key);
+        } else {
+          updated.set(key, val);
+        }
+      });
+      return updated;
+    });
+  }, [setSearchParams]);
 
-  const fetchWorkOrders = async () => {
+  const fetchWorkOrders = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
@@ -55,9 +77,11 @@ export const WorkOrderListPage: React.FC = () => {
         limit,
         sortBy,
         sortOrder,
+        sort_by: sortBy,
+        sort_order: sortOrder,
       };
 
-      if (search.trim()) params.search = search.trim();
+      if (searchParam.trim()) params.search = searchParam.trim();
       if (statusFilter) params.status = statusFilter;
       if (priorityFilter) params.priority = priorityFilter;
 
@@ -65,35 +89,71 @@ export const WorkOrderListPage: React.FC = () => {
       if (res.data?.success) {
         setWorkOrders(res.data.data || []);
         if (res.data.pagination) {
-          setTotalCount(res.data.pagination.total || 0);
-          setTotalPages(res.data.pagination.totalPages || 1);
+          setTotalCount(res.data.pagination.total ?? 0);
+          setTotalPages(Math.max(1, res.data.pagination.totalPages ?? 1));
         }
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to load work orders.');
+      setError(err.response?.data?.message || 'Failed to load work orders catalog.');
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, limit, searchParam, statusFilter, priorityFilter, sortBy, sortOrder]);
 
+  // Single effect triggers API call whenever URL params change
   useEffect(() => {
     fetchWorkOrders();
-  }, [page, statusFilter, priorityFilter, sortBy, sortOrder]);
+  }, [fetchWorkOrders]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setPage(1);
-    fetchWorkOrders();
+    updateParams({
+      search: searchInput.trim() || null,
+      page: '1',
+    });
+  };
+
+  const handleStatusChange = (newStatus: string) => {
+    updateParams({
+      status: newStatus || null,
+      page: '1',
+    });
+  };
+
+  const handlePriorityChange = (newPriority: string) => {
+    updateParams({
+      priority: newPriority || null,
+      page: '1',
+    });
+  };
+
+  const handleSortChange = (newSortBy: string) => {
+    updateParams({
+      sortBy: newSortBy,
+      page: '1',
+    });
+  };
+
+  const handleSortOrderToggle = () => {
+    const nextOrder = sortOrder === 'ASC' ? 'DESC' : 'ASC';
+    updateParams({
+      sortOrder: nextOrder,
+      page: '1',
+    });
+  };
+
+  const handlePageChange = (newPage: number) => {
+    updateParams({
+      page: String(newPage),
+    });
   };
 
   const handleResetFilters = () => {
-    setSearch('');
-    setStatusFilter('');
-    setPriorityFilter('');
-    setSortBy('created_at');
-    setSortOrder('DESC');
-    setPage(1);
+    setSearchInput('');
+    setSearchParams({});
   };
+
+  const hasActiveFilters = Boolean(searchParam || statusFilter || priorityFilter || sortBy !== 'created_at' || sortOrder !== 'DESC');
 
   return (
     <div className="space-y-6 min-h-full">
@@ -127,7 +187,8 @@ export const WorkOrderListPage: React.FC = () => {
           <button
             onClick={fetchWorkOrders}
             disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 bg-white border-2 border-slate-200 rounded-xl text-xs font-bold text-zinc-800 hover:bg-slate-50 transition shadow-xs cursor-pointer"
+            className="flex items-center gap-2 px-4 py-2 bg-white border-2 border-slate-200 rounded-xl text-xs font-bold text-zinc-800 hover:bg-slate-50 transition shadow-xs cursor-pointer disabled:opacity-50"
+            title="Reload current page and filters"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-jcb-yellowDark' : ''}`} />
             <span>Refresh</span>
@@ -155,20 +216,17 @@ export const WorkOrderListPage: React.FC = () => {
             <input
               type="text"
               placeholder="Search by WO#, Machine code, asset name, or problem title..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-zinc-900 focus:outline-none focus:border-jcb-yellow transition"
             />
           </div>
 
           <div className="flex flex-wrap sm:flex-nowrap gap-2">
-            {/* Status Filter */}
+            {/* Status Filter: includes all backend supported statuses */}
             <select
               value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value);
-                setPage(1);
-              }}
+              onChange={(e) => handleStatusChange(e.target.value)}
               className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-zinc-800 focus:outline-none focus:border-jcb-yellow"
             >
               <option value="">All Statuses</option>
@@ -178,18 +236,19 @@ export const WorkOrderListPage: React.FC = () => {
               <option value="under_diagnosis">Under Diagnosis</option>
               <option value="in_progress">In Progress</option>
               <option value="waiting_for_parts">Waiting for Parts</option>
+              <option value="waiting_for_approval">Waiting for Approval</option>
+              <option value="on_hold">On Hold</option>
               <option value="submitted_verification">Submitted for Verification</option>
               <option value="rework_required">Rework Required</option>
+              <option value="completed">Completed</option>
               <option value="verified_closed">Verified & Closed</option>
+              <option value="reopened">Reopened</option>
             </select>
 
             {/* Priority Filter */}
             <select
               value={priorityFilter}
-              onChange={(e) => {
-                setPriorityFilter(e.target.value);
-                setPage(1);
-              }}
+              onChange={(e) => handlePriorityChange(e.target.value)}
               className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-zinc-800 focus:outline-none focus:border-jcb-yellow"
             >
               <option value="">All Priorities</option>
@@ -202,7 +261,7 @@ export const WorkOrderListPage: React.FC = () => {
             {/* Sort Field */}
             <select
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
+              onChange={(e) => handleSortChange(e.target.value)}
               className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-zinc-800 focus:outline-none focus:border-jcb-yellow"
             >
               <option value="created_at">Sort: Created Date</option>
@@ -215,9 +274,9 @@ export const WorkOrderListPage: React.FC = () => {
             {/* Sort Order Toggle */}
             <button
               type="button"
-              onClick={() => setSortOrder(sortOrder === 'ASC' ? 'DESC' : 'ASC')}
-              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-zinc-800 hover:bg-slate-100 flex items-center gap-1"
-              title={`Currently sorted ${sortOrder}`}
+              onClick={handleSortOrderToggle}
+              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-zinc-800 hover:bg-slate-100 flex items-center gap-1 transition"
+              title={`Currently sorted ${sortOrder}. Click to toggle.`}
             >
               <ArrowUpDown className="w-3.5 h-3.5 text-zinc-500" />
               <span>{sortOrder}</span>
@@ -230,7 +289,7 @@ export const WorkOrderListPage: React.FC = () => {
               Filter
             </button>
 
-            {(search || statusFilter || priorityFilter || sortBy !== 'created_at') && (
+            {hasActiveFilters && (
               <button
                 type="button"
                 onClick={handleResetFilters}
@@ -260,12 +319,14 @@ export const WorkOrderListPage: React.FC = () => {
             <Wrench className="w-8 h-8 text-zinc-300 mx-auto" />
             <p className="text-zinc-600 font-black uppercase">No Work Orders Matching Current Filters</p>
             <p className="text-zinc-400 font-medium">Try resetting search keywords or status filters.</p>
-            <button
-              onClick={handleResetFilters}
-              className="mt-2 px-3 py-1.5 bg-slate-100 text-zinc-800 rounded-lg text-xs font-bold hover:bg-slate-200"
-            >
-              Reset Filters
-            </button>
+            {hasActiveFilters && (
+              <button
+                onClick={handleResetFilters}
+                className="mt-2 px-3 py-1.5 bg-slate-100 text-zinc-800 rounded-lg text-xs font-bold hover:bg-slate-200"
+              >
+                Reset Filters
+              </button>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -284,8 +345,10 @@ export const WorkOrderListPage: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs">
                 {workOrders.map((wo) => {
-                  const isCritical = wo.priority === 'critical';
-                  const isSlaOverdue = wo.sla_deadline && new Date(wo.sla_deadline) < new Date() && wo.status !== 'verified_closed';
+                  const isTerminal = ['verified_closed', 'completed'].includes(wo.status);
+                  const deadlineDate = wo.sla_deadline ? new Date(wo.sla_deadline) : null;
+                  const isValidDeadline = deadlineDate && !isNaN(deadlineDate.getTime());
+                  const isSlaOverdue = isValidDeadline && deadlineDate < new Date() && !isTerminal;
                   const isMajor = Boolean(wo.is_major_breakdown);
 
                   return (
@@ -312,18 +375,18 @@ export const WorkOrderListPage: React.FC = () => {
 
                       {/* Machine Asset */}
                       <td className="py-3 px-4">
-                        <div className="font-bold text-zinc-900">{wo.machine_code}</div>
-                        <div className="text-[11px] text-zinc-500 truncate max-w-[150px]">{wo.machine_name}</div>
-                        <div className="text-[10px] text-zinc-400">{wo.bay_line_location || wo.shop_name}</div>
+                        <div className="font-bold text-zinc-900">{wo.machine_code || 'Not specified'}</div>
+                        <div className="text-[11px] text-zinc-500 truncate max-w-[150px]">{wo.machine_name || 'Machine'}</div>
+                        <div className="text-[10px] text-zinc-400">{wo.bay_line_location || wo.shop_name || 'Location unavailable'}</div>
                       </td>
 
                       {/* Problem Title & Instructions */}
                       <td className="py-3 px-4 max-w-[240px]">
-                        <div className="font-bold text-zinc-900 truncate" title={wo.problem_title || wo.work_instructions}>
-                          {wo.problem_title || 'Corrective Breakdown Repair'}
+                        <div className="font-bold text-zinc-900 truncate" title={wo.problem_title || wo.work_instructions || 'No details provided'}>
+                          {wo.problem_title || (wo.work_instructions ? 'Maintenance Task' : 'No title specified')}
                         </div>
                         <div className="text-[11px] text-zinc-500 truncate mt-0.5">
-                          {wo.work_instructions || 'Restore machine operating specifications.'}
+                          {wo.work_instructions || 'No additional work instructions provided.'}
                         </div>
                       </td>
 
@@ -335,9 +398,11 @@ export const WorkOrderListPage: React.FC = () => {
                               <User className="w-3 h-3 text-zinc-400 shrink-0" />
                               <span className="truncate max-w-[130px]">{wo.technician_name}</span>
                             </div>
-                            <span className="text-[10px] font-mono text-zinc-400 block pl-4">
-                              {wo.technician_code || 'Lead Tech'}
-                            </span>
+                            {wo.technician_code && (
+                              <span className="text-[10px] font-mono text-zinc-400 block pl-4">
+                                {wo.technician_code}
+                              </span>
+                            )}
                           </div>
                         ) : (
                           <span className="text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded font-black uppercase border border-amber-200">
@@ -358,13 +423,13 @@ export const WorkOrderListPage: React.FC = () => {
 
                       {/* SLA Deadline */}
                       <td className="py-3 px-4 font-mono text-[11px]">
-                        {wo.sla_deadline ? (
+                        {isValidDeadline ? (
                           <div className={isSlaOverdue ? 'text-red-700 font-bold' : 'text-zinc-600'}>
                             <span>
-                              {new Date(wo.sla_deadline).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              {deadlineDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </span>
                             <span className="block text-[10px] text-zinc-400">
-                              {new Date(wo.sla_deadline).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                              {deadlineDate.toLocaleDateString([], { month: 'short', day: 'numeric' })}
                             </span>
                             {isSlaOverdue && (
                               <span className="text-[9px] bg-red-100 text-red-800 px-1 py-0.2 rounded font-black uppercase tracking-wider block mt-0.5">
@@ -383,7 +448,7 @@ export const WorkOrderListPage: React.FC = () => {
                           to={`/work-orders/${wo.id}`}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-black text-white text-[11px] font-bold rounded-lg transition shadow-xs"
                         >
-                          <span>Execute</span>
+                          <span>{user?.role === 'technician' ? 'Execute' : 'Inspect'}</span>
                           <ChevronRight className="w-3.5 h-3.5 text-zinc-400" />
                         </Link>
                       </td>
@@ -399,9 +464,9 @@ export const WorkOrderListPage: React.FC = () => {
         {totalPages > 1 && (
           <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
             <button
-              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+              onClick={() => handlePageChange(Math.max(1, page - 1))}
               disabled={page <= 1}
-              className="flex items-center gap-1 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-zinc-700 hover:bg-white disabled:opacity-40 transition"
+              className="flex items-center gap-1 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-zinc-700 hover:bg-white disabled:opacity-40 transition cursor-pointer"
             >
               <ChevronLeft className="w-3.5 h-3.5" />
               <span>Previous</span>
@@ -412,9 +477,9 @@ export const WorkOrderListPage: React.FC = () => {
             </span>
 
             <button
-              onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+              onClick={() => handlePageChange(Math.min(totalPages, page + 1))}
               disabled={page >= totalPages}
-              className="flex items-center gap-1 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-zinc-700 hover:bg-white disabled:opacity-40 transition"
+              className="flex items-center gap-1 px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-zinc-700 hover:bg-white disabled:opacity-40 transition cursor-pointer"
             >
               <span>Next</span>
               <ChevronRight className="w-3.5 h-3.5" />

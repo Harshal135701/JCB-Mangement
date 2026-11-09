@@ -368,6 +368,12 @@ export async function executeCreateWorkOrderTransaction(
     throw new WorkOrderServiceError('Assigned user must have the technician role.', 400);
   }
 
+  // Validate technician facility compatibility if available on user record
+  const tech = techRes.rows[0];
+  if (tech && (tech as any).plant_id && complaint.plant_id && (tech as any).plant_id !== complaint.plant_id) {
+    throw new WorkOrderServiceError('Assigned technician does not belong to the machine plant facility.', 400);
+  }
+
   // 6. Concurrency-safe Work Order numbering using PostgreSQL transaction-level advisory locking:
   // Key format: 'wo_seq:YYYY' with collision-resistant 64-bit hashtextextended
   const currentYear = new Date().getFullYear();
@@ -578,10 +584,9 @@ export async function executeCreatePMWorkOrderTransaction(
     );
 
     if (dupCheck.rows.length > 0) {
-      await client.query('ROLLBACK');
       return {
         workOrder: dupCheck.rows[0],
-              };
+      };
     }
   }
 
@@ -731,11 +736,18 @@ export async function getWorkOrdersService(
     params.push(user.id);
     conditions.push(`wo.assigned_technician_id = $${params.length}`);
   } else if (user.role === 'manager') {
-    // Managers must be restricted to their authorized plant/shop
-    if (user.plant_id) {
-      params.push(user.plant_id);
-      conditions.push(`s.plant_id = $${params.length}`);
+    // Managers must be restricted to their authorized plant/shop (fail-closed)
+    if (!user.plant_id) {
+      throw new WorkOrderServiceError('Forbidden: Valid plant facility assignment required.', 403);
     }
+    if (filter.plant_id && filter.plant_id !== user.plant_id) {
+      throw new WorkOrderServiceError('Forbidden: Cannot filter work orders outside your assigned plant facility.', 403);
+    }
+    if (user.shop_id && filter.shop_id && filter.shop_id !== user.shop_id) {
+      throw new WorkOrderServiceError('Forbidden: Cannot filter work orders outside your assigned shop facility.', 403);
+    }
+    params.push(user.plant_id);
+    conditions.push(`s.plant_id = $${params.length}`);
     if (user.shop_id) {
       params.push(user.shop_id);
       conditions.push(`m.shop_id = $${params.length}`);
@@ -746,13 +758,19 @@ export async function getWorkOrdersService(
     }
   } else if (user.role === 'admin') {
     // Admins can filter by plant, shop, or technician if provided
+    if (user.plant_id) {
+      if (filter.plant_id && filter.plant_id !== user.plant_id) {
+        throw new WorkOrderServiceError('Forbidden: Cannot filter work orders outside your assigned plant facility.', 403);
+      }
+      params.push(user.plant_id);
+      conditions.push(`s.plant_id = $${params.length}`);
+    } else if (filter.plant_id && isUUID(filter.plant_id)) {
+      params.push(filter.plant_id);
+      conditions.push(`s.plant_id = $${params.length}`);
+    }
     if (filter.technician_id && isUUID(filter.technician_id)) {
       params.push(filter.technician_id);
       conditions.push(`wo.assigned_technician_id = $${params.length}`);
-    }
-    if (filter.plant_id && isUUID(filter.plant_id)) {
-      params.push(filter.plant_id);
-      conditions.push(`s.plant_id = $${params.length}`);
     }
     if (filter.shop_id && isUUID(filter.shop_id)) {
       params.push(filter.shop_id);
@@ -792,12 +810,15 @@ export async function getWorkOrdersService(
     conditions.push(`(wo.wo_number ILIKE $${pIdx} OR m.machine_code ILIKE $${pIdx} OR m.name ILIKE $${pIdx} OR r.problem_title ILIKE $${pIdx})`);
   }
 
-  // Sorting
+  // Sorting (support both camelCase and snake_case)
+  const sortByParam = filter.sortBy || (filter as any).sort_by;
+  const sortOrderParam = filter.sortOrder || (filter as any).sort_order;
+
   let sortColumn = 'wo.created_at';
-  if (filter.sortBy && ALLOWED_SORT_FIELDS.includes(filter.sortBy as any)) {
-    sortColumn = `wo.${filter.sortBy}`;
+  if (sortByParam && ALLOWED_SORT_FIELDS.includes(sortByParam as any)) {
+    sortColumn = `wo.${sortByParam}`;
   }
-  const sortDirection = String(filter.sortOrder || 'DESC').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+  const sortDirection = String(sortOrderParam || 'DESC').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
 
   const whereClause = conditions.join(' AND ');
 
@@ -933,7 +954,10 @@ export async function getWorkOrderDetailsService(
       throw new WorkOrderServiceError('You are only authorized to access work orders assigned to you.', 403);
     }
   } else if (user.role === 'manager') {
-    if (user.plant_id && user.plant_id !== wo.plant_id) {
+    if (!user.plant_id) {
+      throw new WorkOrderServiceError('Forbidden: Valid plant facility assignment required.', 403);
+    }
+    if (user.plant_id !== wo.plant_id) {
       throw new WorkOrderServiceError('Unauthorized for work orders outside your plant.', 403);
     }
     if (user.shop_id && user.shop_id !== wo.shop_id) {
@@ -943,7 +967,7 @@ export async function getWorkOrderDetailsService(
 
   // Fetch spare parts consumed
   const partsRes = await dbClient(
-    `SELECT pc.*, sp.part_number, sp.name AS part_name, sp.category AS part_category, sp.unit_of_measure
+    `SELECT pc.*, sp.part_number, sp.name AS part_name, sp.category AS part_category, sp.uom AS unit_of_measure
      FROM wo_parts_consumed pc
      JOIN spare_parts sp ON pc.part_id = sp.id
      WHERE pc.work_order_id = $1
@@ -1003,7 +1027,7 @@ export async function getWorkOrderPartsService(
 
   const partsRes = await dbClient(
     `SELECT pc.*, sp.part_number, sp.name AS part_name, sp.category AS part_category,
-            sp.unit_of_measure, sp.current_physical_stock, sp.available_stock
+            sp.uom AS unit_of_measure, sp.current_physical_stock, sp.available_stock
      FROM wo_parts_consumed pc
      JOIN spare_parts sp ON pc.part_id = sp.id
      WHERE pc.work_order_id = $1
@@ -1063,7 +1087,10 @@ export async function reassignWorkOrderService(
 
     // Manager plant/shop check
     if (user.role === 'manager') {
-      if (user.plant_id && user.plant_id !== wo.plant_id) {
+      if (!user.plant_id) {
+        throw new WorkOrderServiceError('Forbidden: Valid plant facility assignment required.', 403);
+      }
+      if (user.plant_id !== wo.plant_id) {
         throw new WorkOrderServiceError('Unauthorized for work orders outside your assigned plant.', 403);
       }
       if (user.shop_id && user.shop_id !== wo.shop_id) {
@@ -1079,7 +1106,7 @@ export async function reassignWorkOrderService(
       throw new WorkOrderServiceError('Work order is already assigned to this technician.', 400);
     }
 
-    // Verify target technician exists and is active
+    // Verify target technician exists, is active, and facility compatible
     const techRes = await client.query(
       `SELECT id, full_name, email, role, is_active FROM users WHERE id = $1`,
       [new_technician_id]
@@ -1091,6 +1118,11 @@ export async function reassignWorkOrderService(
 
     if (techRes.rows[0].role !== 'technician') {
       throw new WorkOrderServiceError('Target user must have the technician role.', 400);
+    }
+
+    const targetTech = techRes.rows[0];
+    if (targetTech && (targetTech as any).plant_id && wo.plant_id && (targetTech as any).plant_id !== wo.plant_id) {
+      throw new WorkOrderServiceError('Target technician does not belong to the work order plant facility.', 400);
     }
 
     // Update assignment
@@ -1211,7 +1243,10 @@ export async function updateWorkOrderMilestoneService(
         throw new WorkOrderServiceError('You can only update work orders assigned to you.', 403);
       }
     } else if (user.role === 'manager') {
-      if (user.plant_id && user.plant_id !== wo.plant_id) {
+      if (!user.plant_id) {
+        throw new WorkOrderServiceError('Forbidden: Valid plant facility assignment required.', 403);
+      }
+      if (user.plant_id !== wo.plant_id) {
         throw new WorkOrderServiceError('Unauthorized for this plant.', 403);
       }
       if (user.shop_id && user.shop_id !== wo.shop_id) {
@@ -1581,7 +1616,10 @@ export async function verifyAndCloseWorkOrderService(
 
     // Manager scope check
     if (user.role === 'manager') {
-      if (user.plant_id && user.plant_id !== wo.plant_id) {
+      if (!user.plant_id) {
+        throw new WorkOrderServiceError('Forbidden: Valid plant facility assignment required.', 403);
+      }
+      if (user.plant_id !== wo.plant_id) {
         throw new WorkOrderServiceError('Unauthorized for this plant.', 403);
       }
       if (user.shop_id && user.shop_id !== wo.shop_id) {
@@ -1844,7 +1882,10 @@ export async function reopenWorkOrderService(
 
     // Manager scope check
     if (user.role === 'manager') {
-      if (user.plant_id && user.plant_id !== wo.plant_id) {
+      if (!user.plant_id) {
+        throw new WorkOrderServiceError('Forbidden: Valid plant facility assignment required.', 403);
+      }
+      if (user.plant_id !== wo.plant_id) {
         throw new WorkOrderServiceError('Unauthorized for this plant.', 403);
       }
       if (user.shop_id && user.shop_id !== wo.shop_id) {
