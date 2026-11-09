@@ -4,6 +4,8 @@ import {
   getPurchaseRequisitionsService,
   getPurchaseRequisitionDetailsService,
   updatePRStatusService,
+  approvePurchaseRequisitionService,
+  rejectPurchaseRequisitionService,
   createPurchaseOrderService,
   getPurchaseOrdersService,
   cancelPurchaseRequisitionService,
@@ -60,6 +62,7 @@ export const createPurchaseRequisition = async (
       urgency,
       technical_justification,
       expected_delivery_date,
+      plant_id,
     } = req.body || {};
 
     const pr = await createPurchaseRequisitionService(
@@ -71,6 +74,7 @@ export const createPurchaseRequisition = async (
         urgency,
         technical_justification,
         expected_delivery_date,
+        plant_id,
       },
       user
     );
@@ -227,12 +231,14 @@ export const approvePurchaseRequisition = async (
     }
 
     const { id } = req.params;
-    const { remarks, next_status = 'vendor_selected' } = req.body || {};
+    const { remarks, next_status, target_status } = req.body || {};
+    const effectiveTargetStatus = target_status || next_status || 'vendor_selected';
 
-    const updatedPR = await updatePRStatusService(
+    const updatedPR = await approvePurchaseRequisitionService(
       id,
       {
-        status: next_status,
+        next_status: effectiveTargetStatus,
+        target_status: effectiveTargetStatus,
         remarks: remarks || 'Requisition approved by management.',
       },
       user
@@ -267,7 +273,7 @@ export const rejectPurchaseRequisition = async (
     const { reason, remarks } = req.body || {};
     const rejectionReason = reason || remarks;
 
-    const updatedPR = await cancelPurchaseRequisitionService(id, rejectionReason, user);
+    const updatedPR = await rejectPurchaseRequisitionService(id, rejectionReason, user);
 
     res.json({
       success: true,
@@ -295,9 +301,10 @@ export const cancelPurchaseRequisition = async (
     }
 
     const { id } = req.params;
-    const { reason } = req.body || {};
+    const { reason, remarks } = req.body || {};
+    const cancellationReason = reason || remarks;
 
-    const updatedPR = await cancelPurchaseRequisitionService(id, reason, user);
+    const updatedPR = await cancelPurchaseRequisitionService(id, cancellationReason, user);
 
     res.json({
       success: true,
@@ -464,6 +471,7 @@ export const processGRNInward = async (
       message: `GRN processed successfully. ${result.accepted_quantity} units added to physical stock ledger.`,
       data: result.pr,
       receipt_details: {
+        grn_number: result.grn_number,
         accepted_quantity: result.accepted_quantity,
         rejected_quantity: result.rejected_quantity,
         total_inwarded: result.total_inwarded,

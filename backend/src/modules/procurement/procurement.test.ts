@@ -149,6 +149,7 @@ class AdvisoryLockManager {
 interface MockPlant {
   id: string;
   name: string;
+  plant_name?: string;
   code: string;
 }
 
@@ -174,6 +175,7 @@ interface MockMachine {
   shop_id: string;
   machine_code: string;
   name: string;
+  model_number?: string;
   status: string;
 }
 
@@ -219,6 +221,7 @@ interface MockPurchaseRequisition {
   unit_price: number;
   expected_delivery_date: string | null;
   received_date: string | null;
+  plant_id?: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -282,8 +285,8 @@ class MockProcurementDatabase implements DbPoolLike {
 
   seed() {
     this.plants = [
-      { id: '10000000-0000-0000-0000-000000000001', name: 'JCB Pune Plant 1', code: 'PUNE-01' },
-      { id: '10000000-0000-0000-0000-000000000002', name: 'JCB Ballabgarh Plant 2', code: 'BLB-02' },
+      { id: '10000000-0000-0000-0000-000000000001', name: 'JCB Pune Plant 1', plant_name: 'JCB Pune Plant 1', code: 'PUNE-01' },
+      { id: '10000000-0000-0000-0000-000000000002', name: 'JCB Ballabgarh Plant 2', plant_name: 'JCB Ballabgarh Plant 2', code: 'BLB-02' },
     ];
 
     this.shops = [
@@ -453,6 +456,7 @@ class MockProcurementDatabase implements DbPoolLike {
         unit_price: 4850.0,
         expected_delivery_date: '2026-11-20',
         received_date: null,
+        plant_id: '10000000-0000-0000-0000-000000000001',
         created_at: new Date('2026-11-01T10:00:00Z'),
         updated_at: new Date('2026-11-01T10:00:00Z'),
       },
@@ -473,6 +477,7 @@ class MockProcurementDatabase implements DbPoolLike {
         unit_price: 76200.0,
         expected_delivery_date: '2026-11-02', // Overdue date
         received_date: null,
+        plant_id: '10000000-0000-0000-0000-000000000001',
         created_at: new Date('2026-10-25T08:00:00Z'),
         updated_at: new Date('2026-10-26T09:00:00Z'),
       },
@@ -557,6 +562,12 @@ class MockProcurementDatabase implements DbPoolLike {
       };
     }
 
+    // 5b. Plant query (by id)
+    if (trimmed.includes('FROM plants') && trimmed.includes('WHERE id = $1')) {
+      const plant = this.plants.find((p) => p.id === params[0]);
+      return { rows: plant ? [{ ...plant, plant_name: plant.plant_name || plant.name }] : [], rowCount: plant ? 1 : 0 };
+    }
+
     // 6. Work order query (by id)
     if (trimmed.includes('FROM work_orders wo') && trimmed.includes('WHERE wo.id = $1')) {
       const wo = this.workOrders.find((w) => w.id === params[0]);
@@ -596,6 +607,7 @@ class MockProcurementDatabase implements DbPoolLike {
         expected_delivery_date: params[8] || null,
         supplier_name: params[9] || null,
         unit_price: params[10] || 0,
+        plant_id: params[11] || null,
         received_date: null,
         created_at: new Date(),
         updated_at: new Date(),
@@ -701,6 +713,12 @@ class MockProcurementDatabase implements DbPoolLike {
         performedBy = params[1];
         oldValues = params[2];
         newValues = params[3];
+      } else if (trimmed.includes(`'PR_REJECTED'`) || trimmed.includes(`'PR_CANCELLED'`)) {
+        action = trimmed.includes(`'PR_REJECTED'`) ? 'PR_REJECTED' : 'PR_CANCELLED';
+        entityId = params[0];
+        performedBy = params[1];
+        oldValues = params[2];
+        newValues = params[3];
       } else if (trimmed.includes(`'purchase_requisitions', $1, 'PO_CREATED', $2, $3, $4`)) {
         action = 'PO_CREATED';
         entityId = params[0];
@@ -802,9 +820,12 @@ class MockProcurementDatabase implements DbPoolLike {
           pr.expected_delivery_date = params[4];
           pr.status = params[5];
           pr.approved_by = params[6];
+        } else if (trimmed.includes("SET status = 'rejected'")) {
+          pr.status = 'rejected';
+        } else if (trimmed.includes("SET status = 'cancelled'")) {
+          pr.status = 'cancelled';
         } else if (trimmed.includes('status = $2,') && trimmed.includes('po_number = $3')) {
           // updatePRStatusService query:
-          // SET status = $2, po_number = $3, supplier_name = $4, unit_price = $5, expected_delivery_date = $6, approved_by = COALESCE($7, approved_by)
           pr.status = params[1];
           pr.po_number = params[2];
           pr.supplier_name = params[3];
@@ -813,7 +834,6 @@ class MockProcurementDatabase implements DbPoolLike {
           pr.approved_by = params[6];
         } else if (trimmed.includes('SET status = $2,') && trimmed.includes('received_date = CURRENT_DATE')) {
           // processGRNInwardService query:
-          // SET status = $2, received_date = CURRENT_DATE
           pr.status = params[1];
           pr.received_date = new Date().toISOString().split('T')[0];
         }
@@ -860,8 +880,9 @@ class MockProcurementDatabase implements DbPoolLike {
           approved_by_name: appUser?.full_name,
           machine_code: machine?.machine_code,
           machine_name: machine?.name,
+          machine_model: machine?.model_number || 'Mazak VARIAXIS',
           shop_name: shop?.shop_name,
-          plant_name: plant?.name,
+          plant_name: plant?.plant_name || plant?.name,
           wo_number: wo?.wo_number,
         };
       });
@@ -870,7 +891,7 @@ class MockProcurementDatabase implements DbPoolLike {
     }
 
     // 20. Vendor Directory Aggregation
-    if (trimmed.includes('FROM spare_parts sp') && trimmed.includes('FULL OUTER JOIN purchase_requisitions')) {
+    if (trimmed.includes('all_vendors') || (trimmed.includes('FROM spare_parts sp') && trimmed.includes('purchase_requisitions'))) {
       const vendorNames = Array.from(
         new Set([
           ...this.parts.map((p) => p.supplier_name).filter(Boolean),
@@ -1140,6 +1161,65 @@ describe('Procurement & Purchase Requisition Module (CMMS Module 4)', () => {
       assert.equal(res.statusCode, 201);
       assert.equal(wo.status, 'waiting_for_parts');
     });
+
+    it('8b. Enterprise Admin creates generic stock PR with explicit valid plant_id', async () => {
+      const { req, res, next } = createMockContext(
+        {
+          part_id: '30000000-0000-0000-0000-000000000001',
+          quantity_required: 10,
+          plant_id: '10000000-0000-0000-0000-000000000001',
+          technical_justification: 'Plant 1 Central Store replenishment',
+        },
+        {},
+        {},
+        {},
+        adminUser
+      );
+
+      await createPurchaseRequisition(req, res, next);
+      assert.equal(res.statusCode, 201);
+      assert.equal(res.responseData.success, true);
+      assert.equal(res.responseData.data.plant_id, '10000000-0000-0000-0000-000000000001');
+    });
+
+    it('8c. Rejects conflicting plant_id when machine belongs to another plant (HTTP 400)', async () => {
+      const { req, res, next } = createMockContext(
+        {
+          part_id: '30000000-0000-0000-0000-000000000001',
+          machine_id: '40000000-0000-0000-0000-000000000001', // Pune Plant 1
+          plant_id: '10000000-0000-0000-0000-000000000002', // Ballabgarh Plant 2 (conflict)
+          quantity_required: 2,
+        },
+        {},
+        {},
+        {},
+        adminUser
+      );
+
+      await createPurchaseRequisition(req, res, next);
+      assert.equal(res.statusCode, 400);
+      assert.equal(res.responseData.success, false);
+      assert.match(res.responseData.message, /Plant conflict/i);
+    });
+
+    it('8d. Rejects generic stock PR creation when plant ownership cannot be determined (HTTP 400)', async () => {
+      const unscopedAdmin = { ...adminUser, plant_id: undefined };
+      const { req, res, next } = createMockContext(
+        {
+          part_id: '30000000-0000-0000-0000-000000000001',
+          quantity_required: 5,
+        },
+        {},
+        {},
+        {},
+        unscopedAdmin
+      );
+
+      await createPurchaseRequisition(req, res, next);
+      assert.equal(res.statusCode, 400);
+      assert.equal(res.responseData.success, false);
+      assert.match(res.responseData.message, /Plant ownership is required/i);
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -1212,6 +1292,7 @@ describe('Procurement & Purchase Requisition Module (CMMS Module 4)', () => {
       assert.equal(res.responseData.success, true);
       assert.equal(res.responseData.data.pr_number, 'PR-2026-00001');
       assert.equal(res.responseData.data.part_number, 'HYD-10025');
+      assert.ok(Array.isArray(res.responseData.data.grn_receipts), 'Response must include grn_receipts array');
     });
 
     it('14. Manager approves requisition and sets status to vendor_selected', async () => {
@@ -1230,6 +1311,47 @@ describe('Procurement & Purchase Requisition Module (CMMS Module 4)', () => {
       assert.equal(res.statusCode, 200);
       assert.equal(res.responseData.success, true);
       assert.equal(res.responseData.data.status, 'vendor_selected');
+    });
+
+    it('14b. Manager approves with target_status: approval_pending (frontend contract)', async () => {
+      const pr1 = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000001')!;
+      pr1.status = 'under_review';
+
+      const { req, res, next } = createMockContext(
+        {
+          target_status: 'approval_pending',
+          remarks: 'Needs secondary plant management signoff',
+        },
+        { id: pr1.id },
+        {},
+        {},
+        puneManagerUser
+      );
+
+      await approvePurchaseRequisition(req, res, next);
+      assert.equal(res.statusCode, 200);
+      assert.equal(res.responseData.success, true);
+      assert.equal(res.responseData.data.status, 'approval_pending');
+    });
+
+    it('14c. Approval with invalid target status is rejected with HTTP 400', async () => {
+      const pr1 = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000001')!;
+      pr1.status = 'new';
+
+      const { req, res, next } = createMockContext(
+        {
+          target_status: 'fully_received',
+        },
+        { id: pr1.id },
+        {},
+        {},
+        puneManagerUser
+      );
+
+      await approvePurchaseRequisition(req, res, next);
+      assert.equal(res.statusCode, 400);
+      assert.equal(res.responseData.success, false);
+      assert.match(res.responseData.message, /Invalid approval status/i);
     });
 
     it('15. Separation of duties: Manager cannot self-approve their own requisition (HTTP 403)', async () => {
@@ -1268,7 +1390,7 @@ describe('Procurement & Purchase Requisition Module (CMMS Module 4)', () => {
       assert.match(res.responseData.message, /minimum 5 characters/i);
     });
 
-    it('17. Successful rejection cancels the requisition and logs audit trail', async () => {
+    it('17. Successful rejection sets status to rejected and logs audit trail', async () => {
       const { req, res, next } = createMockContext(
         {
           reason: 'Part already available in Plant 2 buffer stock. Transfer arranged.',
@@ -1282,10 +1404,30 @@ describe('Procurement & Purchase Requisition Module (CMMS Module 4)', () => {
       await rejectPurchaseRequisition(req, res, next);
       assert.equal(res.statusCode, 200);
       assert.equal(res.responseData.success, true);
-      assert.equal(res.responseData.data.status, 'cancelled');
+      assert.equal(res.responseData.data.status, 'rejected');
 
       const audit = mockDb.auditLogs.find((a) => a.entity_id === '70000000-0000-0000-0000-000000000001');
       assert.ok(audit);
+    });
+
+    it('17b. Explicit cancellation sets status to cancelled and logs audit trail', async () => {
+      const pr = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000001')!;
+      pr.status = 'under_review';
+
+      const { req, res, next } = createMockContext(
+        {
+          reason: 'Duplicate requisition created by technician by mistake.',
+        },
+        { id: pr.id },
+        {},
+        {},
+        puneManagerUser
+      );
+
+      await cancelPurchaseRequisition(req, res, next);
+      assert.equal(res.statusCode, 200);
+      assert.equal(res.responseData.success, true);
+      assert.equal(res.responseData.data.status, 'cancelled');
     });
 
     it('18. State machine rejects illegal status transitions (e.g. new -> fully_received directly) (HTTP 400)', async () => {
@@ -1334,7 +1476,7 @@ describe('Procurement & Purchase Requisition Module (CMMS Module 4)', () => {
       await cancelPurchaseRequisition(req, res, next);
       assert.equal(res.statusCode, 400);
       assert.equal(res.responseData.success, false);
-      assert.match(res.responseData.message, /Invalid status transition/i);
+      assert.match(res.responseData.message, /(Invalid status transition|Cannot cancel)/i);
     });
   });
 
@@ -1343,6 +1485,10 @@ describe('Procurement & Purchase Requisition Module (CMMS Module 4)', () => {
   // -------------------------------------------------------------------------
   describe('4. Purchase Order (PO) Creation & Tracking', () => {
     it('19. Manager issues Purchase Order with vendor, unit price, and auto-generated PO number', async () => {
+      const pr1 = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000001')!;
+      pr1.status = 'vendor_selected';
+      pr1.po_number = null;
+
       const { req, res, next } = createMockContext(
         {
           supplier_name: 'Bosch Rexroth India',
@@ -1383,6 +1529,10 @@ describe('Procurement & Purchase Requisition Module (CMMS Module 4)', () => {
     });
 
     it('21. Custom PO number duplicate validation against existing POs (HTTP 409)', async () => {
+      const pr1 = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000001')!;
+      pr1.status = 'vendor_selected';
+      pr1.po_number = null;
+
       const { req, res, next } = createMockContext(
         {
           po_number: 'PO-2026-00001', // Already in use by Requisition 2
@@ -1812,6 +1962,11 @@ describe('Procurement & Purchase Requisition Module (CMMS Module 4)', () => {
       assert.ok(res.responseData.data.kpi.active_purchase_orders !== undefined);
       assert.ok(res.responseData.data.kpi.overdue_purchase_orders !== undefined);
       assert.ok(res.responseData.data.kpi.total_expenditure !== undefined);
+      assert.ok(res.responseData.data.summary);
+      assert.ok(res.responseData.data.summary.total_pending_prs !== undefined);
+      assert.ok(res.responseData.data.summary.active_pos !== undefined);
+      assert.ok(res.responseData.data.summary.overdue_pos !== undefined);
+      assert.ok(res.responseData.data.summary.total_spend !== undefined);
     });
 
     it('36. Technicians and operators cannot access vendor directory or dashboard (HTTP 403)', async () => {
