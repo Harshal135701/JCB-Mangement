@@ -205,6 +205,39 @@ export const getBreakdowns = async (
       }
     }
 
+    if (issue_category) {
+      const cleanCategory = issue_category.trim().toLowerCase();
+      if (!ALLOWED_CATEGORIES.includes(cleanCategory as IssueCategory)) {
+        res.status(400).json({
+          success: false,
+          message: `Invalid issue_category filter. Allowed values: ${ALLOWED_CATEGORIES.join(', ')}.`,
+        });
+        return;
+      }
+    }
+
+    if (start_date) {
+      const parsedStart = new Date(start_date);
+      if (isNaN(parsedStart.getTime())) {
+        res.status(400).json({
+          success: false,
+          message: 'Invalid start_date filter. Must be a valid date format.',
+        });
+        return;
+      }
+    }
+
+    if (end_date) {
+      const parsedEnd = new Date(end_date);
+      if (isNaN(parsedEnd.getTime())) {
+        res.status(400).json({
+          success: false,
+          message: 'Invalid end_date filter. Must be a valid date format.',
+        });
+        return;
+      }
+    }
+
     if (machine_id && !isUUID(machine_id)) {
       res.status(400).json({ success: false, message: 'Invalid machine ID.' });
       return;
@@ -241,6 +274,13 @@ export const getBreakdowns = async (
       if (req.user?.role === 'operator') {
         // Operators view complaints reported by themselves OR within their assigned shop
         if (req.user.shop_id) {
+          if (shop_id && shop_id !== req.user.shop_id) {
+            res.status(403).json({
+              success: false,
+              message: 'Forbidden: Cannot filter breakdowns outside your assigned shop facility.',
+            });
+            return;
+          }
           params.push(req.user.id);
           const p1 = params.length;
           params.push(req.user.shop_id);
@@ -251,16 +291,51 @@ export const getBreakdowns = async (
           whereClauses.push(`r.reported_by_id = $${params.length}`);
         }
       } else {
-        // Managers & Technicians: scoped to their plant and shop
-        if (req.user?.plant_id) {
-          params.push(req.user.plant_id);
-          whereClauses.push(`s.plant_id = $${params.length}`);
+        // Managers & Technicians: must be assigned to a plant facility
+        if (!req.user?.plant_id) {
+          res.status(403).json({
+            success: false,
+            message: 'Forbidden: Valid plant facility assignment required.',
+          });
+          return;
         }
+
+        // Prevent unauthorized facility filtering
+        if (plant_id && plant_id !== req.user.plant_id) {
+          res.status(403).json({
+            success: false,
+            message: 'Forbidden: Cannot filter breakdowns outside your assigned plant facility.',
+          });
+          return;
+        }
+
+        if (req.user?.shop_id && shop_id && shop_id !== req.user.shop_id) {
+          res.status(403).json({
+            success: false,
+            message: 'Forbidden: Cannot filter breakdowns outside your assigned shop facility.',
+          });
+          return;
+        }
+
+        params.push(req.user.plant_id);
+        whereClauses.push(`s.plant_id = $${params.length}`);
+
         if (req.user?.shop_id) {
           params.push(req.user.shop_id);
           whereClauses.push(`m.shop_id = $${params.length}`);
         }
       }
+    } else if (req.user?.plant_id) {
+      // Scoped Admin
+      if (plant_id && plant_id !== req.user.plant_id) {
+        res.status(403).json({
+          success: false,
+          message: 'Forbidden: Cannot filter breakdowns outside your assigned plant facility.',
+        });
+        return;
+      }
+      params.push(req.user.plant_id);
+      whereClauses.push(`s.plant_id = $${params.length}`);
     }
 
     // Explicit Filter Parameters
