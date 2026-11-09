@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { 
   searchParts, 
+  getSparePartById,
   reservePartForWorkOrder,
   createSparePart,
   updateSparePart,
@@ -14,8 +15,10 @@ const router = Router();
 
 router.use(authenticateJWT);
 
-// Read & Search accessible across all roles
+// Read & Search accessible across all roles (Admin, Manager, Technician, Operator)
+router.get('/', searchParts);
 router.get('/search', searchParts);
+router.get('/:id', getSparePartById);
 
 // Reservation accessible by Technician, Manager, Admin
 router.post('/reserve', requireRoles('admin', 'manager', 'technician'), reservePartForWorkOrder);

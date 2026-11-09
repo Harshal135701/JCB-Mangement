@@ -59,14 +59,24 @@ export interface WorkOrderRecord {
 export interface SparePartRecord {
   id: string;
   part_number: string;
+  oem_part_number?: string | null;
   name: string;
+  description?: string | null;
+  category?: string;
+  subcategory?: string | null;
+  uom?: string;
   warehouse_zone: string | null;
   bin_location: string;
   current_physical_stock: number;
   reserved_stock: number;
   quarantined_stock: number;
   available_stock: number;
+  min_reorder_level?: number;
+  max_stock_level?: number;
+  unit_cost?: number;
+  supplier_name?: string | null;
   status: string;
+  updated_at?: string | Date;
 }
 
 export interface WoPartsConsumedRecord {
@@ -406,6 +416,209 @@ export async function reservePartForWorkOrderService(
       await client.query('ROLLBACK');
     } catch (rollbackErr) {
       console.error('[Inventory Reservation Rollback Error]:', rollbackErr);
+    }
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+export interface AdjustStockInput {
+  part_id: string;
+  adjustment_quantity: number;
+  reason: string;
+}
+
+export interface AdjustStockResult {
+  spare_part: SparePartRecord;
+  transaction: InventoryTransactionRecord;
+}
+
+/**
+ * Executes an atomic stock adjustment transaction.
+ * 
+ * Guarantees:
+ * 1. Strict validation of UUID, non-zero integer adjustment, and non-empty reason.
+ * 2. SELECT ... FOR UPDATE row-level lock on spare_parts preventing race conditions.
+ * 3. Prevention of negative physical stock.
+ * 4. Prevention of physical stock dropping below already committed allocated stock (reserved + quarantined).
+ * 5. Recomputation of generated available_stock without direct manual assignment.
+ * 6. Atomic creation of immutable inventory_transactions record.
+ */
+export async function executeStockAdjustmentTransaction(
+  client: DatabaseQueryable,
+  input: AdjustStockInput,
+  user: AuthenticatedUser
+): Promise<AdjustStockResult> {
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!input.part_id || typeof input.part_id !== 'string' || !UUID_REGEX.test(input.part_id.trim())) {
+    throw new InventoryError('Invalid or missing part_id. A valid UUID is required.', 400);
+  }
+
+  const rawQty = input.adjustment_quantity;
+  const parsedQty = typeof rawQty === 'number' ? rawQty : parseInt(String(rawQty).trim(), 10);
+  if (
+    !Number.isInteger(parsedQty) ||
+    parsedQty === 0 ||
+    !Number.isFinite(parsedQty)
+  ) {
+    throw new InventoryError('Invalid adjustment quantity. Quantity must be a non-zero integer (+ or -).', 400);
+  }
+
+  if (!input.reason || typeof input.reason !== 'string' || !input.reason.trim()) {
+    throw new InventoryError('Adjustment reason is mandatory.', 400);
+  }
+
+  // Step 1: Lock spare part row with PostgreSQL SELECT ... FOR UPDATE
+  const partQuery = `
+    SELECT 
+      id,
+      part_number,
+      oem_part_number,
+      name,
+      description,
+      category,
+      subcategory,
+      uom,
+      warehouse_zone,
+      bin_location,
+      rack_number,
+      shelf_number,
+      bin_number,
+      current_physical_stock,
+      reserved_stock,
+      quarantined_stock,
+      available_stock,
+      min_reorder_level,
+      max_stock_level,
+      unit_cost,
+      supplier_name,
+      status
+    FROM spare_parts
+    WHERE id = $1
+    FOR UPDATE
+  `;
+
+  const partRes = await client.query<SparePartRecord>(partQuery, [input.part_id.trim()]);
+  if (partRes.rows.length === 0) {
+    throw new InventoryError('Spare part not found.', 404);
+  }
+
+  const part = partRes.rows[0];
+
+  if (part.status && part.status.toLowerCase() !== 'active') {
+    throw new InventoryError(`Cannot adjust stock for inactive spare part ${part.part_number}.`, 400);
+  }
+
+  const currentPhysical = Number(part.current_physical_stock);
+  const reservedStock = Number(part.reserved_stock);
+  const quarantinedStock = Number(part.quarantined_stock);
+  const newPhysicalStock = currentPhysical + parsedQty;
+
+  // Validation: Prevent resulting negative physical stock
+  if (newPhysicalStock < 0) {
+    throw new InventoryError(
+      `Stock adjustment rejected: Resulting physical stock (${newPhysicalStock}) cannot be negative. Current physical stock is ${currentPhysical}.`,
+      400
+    );
+  }
+
+  // Validation: Prevent resulting physical stock from falling below allocated stock (reserved + quarantined)
+  const allocatedStock = reservedStock + quarantinedStock;
+  if (newPhysicalStock < allocatedStock) {
+    throw new InventoryError(
+      `Stock adjustment rejected: Resulting physical stock (${newPhysicalStock}) cannot be less than allocated stock (Reserved: ${reservedStock}, Quarantined: ${quarantinedStock}).`,
+      400
+    );
+  }
+
+  // Step 2: Update spare_parts current_physical_stock only (available_stock is generated automatically)
+  const updateQuery = `
+    UPDATE spare_parts
+    SET current_physical_stock = current_physical_stock + $1,
+        updated_at = NOW()
+    WHERE id = $2
+    RETURNING id, part_number, oem_part_number, name, description, category, subcategory,
+              uom, warehouse_zone, bin_location, rack_number, shelf_number, bin_number,
+              current_physical_stock, reserved_stock, quarantined_stock, available_stock,
+              min_reorder_level, max_stock_level, unit_cost, supplier_name, status, updated_at
+  `;
+
+  const updateRes = await client.query<SparePartRecord>(updateQuery, [
+    parsedQty,
+    part.id,
+  ]);
+  const updatedPart = updateRes.rows[0];
+
+  // Step 3: Insert immutable audit trail in inventory_transactions
+  const location = part.warehouse_zone
+    ? `${part.warehouse_zone} (Bin: ${part.bin_location})`
+    : `Bin: ${part.bin_location}`;
+  const remarks = input.reason.trim();
+
+  const insertTxQuery = `
+    INSERT INTO inventory_transactions (
+      part_id,
+      transaction_type,
+      quantity,
+      source_location,
+      destination_location,
+      performed_by,
+      remarks,
+      created_at
+    ) VALUES ($1, 'ADJUSTMENT', $2, $3, $3, $4, $5, NOW())
+    RETURNING id, part_id, transaction_type, quantity, source_location, destination_location, reference_work_order_id, performed_by, remarks, created_at
+  `;
+
+  const txRes = await client.query<InventoryTransactionRecord>(insertTxQuery, [
+    part.id,
+    parsedQty,
+    location,
+    user.id,
+    remarks,
+  ]);
+  const transactionRecord = txRes.rows[0];
+
+  return {
+    spare_part: {
+      ...updatedPart,
+      current_physical_stock: Number(updatedPart.current_physical_stock),
+      reserved_stock: Number(updatedPart.reserved_stock),
+      quarantined_stock: Number(updatedPart.quarantined_stock),
+      available_stock: Number(updatedPart.available_stock),
+    },
+    transaction: transactionRecord,
+  };
+}
+
+/**
+ * Top-level service function that acquires a dedicated client from the pool,
+ * controls BEGIN / COMMIT / ROLLBACK, and releases the client in finally.
+ */
+export async function adjustStockService(
+  input: AdjustStockInput,
+  user: AuthenticatedUser,
+  dbPool: DatabasePoolLike = pool
+): Promise<AdjustStockResult> {
+  if (!user || !user.id) {
+    throw new InventoryError('Unauthorized: Authentication required.', 401);
+  }
+
+  if (!['admin', 'manager'].includes(user.role)) {
+    throw new InventoryError(`Forbidden: Role '${user.role}' is not authorized to adjust stock.`, 403);
+  }
+
+  const client = await dbPool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await executeStockAdjustmentTransaction(client, input, user);
+    await client.query('COMMIT');
+    return result;
+  } catch (err) {
+    try {
+      await client.query('ROLLBACK');
+    } catch (rollbackErr) {
+      console.error('[Inventory Adjustment Rollback Error]:', rollbackErr);
     }
     throw err;
   } finally {

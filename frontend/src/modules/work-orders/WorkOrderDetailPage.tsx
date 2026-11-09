@@ -23,7 +23,8 @@ import {
   Activity, 
   Zap, 
   User, 
-  RefreshCw 
+  RefreshCw,
+  Plus 
 } from 'lucide-react';
 import { useParams, Link } from 'react-router-dom';
 
@@ -97,6 +98,71 @@ export const WorkOrderDetailPage: React.FC = () => {
 
   const [declineReason, setDeclineReason] = useState('');
   const [reopenReason, setReopenReason] = useState('');
+
+  // Reserve Part State
+  const [isReserveModalOpen, setIsReserveModalOpen] = useState(false);
+  const [catalogParts, setCatalogParts] = useState<any[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogSearch, setCatalogSearch] = useState('');
+  const [selectedPartId, setSelectedPartId] = useState('');
+  const [reserveQuantity, setReserveQuantity] = useState(1);
+  const [reserveFeedback, setReserveFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const fetchCatalogForReserve = async (search = '') => {
+    try {
+      setCatalogLoading(true);
+      const res = await apiClient.get(`/inventory?query=${encodeURIComponent(search)}&limit=50`);
+      if (res.data?.success) {
+        const list = res.data.data || [];
+        setCatalogParts(list);
+        if (list.length > 0) {
+          setSelectedPartId(list[0].id);
+        }
+      }
+    } catch (err: any) {
+      console.error('Failed to load catalog for reservation:', err);
+    } finally {
+      setCatalogLoading(false);
+    }
+  };
+
+  const openReserveModal = () => {
+    setIsReserveModalOpen(true);
+    setSelectedPartId('');
+    setReserveQuantity(1);
+    setReserveFeedback(null);
+    setCatalogSearch('');
+    fetchCatalogForReserve('');
+  };
+
+  const handleReserveSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!workOrder || !selectedPartId || reserveQuantity <= 0) return;
+    try {
+      setActionLoading(true);
+      setReserveFeedback(null);
+      const res = await apiClient.post('/inventory/reserve', {
+        work_order_id: workOrder.id,
+        part_id: selectedPartId,
+        quantity: reserveQuantity,
+      });
+      if (res.data?.success) {
+        setReserveFeedback({ type: 'success', text: res.data.message || 'Part reserved successfully.' });
+        setTimeout(() => {
+          setIsReserveModalOpen(false);
+          fetchPartsData();
+          fetchWorkOrderData();
+        }, 900);
+      }
+    } catch (err: any) {
+      setReserveFeedback({
+        type: 'error',
+        text: err.response?.data?.message || 'Failed to reserve part. Please verify available stock.',
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   // Ref to discard stale responses when ID changes rapidly
   const activeFetchIdRef = useRef<string | undefined>(id);
@@ -966,7 +1032,12 @@ export const WorkOrderDetailPage: React.FC = () => {
           )}
 
           {/* TAB 2: SPARE PARTS (Independent error & loading state) */}
-          {activeTab === 'parts' && (
+          {activeTab === 'parts' && (() => {
+            const isAssigned = isTechnician && workOrder?.assigned_technician_id === user?.id;
+            const eligibleStatus = ['assigned', 'accepted', 'scheduled', 'under_diagnosis', 'in_progress', 'waiting_for_parts', 'rework_required', 'reopened'].includes(workOrder?.status || '');
+            const canReserveParts = (user?.role === 'admin' || user?.role === 'manager' || isAssigned) && eligibleStatus;
+
+            return (
             <div className="bg-white rounded-2xl border-2 border-slate-200 shadow-xs p-5 space-y-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -978,6 +1049,15 @@ export const WorkOrderDetailPage: React.FC = () => {
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
+                  {canReserveParts && (
+                    <button
+                      onClick={openReserveModal}
+                      className="bg-jcb-yellow hover:bg-jcb-yellowDark text-black text-xs font-black px-3 py-1.5 rounded-lg shadow-xs transition flex items-center gap-1.5 border border-amber-500 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Reserve Part</span>
+                    </button>
+                  )}
                   <button
                     onClick={fetchPartsData}
                     disabled={partsLoading}
@@ -1036,26 +1116,30 @@ export const WorkOrderDetailPage: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {parts.map((p, idx) => (
+                      {parts.map((p, idx) => {
+                        const qty = p.quantity !== undefined ? p.quantity : (p.quantity_requested || 0);
+                        return (
                         <tr key={idx} className="hover:bg-slate-50 transition">
                           <td className="py-2.5 font-mono font-bold text-zinc-900">{p.part_number || '—'}</td>
                           <td className="py-2.5 font-bold text-zinc-800">{p.part_name || 'Item'}</td>
                           <td className="py-2.5 text-zinc-500 uppercase text-[11px]">{p.part_category || 'General'}</td>
                           <td className="py-2.5 font-mono font-bold">
-                            {p.quantity} {p.unit_of_measure || 'NOS'}
+                            {qty} {p.unit_of_measure || 'NOS'}
                           </td>
                           <td className="py-2.5 font-mono text-zinc-600">₹{p.unit_cost || 0}</td>
                           <td className="py-2.5 font-mono font-bold text-zinc-950 text-right">
-                            ₹{(Number(p.quantity) * Number(p.unit_cost || 0)).toFixed(2)}
+                            ₹{(Number(qty) * Number(p.unit_cost || 0)).toFixed(2)}
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
               )}
             </div>
-          )}
+            );
+          })()}
 
           {/* TAB 3: TIMELINE */}
           {activeTab === 'timeline' && (
@@ -1863,6 +1947,148 @@ export const WorkOrderDetailPage: React.FC = () => {
                   className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-black rounded-xl text-xs font-black uppercase tracking-wider shadow cursor-pointer disabled:opacity-50"
                 >
                   {actionLoading ? 'Reopening...' : 'Confirm Reopen'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 9: Reserve Spare Part */}
+      {isReserveModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-lg w-full border-2 border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-150">
+            <div className="p-4 bg-zinc-950 text-white flex items-center justify-between border-b border-zinc-800">
+              <div className="flex items-center gap-2">
+                <Package className="w-5 h-5 text-jcb-yellow" />
+                <h3 className="text-sm font-black uppercase tracking-wider">
+                  Reserve Spare Part for Work Order
+                </h3>
+              </div>
+              <button onClick={() => setIsReserveModalOpen(false)} className="text-zinc-400 hover:text-white cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleReserveSubmit} className="p-5 space-y-4">
+              {reserveFeedback && (
+                <div className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
+                  reserveFeedback.type === 'success'
+                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                    : 'bg-red-50 text-red-800 border border-red-200'
+                }`}>
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{reserveFeedback.text}</span>
+                </div>
+              )}
+
+              <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200 text-xs">
+                <div className="font-bold text-zinc-900">Work Order: {workOrder?.wo_number}</div>
+                <div className="text-zinc-500 font-medium">Machine: {workOrder?.machine_name} ({workOrder?.machine_code})</div>
+              </div>
+
+              {/* Part Search & Select */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider">
+                  Search & Select Spare Part *
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={catalogSearch}
+                    onChange={(e) => {
+                      setCatalogSearch(e.target.value);
+                      fetchCatalogForReserve(e.target.value);
+                    }}
+                    placeholder="Search catalog by part number or name..."
+                    className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-medium text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                  />
+                </div>
+
+                {catalogLoading ? (
+                  <div className="py-4 text-center text-xs text-zinc-500 font-bold flex items-center justify-center gap-2">
+                    <RefreshCw className="w-4 h-4 animate-spin text-jcb-yellowDark" />
+                    <span>Loading available inventory...</span>
+                  </div>
+                ) : catalogParts.length === 0 ? (
+                  <div className="p-3 bg-amber-50 text-amber-900 text-xs rounded-lg border border-amber-200 font-medium">
+                    No active spare parts found.
+                  </div>
+                ) : (
+                  <select
+                    required
+                    value={selectedPartId}
+                    onChange={(e) => setSelectedPartId(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow mt-1"
+                  >
+                    {catalogParts.map((cp) => (
+                      <option key={cp.id} value={cp.id}>
+                        {cp.part_number} — {cp.name} (Available: {cp.available_stock} | Bin: {cp.bin_location})
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              {/* Selected Part Details Preview */}
+              {selectedPartId && (() => {
+                const sp = catalogParts.find((p) => p.id === selectedPartId);
+                if (!sp) return null;
+                const isInsufficient = Number(sp.available_stock) < reserveQuantity;
+                return (
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1 font-mono">
+                    <div className="flex justify-between text-zinc-600">
+                      <span>Available Stock:</span>
+                      <strong className={isInsufficient ? 'text-red-700 font-bold' : 'text-emerald-700 font-bold'}>
+                        {sp.available_stock} {sp.uom || 'Nos'}
+                      </strong>
+                    </div>
+                    <div className="flex justify-between text-zinc-600">
+                      <span>Unit Cost:</span>
+                      <strong className="text-zinc-900">₹{Number(sp.unit_cost || 0).toFixed(2)}</strong>
+                    </div>
+                    <div className="flex justify-between text-zinc-600">
+                      <span>Warehouse Location:</span>
+                      <strong className="text-zinc-900">{sp.bin_location} ({sp.warehouse_zone || 'Main Store'})</strong>
+                    </div>
+                    {isInsufficient && (
+                      <div className="text-red-700 text-[11px] font-bold font-sans pt-1">
+                        ⚠️ Requested quantity ({reserveQuantity}) exceeds currently available stock ({sp.available_stock}).
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              <div>
+                <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1">
+                  Quantity to Reserve *
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  required
+                  value={reserveQuantity}
+                  onChange={(e) => setReserveQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-sm font-mono font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  disabled={actionLoading}
+                  onClick={() => setIsReserveModalOpen(false)}
+                  className="px-4 py-2 border border-slate-300 rounded-xl text-xs font-bold text-zinc-700 hover:bg-slate-50 cursor-pointer disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={actionLoading || !selectedPartId || reserveQuantity <= 0}
+                  className="px-5 py-2 bg-jcb-yellow hover:bg-jcb-yellowDark text-black rounded-xl text-xs font-black uppercase tracking-wider shadow cursor-pointer disabled:opacity-50 border border-amber-500"
+                >
+                  {actionLoading ? 'Reserving...' : 'Confirm Reservation'}
                 </button>
               </div>
             </form>

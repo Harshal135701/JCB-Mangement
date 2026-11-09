@@ -967,7 +967,8 @@ export async function getWorkOrderDetailsService(
 
   // Fetch spare parts consumed
   const partsRes = await dbClient(
-    `SELECT pc.*, sp.part_number, sp.name AS part_name, sp.category AS part_category, sp.uom AS unit_of_measure
+    `SELECT pc.*, COALESCE(pc.quantity_requested, pc.quantity_issued, 0) AS quantity,
+            sp.part_number, sp.name AS part_name, sp.category AS part_category, sp.uom AS unit_of_measure
      FROM wo_parts_consumed pc
      JOIN spare_parts sp ON pc.part_id = sp.id
      WHERE pc.work_order_id = $1
@@ -1026,7 +1027,8 @@ export async function getWorkOrderPartsService(
   await getWorkOrderDetailsService(id, user, dbClient);
 
   const partsRes = await dbClient(
-    `SELECT pc.*, sp.part_number, sp.name AS part_name, sp.category AS part_category,
+    `SELECT pc.*, COALESCE(pc.quantity_requested, pc.quantity_issued, 0) AS quantity,
+            sp.part_number, sp.name AS part_name, sp.category AS part_category,
             sp.uom AS unit_of_measure, sp.current_physical_stock, sp.available_stock
      FROM wo_parts_consumed pc
      JOIN spare_parts sp ON pc.part_id = sp.id

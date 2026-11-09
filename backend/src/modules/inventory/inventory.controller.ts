@@ -2,155 +2,134 @@ import { Request, Response, NextFunction } from 'express';
 import { query } from '../../config/db';
 import {
   reservePartForWorkOrderService,
+  adjustStockService,
   InventoryError,
 } from './inventory.service';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const SEEDED_PARTS = [
-  {
-    id: '30000000-0000-0000-0000-000000000001',
-    part_number: 'HYD-10025',
-    oem_part_number: 'REX-4WRKE-25',
-    name: 'Hydraulic Pump Filter Element',
-    description: 'Bosch Rexroth high-pressure microglass filter element for CNC-001',
-    category: 'Hydraulic',
-    warehouse_zone: 'Main Store',
-    rack_number: 'R-04',
-    shelf_number: 'S-B',
-    bin_number: 'B-102',
-    current_physical_stock: 18,
-    reserved_stock: 3,
-    quarantined_stock: 0,
-    available_stock: 15,
-    min_reorder_level: 10,
-    unit_cost: 4850.00,
-  },
-  {
-    id: '30000000-0000-0000-0000-000000000002',
-    part_number: 'BRG-70140',
-    oem_part_number: 'SKF-7014-CE',
-    name: 'High Precision Angular Spindle Bearing',
-    description: 'Super-precision ceramic hybrid bearing for Mazak 12,000 RPM spindle',
-    category: 'Bearings',
-    warehouse_zone: 'Main Store',
-    rack_number: 'R-08',
-    shelf_number: 'S-A',
-    bin_number: 'B-205',
-    current_physical_stock: 8,
-    reserved_stock: 1,
-    quarantined_stock: 0,
-    available_stock: 7,
-    min_reorder_level: 2,
-    unit_cost: 76200.00,
-  },
-  {
-    id: '30000000-0000-0000-0000-000000000003',
-    part_number: 'MTR-02200',
-    oem_part_number: 'FAN-A06B-0235',
-    name: 'Fanuc AC Servo Motor 3.0kW',
-    description: 'Joint 2 axis servo motor for robot welding arm',
-    category: 'Electrical',
-    warehouse_zone: 'Main Store',
-    rack_number: 'R-02',
-    shelf_number: 'S-C',
-    bin_number: 'B-310',
-    current_physical_stock: 4,
-    reserved_stock: 0,
-    quarantined_stock: 0,
-    available_stock: 4,
-    min_reorder_level: 1,
-    unit_cost: 142000.00,
-  },
-  {
-    id: '30000000-0000-0000-0000-000000000004',
-    part_number: 'SEL-99100',
-    oem_part_number: 'PAR-HYD-SEAL',
-    name: 'Hydraulic Cylinder Seal Kit 120mm',
-    description: 'Polyurethane seal assembly for 1000T press ram',
-    category: 'Seals',
-    warehouse_zone: 'Main Store',
-    rack_number: 'R-11',
-    shelf_number: 'S-D',
-    bin_number: 'B-412',
-    current_physical_stock: 25,
-    reserved_stock: 0,
-    quarantined_stock: 0,
-    available_stock: 25,
-    min_reorder_level: 5,
-    unit_cost: 8900.00,
-  },
-];
-
+/**
+ * Search and list spare parts catalog with server-side pagination, category filtering,
+ * and Trigram / ILIKE search across part number, OEM number, and name.
+ */
 export const searchParts = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { query: searchQuery, category, page = '1', limit = '50' } = req.query;
-    const offset = (Number(page) - 1) * Number(limit);
+    const { query: searchQuery, category, page = '1', limit = '50', sort_by = 'part_number', sort_order = 'ASC' } = req.query;
 
-    try {
-      let sql = `
-        SELECT id, part_number, oem_part_number, name, description, category,
-               warehouse_zone, rack_number, shelf_number, bin_number,
-               current_physical_stock, reserved_stock, available_stock,
-               min_reorder_level, unit_cost
-        FROM spare_parts
-        WHERE status = 'active'
-      `;
-      const params: any[] = [];
+    const pageNum = Math.max(1, parseInt(String(page), 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(String(limit), 10) || 50));
+    const offset = (pageNum - 1) * limitNum;
 
-      if (searchQuery) {
-        params.push(`%${searchQuery}%`);
-        sql += ` AND (part_number ILIKE $${params.length} OR name ILIKE $${params.length} OR oem_part_number ILIKE $${params.length})`;
-      }
+    // Allowed sort columns
+    const allowedSortColumns: Record<string, string> = {
+      part_number: 'part_number',
+      name: 'name',
+      category: 'category',
+      current_physical_stock: 'current_physical_stock',
+      available_stock: 'available_stock',
+      unit_cost: 'unit_cost',
+      created_at: 'created_at',
+    };
+    const sortCol = allowedSortColumns[String(sort_by)] || 'part_number';
+    const sortDir = String(sort_order).toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
 
-      if (category) {
-        params.push(category);
-        sql += ` AND category = $${params.length}`;
-      }
+    let sql = `
+      SELECT id, part_number, oem_part_number, name, description, category, subcategory,
+             uom, warehouse_zone, bin_location, rack_number, shelf_number, bin_number,
+             current_physical_stock, reserved_stock, quarantined_stock, available_stock,
+             min_reorder_level, max_stock_level, unit_cost, supplier_name, status,
+             created_at, updated_at
+      FROM spare_parts
+      WHERE status = 'active'
+    `;
+    const params: any[] = [];
 
-      sql += ` ORDER BY part_number ASC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
-      params.push(Number(limit), offset);
-
-      const result = await query(sql, params);
-
-      let countSql = `SELECT COUNT(*) FROM spare_parts WHERE status = 'active'`;
-      const countParams: any[] = [];
-      if (searchQuery) {
-        countParams.push(`%${searchQuery}%`);
-        countSql += ` AND (part_number ILIKE $1 OR name ILIKE $1 OR oem_part_number ILIKE $1)`;
-      }
-      const countRes = await query(countSql, countParams);
-      const total = parseInt(countRes.rows[0].count, 10);
-
-      res.json({
-        success: true,
-        data: result.rows,
-        pagination: {
-          total,
-          page: Number(page),
-          limit: Number(limit),
-          totalPages: Math.ceil(total / Number(limit)),
-        },
-      });
-      return;
-    } catch (dbErr) {
-      console.warn('[DB Fallback]: Returning seeded spare parts catalog');
-      const filtered = SEEDED_PARTS.filter(p => {
-        if (!searchQuery) return true;
-        const q = String(searchQuery).toLowerCase();
-        return p.part_number.toLowerCase().includes(q) || p.name.toLowerCase().includes(q);
-      });
-      res.json({
-        success: true,
-        data: filtered,
-        pagination: { total: filtered.length, page: 1, limit: 50, totalPages: 1 },
-      });
+    if (searchQuery && String(searchQuery).trim()) {
+      params.push(`%${String(searchQuery).trim()}%`);
+      sql += ` AND (part_number ILIKE $${params.length} OR name ILIKE $${params.length} OR oem_part_number ILIKE $${params.length})`;
     }
+
+    if (category && String(category).trim() && String(category).trim().toLowerCase() !== 'all') {
+      params.push(String(category).trim());
+      sql += ` AND category = $${params.length}`;
+    }
+
+    sql += ` ORDER BY ${sortCol} ${sortDir} LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+    params.push(limitNum, offset);
+
+    const result = await query(sql, params);
+
+    // Synchronized count query with matching filters
+    let countSql = `SELECT COUNT(*) FROM spare_parts WHERE status = 'active'`;
+    const countParams: any[] = [];
+
+    if (searchQuery && String(searchQuery).trim()) {
+      countParams.push(`%${String(searchQuery).trim()}%`);
+      countSql += ` AND (part_number ILIKE $${countParams.length} OR name ILIKE $${countParams.length} OR oem_part_number ILIKE $${countParams.length})`;
+    }
+
+    if (category && String(category).trim() && String(category).trim().toLowerCase() !== 'all') {
+      countParams.push(String(category).trim());
+      countSql += ` AND category = $${countParams.length}`;
+    }
+
+    const countRes = await query(countSql, countParams);
+    const total = parseInt(countRes.rows[0].count, 10);
+
+    res.json({
+      success: true,
+      data: result.rows,
+      pagination: {
+        total,
+        page: pageNum,
+        limit: limitNum,
+        totalPages: Math.ceil(total / limitNum) || 1,
+      },
+    });
   } catch (err) {
     next(err);
   }
 };
 
+/**
+ * Get single spare part by ID with full stock metrics and bin location
+ */
+export const getSparePartById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { id } = req.params;
+    if (!id || !UUID_REGEX.test(id)) {
+      res.status(400).json({ success: false, message: 'Invalid part ID format. UUID is required.' });
+      return;
+    }
+
+    const result = await query(
+      `SELECT id, part_number, oem_part_number, name, description, category, subcategory,
+              uom, warehouse_zone, bin_location, rack_number, shelf_number, bin_number,
+              current_physical_stock, reserved_stock, quarantined_stock, available_stock,
+              min_reorder_level, max_stock_level, unit_cost, supplier_name, status,
+              created_at, updated_at
+       FROM spare_parts
+       WHERE id = $1`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      res.status(404).json({ success: false, message: 'Spare part not found.' });
+      return;
+    }
+
+    res.json({
+      success: true,
+      data: result.rows[0],
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Reserve spare part for an active work order
+ */
 export const reservePartForWorkOrder = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const user = req.user;
@@ -263,14 +242,19 @@ export const reservePartForWorkOrder = async (req: Request, res: Response, next:
   }
 };
 
+/**
+ * Create a new spare part master record (Admin only).
+ * Validates part_number, name, bin_location and numeric bounds.
+ */
 export const createSparePart = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const user = req.user;
     const {
       part_number,
       oem_part_number,
       name,
       description,
-      category,
+      category = 'Mechanical',
       subcategory,
       uom = 'Nos',
       warehouse_zone = 'Main Store',
@@ -282,10 +266,28 @@ export const createSparePart = async (req: Request, res: Response, next: NextFun
       supplier_name,
     } = req.body;
 
-    if (!part_number || !name || !bin_location) {
-      res.status(400).json({ success: false, message: 'part_number, name, and bin_location are required.' });
+    if (!part_number || typeof part_number !== 'string' || !part_number.trim()) {
+      res.status(400).json({ success: false, message: 'part_number is required.' });
       return;
     }
+
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      res.status(400).json({ success: false, message: 'name is required.' });
+      return;
+    }
+
+    if (!bin_location || typeof bin_location !== 'string' || !bin_location.trim()) {
+      res.status(400).json({ success: false, message: 'bin_location is required.' });
+      return;
+    }
+
+    const trimmedPartNo = part_number.trim();
+    const trimmedName = name.trim();
+    const trimmedBin = bin_location.trim();
+    const physicalStockNum = Math.max(0, parseInt(String(current_physical_stock), 10) || 0);
+    const minReorderNum = Math.max(0, parseInt(String(min_reorder_level), 10) || 5);
+    const maxStockNum = Math.max(1, parseInt(String(max_stock_level), 10) || 100);
+    const unitCostNum = Math.max(0, parseFloat(String(unit_cost)) || 0);
 
     const result = await query(
       `INSERT INTO spare_parts (
@@ -295,44 +297,75 @@ export const createSparePart = async (req: Request, res: Response, next: NextFun
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       RETURNING *`,
       [
-        part_number,
-        oem_part_number || null,
-        name,
-        description || null,
-        category || 'Mechanical',
-        subcategory || null,
-        uom,
-        warehouse_zone,
-        bin_location,
-        parseInt(current_physical_stock, 10) || 0,
-        parseInt(min_reorder_level, 10) || 5,
-        parseInt(max_stock_level, 10) || 100,
-        parseFloat(unit_cost) || 0,
-        supplier_name || 'JCB India Genuine Spares',
+        trimmedPartNo,
+        oem_part_number ? String(oem_part_number).trim() : null,
+        trimmedName,
+        description ? String(description).trim() : null,
+        category ? String(category).trim() : 'Mechanical',
+        subcategory ? String(subcategory).trim() : null,
+        uom ? String(uom).trim() : 'Nos',
+        warehouse_zone ? String(warehouse_zone).trim() : 'Main Store',
+        trimmedBin,
+        physicalStockNum,
+        minReorderNum,
+        maxStockNum,
+        unitCostNum,
+        supplier_name ? String(supplier_name).trim() : 'JCB Genuine Parts',
       ]
     );
 
+    const newPart = result.rows[0];
+
+    // If part was created with initial physical stock > 0, log immutable audit transaction
+    if (physicalStockNum > 0 && user?.id) {
+      try {
+        await query(
+          `INSERT INTO inventory_transactions (
+            part_id, transaction_type, quantity, source_location, destination_location,
+            performed_by, remarks, created_at
+          ) VALUES ($1, 'STOCK_IN', $2, 'Goods Receiving', $3, $4, 'Initial stock intake upon catalog creation', NOW())`,
+          [newPart.id, physicalStockNum, `Bin: ${trimmedBin}`, user.id]
+        );
+      } catch (txErr) {
+        console.warn('[Initial Stock Transaction Warning]:', txErr);
+      }
+    }
+
     res.status(201).json({
       success: true,
-      message: `Spare Part ${part_number} added to master ledger by Admin.`,
-      data: result.rows[0],
+      message: `Spare Part ${trimmedPartNo} added to catalog successfully.`,
+      data: newPart,
     });
   } catch (err: any) {
     if (err.code === '23505') {
-      res.status(409).json({ success: false, message: 'Part Number already exists in catalog.' });
+      res.status(409).json({ success: false, message: `Part Number '${req.body.part_number}' already exists in catalog.` });
       return;
     }
     next(err);
   }
 };
 
+/**
+ * Update spare part metadata (Admin only).
+ * Note: Physical stock, reserved stock, quarantined stock and available stock
+ * CANNOT be updated through this endpoint; stock changes must use /adjust or /reserve.
+ */
 export const updateSparePart = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
+    if (!id || !UUID_REGEX.test(id)) {
+      res.status(400).json({ success: false, message: 'Invalid part ID format. UUID is required.' });
+      return;
+    }
+
     const {
       name,
+      oem_part_number,
       description,
       category,
+      subcategory,
+      uom,
+      warehouse_zone,
       bin_location,
       min_reorder_level,
       max_stock_level,
@@ -340,24 +373,49 @@ export const updateSparePart = async (req: Request, res: Response, next: NextFun
       supplier_name,
     } = req.body;
 
+    const minReorderNum = min_reorder_level !== undefined ? Math.max(0, parseInt(String(min_reorder_level), 10) || 0) : null;
+    const maxStockNum = max_stock_level !== undefined ? Math.max(1, parseInt(String(max_stock_level), 10) || 100) : null;
+    const unitCostNum = unit_cost !== undefined ? Math.max(0, parseFloat(String(unit_cost)) || 0) : null;
+
     const result = await query(
       `UPDATE spare_parts
        SET name = COALESCE($1, name),
-           description = COALESCE($2, description),
-           category = COALESCE($3, category),
-           bin_location = COALESCE($4, bin_location),
-           min_reorder_level = COALESCE($5, min_reorder_level),
-           max_stock_level = COALESCE($6, max_stock_level),
-           unit_cost = COALESCE($7, unit_cost),
-           supplier_name = COALESCE($8, supplier_name),
+           oem_part_number = COALESCE($2, oem_part_number),
+           description = COALESCE($3, description),
+           category = COALESCE($4, category),
+           subcategory = COALESCE($5, subcategory),
+           uom = COALESCE($6, uom),
+           warehouse_zone = COALESCE($7, warehouse_zone),
+           bin_location = COALESCE($8, bin_location),
+           min_reorder_level = COALESCE($9, min_reorder_level),
+           max_stock_level = COALESCE($10, max_stock_level),
+           unit_cost = COALESCE($11, unit_cost),
+           supplier_name = COALESCE($12, supplier_name),
            updated_at = NOW()
-       WHERE id = $9
-       RETURNING *`,
-      [name, description, category, bin_location, min_reorder_level, max_stock_level, unit_cost, supplier_name, id]
+       WHERE id = $13
+       RETURNING id, part_number, oem_part_number, name, description, category, subcategory,
+                 uom, warehouse_zone, bin_location, rack_number, shelf_number, bin_number,
+                 current_physical_stock, reserved_stock, quarantined_stock, available_stock,
+                 min_reorder_level, max_stock_level, unit_cost, supplier_name, status, updated_at`,
+      [
+        name ? String(name).trim() : null,
+        oem_part_number !== undefined ? (oem_part_number ? String(oem_part_number).trim() : null) : null,
+        description !== undefined ? (description ? String(description).trim() : null) : null,
+        category ? String(category).trim() : null,
+        subcategory !== undefined ? (subcategory ? String(subcategory).trim() : null) : null,
+        uom ? String(uom).trim() : null,
+        warehouse_zone ? String(warehouse_zone).trim() : null,
+        bin_location ? String(bin_location).trim() : null,
+        minReorderNum,
+        maxStockNum,
+        unitCostNum,
+        supplier_name !== undefined ? (supplier_name ? String(supplier_name).trim() : null) : null,
+        id,
+      ]
     );
 
     if (result.rows.length === 0) {
-      res.status(404).json({ success: false, message: 'Part not found.' });
+      res.status(404).json({ success: false, message: 'Spare part not found.' });
       return;
     }
 
@@ -371,83 +429,138 @@ export const updateSparePart = async (req: Request, res: Response, next: NextFun
   }
 };
 
+/**
+ * Delete or soft-delete spare part (Admin only).
+ * If the part has historical transactions, consumed records, or active stock,
+ * it is safely transitioned to 'inactive' to maintain referential integrity.
+ */
 export const deleteSparePart = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
+    if (!id || !UUID_REGEX.test(id)) {
+      res.status(400).json({ success: false, message: 'Invalid part ID format. UUID is required.' });
+      return;
+    }
 
+    const partRes = await query('SELECT id, part_number, current_physical_stock, reserved_stock, quarantined_stock FROM spare_parts WHERE id = $1', [id]);
+    if (partRes.rows.length === 0) {
+      res.status(404).json({ success: false, message: 'Spare part not found.' });
+      return;
+    }
+    const part = partRes.rows[0];
+
+    // Check historical usage in work orders
     const checkUsage = await query('SELECT count(*) FROM wo_parts_consumed WHERE part_id = $1', [id]);
-    if (parseInt(checkUsage.rows[0]?.count || '0', 10) > 0) {
+    const usageCount = parseInt(checkUsage.rows[0]?.count || '0', 10);
+
+    // Check historical usage in inventory transactions
+    const checkTx = await query('SELECT count(*) FROM inventory_transactions WHERE part_id = $1', [id]);
+    const txCount = parseInt(checkTx.rows[0]?.count || '0', 10);
+
+    const hasStock = Number(part.current_physical_stock) > 0 || Number(part.reserved_stock) > 0 || Number(part.quarantined_stock) > 0;
+
+    if (usageCount > 0 || txCount > 0 || hasStock) {
       const updateRes = await query(
         `UPDATE spare_parts SET status = 'inactive', updated_at = NOW() WHERE id = $1 RETURNING *`,
         [id]
       );
       res.json({
         success: true,
-        message: 'Part has historical work order usage. Marked inactive rather than hard deleted.',
+        message: 'Part has historical ledger transactions or active stock. Marked inactive rather than hard deleted.',
         data: updateRes.rows[0],
       });
       return;
     }
 
-    const delRes = await query('DELETE FROM spare_parts WHERE id = $1 RETURNING id, part_number', [id]);
-    if (delRes.rows.length === 0) {
-      res.status(404).json({ success: false, message: 'Spare part not found.' });
-      return;
+    try {
+      const delRes = await query('DELETE FROM spare_parts WHERE id = $1 RETURNING id, part_number', [id]);
+      res.json({
+        success: true,
+        message: `Part ${delRes.rows[0].part_number} deleted successfully from master catalog.`,
+        data: delRes.rows[0],
+      });
+    } catch (delErr: any) {
+      if (delErr.code === '23503') {
+        const updateRes = await query(
+          `UPDATE spare_parts SET status = 'inactive', updated_at = NOW() WHERE id = $1 RETURNING *`,
+          [id]
+        );
+        res.json({
+          success: true,
+          message: 'Part has foreign key relationships. Marked inactive rather than hard deleted.',
+          data: updateRes.rows[0],
+        });
+        return;
+      }
+      throw delErr;
     }
-
-    res.json({
-      success: true,
-      message: `Part ${delRes.rows[0].part_number} deleted successfully.`,
-      data: delRes.rows[0],
-    });
   } catch (err) {
     next(err);
   }
 };
 
+/**
+ * Adjust physical stock quantity (+ or -) with mandatory audit reason (Admin or Manager).
+ * Uses transactional row-locking and writes to immutable inventory_transactions ledger.
+ */
 export const adjustStock = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { part_id, adjustment_quantity, reason } = req.body;
-    const performed_by = (req as any).user?.id;
-
-    if (!part_id || adjustment_quantity === undefined) {
-      res.status(400).json({ success: false, message: 'part_id and adjustment_quantity are required.' });
+    const user = req.user;
+    if (!user || !user.id) {
+      res.status(401).json({ success: false, message: 'Unauthorized: Authentication required.' });
       return;
     }
 
-    const updateRes = await query(
-      `UPDATE spare_parts 
-       SET current_physical_stock = current_physical_stock + $1, updated_at = NOW() 
-       WHERE id = $2 
-       RETURNING *`,
-      [adjustment_quantity, part_id]
-    );
-
-    if (updateRes.rows.length === 0) {
-      res.status(404).json({ success: false, message: 'Spare part not found.' });
+    if (!['admin', 'manager'].includes(user.role)) {
+      res.status(403).json({ success: false, message: `Forbidden: Role '${user.role}' is not authorized to adjust stock.` });
       return;
     }
 
-    // Record immutable audit transaction
-    if (performed_by) {
-      try {
-        await query(
-          `INSERT INTO inventory_transactions (part_id, transaction_type, quantity, performed_by, remarks)
-           VALUES ($1, 'ADJUSTMENT', $2, $3, $4)`,
-          [part_id, adjustment_quantity, performed_by, reason || 'Physical stock audit adjustment']
-        );
-      } catch (txErr) {
-        console.warn('Transaction audit log warning:', txErr);
+    const { part_id, adjustment_quantity, reason } = req.body || {};
+
+    if (!part_id || typeof part_id !== 'string' || !UUID_REGEX.test(part_id.trim())) {
+      res.status(400).json({ success: false, message: 'Invalid or missing part_id. A valid UUID is required.' });
+      return;
+    }
+
+    const rawQty = adjustment_quantity;
+    const parsedQty = typeof rawQty === 'number' ? rawQty : parseInt(String(rawQty).trim(), 10);
+    if (!Number.isInteger(parsedQty) || parsedQty === 0 || !Number.isFinite(parsedQty)) {
+      res.status(400).json({ success: false, message: 'Invalid adjustment_quantity. Must be a non-zero integer (+ or -).' });
+      return;
+    }
+
+    if (!reason || typeof reason !== 'string' || !reason.trim()) {
+      res.status(400).json({ success: false, message: 'Reason for adjustment is mandatory.' });
+      return;
+    }
+
+    try {
+      const result = await adjustStockService(
+        {
+          part_id: part_id.trim(),
+          adjustment_quantity: parsedQty,
+          reason: reason.trim(),
+        },
+        user
+      );
+
+      res.status(200).json({
+        success: true,
+        message: `Stock successfully adjusted by ${parsedQty > 0 ? `+${parsedQty}` : parsedQty} units. New physical stock: ${result.spare_part.current_physical_stock}.`,
+        data: result.spare_part,
+      });
+    } catch (serviceErr: any) {
+      if (serviceErr instanceof InventoryError) {
+        res.status(serviceErr.statusCode).json({
+          success: false,
+          message: serviceErr.message,
+        });
+        return;
       }
+      throw serviceErr;
     }
-
-    res.json({
-      success: true,
-      message: `Stock adjusted by ${adjustment_quantity} units.`,
-      data: updateRes.rows[0],
-    });
   } catch (err) {
     next(err);
   }
 };
-
