@@ -2,6 +2,7 @@ import { config } from './config/env';
 import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import app from './app';
+import { initSocketServer } from './config/socket';
 
 const server = http.createServer(app);
 
@@ -14,17 +15,8 @@ export const io = new SocketIOServer(server, {
   },
 });
 
-io.on('connection', (socket) => {
-  if (config.nodeEnv === 'development') {
-    console.log(`[Socket.io] Client connected: ${socket.id}`);
-  }
-
-  socket.on('disconnect', () => {
-    if (config.nodeEnv === 'development') {
-      console.log(`[Socket.io] Client disconnected: ${socket.id}`);
-    }
-  });
-});
+// Initialize authenticated Socket.IO gateway with JWT validation & secure room routing
+initSocketServer(io);
 
 server.listen(config.port, () => {
   console.log(`=======================================================`);

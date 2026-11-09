@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import apiClient from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
+import { useSocket } from '../../context/SocketContext';
 import { 
   Wrench, 
   Clock, 
@@ -23,6 +24,7 @@ import { DowntimeAnalysisCard } from '../../components/dashboard/DowntimeAnalysi
 
 export const TechnicianDashboard: React.FC = () => {
   const { user } = useAuth();
+  const { socket } = useSocket();
   const [plant, setPlant] = useState('Pune Plant');
   const [timeframe, setTimeframe] = useState('Last 30 Days');
   const [workOrders, setWorkOrders] = useState<any[]>([]);
@@ -48,11 +50,44 @@ export const TechnicianDashboard: React.FC = () => {
     fetchWorkOrders();
   }, [plant, timeframe]);
 
+  // Real-time Socket.IO auto-refresh on new assignments and rework requests
+  useEffect(() => {
+    if (!socket) return;
+    const handleRefresh = () => {
+      fetchWorkOrders();
+    };
+    socket.on('technician:assigned', handleRefresh);
+    socket.on('work_order:rework_required', handleRefresh);
+    socket.on('work_order:reopened', handleRefresh);
+    socket.on('work_order:closed', handleRefresh);
+    socket.on('notification:new', handleRefresh);
+
+    return () => {
+      socket.off('technician:assigned', handleRefresh);
+      socket.off('work_order:rework_required', handleRefresh);
+      socket.off('work_order:reopened', handleRefresh);
+      socket.off('work_order:closed', handleRefresh);
+      socket.off('notification:new', handleRefresh);
+    };
+  }, [socket]);
+
   const handleQuickMilestone = async (woId: string, action: string) => {
     try {
       setActionLoading(true);
       setActionSuccess('');
-      const res = await apiClient.post(`/work-orders/${woId}/milestone`, { action });
+
+      let payload: any = { action };
+      if (['DECLINE', 'REJECT'].includes(action.toUpperCase())) {
+        const reason = window.prompt('Please provide a reason for declining this assignment:');
+        if (!reason || !reason.trim()) {
+          setActionLoading(false);
+          return;
+        }
+        payload.notes = reason.trim();
+        payload.technician_remarks = reason.trim();
+      }
+
+      const res = await apiClient.post(`/work-orders/${woId}/milestone`, payload);
       if (res.data?.success) {
         setActionSuccess(`Milestone '${action}' recorded successfully!`);
         fetchWorkOrders();

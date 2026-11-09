@@ -243,6 +243,8 @@ export async function sendInspectionNotification(
         created_at: new Date(),
       };
       // Support both colon and underscore room patterns
+      io.to(`user:${recipientId}`).emit('notification:new', notifPayload);
+      io.to(`user_${recipientId}`).emit('notification:new', notifPayload);
       io.to(`user:${recipientId}`).emit('notification', notifPayload);
       io.to(`user_${recipientId}`).emit('notification', notifPayload);
     }

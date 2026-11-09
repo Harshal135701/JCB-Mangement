@@ -119,13 +119,19 @@ async function sendPMNotification(
     );
 
     if (activeIo && typeof activeIo.to === 'function') {
-      activeIo.to(`user:${recipientId}`).emit('notification', {
+      const notifItem = {
+        recipient_id: recipientId,
         title,
         message,
         type,
         link_url: linkUrl,
+        action_url: linkUrl,
+        is_read: false,
         created_at: new Date(),
-      });
+      };
+      activeIo.to(`user:${recipientId}`).emit('notification:new', notifItem);
+      activeIo.to(`user_${recipientId}`).emit('notification:new', notifItem);
+      activeIo.to(`user:${recipientId}`).emit('notification', notifItem);
     }
   } catch {
     // Non-blocking fallback

@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthProvider } from './context/AuthContext';
+import { SocketProvider } from './context/SocketContext';
 import { Layout } from './layouts/Layout';
 import { RoleGuard } from './components/common/RoleGuard';
 
@@ -26,186 +27,179 @@ import { PreShiftInspectionPage } from './modules/inspections/PreShiftInspection
 import { WorkOrderListPage } from './modules/work-orders/WorkOrderListPage';
 import { WorkOrderDetailPage } from './modules/work-orders/WorkOrderDetailPage';
 
-/**
- * Smart Dashboard Router: Routes /dashboard to the specific home dashboard of the authenticated user
- */
-const DashboardRouter: React.FC = () => {
-  const { user } = useAuth();
-  if (!user) return <Navigate to="/login" replace />;
-
-  switch (user.role) {
-    case 'admin':
-      return <AdminDashboard />;
-    case 'technician':
-      return <TechnicianDashboard />;
-    case 'operator':
-      return <OperatorDashboard />;
-    case 'manager':
-    default:
-      return <LiveShopFloorDashboard />;
-  }
-};
-
 export default function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          {/* Public Welcome Page */}
-          <Route path="/" element={<WelcomePage />} />
+      <SocketProvider>
+        <BrowserRouter>
+          <Routes>
+            {/* Public Welcome Page */}
+            <Route path="/" element={<WelcomePage />} />
 
-          {/* Public Login Page */}
-          <Route path="/login" element={<LoginPage />} />
+            {/* Public Login Page */}
+            <Route path="/login" element={<LoginPage />} />
 
-          {/* Protected Enterprise CMMS Layout Shell */}
-          <Route
-            element={
-              <RoleGuard>
-                <Layout />
-              </RoleGuard>
-            }
-          >
-            {/* Dynamic Dashboard Home */}
-            <Route path="/dashboard" element={<DashboardRouter />} />
+            {/* Protected Enterprise CMMS Layout Shell */}
+            <Route
+              element={
+                <RoleGuard>
+                  <Layout />
+                </RoleGuard>
+              }
+            >
+              {/* Role-Specific Dashboard Routes */}
+              {/* Manager & Admin Dashboard */}
+              <Route
+                path="/dashboard"
+                element={
+                  <RoleGuard allowedRoles={['manager', 'admin']}>
+                    <LiveShopFloorDashboard />
+                  </RoleGuard>
+                }
+              />
 
-            {/* Dedicated Role Dashboard URLs */}
-            <Route
-              path="/admin/dashboard"
-              element={
-                <RoleGuard allowedRoles={['admin']}>
-                  <AdminDashboard />
-                </RoleGuard>
-              }
-            />
-            <Route
-              path="/technician/dashboard"
-              element={
-                <RoleGuard allowedRoles={['technician', 'admin']}>
-                  <TechnicianDashboard />
-                </RoleGuard>
-              }
-            />
-            <Route
-              path="/operator/dashboard"
-              element={
-                <RoleGuard allowedRoles={['operator', 'admin']}>
-                  <OperatorDashboard />
-                </RoleGuard>
-              }
-            />
+              {/* Admin-Only Enterprise Dashboard */}
+              <Route
+                path="/admin/dashboard"
+                element={
+                  <RoleGuard allowedRoles={['admin']}>
+                    <AdminDashboard />
+                  </RoleGuard>
+                }
+              />
 
-            {/* Manager & Admin Modules */}
-            <Route
-              path="/triage"
-              element={
-                <RoleGuard allowedRoles={['manager', 'admin']}>
-                  <TriageQueuePage />
-                </RoleGuard>
-              }
-            />
+              {/* Technician Operational Dashboard */}
+              <Route
+                path="/technician/dashboard"
+                element={
+                  <RoleGuard allowedRoles={['technician', 'admin']}>
+                    <TechnicianDashboard />
+                  </RoleGuard>
+                }
+              />
 
-            {/* Work Order Engine (Phase 3) */}
-            <Route
-              path="/work-orders"
-              element={
-                <RoleGuard allowedRoles={['admin', 'manager', 'technician']}>
-                  <WorkOrderListPage />
-                </RoleGuard>
-              }
-            />
-            <Route
-              path="/work-orders/:id"
-              element={
-                <RoleGuard allowedRoles={['admin', 'manager', 'technician']}>
-                  <WorkOrderDetailPage />
-                </RoleGuard>
-              }
-            />
-            <Route
-              path="/procurement"
-              element={
-                <RoleGuard allowedRoles={['manager', 'admin']}>
-                  <ProcurementPage />
-                </RoleGuard>
-              }
-            />
-            <Route
-              path="/rdc"
-              element={
-                <RoleGuard allowedRoles={['manager', 'admin']}>
-                  <RDCPage />
-                </RoleGuard>
-              }
-            />
-            <Route
-              path="/downtime"
-              element={
-                <RoleGuard allowedRoles={['manager', 'admin']}>
-                  <DowntimeAnalyticsPage />
-                </RoleGuard>
-              }
-            />
+              {/* Operator Shop Floor Dashboard */}
+              <Route
+                path="/operator/dashboard"
+                element={
+                  <RoleGuard allowedRoles={['operator', 'admin']}>
+                    <OperatorDashboard />
+                  </RoleGuard>
+                }
+              />
 
-            {/* Operator Pre-Shift Safety Inspections (Phase 2) */}
-            <Route
-              path="/inspections/run"
-              element={
-                <RoleGuard allowedRoles={['operator', 'manager', 'admin', 'technician']}>
-                  <PreShiftInspectionPage />
-                </RoleGuard>
-              }
-            />
+              {/* Manager & Admin Modules */}
+              <Route
+                path="/triage"
+                element={
+                  <RoleGuard allowedRoles={['manager', 'admin']}>
+                    <TriageQueuePage />
+                  </RoleGuard>
+                }
+              />
 
-            {/* Shared Operational Modules */}
-            <Route
-              path="/machines"
-              element={
-                <RoleGuard allowedRoles={['admin', 'manager', 'technician', 'operator']}>
-                  <MachineMasterPage />
-                </RoleGuard>
-              }
-            />
-            <Route
-              path="/inventory"
-              element={
-                <RoleGuard allowedRoles={['admin', 'manager', 'technician']}>
-                  <InventoryCatalogPage />
-                </RoleGuard>
-              }
-            />
-            <Route
-              path="/pm"
-              element={
-                <RoleGuard allowedRoles={['admin', 'manager', 'technician']}>
-                  <PMCalendarPage />
-                </RoleGuard>
-              }
-            />
+              {/* Work Order Engine */}
+              <Route
+                path="/work-orders"
+                element={
+                  <RoleGuard allowedRoles={['admin', 'manager', 'technician']}>
+                    <WorkOrderListPage />
+                  </RoleGuard>
+                }
+              />
+              <Route
+                path="/work-orders/:id"
+                element={
+                  <RoleGuard allowedRoles={['admin', 'manager', 'technician']}>
+                    <WorkOrderDetailPage />
+                  </RoleGuard>
+                }
+              />
+              <Route
+                path="/procurement"
+                element={
+                  <RoleGuard allowedRoles={['manager', 'admin']}>
+                    <ProcurementPage />
+                  </RoleGuard>
+                }
+              />
+              <Route
+                path="/rdc"
+                element={
+                  <RoleGuard allowedRoles={['manager', 'admin']}>
+                    <RDCPage />
+                  </RoleGuard>
+                }
+              />
+              <Route
+                path="/downtime"
+                element={
+                  <RoleGuard allowedRoles={['manager', 'admin']}>
+                    <DowntimeAnalyticsPage />
+                  </RoleGuard>
+                }
+              />
 
-            {/* Admin-Only Governance Modules */}
-            <Route
-              path="/users"
-              element={
-                <RoleGuard allowedRoles={['admin']}>
-                  <UserManagementPage />
-                </RoleGuard>
-              }
-            />
-            <Route
-              path="/audit"
-              element={
-                <RoleGuard allowedRoles={['admin', 'manager']}>
-                  <AuditLogsPage />
-                </RoleGuard>
-              }
-            />
-          </Route>
+              {/* Operator Pre-Shift Safety Inspections */}
+              <Route
+                path="/inspections/run"
+                element={
+                  <RoleGuard allowedRoles={['operator', 'manager', 'admin', 'technician']}>
+                    <PreShiftInspectionPage />
+                  </RoleGuard>
+                }
+              />
 
-          {/* Fallback to Welcome */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </BrowserRouter>
+              {/* Shared Operational Modules */}
+              <Route
+                path="/machines"
+                element={
+                  <RoleGuard allowedRoles={['admin', 'manager', 'technician', 'operator']}>
+                    <MachineMasterPage />
+                  </RoleGuard>
+                }
+              />
+              <Route
+                path="/inventory"
+                element={
+                  <RoleGuard allowedRoles={['admin', 'manager', 'technician']}>
+                    <InventoryCatalogPage />
+                  </RoleGuard>
+                }
+              />
+              <Route
+                path="/pm"
+                element={
+                  <RoleGuard allowedRoles={['admin', 'manager', 'technician']}>
+                    <PMCalendarPage />
+                  </RoleGuard>
+                }
+              />
+
+              {/* Admin-Only Governance Modules */}
+              <Route
+                path="/users"
+                element={
+                  <RoleGuard allowedRoles={['admin']}>
+                    <UserManagementPage />
+                  </RoleGuard>
+                }
+              />
+              <Route
+                path="/audit"
+                element={
+                  <RoleGuard allowedRoles={['admin', 'manager']}>
+                    <AuditLogsPage />
+                  </RoleGuard>
+                }
+              />
+            </Route>
+
+            {/* Fallback to Welcome */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </SocketProvider>
     </AuthProvider>
   );
 }
-

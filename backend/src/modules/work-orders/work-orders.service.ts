@@ -235,7 +235,7 @@ async function sendNotificationAndEmit(
   socketPayload: any,
   ioInstance?: any
 ): Promise<void> {
-  await client.query(
+  const insertRes = await client.query(
     `INSERT INTO notifications (recipient_id, title, message, type, link_url, created_at)
      VALUES ($1, $2, $3, $4, $5, NOW())`,
     [recipientId, title, message, type, linkUrl]
@@ -243,11 +243,38 @@ async function sendNotificationAndEmit(
 
   const activeIo = ioInstance || getActiveIo();
   if (activeIo) {
+    const notifItem = {
+      id: insertRes.rows?.[0]?.id || `notif-${Date.now()}`,
+      recipient_id: recipientId,
+      title,
+      message,
+      type,
+      link_url: linkUrl,
+      action_url: linkUrl,
+      is_read: false,
+      created_at: new Date(),
+    };
+
     if (typeof activeIo.to === 'function') {
+      activeIo.to(`user:${recipientId}`).emit('notification:new', notifItem);
+      activeIo.to(`user_${recipientId}`).emit('notification:new', notifItem);
+      activeIo.to(`user:${recipientId}`).emit('notification', notifItem);
       activeIo.to(`user:${recipientId}`).emit(socketEvent, socketPayload);
     }
     if (typeof activeIo.emit === 'function') {
       activeIo.emit(`user:${recipientId}:${socketEvent}`, socketPayload);
+    }
+    try {
+      const countRes = await client.query(
+        `SELECT COUNT(*)::int as unread_count FROM notifications WHERE recipient_id = $1 AND is_read = false`,
+        [recipientId]
+      );
+      const unreadCount = Number(countRes.rows?.[0]?.unread_count || 1);
+      if (typeof activeIo.to === 'function') {
+        activeIo.to(`user:${recipientId}`).emit('notification:unread-count', { unread_count: unreadCount });
+      }
+    } catch {
+      // Non-blocking unread count update
     }
   }
 }
@@ -1212,6 +1239,22 @@ export async function updateWorkOrderMilestoneService(
         break;
       }
 
+      case 'DECLINE':
+      case 'REJECT': {
+        if (wo.status !== 'assigned') {
+          throw new WorkOrderServiceError(`Cannot decline work order from status '${wo.status}'. Must be 'assigned'.`, 400);
+        }
+        const reason = input.notes || input.technician_remarks || (input as any).reason || '';
+        if (!reason || typeof reason !== 'string' || reason.trim().length === 0) {
+          throw new WorkOrderServiceError('A reason explaining why you cannot take the job is mandatory.', 400);
+        }
+        nextStatus = 'assigned';
+        updates.push(`assigned_technician_id = NULL`);
+        params.push(`Technician declined assignment: ${reason.trim()}`);
+        updates.push(`technician_remarks = $${params.length}`);
+        break;
+      }
+
       case 'SCHEDULE': {
         if (!['assigned', 'accepted'].includes(wo.status)) {
           throw new WorkOrderServiceError(`Cannot schedule work order from status '${wo.status}'.`, 400);
@@ -1370,7 +1413,7 @@ export async function updateWorkOrderMilestoneService(
 
       default:
         throw new WorkOrderServiceError(
-          `Invalid action: '${action}'. Allowed: ACCEPT, SCHEDULE, ARRIVED, START_WORK, PAUSE, RESUME, PROGRESS, COMPLETE.`,
+          `Invalid action: '${action}'. Allowed: ACCEPT, DECLINE, REJECT, SCHEDULE, ARRIVED, START_WORK, PAUSE, RESUME, PROGRESS, COMPLETE.`,
           400
         );
     }
@@ -1412,19 +1455,64 @@ export async function updateWorkOrderMilestoneService(
       { status: nextStatus, action: action.toUpperCase() }
     );
 
-    // If completed and submitted for verification, notify assigned manager
-    if (nextStatus === 'submitted_verification' && wo.assigned_manager_id) {
+    const techName = (user as any).full_name || user.employee_code || 'Technician';
+
+    // Stage 3: Technician accepts work order -> notify assigned manager
+    if (action.toUpperCase() === 'ACCEPT' && wo.assigned_manager_id) {
       await sendNotificationAndEmit(
         client,
         wo.assigned_manager_id,
-        'Work Order Verification Required',
-        `Work Order ${wo.wo_number} has been completed and submitted for manager verification.`,
+        'Work Order Accepted',
+        `Technician ${techName} has accepted work order ${wo.wo_number}.`,
+        'info',
+        `/work-orders/${id}`,
+        'work_order:accepted',
+        {
+          workOrder: updatedWo,
+          technician: { id: user.id, name: techName },
+          message: `Technician ${techName} has accepted work order ${wo.wo_number}.`,
+        },
+        ioInstance
+      );
+    }
+
+    // Stage 3: Technician declines / rejects assignment -> notify assigned manager
+    if (['DECLINE', 'REJECT'].includes(action.toUpperCase()) && wo.assigned_manager_id) {
+      const declineReason = (input.notes || input.technician_remarks || (input as any).reason || '').trim();
+      await sendNotificationAndEmit(
+        client,
+        wo.assigned_manager_id,
+        'Work Order Assignment Declined',
+        `Technician ${techName} cannot take work order ${wo.wo_number}: ${declineReason}`,
+        'warning',
+        `/work-orders/${id}`,
+        'work_order:declined',
+        {
+          workOrder: updatedWo,
+          technician: { id: user.id, name: techName },
+          reason: declineReason,
+          message: `Technician ${techName} declined work order ${wo.wo_number}: ${declineReason}`,
+        },
+        ioInstance
+      );
+    }
+
+    // Stage 4: Technician completes repair and submits for verification -> notify assigned manager
+    if (nextStatus === 'submitted_verification' && wo.assigned_manager_id) {
+      const machineLabel = wo.machine_code || 'Machine';
+      await sendNotificationAndEmit(
+        client,
+        wo.assigned_manager_id,
+        'Repair Submitted for Verification',
+        `Repair submitted for verification. Machine: ${machineLabel}. Technician: ${techName}. Work Order: ${wo.wo_number}.`,
         'alert',
         `/work-orders/${id}`,
         'work_order:submitted_verification',
         {
           workOrder: updatedWo,
-          message: `Work Order ${wo.wo_number} completed and ready for verification.`,
+          machine_code: machineLabel,
+          technician: { id: user.id, name: techName },
+          message: `Repair submitted for verification. Machine: ${machineLabel}. Technician: ${techName}. Work Order: ${wo.wo_number}.`,
         },
         ioInstance
       );
@@ -1598,6 +1686,38 @@ export async function verifyAndCloseWorkOrderService(
           },
           ioInstance
         );
+      }
+
+      // Stage 5: Notify reporting operator that the repair has been verified
+      if (wo.complaint_id) {
+        try {
+          const compRes = await client.query(
+            `SELECT id, reported_by_id, complaint_number FROM maintenance_requests WHERE id = $1`,
+            [wo.complaint_id]
+          );
+          if (compRes.rows && compRes.rows.length > 0 && compRes.rows[0].reported_by_id) {
+            const operatorId = compRes.rows[0].reported_by_id;
+            const machineLabel = wo.machine_code || 'Machine';
+            await sendNotificationAndEmit(
+              client,
+              operatorId,
+              'Machine Repair Verified',
+              `Your reported machine issue has been repaired and verified. Machine: ${machineLabel}. Work Order: ${wo.wo_number}.`,
+              'info',
+              `/breakdowns/${wo.complaint_id}`,
+              'repair:verified',
+              {
+                workOrder: verifiedWo,
+                complaint_id: wo.complaint_id,
+                machine_code: machineLabel,
+                message: `Your reported machine issue has been repaired and verified. Machine: ${machineLabel}. Work Order: ${wo.wo_number}.`,
+              },
+              ioInstance
+            );
+          }
+        } catch {
+          // Non-blocking notification for operator
+        }
       }
 
       await client.query('COMMIT');

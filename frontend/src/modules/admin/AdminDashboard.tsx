@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import apiClient from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
+import { useSocket } from '../../context/SocketContext';
 import { 
   Users, 
   Building2, 
@@ -21,6 +22,7 @@ import { DowntimeAnalysisCard } from '../../components/dashboard/DowntimeAnalysi
 
 export const AdminDashboard: React.FC = () => {
   const { user } = useAuth();
+  const { socket } = useSocket();
   const [plant, setPlant] = useState('All Plants');
   const [timeframe, setTimeframe] = useState('Last 30 Days');
   const [users, setUsers] = useState<any[]>([]);
@@ -53,6 +55,23 @@ export const AdminDashboard: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, [plant, timeframe]);
+
+  // Real-time Socket.IO auto-refresh for critical events and system alerts
+  useEffect(() => {
+    if (!socket) return;
+    const handleRefresh = () => {
+      fetchData();
+    };
+    socket.on('complaint:critical', handleRefresh);
+    socket.on('complaint:created', handleRefresh);
+    socket.on('notification:new', handleRefresh);
+
+    return () => {
+      socket.off('complaint:critical', handleRefresh);
+      socket.off('complaint:created', handleRefresh);
+      socket.off('notification:new', handleRefresh);
+    };
+  }, [socket]);
 
   // Derived user counts
   const totalUsers = users.length > 0 ? users.length : 48;

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth, getRoleHomeRoute } from '../../context/AuthContext';
 import { 
   ShieldCheck, 
   Cpu, 
@@ -78,7 +78,7 @@ export const WelcomePage: React.FC = () => {
           <div className="flex items-center gap-3">
             {user ? (
               <button
-                onClick={() => navigate('/dashboard')}
+                onClick={() => navigate(getRoleHomeRoute(user.role))}
                 className="bg-jcb-yellow hover:bg-amber-400 text-black font-bold px-4 py-2 rounded-lg shadow-xs transition-all flex items-center gap-2 text-xs uppercase tracking-wider border border-amber-500/50"
               >
                 <span>Go to Dashboard</span>

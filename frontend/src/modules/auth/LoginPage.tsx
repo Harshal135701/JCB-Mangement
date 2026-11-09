@@ -1,29 +1,46 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams, Link } from 'react-router-dom';
 import { useAuth, getRoleHomeRoute } from '../../context/AuthContext';
-import { Lock, User, AlertCircle, ArrowLeft, Eye, EyeOff, Loader2, ArrowRight, ShieldCheck, Activity } from 'lucide-react';
+import {
+  Lock,
+  User,
+  AlertCircle,
+  ArrowLeft,
+  Eye,
+  EyeOff,
+  Loader2,
+  ArrowRight,
+  ShieldCheck,
+  Activity,
+  Info,
+  X,
+} from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
   const { login, user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
 
-  const [identifier, setIdentifier] = useState('manager@jcb.com');
-  const [password, setPassword] = useState('password123');
+  // Inputs initialize empty in production-facing form
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showForgotNotice, setShowForgotNotice] = useState(false);
 
-  // If already logged in, redirect to user's home dashboard
+  // If already authenticated, redirect to user's role-specific dashboard
   useEffect(() => {
     if (user) {
       navigate(getRoleHomeRoute(user.role), { replace: true });
     }
   }, [user, navigate]);
 
+  // Optional query param support (e.g. /login?email=...)
   useEffect(() => {
-    const emailParam = searchParams.get('email');
+    const emailParam = searchParams.get('email') || searchParams.get('identifier');
     if (emailParam) {
       setIdentifier(emailParam);
     }
@@ -31,6 +48,10 @@ export const LoginPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Prevent duplicate form submission
+    if (loading) return;
+
     setError('');
 
     const cleanIdentifier = identifier.trim();
@@ -46,14 +67,23 @@ export const LoginPage: React.FC = () => {
 
     try {
       setLoading(true);
-      const loggedInUser = await login(cleanIdentifier, password);
-      const targetRoute = getRoleHomeRoute(loggedInUser.role);
+      const loggedInUser = await login(cleanIdentifier, password, rememberMe);
+
+      // Check for preserved redirect destination
+      const fromLocation = (location.state as any)?.from;
+      const intendedPath = fromLocation?.pathname;
+
+      const targetRoute =
+        intendedPath && intendedPath !== '/login' && intendedPath !== '/'
+          ? intendedPath
+          : getRoleHomeRoute(loggedInUser.role);
+
       navigate(targetRoute, { replace: true });
     } catch (err: any) {
       setError(
         err.response?.data?.message ||
-        err.message ||
-        'Authentication failed. Please verify your Employee ID and password.'
+          err.message ||
+          'Authentication failed. Please verify your Employee ID and password.'
       );
     } finally {
       setLoading(false);
@@ -62,50 +92,38 @@ export const LoginPage: React.FC = () => {
 
   return (
     <div className="min-h-screen relative overflow-hidden flex items-center justify-center p-4 sm:p-6 lg:p-12 font-sans selection:bg-amber-400 selection:text-black">
-      {/* =========================================================================
-          FULL PAGE BACKGROUND IMAGE (BRIGHT, VIBRANT & CLEARLY VISIBLE)
-          Light gradient wash so the excavator and sunset are fully seen!
-          ========================================================================= */}
+      {/* Background Image with soft gradient overlay */}
       <div className="absolute inset-0 z-0">
         <img
           src="/hero-excavator-sunset.jpg"
           alt="JCB Heavy Excavator Background"
           className="w-full h-full object-cover object-center filter brightness-100 contrast-105"
         />
-        {/* Soft light gradient overlay: bright off-white on left for dark text legibility, 
-            softly fading so the excavator and sunset shine through brightly */}
         <div className="absolute inset-0 bg-gradient-to-r from-white/92 via-white/75 to-white/35" />
       </div>
 
-      {/* =========================================================================
-          JCB INDUSTRIAL CORNER ACCENTS (Top-Left & Bottom-Right Yellow Triangles)
-          ========================================================================= */}
-      <div 
+      {/* JCB Industrial Corner Accents */}
+      <div
         className="absolute -top-12 -left-12 w-48 h-48 bg-jcb-yellow rotate-12 pointer-events-none z-10 shadow-md"
         style={{ clipPath: 'polygon(0 0, 100% 0, 0 100%)' }}
       />
-      <div 
+      <div
         className="absolute -bottom-12 -right-12 w-48 h-48 bg-jcb-yellow rotate-12 pointer-events-none z-10 shadow-md"
         style={{ clipPath: 'polygon(100% 0, 100% 100%, 0 100%)' }}
       />
-      {/* Secondary subtle black diagonal lines */}
-      <div 
+      <div
         className="absolute top-0 left-0 w-32 h-32 bg-black pointer-events-none z-10"
         style={{ clipPath: 'polygon(0 0, 60% 0, 0 60%)' }}
       />
-      <div 
+      <div
         className="absolute bottom-0 right-0 w-32 h-32 bg-black pointer-events-none z-10"
         style={{ clipPath: 'polygon(100% 40%, 100% 100%, 40% 100%)' }}
       />
 
-      {/* =========================================================================
-          MAIN CONTAINER: BRANDING & HEADLINE (LEFT) + CLEAN WHITE FORM (RIGHT)
-          ========================================================================= */}
+      {/* Main Grid: Branding Left + Form Right */}
       <div className="max-w-6xl w-full mx-auto relative z-20 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-16 items-center">
-        
-        {/* LEFT COLUMN: BRANDING & TEXT (Crisp dark text over the bright background) */}
+        {/* Left Column: Branding */}
         <div className="lg:col-span-6 flex flex-col justify-between space-y-6">
-          {/* Back link */}
           <Link
             to="/"
             className="inline-flex items-center gap-2 text-xs font-bold text-zinc-600 hover:text-black transition-colors w-fit"
@@ -114,9 +132,7 @@ export const LoginPage: React.FC = () => {
             <span>Back to Portal Home</span>
           </Link>
 
-          {/* JCB Brand & Subhead */}
           <div className="space-y-4">
-            {/* JCB Logo Badge */}
             <div className="inline-block bg-jcb-yellow text-black font-extrabold text-3xl sm:text-4xl px-4 py-1.5 rounded-md shadow-md tracking-widest border-2 border-black">
               JCB
             </div>
@@ -126,7 +142,6 @@ export const LoginPage: React.FC = () => {
               <span className="text-zinc-900">Maintenance Management System</span>
             </h1>
 
-            {/* Yellow Accent Bar */}
             <div className="w-24 h-2 bg-jcb-yellow rounded-full shadow-sm" />
 
             <p className="text-base sm:text-lg font-bold text-zinc-700 tracking-wide max-w-lg">
@@ -134,7 +149,6 @@ export const LoginPage: React.FC = () => {
             </p>
           </div>
 
-          {/* Industrial Plant Trust Badges */}
           <div className="pt-1 flex flex-wrap items-center gap-3 text-xs">
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/90 border border-slate-300/80 shadow-xs backdrop-blur-xs">
               <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0" />
@@ -147,17 +161,15 @@ export const LoginPage: React.FC = () => {
           </div>
         </div>
 
-        {/* RIGHT COLUMN: CLEAN WHITE LOGIN FORM CARD */}
+        {/* Right Column: Clean Login Card */}
         <div className="lg:col-span-6 flex justify-center lg:justify-end">
           <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-200/90 p-8 sm:p-10 relative">
-            
-            {/* Card Header (Welcome - NO "Back", NO Role Switcher Buttons) */}
             <div className="text-center mb-7">
               <h2 className="text-2xl sm:text-3xl font-extrabold text-zinc-950 tracking-tight">
                 Welcome
               </h2>
               <p className="text-xs sm:text-sm text-zinc-500 font-medium mt-1">
-                Sign in to continue
+                Sign in with your Employee ID or Email
               </p>
             </div>
 
@@ -169,22 +181,46 @@ export const LoginPage: React.FC = () => {
               </div>
             )}
 
-            {/* Form */}
+            {/* Governance Forgot Password Modal / Info Notice */}
+            {showForgotNotice && (
+              <div className="mb-5 p-3.5 bg-amber-50 border border-amber-200 text-amber-950 rounded-xl text-xs relative">
+                <button
+                  type="button"
+                  onClick={() => setShowForgotNotice(false)}
+                  className="absolute top-2 right-2 text-zinc-400 hover:text-zinc-700"
+                  aria-label="Dismiss notice"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+                <div className="flex items-start gap-2 pr-4">
+                  <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <p className="leading-relaxed">
+                    <strong>Plant IT Governance:</strong> Password credentials and resets are managed centrally. Please contact your Plant System Administrator or Shift In-Charge for access assistance.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Login Form */}
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Employee ID / Email */}
+              {/* Employee ID or Email */}
               <div>
                 <label className="block text-[11px] font-bold text-zinc-600 uppercase tracking-wider mb-1.5">
-                  Employee ID
+                  Employee ID / Email
                 </label>
                 <div className="relative">
                   <User className="w-4 h-4 text-zinc-400 absolute left-3.5 top-3.5" />
                   <input
                     type="text"
                     required
+                    disabled={loading}
                     value={identifier}
-                    onChange={(e) => setIdentifier(e.target.value)}
+                    onChange={(e) => {
+                      setIdentifier(e.target.value);
+                      if (error) setError('');
+                    }}
                     placeholder="Enter Employee ID or Email"
-                    className="w-full pl-10 pr-3.5 py-3 bg-white border border-slate-300 rounded-xl text-xs sm:text-sm text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 font-medium transition shadow-2xs"
+                    className="w-full pl-10 pr-3.5 py-3 bg-white border border-slate-300 rounded-xl text-xs sm:text-sm text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 font-medium transition shadow-2xs disabled:opacity-60"
                   />
                 </div>
               </div>
@@ -199,15 +235,19 @@ export const LoginPage: React.FC = () => {
                   <input
                     type={showPassword ? 'text' : 'password'}
                     required
+                    disabled={loading}
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      if (error) setError('');
+                    }}
                     placeholder="Enter Password"
-                    className="w-full pl-10 pr-10 py-3 bg-white border border-slate-300 rounded-xl text-xs sm:text-sm text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 font-medium transition shadow-2xs"
+                    className="w-full pl-10 pr-10 py-3 bg-white border border-slate-300 rounded-xl text-xs sm:text-sm text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 font-medium transition shadow-2xs disabled:opacity-60"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3.5 top-3.5 text-zinc-400 hover:text-zinc-600 focus:outline-none"
+                    className="absolute right-3.5 top-3.5 text-zinc-400 hover:text-zinc-600 focus:outline-none cursor-pointer"
                     tabIndex={-1}
                     aria-label={showPassword ? 'Hide password' : 'Show password'}
                   >
@@ -216,28 +256,29 @@ export const LoginPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Remember Me & Forgot Password */}
+              {/* Remember Me & Help */}
               <div className="flex items-center justify-between text-xs pt-1">
                 <label className="flex items-center gap-2 cursor-pointer select-none text-zinc-600 font-medium">
                   <input
                     type="checkbox"
+                    disabled={loading}
                     checked={rememberMe}
                     onChange={(e) => setRememberMe(e.target.checked)}
-                    className="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 border-slate-300"
+                    className="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 border-slate-300 cursor-pointer"
                   />
                   <span>Remember Me</span>
                 </label>
 
                 <button
                   type="button"
-                  onClick={() => alert('Password reset is managed by Plant IT Governance. Please contact system admin at admin@jcb.com.')}
-                  className="text-amber-700 hover:text-amber-800 font-semibold transition"
+                  onClick={() => setShowForgotNotice(true)}
+                  className="text-amber-700 hover:text-amber-800 font-semibold transition cursor-pointer"
                 >
-                  Forgot Password?
+                  Need Help?
                 </button>
               </div>
 
-              {/* Login Button */}
+              {/* Submit Button */}
               <button
                 type="submit"
                 disabled={loading}
@@ -256,15 +297,8 @@ export const LoginPage: React.FC = () => {
                 )}
               </button>
             </form>
-
-            {/* Quick Demo Credential Helper */}
-            <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-[11px] text-zinc-400">
-              <span>Demo Password: <strong className="text-zinc-600 font-mono">password123</strong></span>
-              <span className="font-semibold text-zinc-600">JCB India</span>
-            </div>
           </div>
         </div>
-
       </div>
     </div>
   );

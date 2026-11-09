@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import apiClient from '../../api/client';
+import { useSocket } from '../../context/SocketContext';
 import { 
   Truck, 
   CheckCircle2, 
@@ -17,6 +18,7 @@ import { RecentMaintenanceRequestsTable, MaintenanceRequestItem } from '../../co
 import { UpcomingPMTable, PMTableItem } from '../../components/dashboard/UpcomingPMTable';
 
 export const LiveShopFloorDashboard: React.FC = () => {
+  const { socket } = useSocket();
   const [plant, setPlant] = useState('Pune Plant');
   const [timeframe, setTimeframe] = useState('Last 30 Days');
   const [loading, setLoading] = useState(false);
@@ -70,6 +72,31 @@ export const LiveShopFloorDashboard: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, [plant, timeframe]);
+
+  // Real-time Socket.IO auto-refresh for live shop floor operations
+  useEffect(() => {
+    if (!socket) return;
+    const handleRefresh = () => {
+      fetchData();
+    };
+    socket.on('complaint:created', handleRefresh);
+    socket.on('complaint:critical', handleRefresh);
+    socket.on('work_order:accepted', handleRefresh);
+    socket.on('work_order:declined', handleRefresh);
+    socket.on('work_order:submitted_verification', handleRefresh);
+    socket.on('work_order:closed', handleRefresh);
+    socket.on('notification:new', handleRefresh);
+
+    return () => {
+      socket.off('complaint:created', handleRefresh);
+      socket.off('complaint:critical', handleRefresh);
+      socket.off('work_order:accepted', handleRefresh);
+      socket.off('work_order:declined', handleRefresh);
+      socket.off('work_order:submitted_verification', handleRefresh);
+      socket.off('work_order:closed', handleRefresh);
+      socket.off('notification:new', handleRefresh);
+    };
+  }, [socket]);
 
   // Derived or Image 2 baseline KPI metrics
   const totalMachines = stats?.total_machines ?? 120;

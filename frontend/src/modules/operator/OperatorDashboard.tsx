@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import apiClient from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
+import { useSocket } from '../../context/SocketContext';
 import { 
   HardHat, 
   CheckCircle2, 
@@ -24,6 +25,7 @@ import { BreakdownReportModal } from '../breakdowns/components/BreakdownReportMo
 
 export const OperatorDashboard: React.FC = () => {
   const { user } = useAuth();
+  const { socket } = useSocket();
   const [plant, setPlant] = useState('Pune Plant');
   const [shift, setShift] = useState('Shift A (06:00 - 14:00)');
   const [machines, setMachines] = useState<any[]>([]);
@@ -56,6 +58,27 @@ export const OperatorDashboard: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, [plant, shift]);
+
+  // Real-time Socket.IO auto-refresh for operator repairs and breakdown updates
+  useEffect(() => {
+    if (!socket) return;
+    const handleUpdate = () => {
+      fetchData();
+    };
+    socket.on('repair:verified', handleUpdate);
+    socket.on('complaint:acknowledged', handleUpdate);
+    socket.on('complaint:info_requested', handleUpdate);
+    socket.on('complaint:rejected', handleUpdate);
+    socket.on('notification:new', handleUpdate);
+
+    return () => {
+      socket.off('repair:verified', handleUpdate);
+      socket.off('complaint:acknowledged', handleUpdate);
+      socket.off('complaint:info_requested', handleUpdate);
+      socket.off('complaint:rejected', handleUpdate);
+      socket.off('notification:new', handleUpdate);
+    };
+  }, [socket]);
 
   const handleReportSuccess = (complaint: any) => {
     setReportSuccess(
