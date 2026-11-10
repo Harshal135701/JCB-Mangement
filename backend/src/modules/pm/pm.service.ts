@@ -659,20 +659,25 @@ export async function getPMUpcomingService(
 
   const conditions: string[] = [
     'p.is_active = true',
-    `p.next_pm_date > CURRENT_DATE`,
+    `p.next_pm_date >= CURRENT_DATE`,
     `p.next_pm_date <= CURRENT_DATE + ($1 || ' days')::interval`,
   ];
   const params: any[] = [safeDays];
 
-  if (user.role !== 'admin') {
-    if (user.plant_id) {
-      params.push(user.plant_id);
-      conditions.push(`s.plant_id = $${params.length}`);
-    }
-    if (user.shop_id) {
-      params.push(user.shop_id);
-      conditions.push(`m.shop_id = $${params.length}`);
-    }
+  if (filters?.plant_id && isUUID(filters.plant_id)) {
+    params.push(filters.plant_id);
+    conditions.push(`s.plant_id = $${params.length}`);
+  } else if (user.role !== 'admin' && user.plant_id) {
+    params.push(user.plant_id);
+    conditions.push(`s.plant_id = $${params.length}`);
+  }
+
+  if (filters?.shop_id && isUUID(filters.shop_id)) {
+    params.push(filters.shop_id);
+    conditions.push(`m.shop_id = $${params.length}`);
+  } else if (user.role === 'operator' && user.shop_id) {
+    params.push(user.shop_id);
+    conditions.push(`m.shop_id = $${params.length}`);
   }
 
   const sql = `
@@ -680,7 +685,7 @@ export async function getPMUpcomingService(
       p.*,
       m.machine_code, m.name as machine_name, m.criticality, m.operating_hours,
       s.shop_name, pl.plant_name,
-      EXTRACT(DAY FROM (p.next_pm_date - CURRENT_DATE)) as days_until_due
+      (p.next_pm_date - CURRENT_DATE)::int as days_until_due
     FROM pm_plans p
     JOIN machines m ON p.machine_id = m.id
     JOIN shops s ON m.shop_id = s.id

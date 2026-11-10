@@ -18,8 +18,8 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   title,
   subtitle,
   badge,
-  plantOptions = ['Pune Plant', 'Ballabgarh Works', 'Jaipur Plant', 'All Plants'],
-  selectedPlant = 'Pune Plant',
+  plantOptions = ['All Plants'],
+  selectedPlant = 'All Plants',
   onPlantChange,
   timeframeOptions = ['Last 30 Days', 'Last 7 Days', 'This Month', 'Today'],
   selectedTimeframe = 'Last 30 Days',
@@ -48,38 +48,42 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
       {/* Dropdown Filters & Actions */}
       <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
         {/* Plant Selector Pill */}
-        <div className="relative inline-flex items-center bg-white border border-slate-200/90 rounded-xl px-3 py-2 text-xs font-bold text-zinc-800 shadow-2xs hover:border-slate-300 transition">
-          <Building2 className="w-4 h-4 text-zinc-500 mr-2 shrink-0" />
-          <select
-            value={selectedPlant}
-            onChange={(e) => onPlantChange && onPlantChange(e.target.value)}
-            className="bg-transparent appearance-none pr-5 focus:outline-none cursor-pointer font-bold text-zinc-900"
-          >
-            {plantOptions.map((opt) => (
-              <option key={opt} value={opt}>
-                {opt}
-              </option>
-            ))}
-          </select>
-          <ChevronDown className="w-3.5 h-3.5 text-zinc-400 pointer-events-none absolute right-2.5 top-2.5" />
-        </div>
+        {plantOptions.length > 0 && (
+          <div className="relative inline-flex items-center bg-white border border-slate-200/90 rounded-xl px-3 py-2 text-xs font-bold text-zinc-800 shadow-2xs hover:border-slate-300 transition">
+            <Building2 className="w-4 h-4 text-zinc-500 mr-2 shrink-0" />
+            <select
+              value={selectedPlant}
+              onChange={(e) => onPlantChange && onPlantChange(e.target.value)}
+              className="bg-transparent appearance-none pr-5 focus:outline-none cursor-pointer font-bold text-zinc-900"
+            >
+              {plantOptions.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="w-3.5 h-3.5 text-zinc-400 pointer-events-none absolute right-2.5 top-2.5" />
+          </div>
+        )}
 
         {/* Timeframe Selector Pill */}
-        <div className="relative inline-flex items-center bg-white border border-slate-200/90 rounded-xl px-3 py-2 text-xs font-bold text-zinc-800 shadow-2xs hover:border-slate-300 transition">
-          <Calendar className="w-4 h-4 text-zinc-500 mr-2 shrink-0" />
-          <select
-            value={selectedTimeframe}
-            onChange={(e) => onTimeframeChange && onTimeframeChange(e.target.value)}
-            className="bg-transparent appearance-none pr-5 focus:outline-none cursor-pointer font-bold text-zinc-900"
-          >
-            {timeframeOptions.map((opt) => (
-              <option key={opt} value={opt}>
-                {opt}
-              </option>
-            ))}
-          </select>
-          <ChevronDown className="w-3.5 h-3.5 text-zinc-400 pointer-events-none absolute right-2.5 top-2.5" />
-        </div>
+        {timeframeOptions.length > 0 && (
+          <div className="relative inline-flex items-center bg-white border border-slate-200/90 rounded-xl px-3 py-2 text-xs font-bold text-zinc-800 shadow-2xs hover:border-slate-300 transition">
+            <Calendar className="w-4 h-4 text-zinc-500 mr-2 shrink-0" />
+            <select
+              value={selectedTimeframe}
+              onChange={(e) => onTimeframeChange && onTimeframeChange(e.target.value)}
+              className="bg-transparent appearance-none pr-5 focus:outline-none cursor-pointer font-bold text-zinc-900"
+            >
+              {timeframeOptions.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="w-3.5 h-3.5 text-zinc-400 pointer-events-none absolute right-2.5 top-2.5" />
+          </div>
+        )}
 
         {/* Custom Actions (e.g. Refresh or Quick Action Button) */}
         {actions}

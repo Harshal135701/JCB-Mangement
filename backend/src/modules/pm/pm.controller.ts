@@ -237,7 +237,7 @@ export const getPMUpcoming = async (req: Request, res: Response, next: NextFunct
       return;
     }
 
-    const days = parseInt(String(req.query.days || '7'), 10) || 7;
+    const days = parseInt(String(req.query.windowDays || req.query.days || '7'), 10) || 7;
     const upcoming = await getPMUpcomingService(days, req.query, user);
     res.json({
       success: true,

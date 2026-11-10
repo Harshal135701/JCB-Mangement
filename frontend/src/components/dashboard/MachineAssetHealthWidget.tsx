@@ -4,23 +4,81 @@ import {
   Clock, 
   Wrench, 
   AlertCircle, 
-  CheckCircle2, 
-  ExternalLink,
-  ShieldCheck,
   ChevronRight
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
-export const MachineAssetHealthWidget: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'history' | 'specs' | 'docs'>('overview');
+interface MachineAssetHealthWidgetProps {
+  machine?: {
+    id?: string;
+    machine_code?: string;
+    name?: string;
+    category?: string;
+    serial_number?: string;
+    bay_line_location?: string;
+    shop_name?: string;
+    plant_name?: string;
+    criticality?: string;
+    status?: string;
+    operating_hours?: number | string;
+    healthScore?: number;
+    servicesDone?: number;
+    openWorkOrders?: number;
+    description?: string;
+  } | null;
+  loading?: boolean;
+}
 
-  // Gauge calculation for 92%
-  const gaugeSize = 100;
-  const strokeWidth = 10;
-  const radius = (gaugeSize - strokeWidth) / 2; // 45
-  const circumference = 2 * Math.PI * radius; // ≈ 282.74
-  const healthPercent = 92;
-  const strokeDashoffset = circumference - (healthPercent / 100) * circumference;
+export const MachineAssetHealthWidget: React.FC<MachineAssetHealthWidgetProps> = ({
+  machine,
+  loading = false,
+}) => {
+  const [activeTab, setActiveTab] = useState<'overview' | 'specs' | 'desc'>('overview');
+
+  if (loading) {
+    return (
+      <div className="bg-white rounded-2xl border-2 border-slate-200 p-6 shadow-xs flex items-center justify-center min-h-[300px]">
+        <span className="text-xs text-zinc-400 font-medium">Loading asset telemetry...</span>
+      </div>
+    );
+  }
+
+  if (!machine) {
+    return (
+      <div className="bg-white rounded-2xl border-2 border-slate-200 p-6 shadow-xs flex flex-col items-center justify-center min-h-[300px] text-center">
+        <Cpu className="w-8 h-8 text-zinc-300 mb-2" />
+        <h4 className="text-sm font-bold text-zinc-700">No Asset Assigned</h4>
+        <p className="text-xs text-zinc-400 mt-1">
+          Select or assign an active production machine to view asset telemetry.
+        </p>
+        <Link
+          to="/machines"
+          className="mt-4 px-3 py-1.5 bg-jcb-yellow text-black text-xs font-bold rounded-lg border border-amber-500 hover:bg-amber-400 transition"
+        >
+          View Fleet Registry
+        </Link>
+      </div>
+    );
+  }
+
+  const status = (machine.status || 'running').toLowerCase();
+  const isRunning = status === 'running' || status === 'operational';
+  const isBreakdown = status === 'breakdown';
+
+  // Real status display
+  const statusBadge = isBreakdown ? (
+    <span className="bg-red-50 text-red-700 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-red-200">
+      Breakdown
+    </span>
+  ) : isRunning ? (
+    <span className="bg-emerald-50 text-emerald-700 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-emerald-200">
+      Operational
+    </span>
+  ) : (
+    <span className="bg-amber-50 text-amber-700 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-amber-200 capitalize">
+      {status.replace('_', ' ')}
+    </span>
+  );
 
   return (
     <div className="bg-white rounded-2xl border-2 border-slate-200 p-5 sm:p-6 shadow-xs flex flex-col justify-between">
@@ -33,29 +91,33 @@ export const MachineAssetHealthWidget: React.FC = () => {
               Machine Asset Health
             </h3>
           </div>
-          <span className="bg-emerald-50 text-emerald-700 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-emerald-200 shadow-2xs">
-            Operational
-          </span>
+          {statusBadge}
         </div>
 
-        {/* Machine Identity (Clean typography, NO IMAGES) */}
+        {/* Machine Identity */}
         <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 mb-4">
           <div className="flex items-start justify-between">
             <div>
               <div className="flex items-center gap-2">
                 <span className="bg-jcb-yellow text-black text-[10px] font-black px-2 py-0.5 rounded uppercase">
-                  Class A
+                  {machine.criticality ? machine.criticality.replace('_', ' ') : 'Asset'}
                 </span>
                 <h4 className="text-base font-extrabold text-zinc-950">
-                  JCB 3DX Plus
+                  {machine.name || machine.machine_code}
                 </h4>
               </div>
               <p className="text-[11px] text-zinc-500 font-mono mt-1">
-                Serial No: <strong className="text-zinc-700">JCB3DX245678</strong> • Site: <strong className="text-zinc-700">Pune</strong>
+                Code: <strong className="text-zinc-700">{machine.machine_code}</strong>
+                {machine.serial_number && (
+                  <> • S/N: <strong className="text-zinc-700">{machine.serial_number}</strong></>
+                )}
+                {machine.shop_name && (
+                  <> • Shop: <strong className="text-zinc-700">{machine.shop_name}</strong></>
+                )}
               </p>
             </div>
             <Link
-              to="/machines"
+              to={machine.id ? `/machines/${machine.id}` : '/machines'}
               className="text-xs font-bold text-amber-800 hover:text-black flex items-center gap-0.5"
             >
               <span>Fleet</span>
@@ -63,47 +125,23 @@ export const MachineAssetHealthWidget: React.FC = () => {
             </Link>
           </div>
 
-          {/* Health Gauge Strip */}
-          <div className="mt-4 pt-3 border-t border-slate-200 flex items-center justify-between gap-4">
+          {/* Machine Location & Category strip */}
+          <div className="mt-3 pt-3 border-t border-slate-200 flex items-center justify-between text-xs text-zinc-600">
             <div>
               <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
-                Health Status
+                Operating Status
               </span>
-              <div className="text-xl sm:text-2xl font-black text-emerald-800 mt-0.5">
-                92% Healthy
-              </div>
-              <span className="text-[11px] text-zinc-500 font-medium">
-                Bottleneck Asset • Zero Unplanned Halts
+              <span className="font-extrabold text-zinc-900 capitalize">
+                {machine.status ? machine.status.replace('_', ' ') : 'Unknown'}
               </span>
             </div>
-
-            {/* Circular Gauge Graphic */}
-            <div className="relative flex items-center justify-center shrink-0">
-              <svg width={gaugeSize} height={gaugeSize} className="transform -rotate-90">
-                <circle
-                  cx={gaugeSize / 2}
-                  cy={gaugeSize / 2}
-                  r={radius}
-                  fill="transparent"
-                  stroke="#E2E8F0"
-                  strokeWidth={strokeWidth}
-                />
-                <circle
-                  cx={gaugeSize / 2}
-                  cy={gaugeSize / 2}
-                  r={radius}
-                  fill="transparent"
-                  stroke="#10B981"
-                  strokeWidth={strokeWidth}
-                  strokeDasharray={circumference}
-                  strokeDashoffset={strokeDashoffset}
-                  strokeLinecap="round"
-                  className="transition-all duration-700 ease-out"
-                />
-              </svg>
-              <div className="absolute inset-0 flex items-center justify-center font-mono font-black text-base text-zinc-950">
-                {healthPercent}%
-              </div>
+            <div className="text-right">
+              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
+                Location
+              </span>
+              <span className="font-medium text-zinc-700">
+                {machine.bay_line_location || machine.shop_name || 'Production Floor'}
+              </span>
             </div>
           </div>
         </div>
@@ -113,7 +151,9 @@ export const MachineAssetHealthWidget: React.FC = () => {
           <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-center">
             <Clock className="w-3.5 h-3.5 text-zinc-400 mx-auto mb-1" />
             <div className="text-xs sm:text-sm font-black text-zinc-950 font-mono">
-              2,150 h
+              {machine.operating_hours != null
+                ? `${Number(machine.operating_hours).toLocaleString()} h`
+                : 'N/A'}
             </div>
             <div className="text-[10px] text-zinc-400 font-medium mt-0.5">Run Hours</div>
           </div>
@@ -121,22 +161,22 @@ export const MachineAssetHealthWidget: React.FC = () => {
           <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-center">
             <Wrench className="w-3.5 h-3.5 text-amber-500 mx-auto mb-1" />
             <div className="text-xs sm:text-sm font-black text-zinc-950 font-mono">
-              12 Done
+              {machine.servicesDone != null ? machine.servicesDone : 0} Done
             </div>
-            <div className="text-[10px] text-zinc-400 font-medium mt-0.5">Services</div>
+            <div className="text-[10px] text-zinc-400 font-medium mt-0.5">PM Services</div>
           </div>
 
           <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-center">
             <AlertCircle className="w-3.5 h-3.5 text-blue-500 mx-auto mb-1" />
             <div className="text-xs sm:text-sm font-black text-blue-700 font-mono">
-              1 Active
+              {machine.openWorkOrders != null ? machine.openWorkOrders : 0} Active
             </div>
             <div className="text-[10px] text-zinc-400 font-medium mt-0.5">Open WO</div>
           </div>
         </div>
 
-        {/* Tab links (Overview, History, Specs, Docs) */}
-        <div className="flex items-center justify-between border-t border-slate-100 pt-3 text-[11px] font-bold text-zinc-500">
+        {/* Tab links (Overview, Specs, Description) */}
+        <div className="flex items-center gap-4 border-t border-slate-100 pt-3 text-[11px] font-bold text-zinc-500">
           <button
             onClick={() => setActiveTab('overview')}
             className={`pb-1 transition ${
@@ -146,16 +186,6 @@ export const MachineAssetHealthWidget: React.FC = () => {
             }`}
           >
             Overview
-          </button>
-          <button
-            onClick={() => setActiveTab('history')}
-            className={`pb-1 transition ${
-              activeTab === 'history'
-                ? 'text-zinc-950 border-b-2 border-jcb-yellow font-extrabold'
-                : 'hover:text-zinc-800'
-            }`}
-          >
-            Maintenance
           </button>
           <button
             onClick={() => setActiveTab('specs')}
@@ -168,35 +198,34 @@ export const MachineAssetHealthWidget: React.FC = () => {
             Specs
           </button>
           <button
-            onClick={() => setActiveTab('docs')}
+            onClick={() => setActiveTab('desc')}
             className={`pb-1 transition ${
-              activeTab === 'docs'
+              activeTab === 'desc'
                 ? 'text-zinc-950 border-b-2 border-jcb-yellow font-extrabold'
                 : 'hover:text-zinc-800'
             }`}
           >
-            Documents
+            Description
           </button>
         </div>
-      </div>
 
-      {/* Tab Content Preview */}
-      <div className="mt-3 pt-2 text-[11px] text-zinc-500 font-medium">
-        {activeTab === 'overview' && (
-          <div className="flex items-center justify-between">
-            <span>Last Service: <strong className="text-zinc-700">25 Oct 2025</strong></span>
-            <span>Next Service: <strong className="text-zinc-700">25 Nov 2025</strong></span>
-          </div>
-        )}
-        {activeTab === 'history' && (
-          <p className="text-zinc-600">3 preventive checks, 1 hydraulic seal replacement completed.</p>
-        )}
-        {activeTab === 'specs' && (
-          <p className="text-zinc-600">76 HP Turbo Diesel • 0.3 m³ Shovel • 4WD Drive</p>
-        )}
-        {activeTab === 'docs' && (
-          <p className="text-zinc-600">O&M Manual v4.2, Wiring Diagram 2025 attached.</p>
-        )}
+        <div className="pt-2 text-xs text-zinc-600">
+          {activeTab === 'overview' && (
+            <p className="line-clamp-2 text-zinc-500">
+              {machine.description || `Industrial ${machine.category || 'production'} equipment monitored live.`}
+            </p>
+          )}
+          {activeTab === 'specs' && (
+            <p className="text-zinc-500">
+              Category: <strong>{machine.category || 'N/A'}</strong> • Criticality: <strong>{machine.criticality || 'Standard'}</strong>
+            </p>
+          )}
+          {activeTab === 'desc' && (
+            <p className="text-zinc-500">
+              {machine.description || 'No equipment documentation recorded in registry.'}
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );

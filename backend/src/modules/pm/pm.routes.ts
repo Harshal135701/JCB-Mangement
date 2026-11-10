@@ -39,6 +39,9 @@ const router = Router();
 // All PM endpoints require authentication
 router.use(authenticateJWT);
 
+// Base route alias for upcoming PM plans
+router.get('/', requireRoles('admin', 'manager', 'technician', 'operator'), getPMUpcoming);
+
 // ---------------------------------------------------------------------------
 // 1. PM Plan Management
 // ---------------------------------------------------------------------------

@@ -15,58 +15,17 @@ interface RecentMaintenanceRequestsTableProps {
   title?: string;
   viewAllLink?: string;
   requests?: MaintenanceRequestItem[];
+  loading?: boolean;
 }
-
-const defaultRequests: MaintenanceRequestItem[] = [
-  {
-    id: 'MR-10025',
-    machine: 'JCB-205',
-    issue: 'Hydraulic Leak',
-    priority: 'Critical',
-    status: 'In Progress',
-    date: '30 Apr, 10:20 AM',
-  },
-  {
-    id: 'MR-10024',
-    machine: 'JCB-104',
-    issue: 'Engine Noise',
-    priority: 'High',
-    status: 'Approved',
-    date: '30 Apr, 09:15 AM',
-  },
-  {
-    id: 'MR-10023',
-    machine: 'JCB-178',
-    issue: 'Overheating',
-    priority: 'Medium',
-    status: 'Pending',
-    date: '30 Apr, 08:50 AM',
-  },
-  {
-    id: 'MR-10022',
-    machine: 'JCB-132',
-    issue: 'Oil Leakage',
-    priority: 'Medium',
-    status: 'Resolved',
-    date: '29 Apr, 06:30 PM',
-  },
-  {
-    id: 'MR-10021',
-    machine: 'JCB-117',
-    issue: 'Vibration',
-    priority: 'Low',
-    status: 'Closed',
-    date: '29 Apr, 05:10 PM',
-  },
-];
 
 export const RecentMaintenanceRequestsTable: React.FC<RecentMaintenanceRequestsTableProps> = ({
   title = 'Recent Maintenance Requests',
   viewAllLink = '/triage',
-  requests = defaultRequests,
+  requests = [],
+  loading = false,
 }) => {
   const getPriorityBadge = (priority: string) => {
-    const p = priority.toLowerCase();
+    const p = (priority || '').toLowerCase();
     let dotColor = 'bg-slate-400';
     let textColor = 'text-zinc-700';
 
@@ -93,14 +52,14 @@ export const RecentMaintenanceRequestsTable: React.FC<RecentMaintenanceRequestsT
   };
 
   const getStatusBadge = (status: string) => {
-    const s = status.toLowerCase();
+    const s = (status || '').toLowerCase();
     let bg = 'bg-slate-100 text-slate-700 border-slate-200';
 
-    if (s.includes('progress')) {
+    if (s.includes('progress') || s.includes('work_order_created')) {
       bg = 'bg-blue-50 text-blue-700 border-blue-200';
-    } else if (s.includes('approved')) {
+    } else if (s.includes('approved') || s.includes('acknowledged')) {
       bg = 'bg-cyan-50 text-cyan-800 border-cyan-200';
-    } else if (s.includes('pending')) {
+    } else if (s.includes('pending') || s.includes('new')) {
       bg = 'bg-amber-50 text-amber-800 border-amber-200';
     } else if (s.includes('resolved')) {
       bg = 'bg-emerald-50 text-emerald-700 border-emerald-200';
@@ -148,28 +107,44 @@ export const RecentMaintenanceRequestsTable: React.FC<RecentMaintenanceRequestsT
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-xs text-zinc-800">
-            {requests.map((row) => (
-              <tr key={row.id} className="hover:bg-slate-50/70 transition">
-                <td className="py-3 px-3 font-mono font-bold text-zinc-950">
-                  {row.id}
-                </td>
-                <td className="py-3 px-3 font-semibold text-zinc-700">
-                  {row.machine}
-                </td>
-                <td className="py-3 px-3 text-zinc-800 font-medium">
-                  {row.issue}
-                </td>
-                <td className="py-3 px-3">
-                  {getPriorityBadge(row.priority)}
-                </td>
-                <td className="py-3 px-3">
-                  {getStatusBadge(row.status)}
-                </td>
-                <td className="py-3 px-3 text-zinc-500 text-[11px] font-medium whitespace-nowrap">
-                  {row.date}
+            {loading ? (
+              <tr>
+                <td colSpan={6} className="py-8 text-center text-xs text-zinc-400 font-medium">
+                  Loading maintenance requests...
                 </td>
               </tr>
-            ))}
+            ) : requests.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="py-8 text-center text-xs text-zinc-400 font-medium">
+                  No maintenance requests found for the selected criteria.
+                </td>
+              </tr>
+            ) : (
+              requests.map((row) => (
+                <tr key={row.id} className="hover:bg-slate-50/70 transition">
+                  <td className="py-3 px-3 font-mono font-bold text-zinc-950">
+                    <Link to="/triage" className="hover:text-amber-600">
+                      {row.id}
+                    </Link>
+                  </td>
+                  <td className="py-3 px-3 font-semibold text-zinc-700">
+                    {row.machine}
+                  </td>
+                  <td className="py-3 px-3 text-zinc-800 font-medium">
+                    {row.issue}
+                  </td>
+                  <td className="py-3 px-3">
+                    {getPriorityBadge(row.priority)}
+                  </td>
+                  <td className="py-3 px-3">
+                    {getStatusBadge(row.status)}
+                  </td>
+                  <td className="py-3 px-3 text-zinc-500 text-[11px] font-medium whitespace-nowrap">
+                    {row.date}
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>

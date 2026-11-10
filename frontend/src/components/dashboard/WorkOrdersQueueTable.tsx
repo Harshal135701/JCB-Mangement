@@ -3,93 +3,70 @@ import { Link } from 'react-router-dom';
 import { 
   Wrench, 
   Search, 
-  Filter, 
   Plus, 
-  ArrowRight, 
   MoreHorizontal,
-  ChevronRight,
-  AlertCircle
+  ChevronRight
 } from 'lucide-react';
 
-interface WorkOrderRow {
+export interface WorkOrderRow {
   id: string;
   woNumber: string;
-  type: 'Breakdown' | 'PM' | 'Inspection';
+  type: string;
   machine: string;
-  priority: 'High' | 'Medium' | 'Low';
-  status: 'Open' | 'In Progress' | 'Completed' | 'Overdue';
+  priority: string;
+  status: string;
   assignedTo: string;
   dueDate: string;
 }
 
-const mockWorkOrders: WorkOrderRow[] = [
-  {
-    id: 'wo-1',
-    woNumber: 'WO-2026-1048',
-    type: 'Breakdown',
-    machine: 'JCB 3DX (CNC-001)',
-    priority: 'High',
-    status: 'Open',
-    assignedTo: 'Ramesh Kumar',
-    dueDate: 'Nov 07, 2026',
-  },
-  {
-    id: 'wo-2',
-    woNumber: 'WO-2026-1047',
-    type: 'PM',
-    machine: 'JCB 220X (Press Line A)',
-    priority: 'Medium',
-    status: 'In Progress',
-    assignedTo: 'Suresh Patel',
-    dueDate: 'Nov 08, 2026',
-  },
-  {
-    id: 'wo-3',
-    woNumber: 'WO-2026-1046',
-    type: 'Breakdown',
-    machine: 'JCB 140 (Robotic Cell)',
-    priority: 'High',
-    status: 'Open',
-    assignedTo: 'Vikram Singh',
-    dueDate: 'Nov 07, 2026',
-  },
-  {
-    id: 'wo-4',
-    woNumber: 'WO-2026-1045',
-    type: 'PM',
-    machine: 'JCB 3DX (Bay B-04)',
-    priority: 'Low',
-    status: 'Completed',
-    assignedTo: 'Ajay Sharma',
-    dueDate: 'Nov 06, 2026',
-  },
-  {
-    id: 'wo-5',
-    woNumber: 'WO-2026-1044',
-    type: 'Inspection',
-    machine: 'JCB 205 (Assembly 2)',
-    priority: 'Medium',
-    status: 'In Progress',
-    assignedTo: 'Deepak Yadav',
-    dueDate: 'Nov 06, 2026',
-  },
-  {
-    id: 'wo-6',
-    woNumber: 'WO-2026-1042',
-    type: 'Breakdown',
-    machine: 'JCB 455ZX (Loader Line)',
-    priority: 'High',
-    status: 'Overdue',
-    assignedTo: 'Manoj Verma',
-    dueDate: 'Nov 04, 2026',
-  },
-];
-
 type FilterTab = 'ALL' | 'OPEN' | 'IN PROGRESS' | 'COMPLETED' | 'OVERDUE';
 
-export const WorkOrdersQueueTable: React.FC<{ liveOrders?: any[] }> = ({ liveOrders }) => {
+interface WorkOrdersQueueTableProps {
+  liveOrders?: any[];
+  workOrders?: any[];
+  loading?: boolean;
+}
+
+export const WorkOrdersQueueTable: React.FC<WorkOrdersQueueTableProps> = ({
+  liveOrders,
+  workOrders,
+  loading = false,
+}) => {
   const [activeTab, setActiveTab] = useState<FilterTab>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Source list from props
+  const rawOrders = workOrders || liveOrders || [];
+
+  // Map raw backend work orders to standardized WorkOrderRow structure
+  const orders: WorkOrderRow[] = rawOrders.map((wo: any) => ({
+    id: wo.id,
+    woNumber: wo.wo_number || wo.woNumber || wo.id?.slice(0, 8),
+    type:
+      wo.classification === 'regular_maintenance'
+        ? 'PM'
+        : wo.classification === 'major_breakdown'
+        ? 'Emergency'
+        : wo.type || 'Breakdown',
+    machine: wo.machine?.code || wo.machine?.name || wo.machine_code || 'Machinery Asset',
+    priority: wo.priority ? wo.priority.charAt(0).toUpperCase() + wo.priority.slice(1) : 'Medium',
+    status:
+      wo.status === 'verified_closed' || wo.status === 'completed'
+        ? 'Completed'
+        : wo.status === 'in_progress' || wo.status === 'accepted' || wo.status === 'under_diagnosis'
+        ? 'In Progress'
+        : wo.status === 'submitted_verification'
+        ? 'Verification'
+        : 'Open',
+    assignedTo:
+      wo.assigned_technician?.full_name ||
+      wo.assigned_technician_name ||
+      wo.assignedTo ||
+      'Unassigned',
+    dueDate: wo.sla_deadline
+      ? new Date(wo.sla_deadline).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
+      : wo.dueDate || 'Standard SLA',
+  }));
 
   // Priority Badge Color
   const getPriorityBadge = (priority: string) => {
@@ -109,6 +86,7 @@ export const WorkOrdersQueueTable: React.FC<{ liveOrders?: any[] }> = ({ liveOrd
   const getStatusBadge = (status: string) => {
     switch (status?.toLowerCase()) {
       case 'open':
+      case 'assigned':
         return 'bg-amber-100 text-amber-900 border-amber-300';
       case 'in progress':
       case 'in_progress':
@@ -123,8 +101,20 @@ export const WorkOrdersQueueTable: React.FC<{ liveOrders?: any[] }> = ({ liveOrd
     }
   };
 
+  // Real Counts for Tabs
+  const allCount = orders.length;
+  const openCount = orders.filter((wo) => wo.status === 'Open').length;
+  const inProgressCount = orders.filter((wo) => wo.status === 'In Progress').length;
+  const completedCount = orders.filter((wo) => wo.status === 'Completed').length;
+  const overdueCount = rawOrders.filter(
+    (wo: any) =>
+      wo.sla_deadline &&
+      new Date(wo.sla_deadline) < new Date() &&
+      !['verified_closed', 'completed'].includes(wo.status)
+  ).length;
+
   // Filtered rows
-  const filteredOrders = mockWorkOrders.filter((wo) => {
+  const filteredOrders = orders.filter((wo) => {
     // Tab filter
     if (activeTab === 'OPEN' && wo.status !== 'Open') return false;
     if (activeTab === 'IN PROGRESS' && wo.status !== 'In Progress') return false;
@@ -170,11 +160,11 @@ export const WorkOrdersQueueTable: React.FC<{ liveOrders?: any[] }> = ({ liveOrd
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
           {(
             [
-              { key: 'ALL', label: 'All (68)' },
-              { key: 'OPEN', label: 'Open (24)' },
-              { key: 'IN PROGRESS', label: 'In Progress (20)' },
-              { key: 'COMPLETED', label: 'Completed (18)' },
-              { key: 'OVERDUE', label: 'Overdue (6)' },
+              { key: 'ALL', label: `All (${allCount})` },
+              { key: 'OPEN', label: `Open (${openCount})` },
+              { key: 'IN PROGRESS', label: `In Progress (${inProgressCount})` },
+              { key: 'COMPLETED', label: `Completed (${completedCount})` },
+              { key: 'OVERDUE', label: `Overdue (${overdueCount})` },
             ] as const
           ).map((tab) => {
             const isActive = activeTab === tab.key;
@@ -223,9 +213,15 @@ export const WorkOrdersQueueTable: React.FC<{ liveOrders?: any[] }> = ({ liveOrd
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-xs">
-            {filteredOrders.length === 0 ? (
+            {loading ? (
               <tr>
-                <td colSpan={8} className="py-6 text-center text-xs text-zinc-400 font-medium">
+                <td colSpan={8} className="py-8 text-center text-xs text-zinc-400 font-medium">
+                  Loading work orders queue...
+                </td>
+              </tr>
+            ) : filteredOrders.length === 0 ? (
+              <tr>
+                <td colSpan={8} className="py-8 text-center text-xs text-zinc-400 font-medium">
                   No work orders found matching the filter criteria.
                 </td>
               </tr>
@@ -272,7 +268,7 @@ export const WorkOrdersQueueTable: React.FC<{ liveOrders?: any[] }> = ({ liveOrd
                   </td>
                   <td className="py-3 text-right">
                     <Link
-                      to={`/work-orders`}
+                      to={`/work-orders/${wo.id}`}
                       className="inline-flex items-center justify-center p-1.5 text-zinc-400 hover:text-black hover:bg-slate-100 rounded-lg transition"
                       title="View Details"
                     >
@@ -289,7 +285,8 @@ export const WorkOrdersQueueTable: React.FC<{ liveOrders?: any[] }> = ({ liveOrd
       {/* Footer count */}
       <div className="pt-3 mt-1 border-t border-slate-100 flex items-center justify-between text-xs text-zinc-500 font-medium">
         <span>
-          Showing <strong className="text-zinc-900">{filteredOrders.length}</strong> of 68 work orders
+          Showing <strong className="text-zinc-900">{filteredOrders.length}</strong> of{' '}
+          <strong className="text-zinc-900">{orders.length}</strong> work orders
         </span>
         <Link
           to="/work-orders"
