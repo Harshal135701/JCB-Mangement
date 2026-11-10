@@ -735,8 +735,8 @@ export async function getWorkOrdersService(
     // Technicians must only access work orders assigned to them
     params.push(user.id);
     conditions.push(`wo.assigned_technician_id = $${params.length}`);
-  } else if (user.role === 'manager') {
-    // Managers must be restricted to their authorized plant/shop (fail-closed)
+  } else if (user.role === 'manager' || user.role === 'store_manager') {
+    // Managers and Store Managers must be restricted to their authorized plant/shop (fail-closed)
     if (!user.plant_id) {
       throw new WorkOrderServiceError('Forbidden: Valid plant facility assignment required.', 403);
     }
@@ -953,7 +953,7 @@ export async function getWorkOrderDetailsService(
     if (wo.assigned_technician_id !== user.id) {
       throw new WorkOrderServiceError('You are only authorized to access work orders assigned to you.', 403);
     }
-  } else if (user.role === 'manager') {
+  } else if (user.role === 'manager' || user.role === 'store_manager') {
     if (!user.plant_id) {
       throw new WorkOrderServiceError('Forbidden: Valid plant facility assignment required.', 403);
     }

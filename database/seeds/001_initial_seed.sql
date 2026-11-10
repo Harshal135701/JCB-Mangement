@@ -1,7 +1,6 @@
 -- =====================================================================
--- JCB SMART CMMS SEED DATA (ALIGNED WITH FINAL 4-ROLE ARCHITECTURE)
--- 4 Core Roles: Admin, Manager, Operator, Technician
--- (Store & Purchase managed via Manager/Admin Functional Queues)
+-- JCB SMART CMMS SEED DATA (ALIGNED WITH ENTERPRISE 5-ROLE ARCHITECTURE)
+-- Core Roles: Admin, Manager, Store Manager, Operator, Technician
 -- =====================================================================
 
 -- 1. Plants
@@ -20,13 +19,14 @@ VALUES
   ('c0000000-0000-0000-0000-000000000003', 'b0000000-0000-0000-0000-000000000001', 'SHOP-CUT', 'Cutting & Blanking Shop', '300 laser & hydraulic cutting presses')
 ON CONFLICT (shop_code) DO NOTHING;
 
--- 3. Users (4 Core Roles)
+-- 3. Users (Core Roles including Store Manager)
 INSERT INTO users (id, employee_code, full_name, email, phone, role, plant_id, shop_id, department, designation, shift, skills_json, password_hash)
 VALUES 
   ('f0000000-0000-0000-0000-000000000001', 'EMP-ADM-001', 'Rajesh Admin', 'admin@jcb.com', '+91-9811000001', 'admin', 'b0000000-0000-0000-0000-000000000001', NULL, 'IT & Systems', 'Enterprise Administrator', 'General', '[]'::jsonb, '$2a$12$g1l6RDlhupTVLSasbUQk8ueD5vZNSlSFrkPFwu3GUnKjwcUYN2m4e'),
   ('f0000000-0000-0000-0000-000000000002', 'EMP-MGR-001', 'Vikas Verma', 'manager@jcb.com', '+91-9811000002', 'manager', 'b0000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Maintenance', 'Maintenance In-Charge', 'Shift A', '[]'::jsonb, '$2a$12$g1l6RDlhupTVLSasbUQk8ueD5vZNSlSFrkPFwu3GUnKjwcUYN2m4e'),
   ('f0000000-0000-0000-0000-000000000003', 'EMP-TCH-001', 'Sunil Yadav', 'technician@jcb.com', '+91-9811000003', 'technician', 'b0000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Electrical Maintenance', 'Senior Maintenance Tech', 'Shift A', '["Electrical", "PLC", "Hydraulic"]'::jsonb, '$2a$12$g1l6RDlhupTVLSasbUQk8ueD5vZNSlSFrkPFwu3GUnKjwcUYN2m4e'),
-  ('f0000000-0000-0000-0000-000000000004', 'EMP-OPR-001', 'Ramesh Chandra', 'operator@jcb.com', '+91-9811000004', 'operator', 'b0000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Production Operations', 'CNC Machine Operator', 'Shift A', '[]'::jsonb, '$2a$12$g1l6RDlhupTVLSasbUQk8ueD5vZNSlSFrkPFwu3GUnKjwcUYN2m4e')
+  ('f0000000-0000-0000-0000-000000000004', 'EMP-OPR-001', 'Ramesh Chandra', 'operator@jcb.com', '+91-9811000004', 'operator', 'b0000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000001', 'Production Operations', 'CNC Machine Operator', 'Shift A', '[]'::jsonb, '$2a$12$g1l6RDlhupTVLSasbUQk8ueD5vZNSlSFrkPFwu3GUnKjwcUYN2m4e'),
+  ('f0000000-0000-0000-0000-000000000005', 'EMP-STM-001', 'Ramesh Gupta', 'store@jcb.com', '+91-9811000005', 'store_manager', 'b0000000-0000-0000-0000-000000000001', NULL, 'Central Stores & Inventory', 'Store Manager', 'General', '["Inventory Control", "Material Handling", "Procurement"]'::jsonb, '$2a$12$g1l6RDlhupTVLSasbUQk8ueD5vZNSlSFrkPFwu3GUnKjwcUYN2m4e')
 ON CONFLICT (employee_code) DO NOTHING;
 
 -- 4. Machines
@@ -170,4 +170,3 @@ VALUES
     NOW()
   )
 ON CONFLICT (id) DO NOTHING;
-

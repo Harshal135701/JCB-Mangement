@@ -8,7 +8,7 @@ export const isUUID = (value: unknown): value is string =>
   typeof value === 'string' &&
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 
-export const VALID_ROLES = ['admin', 'manager', 'operator', 'technician'] as const;
+export const VALID_ROLES = ['admin', 'manager', 'store_manager', 'operator', 'technician'] as const;
 export type ValidRole = (typeof VALID_ROLES)[number];
 
 export const isNonEmptyString = (value: unknown): value is string =>

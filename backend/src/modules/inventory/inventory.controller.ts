@@ -4,7 +4,20 @@ import {
   reservePartForWorkOrderService,
   adjustStockService,
   InventoryError,
+  getStoreDashboardService,
+  getLowStockAlertsService,
+  createStockTransferService,
+  getStockTransfersService,
+  getStockTransferByIdService,
+  reportDamagedStockService,
+  getDamagedStockService,
+  updateDamagedStockDispositionService,
+  getInventoryTransactionsService,
+  getInventoryValuationReportService,
+  getInventoryMovementReportService,
+  getInventoryLevelsService,
 } from './inventory.service';
+import { AuthenticatedUser } from '../../middlewares/auth.middleware';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -37,7 +50,7 @@ export const searchParts = async (req: Request, res: Response, next: NextFunctio
       SELECT id, part_number, oem_part_number, name, description, category, subcategory,
              uom, warehouse_zone, bin_location, rack_number, shelf_number, bin_number,
              current_physical_stock, reserved_stock, quarantined_stock, available_stock,
-             min_reorder_level, max_stock_level, unit_cost, supplier_name, status,
+             min_reorder_level, max_stock_level, unit_cost, supplier_name, plant_id, status,
              created_at, updated_at
       FROM spare_parts
       WHERE status = 'active'
@@ -106,7 +119,7 @@ export const getSparePartById = async (req: Request, res: Response, next: NextFu
       `SELECT id, part_number, oem_part_number, name, description, category, subcategory,
               uom, warehouse_zone, bin_location, rack_number, shelf_number, bin_number,
               current_physical_stock, reserved_stock, quarantined_stock, available_stock,
-              min_reorder_level, max_stock_level, unit_cost, supplier_name, status,
+              min_reorder_level, max_stock_level, unit_cost, supplier_name, plant_id, status,
               created_at, updated_at
        FROM spare_parts
        WHERE id = $1`,
@@ -141,7 +154,7 @@ export const reservePartForWorkOrder = async (req: Request, res: Response, next:
       return;
     }
 
-    if (!['admin', 'manager', 'technician'].includes(user.role)) {
+    if (!['admin', 'manager', 'technician', 'store_manager'].includes(user.role)) {
       res.status(403).json({
         success: false,
         message: `Forbidden: Role '${user.role}' is not authorized to reserve inventory.`,
@@ -151,7 +164,6 @@ export const reservePartForWorkOrder = async (req: Request, res: Response, next:
 
     const { work_order_id, part_id, quantity } = req.body || {};
 
-    // Input Validation: Require valid work_order_id (UUID)
     if (!work_order_id || typeof work_order_id !== 'string' || !UUID_REGEX.test(work_order_id.trim())) {
       res.status(400).json({
         success: false,
@@ -160,7 +172,6 @@ export const reservePartForWorkOrder = async (req: Request, res: Response, next:
       return;
     }
 
-    // Input Validation: Require valid part_id (UUID)
     if (!part_id || typeof part_id !== 'string' || !UUID_REGEX.test(part_id.trim())) {
       res.status(400).json({
         success: false,
@@ -169,7 +180,6 @@ export const reservePartForWorkOrder = async (req: Request, res: Response, next:
       return;
     }
 
-    // Input Validation: Quantity must be a strictly positive integer
     let parsedQuantity: number;
     if (typeof quantity === 'number') {
       if (!Number.isInteger(quantity) || quantity <= 0 || !Number.isFinite(quantity)) {
@@ -197,7 +207,6 @@ export const reservePartForWorkOrder = async (req: Request, res: Response, next:
       return;
     }
 
-    // Execute reservation workflow inside single database transaction
     try {
       const result = await reservePartForWorkOrderService(
         {
@@ -243,12 +252,22 @@ export const reservePartForWorkOrder = async (req: Request, res: Response, next:
 };
 
 /**
- * Create a new spare part master record (Admin only).
+ * Create a new spare part master record (Admin and Store Manager).
  * Validates part_number, name, bin_location and numeric bounds.
  */
 export const createSparePart = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const user = req.user;
+    if (!user || !user.id) {
+      res.status(401).json({ success: false, message: 'Unauthorized: Authentication required.' });
+      return;
+    }
+
+    if (!['admin', 'store_manager'].includes(user.role)) {
+      res.status(403).json({ success: false, message: `Forbidden: Role '${user.role}' is not authorized to create spare parts.` });
+      return;
+    }
+
     const {
       part_number,
       oem_part_number,
@@ -264,6 +283,7 @@ export const createSparePart = async (req: Request, res: Response, next: NextFun
       max_stock_level = 100,
       unit_cost = 0,
       supplier_name,
+      plant_id,
     } = req.body;
 
     if (!part_number || typeof part_number !== 'string' || !part_number.trim()) {
@@ -281,6 +301,10 @@ export const createSparePart = async (req: Request, res: Response, next: NextFun
       return;
     }
 
+    const assignedPlantId = user.role !== 'admin'
+      ? (user.plant_id || plant_id || null)
+      : (plant_id || user.plant_id || null);
+
     const trimmedPartNo = part_number.trim();
     const trimmedName = name.trim();
     const trimmedBin = bin_location.trim();
@@ -293,8 +317,8 @@ export const createSparePart = async (req: Request, res: Response, next: NextFun
       `INSERT INTO spare_parts (
         part_number, oem_part_number, name, description, category, subcategory,
         uom, warehouse_zone, bin_location, current_physical_stock, min_reorder_level,
-        max_stock_level, unit_cost, supplier_name
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        max_stock_level, unit_cost, supplier_name, plant_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       RETURNING *`,
       [
         trimmedPartNo,
@@ -311,6 +335,7 @@ export const createSparePart = async (req: Request, res: Response, next: NextFun
         maxStockNum,
         unitCostNum,
         supplier_name ? String(supplier_name).trim() : 'JCB Genuine Parts',
+        assignedPlantId,
       ]
     );
 
@@ -346,16 +371,40 @@ export const createSparePart = async (req: Request, res: Response, next: NextFun
 };
 
 /**
- * Update spare part metadata (Admin only).
+ * Update spare part metadata (Admin and Store Manager).
  * Note: Physical stock, reserved stock, quarantined stock and available stock
  * CANNOT be updated through this endpoint; stock changes must use /adjust or /reserve.
  */
 export const updateSparePart = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const user = req.user;
+    if (!user || !user.id) {
+      res.status(401).json({ success: false, message: 'Unauthorized: Authentication required.' });
+      return;
+    }
+
+    if (!['admin', 'store_manager'].includes(user.role)) {
+      res.status(403).json({ success: false, message: `Forbidden: Role '${user.role}' is not authorized to update spare parts.` });
+      return;
+    }
+
     const { id } = req.params;
     if (!id || !UUID_REGEX.test(id)) {
       res.status(400).json({ success: false, message: 'Invalid part ID format. UUID is required.' });
       return;
+    }
+
+    // Plant isolation check for store manager
+    if (user.role !== 'admin' && user.plant_id) {
+      const partCheck = await query('SELECT id, plant_id FROM spare_parts WHERE id = $1', [id]);
+      if (partCheck.rows.length === 0) {
+        res.status(404).json({ success: false, message: 'Spare part not found.' });
+        return;
+      }
+      if (partCheck.rows[0].plant_id && partCheck.rows[0].plant_id !== user.plant_id) {
+        res.status(403).json({ success: false, message: 'Forbidden: Cannot update spare parts assigned to another plant.' });
+        return;
+      }
     }
 
     const {
@@ -396,7 +445,7 @@ export const updateSparePart = async (req: Request, res: Response, next: NextFun
        RETURNING id, part_number, oem_part_number, name, description, category, subcategory,
                  uom, warehouse_zone, bin_location, rack_number, shelf_number, bin_number,
                  current_physical_stock, reserved_stock, quarantined_stock, available_stock,
-                 min_reorder_level, max_stock_level, unit_cost, supplier_name, status, updated_at`,
+                 min_reorder_level, max_stock_level, unit_cost, supplier_name, plant_id, status, updated_at`,
       [
         name ? String(name).trim() : null,
         oem_part_number !== undefined ? (oem_part_number ? String(oem_part_number).trim() : null) : null,
@@ -430,24 +479,41 @@ export const updateSparePart = async (req: Request, res: Response, next: NextFun
 };
 
 /**
- * Delete or soft-delete spare part (Admin only).
+ * Delete or soft-delete spare part (Admin and Store Manager).
  * If the part has historical transactions, consumed records, or active stock,
  * it is safely transitioned to 'inactive' to maintain referential integrity.
  */
 export const deleteSparePart = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const user = req.user;
+    if (!user || !user.id) {
+      res.status(401).json({ success: false, message: 'Unauthorized: Authentication required.' });
+      return;
+    }
+
+    if (!['admin', 'store_manager'].includes(user.role)) {
+      res.status(403).json({ success: false, message: `Forbidden: Role '${user.role}' is not authorized to delete spare parts.` });
+      return;
+    }
+
     const { id } = req.params;
     if (!id || !UUID_REGEX.test(id)) {
       res.status(400).json({ success: false, message: 'Invalid part ID format. UUID is required.' });
       return;
     }
 
-    const partRes = await query('SELECT id, part_number, current_physical_stock, reserved_stock, quarantined_stock FROM spare_parts WHERE id = $1', [id]);
+    const partRes = await query('SELECT id, part_number, plant_id, current_physical_stock, reserved_stock, quarantined_stock FROM spare_parts WHERE id = $1', [id]);
     if (partRes.rows.length === 0) {
       res.status(404).json({ success: false, message: 'Spare part not found.' });
       return;
     }
     const part = partRes.rows[0];
+
+    // Plant isolation check for store manager
+    if (user.role !== 'admin' && user.plant_id && part.plant_id && part.plant_id !== user.plant_id) {
+      res.status(403).json({ success: false, message: 'Forbidden: Cannot delete spare parts assigned to another plant.' });
+      return;
+    }
 
     // Check historical usage in work orders
     const checkUsage = await query('SELECT count(*) FROM wo_parts_consumed WHERE part_id = $1', [id]);
@@ -500,7 +566,7 @@ export const deleteSparePart = async (req: Request, res: Response, next: NextFun
 };
 
 /**
- * Adjust physical stock quantity (+ or -) with mandatory audit reason (Admin or Manager).
+ * Adjust physical stock quantity (+ or -) with mandatory audit reason (Admin, Manager, Store Manager).
  * Uses transactional row-locking and writes to immutable inventory_transactions ledger.
  */
 export const adjustStock = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -511,7 +577,7 @@ export const adjustStock = async (req: Request, res: Response, next: NextFunctio
       return;
     }
 
-    if (!['admin', 'manager'].includes(user.role)) {
+    if (!['admin', 'manager', 'store_manager'].includes(user.role)) {
       res.status(403).json({ success: false, message: `Forbidden: Role '${user.role}' is not authorized to adjust stock.` });
       return;
     }
@@ -561,6 +627,214 @@ export const adjustStock = async (req: Request, res: Response, next: NextFunctio
       throw serviceErr;
     }
   } catch (err) {
+    next(err);
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Store Manager Extended Handlers
+// ---------------------------------------------------------------------------
+
+/**
+ * GET /dashboard - Store Dashboard Summary KPIs & Status
+ */
+export const getStoreDashboard = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const data = await getStoreDashboardService(req.user as AuthenticatedUser);
+    res.json({ success: true, data });
+  } catch (err: any) {
+    if (err instanceof InventoryError) {
+      res.status(err.statusCode).json({ success: false, message: err.message });
+      return;
+    }
+    next(err);
+  }
+};
+
+/**
+ * GET /alerts/low-stock - Low-stock alerts and reorder recommendations
+ */
+export const getLowStockAlerts = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const result = await getLowStockAlertsService(req.query as any, req.user as AuthenticatedUser);
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    if (err instanceof InventoryError) {
+      res.status(err.statusCode).json({ success: false, message: err.message });
+      return;
+    }
+    next(err);
+  }
+};
+
+/**
+ * GET /levels - Filtered inventory stock levels and health statuses
+ */
+export const getInventoryLevels = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const result = await getInventoryLevelsService(req.query as any, req.user as AuthenticatedUser);
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    if (err instanceof InventoryError) {
+      res.status(err.statusCode).json({ success: false, message: err.message });
+      return;
+    }
+    next(err);
+  }
+};
+
+/**
+ * GET /transactions - Immutable inventory transaction ledger audit history
+ */
+export const getInventoryTransactions = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const result = await getInventoryTransactionsService(req.query as any, req.user as AuthenticatedUser);
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    if (err instanceof InventoryError) {
+      res.status(err.statusCode).json({ success: false, message: err.message });
+      return;
+    }
+    next(err);
+  }
+};
+
+/**
+ * POST /transfers - Create and execute stock transfer (intra-plant or inter-plant)
+ */
+export const createStockTransfer = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const result = await createStockTransferService(req.body, req.user as AuthenticatedUser);
+    res.status(201).json({
+      success: true,
+      message: `Stock transfer ${result.transfer_number} processed successfully.`,
+      data: result,
+    });
+  } catch (err: any) {
+    if (err instanceof InventoryError) {
+      res.status(err.statusCode).json({ success: false, message: err.message });
+      return;
+    }
+    next(err);
+  }
+};
+
+/**
+ * GET /transfers - List stock transfers with pagination & filters
+ */
+export const getStockTransfers = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const result = await getStockTransfersService(req.query as any, req.user as AuthenticatedUser);
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    if (err instanceof InventoryError) {
+      res.status(err.statusCode).json({ success: false, message: err.message });
+      return;
+    }
+    next(err);
+  }
+};
+
+/**
+ * GET /transfers/:id - Retrieve details of single stock transfer
+ */
+export const getStockTransferById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const data = await getStockTransferByIdService(req.params.id, req.user as AuthenticatedUser);
+    res.json({ success: true, data });
+  } catch (err: any) {
+    if (err instanceof InventoryError) {
+      res.status(err.statusCode).json({ success: false, message: err.message });
+      return;
+    }
+    next(err);
+  }
+};
+
+/**
+ * POST /damaged - Quarantine and report damaged or expired stock
+ */
+export const reportDamagedStock = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const result = await reportDamagedStockService(req.body, req.user as AuthenticatedUser);
+    res.status(201).json({
+      success: true,
+      message: `Damaged stock report ${result.report_number} created and parts moved to quarantine.`,
+      data: result,
+    });
+  } catch (err: any) {
+    if (err instanceof InventoryError) {
+      res.status(err.statusCode).json({ success: false, message: err.message });
+      return;
+    }
+    next(err);
+  }
+};
+
+/**
+ * GET /damaged - List damaged & quarantined stock items
+ */
+export const getDamagedStock = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const result = await getDamagedStockService(req.query as any, req.user as AuthenticatedUser);
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    if (err instanceof InventoryError) {
+      res.status(err.statusCode).json({ success: false, message: err.message });
+      return;
+    }
+    next(err);
+  }
+};
+
+/**
+ * PATCH /damaged/:id/disposition - Resolve damaged stock quarantine disposition (scrapped, returned_to_vendor, repaired_restocked)
+ */
+export const updateDamagedStockDisposition = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const result = await updateDamagedStockDispositionService(req.params.id, req.body, req.user as AuthenticatedUser);
+    res.json({
+      success: true,
+      message: `Damaged stock disposition updated to '${result.disposition}'.`,
+      data: result,
+    });
+  } catch (err: any) {
+    if (err instanceof InventoryError) {
+      res.status(err.statusCode).json({ success: false, message: err.message });
+      return;
+    }
+    next(err);
+  }
+};
+
+/**
+ * GET /reports/valuation - Inventory total and category-wise valuation report
+ */
+export const getInventoryValuationReport = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const data = await getInventoryValuationReportService(req.user as AuthenticatedUser);
+    res.json({ success: true, data });
+  } catch (err: any) {
+    if (err instanceof InventoryError) {
+      res.status(err.statusCode).json({ success: false, message: err.message });
+      return;
+    }
+    next(err);
+  }
+};
+
+/**
+ * GET /reports/movement - Inventory stock intake, consumption, transfer and scrap movement trends
+ */
+export const getInventoryMovementReport = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const result = await getInventoryMovementReportService(req.query as any, req.user as AuthenticatedUser);
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    if (err instanceof InventoryError) {
+      res.status(err.statusCode).json({ success: false, message: err.message });
+      return;
+    }
     next(err);
   }
 };

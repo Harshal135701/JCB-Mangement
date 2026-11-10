@@ -6,7 +6,7 @@ import { requireRoles } from '../../middlewares/rbac.middleware';
 const router = Router();
 
 router.use(authenticateJWT);
-router.use(requireRoles('admin', 'manager'));
+router.use(requireRoles('admin', 'manager', 'store_manager'));
 
 router.get('/', getAuditLogs);
 

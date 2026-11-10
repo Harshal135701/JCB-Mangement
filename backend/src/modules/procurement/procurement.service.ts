@@ -184,14 +184,14 @@ export function validateProcurementRole(user?: AuthenticatedUser): void {
   if (user.role === 'operator') {
     throw new ProcurementServiceError('Forbidden: Operators are not authorized to perform procurement operations.', 403);
   }
-  if (!['admin', 'manager', 'technician'].includes(user.role)) {
+  if (!['admin', 'manager', 'technician', 'store_manager'].includes(user.role)) {
     throw new ProcurementServiceError(`Forbidden: Role '${user.role}' is not authorized for procurement.`, 403);
   }
 }
 
 export function validateManagerOrAdmin(user?: AuthenticatedUser, action: string = 'this operation'): void {
   validateProcurementRole(user);
-  if (user?.role !== 'admin' && user?.role !== 'manager') {
+  if (user?.role !== 'admin' && user?.role !== 'manager' && user?.role !== 'store_manager') {
     throw new ProcurementServiceError(`Forbidden: Only managers and administrators can perform ${action}.`, 403);
   }
 }
@@ -646,7 +646,7 @@ export async function getPurchaseRequisitionsService(
   if (user.role === 'technician') {
     params.push(user.id);
     baseQuery += ` AND (pr.requested_by = $${params.length} OR wo.assigned_technician_id = $${params.length})`;
-  } else if (user.role === 'manager') {
+  } else if (user.role === 'manager' || user.role === 'store_manager') {
     const authorizedPlantId = getAuthorizedPlantId(user);
     params.push(authorizedPlantId);
     baseQuery += ` AND (pr.plant_id = $${params.length} OR s.plant_id = $${params.length})`;
@@ -819,7 +819,7 @@ export async function getPurchaseRequisitionDetailsService(
     if (pr.requested_by !== user.id && pr.assigned_technician_id !== user.id) {
       throw new ProcurementServiceError('Forbidden: Technicians can only view their own purchase requisitions.', 403);
     }
-  } else if (user.role === 'manager') {
+  } else if (user.role === 'manager' || user.role === 'store_manager') {
     const authorizedPlantId = getAuthorizedPlantId(user);
     if (pr.plant_id && pr.plant_id !== authorizedPlantId) {
       throw new ProcurementServiceError('Forbidden: Cannot view purchase requisition from a different plant.', 403);
@@ -910,7 +910,7 @@ export async function updatePRStatusService(
     const effectivePlantId = currentPR.plant_id || currentPR.shop_plant_id;
 
     // Plant scope check for manager
-    if (user.role === 'manager') {
+    if (user.role === 'manager' || user.role === 'store_manager') {
       const authorizedPlantId = getAuthorizedPlantId(user);
       if (effectivePlantId && authorizedPlantId !== effectivePlantId) {
         throw new ProcurementServiceError('Forbidden: Cannot update purchase requisition for another plant.', 403);
@@ -1116,7 +1116,7 @@ export async function rejectPurchaseRequisitionService(
     const pr = selectRes.rows[0];
     const effectivePlantId = pr.plant_id || pr.shop_plant_id;
 
-    if (user.role === 'manager') {
+    if (user.role === 'manager' || user.role === 'store_manager') {
       const authorizedPlantId = getAuthorizedPlantId(user);
       if (effectivePlantId && authorizedPlantId !== effectivePlantId) {
         throw new ProcurementServiceError('Forbidden: Cannot reject purchase requisition for another plant.', 403);
@@ -1236,7 +1236,7 @@ export async function cancelPurchaseRequisitionService(
     const pr = selectRes.rows[0];
     const effectivePlantId = pr.plant_id || pr.shop_plant_id;
 
-    if (user.role === 'manager') {
+    if (user.role === 'manager' || user.role === 'store_manager') {
       const authorizedPlantId = getAuthorizedPlantId(user);
       if (effectivePlantId && authorizedPlantId !== effectivePlantId) {
         throw new ProcurementServiceError('Forbidden: Cannot cancel purchase requisition for another plant.', 403);
@@ -1373,7 +1373,7 @@ export async function createPurchaseOrderService(
     const effectivePlantId = pr.plant_id || pr.shop_plant_id;
 
     // Manager plant scope check
-    if (user.role === 'manager') {
+    if (user.role === 'manager' || user.role === 'store_manager') {
       const authorizedPlantId = getAuthorizedPlantId(user);
       if (effectivePlantId && authorizedPlantId !== effectivePlantId) {
         throw new ProcurementServiceError('Forbidden: Cannot issue PO for a requisition belonging to another plant.', 403);
@@ -1541,7 +1541,7 @@ export async function getPurchaseOrdersService(
   if (user.role === 'technician') {
     params.push(user.id);
     baseQuery += ` AND pr.requested_by = $${params.length}`;
-  } else if (user.role === 'manager') {
+  } else if (user.role === 'manager' || user.role === 'store_manager') {
     const authorizedPlantId = getAuthorizedPlantId(user);
     params.push(authorizedPlantId);
     baseQuery += ` AND (pr.plant_id = $${params.length} OR s.plant_id = $${params.length})`;
@@ -1687,7 +1687,7 @@ export async function processGRNInwardService(
     const effectivePlantId = pr.plant_id || pr.shop_plant_id;
 
     // Manager plant scope check
-    if (user.role === 'manager') {
+    if (user.role === 'manager' || user.role === 'store_manager') {
       const authorizedPlantId = getAuthorizedPlantId(user);
       if (effectivePlantId && authorizedPlantId !== effectivePlantId) {
         throw new ProcurementServiceError('Forbidden: Cannot process GRN for a requisition from another plant.', 403);
@@ -1935,7 +1935,7 @@ export async function getVendorsService(user: AuthenticatedUser): Promise<any[]>
 
   let prPlantFilter = '';
   const params: any[] = [];
-  if (user.role === 'manager') {
+  if (user.role === 'manager' || user.role === 'store_manager') {
     const authorizedPlantId = getAuthorizedPlantId(user);
     params.push(authorizedPlantId);
     prPlantFilter = `WHERE (pr.plant_id = $1 OR s.plant_id = $1)`;
@@ -2015,7 +2015,7 @@ export async function getProcurementDashboardService(user: AuthenticatedUser): P
 
   let scopeClause = '';
   const params: any[] = [];
-  if (user.role === 'manager') {
+  if (user.role === 'manager' || user.role === 'store_manager') {
     const authorizedPlantId = getAuthorizedPlantId(user);
     params.push(authorizedPlantId);
     scopeClause = ` AND (pr.plant_id = $${params.length} OR s.plant_id = $${params.length})`;
@@ -2139,4 +2139,133 @@ export async function getProcurementDashboardService(user: AuthenticatedUser): P
     }, {}),
     recent_activity: recentRes.rows,
   };
+}
+
+// ---------------------------------------------------------------------------
+// 13. Vendor Master Management Services
+// ---------------------------------------------------------------------------
+export interface CreateVendorInput {
+  vendor_code: string;
+  name: string;
+  contact_person?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  gstin?: string;
+  payment_terms?: string;
+  plant_id?: string;
+}
+
+export interface UpdateVendorInput {
+  name?: string;
+  contact_person?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  gstin?: string;
+  payment_terms?: string;
+  status?: string;
+}
+
+export async function createVendorService(
+  input: CreateVendorInput,
+  user: AuthenticatedUser
+): Promise<any> {
+  validateManagerOrAdmin(user, 'registering new vendor');
+  const { query } = getProcurementServiceDb();
+
+  if (!input.vendor_code || !input.vendor_code.trim()) {
+    throw new ProcurementServiceError('vendor_code is required.', 400);
+  }
+  if (!input.name || !input.name.trim()) {
+    throw new ProcurementServiceError('Vendor name is required.', 400);
+  }
+
+  const plantId = input.plant_id || user.plant_id || null;
+
+  try {
+    const res = await query(
+      `INSERT INTO vendors (
+        vendor_code, name, contact_person, email, phone, address, gstin, payment_terms, status, plant_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'active', $9)
+      RETURNING *`,
+      [
+        input.vendor_code.trim().toUpperCase(),
+        input.name.trim(),
+        input.contact_person ? input.contact_person.trim() : null,
+        input.email ? input.email.trim() : null,
+        input.phone ? input.phone.trim() : null,
+        input.address ? input.address.trim() : null,
+        input.gstin ? input.gstin.trim() : null,
+        input.payment_terms ? input.payment_terms.trim() : 'Net 30',
+        plantId,
+      ]
+    );
+    return res.rows[0];
+  } catch (err: any) {
+    if (err.code === '23505') {
+      throw new ProcurementServiceError(`Vendor code '${input.vendor_code}' already exists.`, 409);
+    }
+    throw err;
+  }
+}
+
+export async function updateVendorService(
+  id: string,
+  input: UpdateVendorInput,
+  user: AuthenticatedUser
+): Promise<any> {
+  validateManagerOrAdmin(user, 'updating vendor details');
+  const { query } = getProcurementServiceDb();
+
+  if (!id || !UUID_REGEX.test(id)) {
+    throw new ProcurementServiceError('Invalid vendor ID format.', 400);
+  }
+
+  const res = await query(
+    `UPDATE vendors
+     SET name = COALESCE($1, name),
+         contact_person = COALESCE($2, contact_person),
+         email = COALESCE($3, email),
+         phone = COALESCE($4, phone),
+         address = COALESCE($5, address),
+         gstin = COALESCE($6, gstin),
+         payment_terms = COALESCE($7, payment_terms),
+         status = COALESCE($8, status),
+         updated_at = NOW()
+     WHERE id = $9
+     RETURNING *`,
+    [
+      input.name ? input.name.trim() : null,
+      input.contact_person ? input.contact_person.trim() : null,
+      input.email ? input.email.trim() : null,
+      input.phone ? input.phone.trim() : null,
+      input.address ? input.address.trim() : null,
+      input.gstin ? input.gstin.trim() : null,
+      input.payment_terms ? input.payment_terms.trim() : null,
+      input.status ? input.status.trim().toLowerCase() : null,
+      id,
+    ]
+  );
+
+  if (res.rows.length === 0) {
+    throw new ProcurementServiceError('Vendor not found.', 404);
+  }
+
+  return res.rows[0];
+}
+
+export async function getVendorByIdService(id: string, user: AuthenticatedUser): Promise<any> {
+  validateManagerOrAdmin(user, 'viewing vendor details');
+  const { query } = getProcurementServiceDb();
+
+  if (!id || !UUID_REGEX.test(id)) {
+    throw new ProcurementServiceError('Invalid vendor ID format.', 400);
+  }
+
+  const res = await query('SELECT * FROM vendors WHERE id = $1', [id]);
+  if (res.rows.length === 0) {
+    throw new ProcurementServiceError('Vendor not found.', 404);
+  }
+  return res.rows[0];
 }

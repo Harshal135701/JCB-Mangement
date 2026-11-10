@@ -12,6 +12,9 @@ import {
   processGRNInwardService,
   getVendorsService,
   getProcurementDashboardService,
+  createVendorService,
+  updateVendorService,
+  getVendorByIdService,
   ProcurementServiceError,
   setProcurementServiceDb,
   resetProcurementServiceDb,
@@ -529,6 +532,131 @@ export const getProcurementDashboard = async (
     res.json({
       success: true,
       data: metrics,
+    });
+  } catch (err) {
+    handleControllerError(err, res, next);
+  }
+};
+
+// ---------------------------------------------------------------------------
+// 14. Vendor Master CRUD Controllers
+// ---------------------------------------------------------------------------
+export const createVendor = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user || !user.id) {
+      res.status(401).json({ success: false, message: 'Unauthorized: Authentication required.' });
+      return;
+    }
+
+    const {
+      vendor_code,
+      name,
+      contact_person,
+      email,
+      phone,
+      address,
+      gstin,
+      payment_terms,
+      plant_id,
+    } = req.body || {};
+
+    const vendor = await createVendorService(
+      {
+        vendor_code,
+        name,
+        contact_person,
+        email,
+        phone,
+        address,
+        gstin,
+        payment_terms,
+        plant_id,
+      },
+      user
+    );
+
+    res.status(201).json({
+      success: true,
+      message: `Vendor ${vendor.name} registered successfully.`,
+      data: vendor,
+    });
+  } catch (err) {
+    handleControllerError(err, res, next);
+  }
+};
+
+export const updateVendor = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user || !user.id) {
+      res.status(401).json({ success: false, message: 'Unauthorized: Authentication required.' });
+      return;
+    }
+
+    const { id } = req.params;
+    const {
+      name,
+      contact_person,
+      email,
+      phone,
+      address,
+      gstin,
+      payment_terms,
+      status,
+    } = req.body || {};
+
+    const updated = await updateVendorService(
+      id,
+      {
+        name,
+        contact_person,
+        email,
+        phone,
+        address,
+        gstin,
+        payment_terms,
+        status,
+      },
+      user
+    );
+
+    res.json({
+      success: true,
+      message: `Vendor ${updated.name} updated successfully.`,
+      data: updated,
+    });
+  } catch (err) {
+    handleControllerError(err, res, next);
+  }
+};
+
+export const getVendorById = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user || !user.id) {
+      res.status(401).json({ success: false, message: 'Unauthorized: Authentication required.' });
+      return;
+    }
+
+    const { id } = req.params;
+    const vendor = await getVendorByIdService(id, user);
+
+    res.json({
+      success: true,
+      data: vendor,
     });
   } catch (err) {
     handleControllerError(err, res, next);
