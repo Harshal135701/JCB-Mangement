@@ -16,7 +16,9 @@ import {
   AlertCircle,
   Phone,
   Mail,
-  Clock
+  Clock,
+  Boxes,
+  Package
 } from 'lucide-react';
 
 export const UserManagementPage: React.FC = () => {
@@ -68,15 +70,15 @@ export const UserManagementPage: React.FC = () => {
 
   const openCreateModal = (presetRole: string = 'technician') => {
     setEditingUser(null);
-    const prefix = presetRole === 'technician' ? 'TCH' : presetRole === 'operator' ? 'OPR' : presetRole === 'manager' ? 'MGR' : 'ADM';
+    const prefix = presetRole === 'technician' ? 'TCH' : presetRole === 'operator' ? 'OPR' : presetRole === 'manager' ? 'MGR' : presetRole === 'store_manager' ? 'STR' : 'ADM';
     setFormData({
       employee_code: `JCB-${prefix}-${Math.floor(100 + Math.random() * 900)}`,
       full_name: '',
       email: '',
       phone: '',
       role: presetRole,
-      department: presetRole === 'operator' ? 'Production Operations' : 'Mechanical Maintenance',
-      designation: presetRole === 'technician' ? 'Maintenance Technician' : presetRole === 'operator' ? 'CNC Line Operator' : 'Maintenance Engineer',
+      department: presetRole === 'operator' ? 'Production Operations' : presetRole === 'store_manager' ? 'Central Stores & Inventory' : 'Mechanical Maintenance',
+      designation: presetRole === 'technician' ? 'Maintenance Technician' : presetRole === 'operator' ? 'CNC Line Operator' : presetRole === 'store_manager' ? 'Store Manager' : 'Maintenance Engineer',
       shift: 'Shift A',
       password: 'password123',
       is_active: true,
@@ -167,6 +169,7 @@ export const UserManagementPage: React.FC = () => {
   const techCount = usersList.filter(u => u.role === 'technician').length;
   const oprCount = usersList.filter(u => u.role === 'operator').length;
   const mgrCount = usersList.filter(u => u.role === 'manager').length;
+  const storeMgrCount = usersList.filter(u => u.role === 'store_manager').length;
 
   return (
     <div className="space-y-6 bg-white min-h-full">
@@ -180,32 +183,39 @@ export const UserManagementPage: React.FC = () => {
             </span>
           </div>
           <p className="text-xs text-zinc-500 font-medium mt-1">
-            Manage field maintenance technicians, machine operators, shift supervisors, and engineering staff across JCB manufacturing facilities.
+            Manage field maintenance technicians, machine operators, shift supervisors, store managers, and engineering staff across JCB manufacturing facilities.
           </p>
         </div>
 
         {isAdmin && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={() => openCreateModal('technician')}
-              className="bg-jcb-yellow hover:bg-jcb-yellowDark text-black text-xs font-black px-4 py-2.5 rounded-xl shadow transition-all flex items-center gap-2 border border-amber-500"
+              className="bg-jcb-yellow hover:bg-jcb-yellowDark text-black text-xs font-black px-3.5 py-2.5 rounded-xl shadow transition-all flex items-center gap-1.5 border border-amber-500"
             >
               <UserPlus className="w-4 h-4" />
               <span>ENROLL TECHNICIAN</span>
             </button>
             <button
               onClick={() => openCreateModal('operator')}
-              className="bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-black px-4 py-2.5 rounded-xl shadow transition-all flex items-center gap-2"
+              className="bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-black px-3.5 py-2.5 rounded-xl shadow transition-all flex items-center gap-1.5"
             >
               <HardHat className="w-4 h-4" />
               <span>ENROLL OPERATOR</span>
+            </button>
+            <button
+              onClick={() => openCreateModal('store_manager')}
+              className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-black px-3.5 py-2.5 rounded-xl shadow transition-all flex items-center gap-1.5"
+            >
+              <Boxes className="w-4 h-4" />
+              <span>ENROLL STORE MGR</span>
             </button>
           </div>
         )}
       </div>
 
       {/* Metrics Bar */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <div className="p-4 bg-white rounded-xl border-2 border-zinc-200 shadow-sm">
           <div className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Total Personnel</div>
           <div className="text-2xl font-black text-zinc-950 mt-1">{usersList.length}</div>
@@ -218,9 +228,13 @@ export const UserManagementPage: React.FC = () => {
           <div className="text-xs font-bold text-blue-700 uppercase tracking-wider">Machine Operators</div>
           <div className="text-2xl font-black text-zinc-950 mt-1">{oprCount}</div>
         </div>
-        <div className="p-4 bg-white rounded-xl border-2 border-zinc-200 shadow-sm">
-          <div className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Maintenance Managers</div>
+        <div className="p-4 bg-white rounded-xl border-2 border-purple-200 bg-purple-50/20 shadow-sm">
+          <div className="text-xs font-bold text-purple-800 uppercase tracking-wider">Maintenance Managers</div>
           <div className="text-2xl font-black text-zinc-950 mt-1">{mgrCount}</div>
+        </div>
+        <div className="p-4 bg-white rounded-xl border-2 border-emerald-300 bg-emerald-50/20 shadow-sm">
+          <div className="text-xs font-bold text-emerald-800 uppercase tracking-wider">Store Managers</div>
+          <div className="text-2xl font-black text-emerald-950 mt-1">{storeMgrCount}</div>
         </div>
       </div>
 
@@ -237,8 +251,8 @@ export const UserManagementPage: React.FC = () => {
           />
         </div>
 
-        <div className="flex items-center gap-2">
-          {['all', 'technician', 'operator', 'manager', 'admin'].map((role) => (
+        <div className="flex items-center gap-2 flex-wrap">
+          {['all', 'technician', 'operator', 'manager', 'store_manager', 'admin'].map((role) => (
             <button
               key={role}
               onClick={() => setSelectedRole(role)}
@@ -248,7 +262,7 @@ export const UserManagementPage: React.FC = () => {
                   : 'bg-white border-2 border-zinc-200 text-zinc-700 hover:bg-zinc-50'
               }`}
             >
-              {role === 'all' ? 'All Roles' : role}
+              {role === 'all' ? 'All Roles' : role.replace('_', ' ')}
             </button>
           ))}
         </div>
@@ -287,6 +301,7 @@ export const UserManagementPage: React.FC = () => {
                   const isTech = u.role === 'technician';
                   const isOpr = u.role === 'operator';
                   const isMgr = u.role === 'manager';
+                  const isStore = u.role === 'store_manager';
                   const isAdm = u.role === 'admin';
 
                   return (
@@ -303,13 +318,16 @@ export const UserManagementPage: React.FC = () => {
                             ? 'bg-blue-100 text-blue-900 border border-blue-200'
                             : isMgr
                             ? 'bg-purple-100 text-purple-900 border border-purple-200'
+                            : isStore
+                            ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
                             : 'bg-zinc-900 text-white'
                         }`}>
                           {isTech && <Wrench className="w-3 h-3" />}
                           {isOpr && <HardHat className="w-3 h-3" />}
                           {isMgr && <Briefcase className="w-3 h-3" />}
+                          {isStore && <Boxes className="w-3 h-3" />}
                           {isAdm && <Shield className="w-3 h-3" />}
-                          <span>{u.role}</span>
+                          <span>{u.role.replace('_', ' ')}</span>
                         </span>
                       </td>
                       <td className="px-6 py-3.5">
@@ -472,6 +490,7 @@ export const UserManagementPage: React.FC = () => {
                     <option value="technician">Field Maintenance Technician</option>
                     <option value="operator">Machine Operator</option>
                     <option value="manager">Maintenance Manager / In-Charge</option>
+                    <option value="store_manager">Store Manager / Inventory In-Charge</option>
                     <option value="admin">Enterprise Administrator</option>
                   </select>
                 </div>
@@ -484,6 +503,7 @@ export const UserManagementPage: React.FC = () => {
                     onChange={(e) => setFormData({ ...formData, department: e.target.value })}
                     className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
                   >
+                    <option value="Central Stores & Inventory">Central Stores & Inventory</option>
                     <option value="Mechanical Maintenance">Mechanical Maintenance</option>
                     <option value="Electrical & PLC Automation">Electrical & PLC Automation</option>
                     <option value="Hydraulics & Tooling">Hydraulics & Tooling</option>

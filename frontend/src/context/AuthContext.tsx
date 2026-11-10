@@ -5,7 +5,7 @@ import apiClient, {
   clearStoredAuth,
 } from '../api/client';
 
-export type UserRole = 'admin' | 'manager' | 'technician' | 'operator';
+export type UserRole = 'admin' | 'manager' | 'technician' | 'operator' | 'store_manager';
 
 export interface User {
   id: string;
@@ -33,6 +33,8 @@ export const getRoleHomeRoute = (role?: string): string => {
       return '/technician/dashboard';
     case 'operator':
       return '/operator/dashboard';
+    case 'store_manager':
+      return '/store/dashboard';
     default:
       // Never silently fall back to manager or other privileged roles
       return '/login';

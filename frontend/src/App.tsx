@@ -12,6 +12,7 @@ import { LiveShopFloorDashboard } from './modules/manager/LiveShopFloorDashboard
 import { TechnicianDashboard } from './modules/technician/TechnicianDashboard';
 import { OperatorDashboard } from './modules/operator/OperatorDashboard';
 import { AdminDashboard } from './modules/admin/AdminDashboard';
+import { StoreManagerDashboard } from './modules/store/StoreManagerDashboard';
 
 // Module Pages
 import { TriageQueuePage } from './modules/breakdowns/TriageQueuePage';
@@ -88,6 +89,16 @@ export default function App() {
                 }
               />
 
+              {/* Store Manager Dashboard */}
+              <Route
+                path="/store/dashboard"
+                element={
+                  <RoleGuard allowedRoles={['store_manager', 'admin']}>
+                    <StoreManagerDashboard />
+                  </RoleGuard>
+                }
+              />
+
               {/* Manager & Admin Modules */}
               <Route
                 path="/triage"
@@ -102,7 +113,7 @@ export default function App() {
               <Route
                 path="/work-orders"
                 element={
-                  <RoleGuard allowedRoles={['admin', 'manager', 'technician']}>
+                  <RoleGuard allowedRoles={['admin', 'manager', 'technician', 'store_manager']}>
                     <WorkOrderListPage />
                   </RoleGuard>
                 }
@@ -110,7 +121,7 @@ export default function App() {
               <Route
                 path="/work-orders/:id"
                 element={
-                  <RoleGuard allowedRoles={['admin', 'manager', 'technician']}>
+                  <RoleGuard allowedRoles={['admin', 'manager', 'technician', 'store_manager']}>
                     <WorkOrderDetailPage />
                   </RoleGuard>
                 }
@@ -118,7 +129,7 @@ export default function App() {
               <Route
                 path="/procurement"
                 element={
-                  <RoleGuard allowedRoles={['manager', 'admin', 'technician']}>
+                  <RoleGuard allowedRoles={['manager', 'admin', 'technician', 'store_manager']}>
                     <ProcurementPage />
                   </RoleGuard>
                 }
@@ -126,7 +137,7 @@ export default function App() {
               <Route
                 path="/rdc"
                 element={
-                  <RoleGuard allowedRoles={['manager', 'admin']}>
+                  <RoleGuard allowedRoles={['manager', 'admin', 'store_manager']}>
                     <RDCPage />
                   </RoleGuard>
                 }
@@ -178,7 +189,7 @@ export default function App() {
               <Route
                 path="/inventory"
                 element={
-                  <RoleGuard allowedRoles={['admin', 'manager', 'technician']}>
+                  <RoleGuard allowedRoles={['admin', 'manager', 'technician', 'store_manager']}>
                     <InventoryCatalogPage />
                   </RoleGuard>
                 }
@@ -204,7 +215,7 @@ export default function App() {
               <Route
                 path="/audit"
                 element={
-                  <RoleGuard allowedRoles={['admin', 'manager']}>
+                  <RoleGuard allowedRoles={['admin', 'manager', 'store_manager']}>
                     <AuditLogsPage />
                   </RoleGuard>
                 }

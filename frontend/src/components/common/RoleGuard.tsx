@@ -32,7 +32,7 @@ export const RoleGuard: React.FC<RoleGuardProps> = ({ allowedRoles, children }) 
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  const validRoles: UserRole[] = ['admin', 'manager', 'technician', 'operator'];
+  const validRoles: UserRole[] = ['admin', 'manager', 'technician', 'operator', 'store_manager'];
   const isUnknownRole = !validRoles.includes(user.role);
 
   if (isUnknownRole || (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(user.role))) {

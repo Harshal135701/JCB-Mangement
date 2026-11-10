@@ -15,6 +15,7 @@ import {
   Wrench, 
   HardHat, 
   ClipboardCheck,
+  Boxes,
   X,
   ChevronRight
 } from 'lucide-react';
@@ -66,21 +67,26 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
       icon: HardHat, 
       roles: ['operator'] 
     },
+    // Store Manager Dashboard
+    { 
+      name: 'Store Dashboard', 
+      path: '/store/dashboard', 
+      icon: Boxes, 
+      roles: ['store_manager', 'admin'] 
+    },
     // Breakdowns / Maintenance Requests
     { 
       name: 'Maintenance Requests', 
       path: '/triage', 
       icon: AlertTriangle, 
       roles: ['manager', 'admin'],
-      badge: 5,
-      badgeColor: 'bg-red-500 text-white'
     },
     // Work Orders Master
     { 
       name: 'Work Orders', 
       path: '/work-orders', 
       icon: Wrench, 
-      roles: ['admin', 'manager', 'technician'] 
+      roles: ['admin', 'manager', 'technician', 'store_manager'] 
     },
     // Personnel & Technician Management
     { 
@@ -115,23 +121,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
       name: 'Spare Parts Requests', 
       path: '/inventory', 
       icon: Package, 
-      roles: ['admin', 'manager', 'technician'] 
+      roles: ['admin', 'manager', 'technician', 'store_manager'] 
     },
     // Purchase Requisition / Procurement
     { 
       name: 'Purchase Requisition', 
       path: '/procurement', 
       icon: ShoppingCart, 
-      roles: ['admin', 'manager', 'technician'],
-      badge: 2,
-      badgeColor: 'bg-red-500 text-white'
+      roles: ['admin', 'manager', 'technician', 'store_manager'],
     },
     // Gate Passes (RDC)
     { 
       name: 'RDC Gate Passes', 
       path: '/rdc', 
       icon: FileText, 
-      roles: ['admin', 'manager'] 
+      roles: ['admin', 'manager', 'store_manager'] 
     },
     // Downtime & Analytics
     { 
@@ -145,7 +149,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
       name: 'Audit Trail', 
       path: '/audit', 
       icon: ShieldCheck, 
-      roles: ['admin', 'manager'] 
+      roles: ['admin', 'manager', 'store_manager'] 
     },
   ];
 

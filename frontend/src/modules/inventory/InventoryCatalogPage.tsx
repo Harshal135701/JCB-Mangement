@@ -62,7 +62,9 @@ export const InventoryCatalogPage: React.FC = () => {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const isManager = user?.role === 'manager';
-  const canAdjust = isAdmin || isManager;
+  const isStoreManager = user?.role === 'store_manager';
+  const canAdjust = isAdmin || isManager || isStoreManager;
+  const canManageParts = isAdmin || isStoreManager;
 
   // Search & Filter state
   const [searchInput, setSearchInput] = useState('');
@@ -371,9 +373,9 @@ export const InventoryCatalogPage: React.FC = () => {
         <div>
           <div className="flex items-center gap-3">
             <h2 className="text-xl font-black text-zinc-950 tracking-tight">SPARE PARTS CATALOG & INVENTORY</h2>
-            {isAdmin ? (
+            {canManageParts ? (
               <span className="bg-jcb-yellow text-black text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-amber-500 shadow-xs">
-                Admin Full Access (CRUD)
+                {isAdmin ? 'Admin Full Access (CRUD)' : 'Store Manager Full Access (CRUD)'}
               </span>
             ) : canAdjust ? (
               <span className="bg-amber-100 text-amber-900 text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-amber-300">
@@ -399,7 +401,7 @@ export const InventoryCatalogPage: React.FC = () => {
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-jcb-yellowDark' : ''}`} />
           </button>
-          {isAdmin && (
+          {canManageParts && (
             <button
               onClick={openCreateModal}
               className="bg-jcb-yellow hover:bg-jcb-yellowDark text-black text-xs font-black px-4 py-2.5 rounded-xl shadow-xs transition flex items-center gap-2 border border-amber-500 cursor-pointer"
@@ -584,7 +586,7 @@ export const InventoryCatalogPage: React.FC = () => {
                       <td className="px-4 py-3.5 font-mono text-zinc-800 font-bold text-right">
                         ₹{Number(p.unit_cost || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </td>
-                      {(isAdmin || canAdjust) && (
+                      {(canManageParts || canAdjust) && (
                         <td className="px-5 py-3.5 text-right">
                           <div className="flex items-center justify-end gap-1.5">
                             {canAdjust && (
@@ -596,7 +598,7 @@ export const InventoryCatalogPage: React.FC = () => {
                                 <SlidersHorizontal className="w-4 h-4" />
                               </button>
                             )}
-                            {isAdmin && (
+                            {canManageParts && (
                               <>
                                 <button
                                   onClick={() => openEditModal(p)}

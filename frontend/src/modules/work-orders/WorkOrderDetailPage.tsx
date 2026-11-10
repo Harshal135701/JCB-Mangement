@@ -1035,7 +1035,7 @@ export const WorkOrderDetailPage: React.FC = () => {
           {activeTab === 'parts' && (() => {
             const isAssigned = isTechnician && workOrder?.assigned_technician_id === user?.id;
             const eligibleStatus = ['assigned', 'accepted', 'scheduled', 'under_diagnosis', 'in_progress', 'waiting_for_parts', 'rework_required', 'reopened'].includes(workOrder?.status || '');
-            const canReserveParts = (user?.role === 'admin' || user?.role === 'manager' || isAssigned) && eligibleStatus;
+            const canReserveParts = (user?.role === 'admin' || user?.role === 'manager' || user?.role === 'store_manager' || isAssigned) && eligibleStatus;
 
             return (
             <div className="bg-white rounded-2xl border-2 border-slate-200 shadow-xs p-5 space-y-4">

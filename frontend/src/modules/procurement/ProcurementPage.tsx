@@ -263,7 +263,8 @@ const getUrgencyBadge = (urgency: PRUrgency) => {
 export const ProcurementPage: React.FC = () => {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
-  const isManager = user?.role === 'manager' || isAdmin;
+  const isStoreManager = user?.role === 'store_manager';
+  const isManager = user?.role === 'manager' || isAdmin || isStoreManager;
   const isTechnician = user?.role === 'technician';
 
   // Navigation tab state

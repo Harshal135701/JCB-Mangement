@@ -582,14 +582,14 @@ export const adjustStock = async (req: Request, res: Response, next: NextFunctio
       return;
     }
 
-    const { part_id, adjustment_quantity, reason } = req.body || {};
+    const { part_id, adjustment_quantity, quantity, reason } = req.body || {};
 
     if (!part_id || typeof part_id !== 'string' || !UUID_REGEX.test(part_id.trim())) {
       res.status(400).json({ success: false, message: 'Invalid or missing part_id. A valid UUID is required.' });
       return;
     }
 
-    const rawQty = adjustment_quantity;
+    const rawQty = adjustment_quantity !== undefined ? adjustment_quantity : quantity;
     const parsedQty = typeof rawQty === 'number' ? rawQty : parseInt(String(rawQty).trim(), 10);
     if (!Number.isInteger(parsedQty) || parsedQty === 0 || !Number.isFinite(parsedQty)) {
       res.status(400).json({ success: false, message: 'Invalid adjustment_quantity. Must be a non-zero integer (+ or -).' });
@@ -704,7 +704,13 @@ export const getInventoryTransactions = async (req: Request, res: Response, next
  */
 export const createStockTransfer = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const result = await createStockTransferService(req.body, req.user as AuthenticatedUser);
+    const payload = {
+      ...req.body,
+      source_location: req.body.source_location || req.body.source_bin,
+      destination_location: req.body.destination_location || req.body.destination_bin,
+      remarks: req.body.remarks || req.body.reason,
+    };
+    const result = await createStockTransferService(payload, req.user as AuthenticatedUser);
     res.status(201).json({
       success: true,
       message: `Stock transfer ${result.transfer_number} processed successfully.`,
@@ -756,7 +762,14 @@ export const getStockTransferById = async (req: Request, res: Response, next: Ne
  */
 export const reportDamagedStock = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const result = await reportDamagedStockService(req.body, req.user as AuthenticatedUser);
+    const payload = {
+      ...req.body,
+      damage_type: req.body.damage_type || 'damaged',
+      reason: req.body.reason || req.body.damage_reason || req.body.remarks,
+      disposition: req.body.disposition || 'quarantined',
+      quarantined_bin: req.body.quarantined_bin || 'QUAR-BIN-01',
+    };
+    const result = await reportDamagedStockService(payload, req.user as AuthenticatedUser);
     res.status(201).json({
       success: true,
       message: `Damaged stock report ${result.report_number} created and parts moved to quarantine.`,

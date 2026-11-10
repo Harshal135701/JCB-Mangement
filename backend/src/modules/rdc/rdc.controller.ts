@@ -9,6 +9,7 @@ export const createRDC = async (req: Request, res: Response, next: NextFunction)
       work_order_id,
       machine_id,
       vendor_party_name,
+      vendor_name,
       vendor_gstin,
       vendor_address,
       contact_person,
@@ -17,7 +18,9 @@ export const createRDC = async (req: Request, res: Response, next: NextFunction)
       items = [], // array of { part_id, item_description, serial_number, quantity_dispatched, approximate_value }
     } = req.body;
 
-    if (!vendor_party_name || !purpose) {
+    const effectiveVendorPartyName = vendor_party_name || vendor_name;
+
+    if (!effectiveVendorPartyName || !purpose) {
       res.status(400).json({ success: false, message: 'Vendor name and dispatch purpose are mandatory.' });
       return;
     }
@@ -40,7 +43,7 @@ export const createRDC = async (req: Request, res: Response, next: NextFunction)
         rdc_type,
         work_order_id || null,
         machine_id || null,
-        vendor_party_name,
+        effectiveVendorPartyName,
         vendor_gstin || '',
         vendor_address || '',
         contact_person || '',
