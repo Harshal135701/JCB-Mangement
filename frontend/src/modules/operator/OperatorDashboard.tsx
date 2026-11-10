@@ -366,30 +366,48 @@ export const OperatorDashboard: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs text-zinc-800">
-                {(recentInspections.length > 0 ? recentInspections : [
-                  { machine: 'JCB-205', type: 'Pre-Shift Safety 24-Point', shift: 'Shift A', result: 'PASSED' },
-                  { machine: 'JCB-205', type: 'Pre-Shift Safety 24-Point', shift: 'Shift B', result: 'PASSED' },
-                  { machine: 'JCB-104', type: 'Pre-Shift Safety 24-Point', shift: 'Shift A', result: 'PASSED' },
-                  { machine: 'JCB-178', type: 'Pre-Shift Safety 24-Point', shift: 'Shift C', result: 'PASSED' },
-                  { machine: 'JCB-132', type: 'Engine & Oil Pre-Check', shift: 'Shift A', result: 'PASSED' },
-                ]).map((rec: any, idx: number) => (
-                  <tr key={idx} className="hover:bg-slate-50/70 transition">
-                    <td className="py-3 px-3 font-semibold text-zinc-900 whitespace-nowrap">
-                      {rec.machine?.code || rec.machine || 'JCB-205'}
-                    </td>
-                    <td className="py-3 px-3 text-zinc-800 font-medium">
-                      {rec.type || 'Pre-Shift Safety 24-Point'}
-                    </td>
-                    <td className="py-3 px-3 text-zinc-500 text-[11px] font-medium whitespace-nowrap">
-                      {rec.shift || 'Shift A'}
-                    </td>
-                    <td className="py-3 px-3">
-                      <span className="px-2.5 py-0.5 rounded-md text-[11px] font-bold border bg-emerald-50 text-emerald-700 border-emerald-200">
-                        {rec.result || 'PASSED'}
-                      </span>
+                {recentInspections.length > 0 ? (
+                  recentInspections.map((rec: any, idx: number) => {
+                    const statusStr = (rec.overall_status || rec.result || 'pass').toLowerCase();
+                    return (
+                      <tr key={rec.id || idx} className="hover:bg-slate-50/70 transition">
+                        <td className="py-3 px-3 font-semibold text-zinc-900 whitespace-nowrap">
+                          <Link
+                            to={`/inspections/run?record_id=${rec.id}`}
+                            className="hover:underline hover:text-amber-600"
+                          >
+                            {rec.machine_code || rec.machine?.code || rec.machine || 'Machine'}
+                          </Link>
+                        </td>
+                        <td className="py-3 px-3 text-zinc-800 font-medium truncate max-w-[140px]" title={rec.responses_json?.template_title || rec.type || 'Pre-Shift Inspection'}>
+                          {rec.responses_json?.template_title || rec.type || 'Pre-Shift Inspection'}
+                        </td>
+                        <td className="py-3 px-3 text-zinc-500 text-[11px] font-medium whitespace-nowrap">
+                          {rec.shift || 'Shift A'}
+                        </td>
+                        <td className="py-3 px-3">
+                          <span
+                            className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border ${
+                              statusStr === 'fail'
+                                ? 'bg-red-50 text-red-700 border-red-200'
+                                : statusStr === 'flagged'
+                                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            }`}
+                          >
+                            {statusStr}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={4} className="py-8 text-center text-zinc-400 text-xs">
+                      No inspection logs found for this shop shift.
                     </td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>

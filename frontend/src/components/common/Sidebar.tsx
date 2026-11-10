@@ -108,7 +108,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
       name: 'Pre-Shift Inspection',
       path: '/inspections/run',
       icon: ClipboardCheck,
-      roles: ['operator', 'manager', 'admin']
+      roles: ['operator', 'manager', 'admin', 'technician']
     },
     // Spare Parts Inventory / Requests
     { 
@@ -122,7 +122,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
       name: 'Purchase Requisition', 
       path: '/procurement', 
       icon: ShoppingCart, 
-      roles: ['admin', 'manager'],
+      roles: ['admin', 'manager', 'technician'],
       badge: 2,
       badgeColor: 'bg-red-500 text-white'
     },

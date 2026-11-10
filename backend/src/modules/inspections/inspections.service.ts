@@ -1047,23 +1047,25 @@ export async function submitInspectionService(
     if (!row.is_active) {
       throw new InspectionServiceError('Cannot submit inspection against an inactive template.', 400);
     }
-    if (row.machine_category.toLowerCase() !== machine.category.toLowerCase()) {
-      throw new InspectionServiceError(`Template category '${row.machine_category}' does not match machine category '${machine.category}'.`, 400);
+    const machineCategory = (machine.category || 'HMC').trim();
+    if (row.machine_category.toLowerCase() !== machineCategory.toLowerCase()) {
+      throw new InspectionServiceError(`Template category '${row.machine_category}' does not match machine category '${machineCategory}'.`, 400);
     }
     activeTemplate = formatTemplateRow(row);
   } else {
     // Lookup latest active template for machine category
+    const machineCategory = (machine.category || 'HMC').trim();
     const tRes = await db.query(
       `SELECT * FROM inspection_templates 
        WHERE LOWER(machine_category) = LOWER($1) AND is_active = true 
        ORDER BY updated_at DESC LIMIT 1`,
-      [machine.category]
+      [machineCategory]
     );
     if (tRes.rows.length > 0) {
       activeTemplate = formatTemplateRow(tRes.rows[0]);
     } else {
       throw new InspectionServiceError(
-        `No active inspection template configured for machine category '${machine.category}'. An active template is mandatory for inspection submission.`,
+        `No active inspection template configured for machine category '${machineCategory}'. An active template is mandatory for inspection submission.`,
         400
       );
     }
@@ -1284,7 +1286,7 @@ export async function submitInspectionService(
     template_id: activeTemplate.id || null,
     template_version: activeTemplate.version || 1,
     template_title: activeTemplate.title,
-    machine_category: machine.category,
+    machine_category: machine.category || 'HMC',
     evaluated_at: new Date().toISOString(),
     evaluation_summary: {
       overall_status: calculatedOverallStatus,

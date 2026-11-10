@@ -118,7 +118,7 @@ export default function App() {
               <Route
                 path="/procurement"
                 element={
-                  <RoleGuard allowedRoles={['manager', 'admin']}>
+                  <RoleGuard allowedRoles={['manager', 'admin', 'technician']}>
                     <ProcurementPage />
                   </RoleGuard>
                 }
@@ -140,9 +140,25 @@ export default function App() {
                 }
               />
 
-              {/* Operator Pre-Shift Safety Inspections */}
+              {/* Operator Pre-Shift Safety Inspections & Audit Logs */}
+              <Route
+                path="/inspections"
+                element={
+                  <RoleGuard allowedRoles={['operator', 'manager', 'admin', 'technician']}>
+                    <PreShiftInspectionPage />
+                  </RoleGuard>
+                }
+              />
               <Route
                 path="/inspections/run"
+                element={
+                  <RoleGuard allowedRoles={['operator', 'manager', 'admin', 'technician']}>
+                    <PreShiftInspectionPage />
+                  </RoleGuard>
+                }
+              />
+              <Route
+                path="/inspections/records/:id"
                 element={
                   <RoleGuard allowedRoles={['operator', 'manager', 'admin', 'technician']}>
                     <PreShiftInspectionPage />
