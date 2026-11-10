@@ -137,7 +137,7 @@ export default function App() {
               <Route
                 path="/rdc"
                 element={
-                  <RoleGuard allowedRoles={['manager', 'admin', 'store_manager']}>
+                  <RoleGuard allowedRoles={['manager', 'admin', 'technician', 'store_manager']}>
                     <RDCPage />
                   </RoleGuard>
                 }

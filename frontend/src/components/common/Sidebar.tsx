@@ -135,7 +135,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
       name: 'RDC Gate Passes', 
       path: '/rdc', 
       icon: FileText, 
-      roles: ['admin', 'manager', 'store_manager'] 
+      roles: ['admin', 'manager', 'store_manager', 'technician'] 
     },
     // Downtime & Analytics
     { 

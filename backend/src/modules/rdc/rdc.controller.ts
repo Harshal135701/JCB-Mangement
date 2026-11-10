@@ -1,188 +1,641 @@
 import { Request, Response, NextFunction } from 'express';
-import { query } from '../../config/db';
+import {
+  createRdcSchema,
+  updateRdcSchema,
+  submitRdcSchema,
+  approveRdcSchema,
+  rejectRdcSchema,
+  dispatchRdcSchema,
+  returnItemSchema,
+  replacementItemSchema,
+  damageItemSchema,
+  writeOffItemSchema,
+  cancelRdcSchema,
+  rdcFilterSchema,
+  uuidSchema,
+} from './rdc.validation';
+import {
+  createChallanService,
+  getChallansService,
+  getChallanByIdService,
+  updateChallanDraftService,
+  submitChallanService,
+  approveChallanService,
+  rejectChallanService,
+  dispatchChallanService,
+  recordReturnService,
+  recordReplacementService,
+  recordDamageService,
+  recordWriteOffService,
+  cancelChallanService,
+  closeChallanService,
+  getChallanHistoryService,
+  getDashboardMetricsService,
+  getOverdueChallansService,
+  RdcServiceError,
+  setRdcServiceDb,
+  resetRdcServiceDb,
+  setRdcServiceIo,
+  resetRdcServiceIo,
+} from './rdc.service';
+import { AuthenticatedUser } from '../../middlewares/auth.middleware';
 
+// Re-export test utilities for test suites
+export {
+  setRdcServiceDb,
+  resetRdcServiceDb,
+  setRdcServiceIo,
+  resetRdcServiceIo,
+};
+
+function getAuthUser(req: Request): AuthenticatedUser {
+  if (!req.user || !req.user.id) {
+    throw new RdcServiceError('Authentication required.', 401);
+  }
+  return req.user;
+}
+
+/**
+ * POST /api/v1/rdc
+ * Create Returnable / Non-Returnable Delivery Challan
+ */
 export const createRDC = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    const {
-      rdc_type = 'RDC',
-      work_order_id,
-      machine_id,
-      vendor_party_name,
-      vendor_name,
-      vendor_gstin,
-      vendor_address,
-      contact_person,
-      purpose,
-      expected_return_date,
-      items = [], // array of { part_id, item_description, serial_number, quantity_dispatched, approximate_value }
-    } = req.body;
-
-    const effectiveVendorPartyName = vendor_party_name || vendor_name;
-
-    if (!effectiveVendorPartyName || !purpose) {
-      res.status(400).json({ success: false, message: 'Vendor name and dispatch purpose are mandatory.' });
+    const user = getAuthUser(req);
+    const parsed = createRdcSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        success: false,
+        message: parsed.error.errors[0]?.message || 'Invalid delivery challan request.',
+        errors: parsed.error.errors,
+      });
       return;
     }
 
-    // Auto-generate Challan Number (e.g. RDC-2026-00001)
-    const countRes = await query('SELECT COUNT(*) FROM rdc_challans');
-    const seq = parseInt(countRes.rows[0].count, 10) + 1;
-    const challan_number = `${rdc_type}-${new Date().getFullYear()}-${String(seq).padStart(5, '0')}`;
-
-    const insertChallan = await query(
-      `INSERT INTO rdc_challans (
-        challan_number, rdc_type, work_order_id, machine_id, vendor_party_name,
-        vendor_gstin, vendor_address, contact_person, purpose, expected_return_date,
-        status, created_by
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending_approval', $11)
-      RETURNING *`,
-      [
-        challan_number,
-        rdc_type,
-        work_order_id || null,
-        machine_id || null,
-        effectiveVendorPartyName,
-        vendor_gstin || '',
-        vendor_address || '',
-        contact_person || '',
-        purpose,
-        expected_return_date || null,
-        userId,
-      ]
-    );
-
-    const challan = insertChallan.rows[0];
-
-    // Insert line items
-    for (const item of items) {
-      await query(
-        `INSERT INTO rdc_items (rdc_id, part_id, item_description, serial_number, quantity_dispatched, approximate_value)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [challan.id, item.part_id || null, item.item_description, item.serial_number || '', item.quantity_dispatched || 1, item.approximate_value || 0]
-      );
-    }
-
+    const challan = await createChallanService(parsed.data as any, user);
     res.status(201).json({
       success: true,
-      message: `${rdc_type} created successfully and forwarded for Manager/Admin authorization.`,
+      message: `${challan.rdc_type} created successfully${challan.status === 'draft' ? ' as draft.' : ' and forwarded for authorization.'}`,
       data: challan,
     });
-  } catch (err) {
+  } catch (err: any) {
+    if (err instanceof RdcServiceError) {
+      res.status(err.statusCode).json({ success: false, message: err.message });
+      return;
+    }
     next(err);
   }
 };
 
+/**
+ * GET /api/v1/rdc
+ * List & filter Delivery Challans
+ */
 export const getRDCs = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { status, rdc_type } = req.query;
-    let sql = `
-      SELECT r.*, m.machine_code, u.full_name as created_by_name
-      FROM rdc_challans r
-      LEFT JOIN machines m ON r.machine_id = m.id
-      JOIN users u ON r.created_by = u.id
-      WHERE 1=1
-    `;
-    const params: any[] = [];
-    if (status) {
-      params.push(status);
-      sql += ` AND r.status = $${params.length}`;
-    }
-    if (rdc_type) {
-      params.push(rdc_type);
-      sql += ` AND r.rdc_type = $${params.length}`;
-    }
-    sql += ` ORDER BY r.created_at DESC`;
-
-    const result = await query(sql, params);
-
-    // Fetch items for each challan
-    const rdcList = [];
-    for (const row of result.rows) {
-      const itemsRes = await query(`SELECT * FROM rdc_items WHERE rdc_id = $1`, [row.id]);
-      rdcList.push({ ...row, items: itemsRes.rows });
+    const user = getAuthUser(req);
+    const parsed = rdcFilterSchema.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({
+        success: false,
+        message: parsed.error.errors[0]?.message || 'Invalid query parameters.',
+        errors: parsed.error.errors,
+      });
+      return;
     }
 
-    res.json({ success: true, data: rdcList });
-  } catch (err) {
+    const result = await getChallansService(parsed.data, user);
+    res.json({
+      success: true,
+      data: result.challans,
+      meta: {
+        total: result.total,
+        page: result.page,
+        limit: result.limit,
+      },
+    });
+  } catch (err: any) {
+    if (err instanceof RdcServiceError) {
+      res.status(err.statusCode).json({ success: false, message: err.message });
+      return;
+    }
     next(err);
   }
 };
 
+/**
+ * GET /api/v1/rdc/dashboard
+ * Operational metrics & counts
+ */
+export const getRdcDashboard = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = getAuthUser(req);
+    const parsed = rdcFilterSchema.safeParse(req.query);
+    const metrics = await getDashboardMetricsService(parsed.success ? parsed.data : {}, user);
+    res.json({
+      success: true,
+      data: metrics,
+    });
+  } catch (err: any) {
+    if (err instanceof RdcServiceError) {
+      res.status(err.statusCode).json({ success: false, message: err.message });
+      return;
+    }
+    next(err);
+  }
+};
+
+/**
+ * GET /api/v1/rdc/overdue
+ * Overdue return tracking
+ */
+export const getOverdueRDCs = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = getAuthUser(req);
+    const parsed = rdcFilterSchema.safeParse(req.query);
+    const overdueList = await getOverdueChallansService(parsed.success ? parsed.data : {}, user);
+    res.json({
+      success: true,
+      data: overdueList,
+      total_overdue: overdueList.length,
+    });
+  } catch (err: any) {
+    if (err instanceof RdcServiceError) {
+      res.status(err.statusCode).json({ success: false, message: err.message });
+      return;
+    }
+    next(err);
+  }
+};
+
+/**
+ * GET /api/v1/rdc/:id
+ * Single challan details with line items and relationships
+ */
+export const getRDCById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = getAuthUser(req);
+    const { id } = req.params;
+    if (!uuidSchema.safeParse(id).success) {
+      res.status(400).json({ success: false, message: 'Invalid challan ID format.' });
+      return;
+    }
+
+    const challan = await getChallanByIdService(id, user);
+    res.json({
+      success: true,
+      data: challan,
+    });
+  } catch (err: any) {
+    if (err instanceof RdcServiceError) {
+      res.status(err.statusCode).json({ success: false, message: err.message });
+      return;
+    }
+    next(err);
+  }
+};
+
+/**
+ * PATCH /api/v1/rdc/:id
+ * Update permitted draft fields
+ */
+export const updateRDCDraft = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = getAuthUser(req);
+    const { id } = req.params;
+    if (!uuidSchema.safeParse(id).success) {
+      res.status(400).json({ success: false, message: 'Invalid challan ID format.' });
+      return;
+    }
+
+    const parsed = updateRdcSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        success: false,
+        message: parsed.error.errors[0]?.message || 'Invalid draft update payload.',
+        errors: parsed.error.errors,
+      });
+      return;
+    }
+
+    const updated = await updateChallanDraftService(id, parsed.data, user);
+    res.json({
+      success: true,
+      message: 'Delivery challan draft updated successfully.',
+      data: updated,
+    });
+  } catch (err: any) {
+    if (err instanceof RdcServiceError) {
+      res.status(err.statusCode).json({ success: false, message: err.message });
+      return;
+    }
+    next(err);
+  }
+};
+
+/**
+ * POST /api/v1/rdc/:id/submit
+ * Submit draft / resubmit rejected challan for approval
+ */
+export const submitRDC = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = getAuthUser(req);
+    const { id } = req.params;
+    if (!uuidSchema.safeParse(id).success) {
+      res.status(400).json({ success: false, message: 'Invalid challan ID format.' });
+      return;
+    }
+
+    const parsed = submitRdcSchema.safeParse(req.body || {});
+    const updated = await submitChallanService(id, parsed.success ? parsed.data : {}, user);
+    res.json({
+      success: true,
+      message: 'Delivery challan submitted successfully for management approval.',
+      data: updated,
+    });
+  } catch (err: any) {
+    if (err instanceof RdcServiceError) {
+      res.status(err.statusCode).json({ success: false, message: err.message });
+      return;
+    }
+    next(err);
+  }
+};
+
+/**
+ * POST /api/v1/rdc/:id/approve
+ * Formal approval step
+ */
+export const approveRDC = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = getAuthUser(req);
+    const { id } = req.params;
+    if (!uuidSchema.safeParse(id).success) {
+      res.status(400).json({ success: false, message: 'Invalid challan ID format.' });
+      return;
+    }
+
+    const parsed = approveRdcSchema.safeParse(req.body || {});
+    const updated = await approveChallanService(id, parsed.success ? parsed.data : {}, user);
+    res.json({
+      success: true,
+      message: 'Delivery challan approved successfully. Ready for physical dispatch.',
+      data: updated,
+    });
+  } catch (err: any) {
+    if (err instanceof RdcServiceError) {
+      res.status(err.statusCode).json({ success: false, message: err.message });
+      return;
+    }
+    next(err);
+  }
+};
+
+/**
+ * PUT /api/v1/rdc/:id/approve (Legacy Approval Endpoint compatibility)
+ * Strictly enforces separation of duties: executes approval ONLY.
+ * Cannot bypass separate physical dispatch authorization.
+ */
 export const approveAndDispatchRDC = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const managerId = req.user?.id;
+    const user = getAuthUser(req);
     const { id } = req.params;
-    const { gate_pass_number } = req.body;
-
-    const result = await query(
-      `UPDATE rdc_challans
-       SET status = 'dispatched',
-           gate_pass_number = COALESCE($2, 'GP-' || floor(random() * 90000 + 10000)::text),
-           approved_by = $3,
-           updated_at = NOW()
-       WHERE id = $1
-       RETURNING *`,
-      [id, gate_pass_number, managerId]
-    );
-
-    if (result.rows.length === 0) {
-      res.status(404).json({ success: false, message: 'RDC not found.' });
+    if (!uuidSchema.safeParse(id).success) {
+      res.status(400).json({ success: false, message: 'Invalid challan ID format.' });
       return;
     }
 
-    res.json({ success: true, message: 'RDC approved and dispatched. Gate Pass generated.', data: result.rows[0] });
-  } catch (err) {
-    next(err);
-  }
-};
-
-export const recordRDCReturn = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  try {
-    const { id } = req.params; // RDC ID
-    const { item_id, returned_quantity } = req.body;
-
-    const itemRes = await query(`SELECT * FROM rdc_items WHERE id = $1 AND rdc_id = $2`, [item_id, id]);
-    if (itemRes.rows.length === 0) {
-      res.status(404).json({ success: false, message: 'Item not found in this RDC.' });
-      return;
-    }
-
-    const item = itemRes.rows[0];
-    const newReturned = item.quantity_returned + parseInt(returned_quantity, 10);
-
-    await query(
-      `UPDATE rdc_items SET quantity_returned = $1 WHERE id = $2`,
-      [newReturned, item_id]
-    );
-
-    // Check overall RDC status (partially vs fully returned)
-    const allItems = await query(`SELECT quantity_dispatched, quantity_returned FROM rdc_items WHERE rdc_id = $1`, [id]);
-    let allComplete = true;
-    let anyReturned = false;
-
-    for (const it of allItems.rows) {
-      if (it.quantity_returned > 0) anyReturned = true;
-      if (it.quantity_returned < it.quantity_dispatched) allComplete = false;
-    }
-
-    const newStatus = allComplete ? 'fully_returned' : (anyReturned ? 'partially_returned' : 'dispatched');
-
-    const updatedRDC = await query(
-      `UPDATE rdc_challans 
-       SET status = $1, actual_return_date = CASE WHEN $1 = 'fully_returned' THEN CURRENT_DATE ELSE actual_return_date END, updated_at = NOW() 
-       WHERE id = $2 RETURNING *`,
-      [newStatus, id]
+    // Enforce separation of duties: Approval and Physical Dispatch are distinct operations.
+    // Legacy PUT /approve executes approval only, transitioning status from pending_approval to approved.
+    // Physical dispatch with Gate Pass issuance and stock decrement strictly requires POST /:id/dispatch.
+    const approved = await approveChallanService(
+      id,
+      { remarks: req.body.remarks || 'Approved via approval endpoint' },
+      user
     );
 
     res.json({
       success: true,
-      message: `Return recorded. RDC Status: ${newStatus}`,
-      data: updatedRDC.rows[0],
+      message: 'Delivery challan approved successfully. Physical dispatch requires separate authorization via /dispatch.',
+      data: approved,
     });
-  } catch (err) {
+  } catch (err: any) {
+    if (err instanceof RdcServiceError) {
+      res.status(err.statusCode).json({ success: false, message: err.message });
+      return;
+    }
     next(err);
   }
 };
 
+/**
+ * POST /api/v1/rdc/:id/reject
+ * Reject with mandatory remarks
+ */
+export const rejectRDC = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = getAuthUser(req);
+    const { id } = req.params;
+    if (!uuidSchema.safeParse(id).success) {
+      res.status(400).json({ success: false, message: 'Invalid challan ID format.' });
+      return;
+    }
+
+    const parsed = rejectRdcSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        success: false,
+        message: parsed.error.errors[0]?.message || 'Rejection reason is mandatory.',
+        errors: parsed.error.errors,
+      });
+      return;
+    }
+
+    const updated = await rejectChallanService(id, parsed.data, user);
+    res.json({
+      success: true,
+      message: 'Delivery challan rejected.',
+      data: updated,
+    });
+  } catch (err: any) {
+    if (err instanceof RdcServiceError) {
+      res.status(err.statusCode).json({ success: false, message: err.message });
+      return;
+    }
+    next(err);
+  }
+};
+
+/**
+ * POST /api/v1/rdc/:id/dispatch
+ * Authorised dispatch & gate pass generation with stock deduction
+ */
+export const dispatchRDC = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = getAuthUser(req);
+    const { id } = req.params;
+    if (!uuidSchema.safeParse(id).success) {
+      res.status(400).json({ success: false, message: 'Invalid challan ID format.' });
+      return;
+    }
+
+    const parsed = dispatchRdcSchema.safeParse(req.body || {});
+    const updated = await dispatchChallanService(id, parsed.success ? parsed.data : {}, user);
+    res.json({
+      success: true,
+      message: 'Delivery challan dispatched successfully. Gate Pass issued.',
+      data: updated,
+    });
+  } catch (err: any) {
+    if (err instanceof RdcServiceError) {
+      res.status(err.statusCode).json({ success: false, message: err.message });
+      return;
+    }
+    next(err);
+  }
+};
+
+/**
+ * POST /api/v1/rdc/:id/return
+ * Record returned material against specific item
+ */
+export const recordRDCReturn = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = getAuthUser(req);
+    const { id } = req.params;
+    if (!uuidSchema.safeParse(id).success) {
+      res.status(400).json({ success: false, message: 'Invalid challan ID format.' });
+      return;
+    }
+
+    const parsed = returnItemSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        success: false,
+        message: parsed.error.errors[0]?.message || 'Invalid return parameters.',
+        errors: parsed.error.errors,
+      });
+      return;
+    }
+
+    const updated = await recordReturnService(id, parsed.data, user);
+    res.json({
+      success: true,
+      message: `Return recorded successfully. Challan Status: ${updated.status}`,
+      data: updated,
+    });
+  } catch (err: any) {
+    if (err instanceof RdcServiceError) {
+      res.status(err.statusCode).json({ success: false, message: err.message });
+      return;
+    }
+    next(err);
+  }
+};
+
+/**
+ * POST /api/v1/rdc/:id/replacement
+ * Record replacement item receipt
+ */
+export const recordRDCReplacement = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = getAuthUser(req);
+    const { id } = req.params;
+    if (!uuidSchema.safeParse(id).success) {
+      res.status(400).json({ success: false, message: 'Invalid challan ID format.' });
+      return;
+    }
+
+    const parsed = replacementItemSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        success: false,
+        message: parsed.error.errors[0]?.message || 'Invalid replacement parameters.',
+        errors: parsed.error.errors,
+      });
+      return;
+    }
+
+    const updated = await recordReplacementService(id, parsed.data, user);
+    res.json({
+      success: true,
+      message: `Replacement received and stock replenished. Challan Status: ${updated.status}`,
+      data: updated,
+    });
+  } catch (err: any) {
+    if (err instanceof RdcServiceError) {
+      res.status(err.statusCode).json({ success: false, message: err.message });
+      return;
+    }
+    next(err);
+  }
+};
+
+/**
+ * POST /api/v1/rdc/:id/damage
+ * Report damaged material (Strict Quarantine)
+ */
+export const recordRDCDamage = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = getAuthUser(req);
+    const { id } = req.params;
+    if (!uuidSchema.safeParse(id).success) {
+      res.status(400).json({ success: false, message: 'Invalid challan ID format.' });
+      return;
+    }
+
+    const parsed = damageItemSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        success: false,
+        message: parsed.error.errors[0]?.message || 'Invalid damage reporting parameters.',
+        errors: parsed.error.errors,
+      });
+      return;
+    }
+
+    const updated = await recordDamageService(id, parsed.data, user);
+    res.json({
+      success: true,
+      message: `Damaged material quarantined successfully. Challan Status: ${updated.status}`,
+      data: updated,
+    });
+  } catch (err: any) {
+    if (err instanceof RdcServiceError) {
+      res.status(err.statusCode).json({ success: false, message: err.message });
+      return;
+    }
+    next(err);
+  }
+};
+
+/**
+ * POST /api/v1/rdc/:id/writeoff
+ * Authorised write-off of outstanding material
+ */
+export const recordRDCWriteOff = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = getAuthUser(req);
+    const { id } = req.params;
+    if (!uuidSchema.safeParse(id).success) {
+      res.status(400).json({ success: false, message: 'Invalid challan ID format.' });
+      return;
+    }
+
+    const parsed = writeOffItemSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        success: false,
+        message: parsed.error.errors[0]?.message || 'Invalid write-off parameters.',
+        errors: parsed.error.errors,
+      });
+      return;
+    }
+
+    const updated = await recordWriteOffService(id, parsed.data, user);
+    res.json({
+      success: true,
+      message: `Material write-off authorized successfully. Challan Status: ${updated.status}`,
+      data: updated,
+    });
+  } catch (err: any) {
+    if (err instanceof RdcServiceError) {
+      res.status(err.statusCode).json({ success: false, message: err.message });
+      return;
+    }
+    next(err);
+  }
+};
+
+/**
+ * POST /api/v1/rdc/:id/cancel
+ * Cancel delivery challan (before physical dispatch)
+ */
+export const cancelRDC = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = getAuthUser(req);
+    const { id } = req.params;
+    if (!uuidSchema.safeParse(id).success) {
+      res.status(400).json({ success: false, message: 'Invalid challan ID format.' });
+      return;
+    }
+
+    const parsed = cancelRdcSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        success: false,
+        message: parsed.error.errors[0]?.message || 'Cancellation reason is mandatory.',
+        errors: parsed.error.errors,
+      });
+      return;
+    }
+
+    const updated = await cancelChallanService(id, parsed.data, user);
+    res.json({
+      success: true,
+      message: 'Delivery challan cancelled successfully.',
+      data: updated,
+    });
+  } catch (err: any) {
+    if (err instanceof RdcServiceError) {
+      res.status(err.statusCode).json({ success: false, message: err.message });
+      return;
+    }
+    next(err);
+  }
+};
+
+/**
+ * POST /api/v1/rdc/:id/close
+ * Close reconciled delivery challan
+ */
+export const closeRDC = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = getAuthUser(req);
+    const { id } = req.params;
+    if (!uuidSchema.safeParse(id).success) {
+      res.status(400).json({ success: false, message: 'Invalid challan ID format.' });
+      return;
+    }
+
+    const updated = await closeChallanService(id, user);
+    res.json({
+      success: true,
+      message: 'Delivery challan closed successfully.',
+      data: updated,
+    });
+  } catch (err: any) {
+    if (err instanceof RdcServiceError) {
+      res.status(err.statusCode).json({ success: false, message: err.message });
+      return;
+    }
+    next(err);
+  }
+};
+
+/**
+ * GET /api/v1/rdc/:id/history
+ * Get audit history & timeline
+ */
+export const getRDCHistory = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = getAuthUser(req);
+    const { id } = req.params;
+    if (!uuidSchema.safeParse(id).success) {
+      res.status(400).json({ success: false, message: 'Invalid challan ID format.' });
+      return;
+    }
+
+    const history = await getChallanHistoryService(id, user);
+    res.json({
+      success: true,
+      data: history,
+    });
+  } catch (err: any) {
+    if (err instanceof RdcServiceError) {
+      res.status(err.statusCode).json({ success: false, message: err.message });
+      return;
+    }
+    next(err);
+  }
+};
