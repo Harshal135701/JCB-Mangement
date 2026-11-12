@@ -224,6 +224,15 @@ interface MockPurchaseRequisition {
   expected_delivery_date: string | null;
   received_date: string | null;
   plant_id?: string | null;
+  supply_method?: string | null;
+  delivery_document_type?: string | null;
+  challan_type?: string | null;
+  vendor_challan_number?: string | null;
+  expected_dispatch_date?: string | null;
+  transporter_name?: string | null;
+  vehicle_number?: string | null;
+  lr_tracking_number?: string | null;
+  delivery_remarks?: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -822,6 +831,15 @@ class MockProcurementDatabase implements DbPoolLike {
           pr.expected_delivery_date = params[4];
           pr.status = params[5];
           pr.approved_by = params[6];
+          pr.supply_method = params[7] || null;
+          pr.delivery_document_type = params[8] || null;
+          pr.challan_type = params[9] || null;
+          pr.vendor_challan_number = params[10] || null;
+          pr.expected_dispatch_date = params[11] || null;
+          pr.transporter_name = params[12] || null;
+          pr.vehicle_number = params[13] || null;
+          pr.lr_tracking_number = params[14] || null;
+          pr.delivery_remarks = params[15] || null;
         } else if (trimmed.includes("SET status = 'rejected'")) {
           pr.status = 'rejected';
         } else if (trimmed.includes("SET status = 'cancelled'")) {
@@ -2149,6 +2167,73 @@ describe('Procurement & Purchase Requisition Module (CMMS Module 4)', () => {
       const { req: req2, res: res2, next: next2 } = createMockContext({}, {}, {}, {}, operatorUser);
       await getProcurementDashboard(req2, res2, next2);
       assert.equal(res2.statusCode, 403);
+    });
+  });
+
+  describe('Vendor Supply & Delivery Details Integration (PO & GRN)', () => {
+    it('1. Successfully issues PO with complete vendor supply and delivery challan details', async () => {
+      const pr = mockDb.requisitions[0];
+      pr.status = 'vendor_selected';
+      pr.po_number = null;
+
+      const { req, res, next } = createMockContext(
+        {
+          supplier_name: 'Raju Bhai Industrial Supplies',
+          unit_price: 1500,
+          expected_delivery_date: '2026-11-20',
+          mark_as_ordered: true,
+          supply_method: 'Vendor Direct Delivery',
+          delivery_document_type: 'Delivery Challan',
+          challan_type: 'Non-Returnable',
+          vendor_challan_number: 'DC-2026-00125',
+          expected_dispatch_date: '2026-11-15',
+          transporter_name: 'FastTrack Logistics',
+          vehicle_number: 'MH-14-GH-9988',
+          lr_tracking_number: 'LR-JCB-88221',
+          delivery_remarks: 'Deliver to Machine Shop Gate 2',
+        },
+        { id: pr.id },
+        {},
+        {},
+        puneManagerUser
+      );
+
+      await createPurchaseOrder(req, res, next);
+
+      assert.equal(res.statusCode, 201);
+      assert.equal(res.responseData.success, true);
+      const data = res.responseData.data;
+      assert.equal(data.supplier_name, 'Raju Bhai Industrial Supplies');
+      assert.equal(data.supply_method, 'Vendor Direct Delivery');
+      assert.equal(data.delivery_document_type, 'Delivery Challan');
+      assert.equal(data.challan_type, 'Non-Returnable');
+      assert.equal(data.vendor_challan_number, 'DC-2026-00125');
+      assert.equal(data.transporter_name, 'FastTrack Logistics');
+      assert.equal(data.vehicle_number, 'MH-14-GH-9988');
+      assert.equal(data.lr_tracking_number, 'LR-JCB-88221');
+      assert.equal(data.delivery_remarks, 'Deliver to Machine Shop Gate 2');
+      assert.equal(data.status, 'ordered');
+    });
+
+    it('2. Rejects PO creation if expected dispatch date is invalid', async () => {
+      const pr = mockDb.requisitions[0];
+      pr.status = 'vendor_selected';
+      pr.po_number = null;
+
+      const { req, res, next } = createMockContext(
+        {
+          supplier_name: 'SKF India',
+          unit_price: 500,
+          expected_dispatch_date: 'invalid-date-format',
+        },
+        { id: pr.id },
+        {},
+        {},
+        puneManagerUser
+      );
+
+      await createPurchaseOrder(req, res, next);
+      assert.ok(res.statusCode === 400 || (res.responseData && res.responseData.success === false));
     });
   });
 });

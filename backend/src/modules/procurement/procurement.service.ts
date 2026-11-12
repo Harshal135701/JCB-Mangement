@@ -173,6 +173,15 @@ export interface CreatePOInput {
   expected_delivery_date?: string;
   remarks?: string;
   mark_as_ordered?: boolean;
+  supply_method?: string | null;
+  delivery_document_type?: string | null;
+  challan_type?: string | null;
+  vendor_challan_number?: string | null;
+  expected_dispatch_date?: string | null;
+  transporter_name?: string | null;
+  vehicle_number?: string | null;
+  lr_tracking_number?: string | null;
+  delivery_remarks?: string | null;
 }
 
 export interface ProcessGRNInput {
@@ -182,6 +191,13 @@ export interface ProcessGRNInput {
   rejection_reason?: string;
   remarks?: string;
   delivery_note_number?: string;
+  vendor_challan_number?: string;
+  invoice_number?: string;
+  supply_method?: string;
+  delivery_document_type?: string;
+  challan_type?: string;
+  vehicle_number?: string;
+  lr_tracking_number?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -1698,6 +1714,13 @@ export async function createPurchaseOrderService(
     throw new ProcurementServiceError('Unit price must be a valid non-negative number.', 400);
   }
 
+  if (input.expected_dispatch_date) {
+    const d = new Date(input.expected_dispatch_date);
+    if (isNaN(d.getTime())) {
+      throw new ProcurementServiceError('Expected dispatch date must be a valid date.', 400);
+    }
+  }
+
   if (input.expected_delivery_date) {
     const d = new Date(input.expected_delivery_date);
     if (isNaN(d.getTime())) {
@@ -1789,6 +1812,15 @@ export async function createPurchaseOrderService(
            expected_delivery_date = $5,
            status = $6,
            approved_by = $7,
+           supply_method = $8,
+           delivery_document_type = $9,
+           challan_type = $10,
+           vendor_challan_number = $11,
+           expected_dispatch_date = $12,
+           transporter_name = $13,
+           vehicle_number = $14,
+           lr_tracking_number = $15,
+           delivery_remarks = $16,
            updated_at = NOW()
        WHERE id = $1
        RETURNING *`,
@@ -1800,6 +1832,15 @@ export async function createPurchaseOrderService(
         input.expected_delivery_date || null,
         targetStatus,
         user.id,
+        input.supply_method?.trim() || null,
+        input.delivery_document_type?.trim() || null,
+        input.challan_type?.trim() || null,
+        input.vendor_challan_number?.trim() || null,
+        input.expected_dispatch_date || null,
+        input.transporter_name?.trim() || null,
+        input.vehicle_number?.trim() || null,
+        input.lr_tracking_number?.trim() || null,
+        input.delivery_remarks?.trim() || null,
       ]
     );
 
@@ -1819,6 +1860,14 @@ export async function createPurchaseOrderService(
           supplier_name: input.supplier_name,
           unit_price: unitPrice,
           total_value: Number(pr.quantity_required) * unitPrice,
+          supply_method: input.supply_method || null,
+          delivery_document_type: input.delivery_document_type || null,
+          challan_type: input.challan_type || null,
+          vendor_challan_number: input.vendor_challan_number || null,
+          expected_dispatch_date: input.expected_dispatch_date || null,
+          transporter_name: input.transporter_name || null,
+          vehicle_number: input.vehicle_number || null,
+          lr_tracking_number: input.lr_tracking_number || null,
         }),
       ]
     );
@@ -1942,6 +1991,15 @@ export async function getPurchaseOrdersService(
   const selectCols = `
     SELECT pr.id,
            pr.pr_number,
+           pr.supply_method,
+           pr.delivery_document_type,
+           pr.challan_type,
+           pr.vendor_challan_number,
+           pr.expected_dispatch_date,
+           pr.transporter_name,
+           pr.vehicle_number,
+           pr.lr_tracking_number,
+           pr.delivery_remarks,
            pr.po_number,
            pr.supplier_name,
            pr.unit_price,
@@ -2137,24 +2195,63 @@ export async function processGRNInwardService(
     const grnNumber = await generateGRNNumberWithAdvisoryLock(client, currentYear);
 
     try {
-      await client.query(
-        `INSERT INTO grn_receipts (
-          grn_number, pr_id, delivery_note_number, received_quantity,
-          accepted_quantity, rejected_quantity, rejection_reason, remarks, received_by
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-        [
-          grnNumber,
-          pr.id,
-          input.delivery_note_number?.trim() || null,
-          totalDeliveredInBatch,
-          finalAcceptedQty,
-          finalRejectedQty,
-          input.rejection_reason?.trim() || null,
-          input.remarks?.trim() || null,
-          user.id,
-        ]
-      );
+      const effChallanNo = input.vendor_challan_number?.trim() || input.delivery_note_number?.trim() || pr.vendor_challan_number || null;
+      const effSupplyMethod = input.supply_method?.trim() || pr.supply_method || null;
+      const effDocType = input.delivery_document_type?.trim() || pr.delivery_document_type || null;
+      const effChallanType = input.challan_type?.trim() || pr.challan_type || null;
+      const effVehicleNo = input.vehicle_number?.trim() || pr.vehicle_number || null;
+      const effTrackingNo = input.lr_tracking_number?.trim() || pr.lr_tracking_number || null;
+      const effInvoiceNo = input.invoice_number?.trim() || null;
+
+      try {
+        await client.query(
+          `INSERT INTO grn_receipts (
+            grn_number, pr_id, delivery_note_number, received_quantity,
+            accepted_quantity, rejected_quantity, rejection_reason, remarks, received_by,
+            vendor_challan_number, supply_method, delivery_document_type, challan_type,
+            vehicle_number, lr_tracking_number, invoice_number
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+          [
+            grnNumber,
+            pr.id,
+            input.delivery_note_number?.trim() || effChallanNo,
+            totalDeliveredInBatch,
+            finalAcceptedQty,
+            finalRejectedQty,
+            input.rejection_reason?.trim() || null,
+            input.remarks?.trim() || null,
+            user.id,
+            effChallanNo,
+            effSupplyMethod,
+            effDocType,
+            effChallanType,
+            effVehicleNo,
+            effTrackingNo,
+            effInvoiceNo,
+          ]
+        );
+      } catch (colErr) {
+        // Fallback to standard columns if extended columns do not exist yet
+        await client.query(
+          `INSERT INTO grn_receipts (
+            grn_number, pr_id, delivery_note_number, received_quantity,
+            accepted_quantity, rejected_quantity, rejection_reason, remarks, received_by
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          [
+            grnNumber,
+            pr.id,
+            input.delivery_note_number?.trim() || effChallanNo,
+            totalDeliveredInBatch,
+            finalAcceptedQty,
+            finalRejectedQty,
+            input.rejection_reason?.trim() || null,
+            input.remarks?.trim() || null,
+            user.id,
+          ]
+        );
+      }
     } catch (e: any) {
       // Non-blocking in mock environments where grn_receipts table is not simulated
     }

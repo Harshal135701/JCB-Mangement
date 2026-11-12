@@ -78,6 +78,15 @@ export interface PurchaseRequisition {
   unit_price?: number | null;
   total_spend?: number | null;
   expected_delivery_date?: string | null;
+  supply_method?: string | null;
+  delivery_document_type?: string | null;
+  challan_type?: string | null;
+  vendor_challan_number?: string | null;
+  expected_dispatch_date?: string | null;
+  transporter_name?: string | null;
+  vehicle_number?: string | null;
+  lr_tracking_number?: string | null;
+  delivery_remarks?: string | null;
   received_quantity?: number;
   requested_by?: string;
   requested_by_name?: string | null;
@@ -102,6 +111,15 @@ export interface PurchaseOrder {
   quantity_required: number;
   received_quantity: number;
   expected_delivery_date?: string | null;
+  supply_method?: string | null;
+  delivery_document_type?: string | null;
+  challan_type?: string | null;
+  vendor_challan_number?: string | null;
+  expected_dispatch_date?: string | null;
+  transporter_name?: string | null;
+  vehicle_number?: string | null;
+  lr_tracking_number?: string | null;
+  delivery_remarks?: string | null;
   status: PRStatus;
   part_number: string;
   part_name: string;
@@ -188,6 +206,12 @@ export interface PRDetails extends PurchaseRequisition {
     rejected_quantity: number;
     rejection_reason?: string | null;
     delivery_note_number: string;
+    vendor_challan_number?: string | null;
+    supply_method?: string | null;
+    delivery_document_type?: string | null;
+    challan_type?: string | null;
+    vehicle_number?: string | null;
+    lr_tracking_number?: string | null;
     invoice_number?: string | null;
     delivery_date?: string;
     remarks?: string | null;
@@ -265,6 +289,39 @@ const getUrgencyBadge = (urgency: PRUrgency) => {
 // ============================================================================
 // MAIN PROCUREMENT COMPONENT
 // ============================================================================
+
+export const INITIAL_PO_FORM = {
+  supplier_name: '',
+  unit_price: 0,
+  expected_delivery_date: '',
+  mark_as_ordered: true,
+  po_number: '',
+  supply_method: 'Vendor Direct Delivery',
+  delivery_document_type: 'Delivery Challan',
+  challan_type: 'Non-Returnable',
+  vendor_challan_number: '',
+  expected_dispatch_date: '',
+  transporter_name: '',
+  vehicle_number: '',
+  lr_tracking_number: '',
+  delivery_remarks: '',
+};
+
+export const INITIAL_GRN_FORM = {
+  delivery_note_number: '',
+  vendor_challan_number: '',
+  invoice_number: '',
+  supply_method: 'Vendor Direct Delivery',
+  delivery_document_type: 'Delivery Challan',
+  challan_type: 'Non-Returnable',
+  vehicle_number: '',
+  lr_tracking_number: '',
+  delivery_date: new Date().toISOString().split('T')[0],
+  accepted_quantity: 1,
+  rejected_quantity: 0,
+  rejection_reason: '',
+  remarks: '',
+};
 
 export const ProcurementPage: React.FC = () => {
   const { user } = useAuth();
@@ -345,23 +402,9 @@ export const ProcurementPage: React.FC = () => {
   const [rejectRemarks, setRejectRemarks] = useState('');
   const [cancelReason, setCancelReason] = useState('');
 
-  const [poForm, setPoForm] = useState({
-    supplier_name: '',
-    unit_price: 0,
-    expected_delivery_date: '',
-    mark_as_ordered: true,
-    po_number: '',
-  });
+  const [poForm, setPoForm] = useState(INITIAL_PO_FORM);
 
-  const [grnForm, setGrnForm] = useState({
-    delivery_note_number: '',
-    invoice_number: '',
-    delivery_date: new Date().toISOString().split('T')[0],
-    accepted_quantity: 1,
-    rejected_quantity: 0,
-    rejection_reason: '',
-    remarks: '',
-  });
+  const [grnForm, setGrnForm] = useState(INITIAL_GRN_FORM);
 
   // Request race-condition counter
   const prRequestIdRef = useRef(0);
@@ -806,13 +849,7 @@ export const ProcurementPage: React.FC = () => {
           message: `Purchase Order ${issuedPo || ''} issued successfully with status '${res.data.data?.status || 'ordered'}'.`,
         });
         setSelectedPRForPO(null);
-        setPoForm({
-          supplier_name: '',
-          unit_price: 0,
-          expected_delivery_date: '',
-          mark_as_ordered: true,
-          po_number: '',
-        });
+        setPoForm(INITIAL_PO_FORM);
         fetchPRs();
         fetchPOs();
         fetchDashboardData();
@@ -879,15 +916,7 @@ export const ProcurementPage: React.FC = () => {
           message: `GRN ${grnNum || ''} posted successfully! Usable stock increased by ${accepted} units.`,
         });
         setSelectedPRForGRN(null);
-        setGrnForm({
-          delivery_note_number: '',
-          invoice_number: '',
-          delivery_date: new Date().toISOString().split('T')[0],
-          accepted_quantity: 1,
-          rejected_quantity: 0,
-          rejection_reason: '',
-          remarks: '',
-        });
+        setGrnForm(INITIAL_GRN_FORM);
         fetchPRs();
         fetchPOs();
         fetchDashboardData();
@@ -905,7 +934,6 @@ export const ProcurementPage: React.FC = () => {
   // Helper to open PO modal prefilled
   const openPOModal = (pr: PurchaseRequisition) => {
     setSelectedPRForPO(pr);
-    // Suggest price from part catalog if available
     const part = parts.find((p) => p.id === pr.part_id);
     setPoForm({
       supplier_name: pr.supplier_name || 'JCB Genuine Parts Co.',
@@ -913,6 +941,15 @@ export const ProcurementPage: React.FC = () => {
       expected_delivery_date: pr.expected_delivery_date ? pr.expected_delivery_date.split('T')[0] : '',
       mark_as_ordered: true,
       po_number: '',
+      supply_method: pr.supply_method || 'Vendor Direct Delivery',
+      delivery_document_type: pr.delivery_document_type || 'Delivery Challan',
+      challan_type: pr.challan_type || 'Non-Returnable',
+      vendor_challan_number: pr.vendor_challan_number || `DC-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`,
+      expected_dispatch_date: pr.expected_dispatch_date ? pr.expected_dispatch_date.split('T')[0] : new Date().toISOString().split('T')[0],
+      transporter_name: pr.transporter_name || '',
+      vehicle_number: pr.vehicle_number || '',
+      lr_tracking_number: pr.lr_tracking_number || '',
+      delivery_remarks: pr.delivery_remarks || '',
     });
   };
 
@@ -921,8 +958,14 @@ export const ProcurementPage: React.FC = () => {
     setSelectedPRForGRN(pr);
     const remaining = Math.max(1, (pr.quantity_required || 1) - (pr.received_quantity || 0));
     setGrnForm({
-      delivery_note_number: `DC-${Math.floor(100000 + Math.random() * 900000)}`,
+      delivery_note_number: pr.vendor_challan_number || `DC-${Math.floor(100000 + Math.random() * 900000)}`,
+      vendor_challan_number: pr.vendor_challan_number || '',
       invoice_number: `INV-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
+      supply_method: pr.supply_method || 'Vendor Direct Delivery',
+      delivery_document_type: pr.delivery_document_type || 'Delivery Challan',
+      challan_type: pr.challan_type || 'Non-Returnable',
+      vehicle_number: pr.vehicle_number || '',
+      lr_tracking_number: pr.lr_tracking_number || '',
       delivery_date: new Date().toISOString().split('T')[0],
       accepted_quantity: remaining,
       rejected_quantity: 0,

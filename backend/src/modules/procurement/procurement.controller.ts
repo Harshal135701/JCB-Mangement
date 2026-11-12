@@ -451,7 +451,23 @@ export const createPurchaseOrder = async (
     }
 
     const { id } = req.params;
-    const { po_number, supplier_name, unit_price, expected_delivery_date, remarks, mark_as_ordered } = req.body || {};
+    const {
+      po_number,
+      supplier_name,
+      unit_price,
+      expected_delivery_date,
+      remarks,
+      mark_as_ordered,
+      supply_method,
+      delivery_document_type,
+      challan_type,
+      vendor_challan_number,
+      expected_dispatch_date,
+      transporter_name,
+      vehicle_number,
+      lr_tracking_number,
+      delivery_remarks,
+    } = req.body || {};
 
     const updatedPR = await createPurchaseOrderService(
       id,
@@ -462,6 +478,15 @@ export const createPurchaseOrder = async (
         expected_delivery_date,
         remarks,
         mark_as_ordered,
+        supply_method,
+        delivery_document_type,
+        challan_type,
+        vendor_challan_number,
+        expected_dispatch_date,
+        transporter_name,
+        vehicle_number,
+        lr_tracking_number,
+        delivery_remarks,
       },
       user
     );
@@ -570,6 +595,13 @@ export const processGRNInward = async (
       rejection_reason,
       remarks,
       delivery_note_number,
+      vendor_challan_number,
+      invoice_number,
+      supply_method,
+      delivery_document_type,
+      challan_type,
+      vehicle_number,
+      lr_tracking_number,
     } = req.body || {};
 
     const result = await processGRNInwardService(
@@ -581,6 +613,13 @@ export const processGRNInward = async (
         rejection_reason,
         remarks,
         delivery_note_number,
+        vendor_challan_number,
+        invoice_number,
+        supply_method,
+        delivery_document_type,
+        challan_type,
+        vehicle_number,
+        lr_tracking_number,
       },
       user
     );
