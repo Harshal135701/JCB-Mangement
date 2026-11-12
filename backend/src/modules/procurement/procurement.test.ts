@@ -6,6 +6,8 @@ import {
   getPurchaseRequisitions,
   getPurchaseRequisitionDetails,
   updatePRStatus,
+  editPurchaseRequisition,
+  deletePurchaseRequisition,
   approvePurchaseRequisition,
   rejectPurchaseRequisition,
   cancelPurchaseRequisition,
@@ -833,9 +835,16 @@ class MockProcurementDatabase implements DbPoolLike {
           pr.expected_delivery_date = params[5];
           pr.approved_by = params[6];
         } else if (trimmed.includes('SET status = $2,') && trimmed.includes('received_date = CURRENT_DATE')) {
-          // processGRNInwardService query:
           pr.status = params[1];
           pr.received_date = new Date().toISOString().split('T')[0];
+        } else if (trimmed.includes('SET part_id = $2,')) {
+          // editPurchaseRequisitionService query:
+          pr.part_id = params[1];
+          pr.quantity_required = Number(params[2]);
+          pr.urgency = params[3];
+          pr.technical_justification = params[4];
+          pr.machine_id = params[5] || null;
+          pr.expected_delivery_date = params[6] || null;
         }
         pr.updated_at = new Date();
       }
@@ -848,6 +857,25 @@ class MockProcurementDatabase implements DbPoolLike {
       const excludeId = params[1];
       const match = this.requisitions.find((r) => r.po_number === poNum && r.id !== excludeId);
       return { rows: match ? [{ id: match.id }] : [], rowCount: match ? 1 : 0 };
+    }
+
+    // 17b. Delete PR row
+    if (trimmed.startsWith('DELETE FROM purchase_requisitions')) {
+      const match = trimmed.match(/WHERE id = \$(\d+)/i);
+      const prId = match ? params[parseInt(match[1], 10) - 1] : params[0];
+      const idx = this.requisitions.findIndex((r) => r.id === prId);
+      const deleted = idx !== -1 ? this.requisitions.splice(idx, 1)[0] : null;
+      return { rows: deleted ? [{ id: deleted.id, pr_number: deleted.pr_number }] : [], rowCount: deleted ? 1 : 0 };
+    }
+
+    // 17c. Check grn_receipts for PR
+    if (trimmed.includes('FROM grn_receipts WHERE pr_id = $1')) {
+      return { rows: [{ count: '0' }], rowCount: 1 };
+    }
+
+    // 17d. Delete notifications
+    if (trimmed.startsWith('DELETE FROM notifications')) {
+      return { rows: [], rowCount: 0 };
     }
 
     // 18. Count PRs for pagination
@@ -1477,6 +1505,150 @@ describe('Procurement & Purchase Requisition Module (CMMS Module 4)', () => {
       assert.equal(res.statusCode, 400);
       assert.equal(res.responseData.success, false);
       assert.match(res.responseData.message, /(Invalid status transition|Cannot cancel)/i);
+    });
+
+    it('18d. Successfully edit purchase requisition specifications (quantity, urgency, justification) in draft new status', async () => {
+      const pr = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000001')!;
+      pr.status = 'new';
+      pr.quantity_required = 5;
+
+      const { req, res, next } = createMockContext(
+        {
+          quantity_required: 12,
+          urgency: 'critical',
+          technical_justification: 'Updated justification for urgent cylinder breakdown',
+        },
+        { id: pr.id },
+        {},
+        {},
+        tech1User
+      );
+
+      await editPurchaseRequisition(req, res, next);
+      assert.equal(res.statusCode, 200);
+      assert.equal(res.responseData.success, true);
+      assert.equal(pr.quantity_required, 12);
+      assert.equal(pr.urgency, 'critical');
+    });
+
+    it('18e. Edit requisition is rejected with HTTP 409 Conflict if PR is already ordered or PO issued', async () => {
+      const pr = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000002')!;
+      assert.equal(pr.status, 'ordered');
+
+      const { req, res, next } = createMockContext(
+        { quantity_required: 20 },
+        { id: pr.id },
+        {},
+        {},
+        puneManagerUser
+      );
+
+      await editPurchaseRequisition(req, res, next);
+      assert.equal(res.statusCode, 409);
+      assert.equal(res.responseData.success, false);
+      assert.match(res.responseData.message, /Cannot edit requisition/i);
+    });
+
+    it('18f. Edit requisition rejects invalid quantity (0 or negative) with HTTP 400', async () => {
+      const pr = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000001')!;
+      pr.status = 'new';
+
+      const { req, res, next } = createMockContext(
+        { quantity_required: 0 },
+        { id: pr.id },
+        {},
+        {},
+        tech1User
+      );
+
+      await editPurchaseRequisition(req, res, next);
+      assert.equal(res.statusCode, 400);
+      assert.equal(res.responseData.success, false);
+      assert.match(res.responseData.message, /must be greater than zero/i);
+    });
+
+    it('18g. Successfully delete purchase requisition in draft new status without PO', async () => {
+      // Create a dedicated new PR to delete
+      const prToDelete = {
+        id: '70000000-0000-0000-0000-000000000099',
+        pr_number: 'PR-2026-00099',
+        work_order_id: null,
+        machine_id: '40000000-0000-0000-0000-000000000001',
+        part_id: '30000000-0000-0000-0000-000000000001',
+        quantity_required: 3,
+        urgency: 'high' as const,
+        technical_justification: 'Temporary draft requisition',
+        status: 'new' as const,
+        requested_by: tech1User.id,
+        approved_by: null,
+        po_number: null,
+        supplier_name: null,
+        unit_price: 1000,
+        expected_delivery_date: null,
+        received_date: null,
+        plant_id: '10000000-0000-0000-0000-000000000001',
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+      mockDb.requisitions.push(prToDelete);
+
+      const { req, res, next } = createMockContext(
+        {},
+        { id: prToDelete.id },
+        {},
+        {},
+        tech1User
+      );
+
+      await deletePurchaseRequisition(req, res, next);
+      assert.equal(res.statusCode, 200);
+      assert.equal(res.responseData.success, true);
+      assert.equal(mockDb.requisitions.some((r) => r.id === prToDelete.id), false);
+    });
+
+    it('18h. Delete requisition is rejected with HTTP 409 Conflict if PO is already issued', async () => {
+      const pr = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000002')!;
+      assert.ok(pr.po_number);
+
+      const { req, res, next } = createMockContext(
+        {},
+        { id: pr.id },
+        {},
+        {},
+        adminUser
+      );
+
+      await deletePurchaseRequisition(req, res, next);
+      assert.equal(res.statusCode, 409);
+      assert.equal(res.responseData.success, false);
+      assert.match(res.responseData.message, /Cannot delete requisition/i);
+    });
+
+    it('18i. Technician cannot delete another technician\'s purchase requisition (HTTP 403)', async () => {
+      const pr = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000001')!;
+      pr.requested_by = '00000000-0000-0000-0000-000000000004'; // tech1
+
+      // tech2 tries to delete
+      const otherTech: AuthenticatedUser = {
+        id: '00000000-0000-0000-0000-000000000099',
+        employee_code: 'TECH-99',
+        email: 'tech99@jcb.com',
+        role: 'technician',
+        plant_id: '10000000-0000-0000-0000-000000000001',
+      };
+
+      const { req, res, next } = createMockContext(
+        {},
+        { id: pr.id },
+        {},
+        {},
+        otherTech
+      );
+
+      await deletePurchaseRequisition(req, res, next);
+      assert.equal(res.statusCode, 403);
+      assert.equal(res.responseData.success, false);
+      assert.match(res.responseData.message, /Forbidden/i);
     });
   });
 

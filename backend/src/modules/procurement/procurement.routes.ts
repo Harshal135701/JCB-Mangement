@@ -4,6 +4,8 @@ import {
   getPurchaseRequisitions,
   getPurchaseRequisitionDetails,
   updatePRStatus,
+  editPurchaseRequisition,
+  deletePurchaseRequisition,
   approvePurchaseRequisition,
   rejectPurchaseRequisition,
   cancelPurchaseRequisition,
@@ -35,6 +37,11 @@ router.use(requireRoles('admin', 'manager', 'technician', 'store_manager'));
 router.post('/pr', createPurchaseRequisition);
 router.get('/pr', getPurchaseRequisitions);
 router.get('/pr/:id', getPurchaseRequisitionDetails);
+
+// Manager, Store Manager & Admin: Requisition status review, approvals, and cancellations
+// Requisition specification editing and deletion
+router.put('/pr/:id/edit', editPurchaseRequisition);
+router.delete('/pr/:id', deletePurchaseRequisition);
 
 // Manager, Store Manager & Admin: Requisition status review, approvals, and cancellations
 router.put('/pr/:id', requireRoles('admin', 'manager', 'store_manager'), updatePRStatus);

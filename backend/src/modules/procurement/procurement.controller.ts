@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import {
   createPurchaseRequisitionService,
+  editPurchaseRequisitionService,
+  deletePurchaseRequisitionService,
   getPurchaseRequisitionsService,
   getPurchaseRequisitionDetailsService,
   updatePRStatusService,
@@ -193,7 +195,43 @@ export const updatePRStatus = async (
     }
 
     const { id } = req.params;
-    const { status, po_number, supplier_name, unit_price, expected_delivery_date, remarks } = req.body || {};
+    const {
+      status,
+      po_number,
+      supplier_name,
+      unit_price,
+      expected_delivery_date,
+      remarks,
+      part_id,
+      quantity_required,
+      urgency,
+      technical_justification,
+      machine_id,
+      work_order_id,
+    } = req.body || {};
+
+    if ((part_id !== undefined || quantity_required !== undefined || urgency !== undefined || technical_justification !== undefined) && !status) {
+      const updatedPR = await editPurchaseRequisitionService(
+        id,
+        {
+          part_id,
+          quantity_required,
+          urgency,
+          technical_justification,
+          machine_id,
+          work_order_id,
+          expected_delivery_date,
+        },
+        user
+      );
+
+      res.json({
+        success: true,
+        message: `Purchase Requisition ${updatedPR.pr_number} updated successfully.`,
+        data: updatedPR,
+      });
+      return;
+    }
 
     const updatedPR = await updatePRStatusService(
       id,
@@ -221,6 +259,84 @@ export const updatePRStatus = async (
 // ---------------------------------------------------------------------------
 // 5. Approve Purchase Requisition (POST /api/v1/procurement/pr/:id/approve)
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// 4b. Edit Purchase Requisition Specification (PUT /api/v1/procurement/pr/:id/edit)
+// ---------------------------------------------------------------------------
+export const editPurchaseRequisition = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user || !user.id) {
+      res.status(401).json({ success: false, message: 'Unauthorized: Authentication required.' });
+      return;
+    }
+
+    const { id } = req.params;
+    const {
+      part_id,
+      quantity_required,
+      urgency,
+      technical_justification,
+      machine_id,
+      work_order_id,
+      expected_delivery_date,
+    } = req.body || {};
+
+    const updatedPR = await editPurchaseRequisitionService(
+      id,
+      {
+        part_id,
+        quantity_required,
+        urgency,
+        technical_justification,
+        machine_id,
+        work_order_id,
+        expected_delivery_date,
+      },
+      user
+    );
+
+    res.json({
+      success: true,
+      message: `Purchase Requisition ${updatedPR.pr_number} updated successfully.`,
+      data: updatedPR,
+    });
+  } catch (err) {
+    handleControllerError(err, res, next);
+  }
+};
+
+// ---------------------------------------------------------------------------
+// 4c. Delete Purchase Requisition (DELETE /api/v1/procurement/pr/:id)
+// ---------------------------------------------------------------------------
+export const deletePurchaseRequisition = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user || !user.id) {
+      res.status(401).json({ success: false, message: 'Unauthorized: Authentication required.' });
+      return;
+    }
+
+    const { id } = req.params;
+    const result = await deletePurchaseRequisitionService(id, user);
+
+    res.json({
+      success: true,
+      message: `Purchase Requisition ${result.pr_number} deleted successfully.`,
+      data: result,
+    });
+  } catch (err) {
+    handleControllerError(err, res, next);
+  }
+};
+
 export const approvePurchaseRequisition = async (
   req: Request,
   res: Response,

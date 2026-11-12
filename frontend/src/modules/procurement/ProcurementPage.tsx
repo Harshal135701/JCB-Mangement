@@ -25,6 +25,8 @@ import {
   Check,
   Ban,
   Eye,
+  Pencil,
+  Trash2,
   Calendar,
   Send,
   Boxes,
@@ -32,6 +34,8 @@ import {
   Sparkles,
   Info
 } from 'lucide-react';
+import { EditPRModal } from './components/EditPRModal';
+import { DeletePRModal } from './components/DeletePRModal';
 
 // ============================================================================
 // TYPES & CONTRACTS
@@ -76,6 +80,8 @@ export interface PurchaseRequisition {
   expected_delivery_date?: string | null;
   received_quantity?: number;
   requested_by?: string;
+  requested_by_name?: string | null;
+  requested_by_code?: string | null;
   requester_name?: string;
   requester_role?: string;
   approved_by?: string | null;
@@ -311,6 +317,8 @@ export const ProcurementPage: React.FC = () => {
 
   // Modal States
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [selectedPRForEdit, setSelectedPRForEdit] = useState<PurchaseRequisition | null>(null);
+  const [selectedPRForDelete, setSelectedPRForDelete] = useState<PurchaseRequisition | null>(null);
   const [selectedPRForApprove, setSelectedPRForApprove] = useState<PurchaseRequisition | null>(null);
   const [selectedPRForReject, setSelectedPRForReject] = useState<PurchaseRequisition | null>(null);
   const [selectedPRForCancel, setSelectedPRForCancel] = useState<PurchaseRequisition | null>(null);
@@ -1359,6 +1367,40 @@ export const ProcurementPage: React.FC = () => {
                                 title="View PR Full Details, Audit Logs & GRNs"
                               >
                                 <Eye className="w-4 h-4" />
+                              </button>
+
+                              {/* Edit Requisition */}
+                              <button
+                                onClick={() => setSelectedPRForEdit(pr)}
+                                className={`p-1.5 rounded-lg transition ${
+                                  ['new', 'under_review'].includes(pr.status)
+                                    ? 'text-blue-600 hover:text-blue-800 hover:bg-blue-100'
+                                    : 'text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100'
+                                }`}
+                                title={
+                                  ['new', 'under_review'].includes(pr.status)
+                                    ? 'Edit Purchase Requisition'
+                                    : `Requisition is '${pr.status}' (Specifications read-only)`
+                                }
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+
+                              {/* Delete Requisition */}
+                              <button
+                                onClick={() => setSelectedPRForDelete(pr)}
+                                className={`p-1.5 rounded-lg transition ${
+                                  pr.po_number || ['po_created', 'ordered', 'partially_received', 'fully_received'].includes(pr.status)
+                                    ? 'text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100'
+                                    : 'text-red-600 hover:text-red-800 hover:bg-red-100'
+                                }`}
+                                title={
+                                  pr.po_number || ['po_created', 'ordered', 'partially_received', 'fully_received'].includes(pr.status)
+                                    ? 'Deletion restricted: PO issued or items received'
+                                    : 'Delete Purchase Requisition'
+                                }
+                              >
+                                <Trash2 className="w-4 h-4" />
                               </button>
 
                               {/* Manager Approve */}
@@ -2698,6 +2740,42 @@ export const ProcurementPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Edit Purchase Requisition Modal */}
+      <EditPRModal
+        isOpen={Boolean(selectedPRForEdit)}
+        onClose={() => setSelectedPRForEdit(null)}
+        onSuccess={(updatedPR) => {
+          setFeedback({
+            type: 'success',
+            message: `Purchase Requisition ${updatedPR.pr_number} updated successfully!`,
+          });
+          fetchPRs();
+          if (isManager) fetchDashboardData();
+        }}
+        pr={selectedPRForEdit}
+        parts={parts}
+        machines={machines}
+        userRole={user?.role}
+        userId={user?.id}
+      />
+
+      {/* Delete Purchase Requisition Modal */}
+      <DeletePRModal
+        isOpen={Boolean(selectedPRForDelete)}
+        onClose={() => setSelectedPRForDelete(null)}
+        onSuccess={() => {
+          setFeedback({
+            type: 'success',
+            message: 'Purchase requisition deleted successfully from database.',
+          });
+          fetchPRs();
+          if (isManager) fetchDashboardData();
+        }}
+        pr={selectedPRForDelete}
+        userRole={user?.role}
+        userId={user?.id}
+      />
     </div>
   );
 };
