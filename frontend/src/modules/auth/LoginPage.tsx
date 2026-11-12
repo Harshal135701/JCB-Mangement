@@ -88,7 +88,7 @@ export const LoginPage: React.FC = () => {
         - Cover scaling with responsive positioning 
       */}
       <div
-        className="absolute inset-0 z-0 bg-cover bg-no-repeat bg-[position:30%_center] lg:bg-center pointer-events-none select-none"
+        className="absolute inset-0 z-0 bg-cover bg-no-repeat bg-[position:20%_center] lg:bg-[position:62%_center] pointer-events-none select-none"
         style={{
           backgroundImage: "url('/images/jcb-login-hero-wide.png')",
         }}
