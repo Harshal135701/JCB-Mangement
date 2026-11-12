@@ -80,73 +80,39 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen w-full flex flex-col lg:flex-row font-sans selection:bg-[#F9B101] selection:text-black overflow-x-hidden">
-      {/* =========================================================================
-          1. LEFT PANEL: JCB Excavator Background & Industrial Branding (55% width)
-          ========================================================================= */}
-      <div className="w-full lg:w-[55%] min-h-[440px] sm:min-h-[520px] lg:min-h-screen relative flex flex-col justify-between overflow-hidden bg-[#E5E9EE]">
-        {/* Supplied Extracted JCB Excavator Background Image */}
-        <div
-          className="absolute inset-0 z-0 bg-cover bg-no-repeat bg-[center_bottom] pointer-events-none select-none transition-transform duration-700"
-          style={{
-            backgroundImage: "url('/images/jcb-login-background.png')",
-          }}
-        />
+    <div className="min-h-screen w-full relative flex flex-col justify-between font-sans selection:bg-[#F9B101] selection:text-black overflow-x-hidden bg-[#EAEFF5]">
+      {/* 
+        High-Resolution JCB Excavator Background 
+        - Uses the supplied wide artwork (/images/jcb-login-hero-wide.png)
+        - Crisp, sharp, zero blur filters
+        - Cover scaling with responsive positioning 
+      */}
+      <div
+        className="absolute inset-0 z-0 bg-cover bg-no-repeat bg-[position:30%_center] lg:bg-center pointer-events-none select-none"
+        style={{
+          backgroundImage: "url('/images/jcb-login-hero-wide.png')",
+        }}
+      />
 
-        {/* Subtle Light Grey / White Shade Overlay (reduces intensity slightly, exactly matching reference) */}
-        <div className="absolute inset-0 z-1 bg-white/[0.08] backdrop-brightness-[0.98] pointer-events-none" />
+      {/* Top Header Navigation Bar */}
+      <header className="relative z-10 w-full p-4 sm:p-6 lg:p-8 flex items-center justify-between">
+        <Link
+          to="/"
+          className="inline-flex items-center gap-2 text-xs font-bold text-zinc-700 hover:text-black bg-white/85 hover:bg-white px-3.5 py-1.5 rounded-lg border border-zinc-200/80 shadow-xs transition-all"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          <span>← Back to Home</span>
+        </Link>
 
-        {/* Top Branding Section (Positioned in the upper portion as per reference) */}
-        <div className="relative z-10 pt-10 sm:pt-14 lg:pt-16 px-6 sm:px-12 flex flex-col items-center text-center">
-          {/* Prominent Official JCB Logo */}
-          <div className="transition-transform duration-200 hover:scale-[1.02]">
-            <img
-              src="/images/jcb-official-logo.png"
-              alt="JCB Logo"
-              className="w-40 sm:w-48 lg:w-56 h-auto mx-auto object-contain drop-shadow-sm select-none"
-            />
-          </div>
+        <span className="text-[11px] font-black text-zinc-700 uppercase tracking-widest bg-white/75 px-3 py-1 rounded-md border border-zinc-200/60 shadow-2xs">
+          JCB INDIA CMMS
+        </span>
+      </header>
 
-          {/* Heading */}
-          <h1 className="mt-5 sm:mt-6 text-2xl sm:text-3xl lg:text-[32px] font-extrabold text-[#111827] text-center leading-[1.25] tracking-tight max-w-md sm:max-w-lg">
-            Smart Machine<br />
-            Maintenance Management System
-          </h1>
-
-          {/* Small JCB Yellow Horizontal Underline */}
-          <div className="w-14 h-1.5 bg-[#F9B101] rounded-full mx-auto my-3.5 shadow-2xs" />
-
-          {/* Tagline */}
-          <p className="text-sm sm:text-base font-semibold text-zinc-700 text-center tracking-tight">
-            Keep Machines Running. Always.
-          </p>
-        </div>
-
-        {/* Bottom Spacer to ensure full visibility of the JCB Excavator asset */}
-        <div className="relative z-10 h-32 sm:h-44 lg:h-56 pointer-events-none" />
-      </div>
-
-      {/* =========================================================================
-          2. RIGHT PANEL: Clean White Login Card on Subtle Light Grey (45% width)
-          ========================================================================= */}
-      <div className="w-full lg:w-[45%] min-h-screen bg-[#F3F4F6] flex flex-col justify-between p-6 sm:p-10 lg:p-12 xl:p-16 z-10">
-        {/* Top Header Navigation */}
-        <div className="flex items-center justify-between">
-          <Link
-            to="/"
-            className="inline-flex items-center gap-2 text-xs font-semibold text-zinc-500 hover:text-zinc-900 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>← Back to Home</span>
-          </Link>
-
-          <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest">
-            JCB INDIA CMMS
-          </span>
-        </div>
-
-        {/* Clean Centered White Login Card */}
-        <div className="w-full max-w-[420px] mx-auto my-auto bg-white rounded-2xl shadow-[0_10px_35px_rgba(0,0,0,0.06)] border border-[#E5E7EB] p-8 sm:p-10">
+      {/* Main Content Area: Aligned to the Right Side of the Image */}
+      <main className="relative z-10 w-full flex-1 flex items-center justify-center lg:justify-end px-4 py-6 sm:px-8 lg:pr-14 xl:pr-24">
+        {/* Clean White Login Card */}
+        <div className="w-full max-w-[420px] bg-white rounded-2xl shadow-[0_15px_45px_rgba(0,0,0,0.12)] border border-[#E5E7EB] p-8 sm:p-10 my-auto animate-in fade-in duration-200">
           {/* Card Header: Welcome & Sign in to continue */}
           <div className="mb-6">
             <h2 className="text-3xl font-extrabold text-[#111827] tracking-tight">
@@ -188,7 +154,7 @@ export const LoginPage: React.FC = () => {
             </div>
           )}
 
-          {/* Direct Login Form */}
+          {/* Login Form */}
           <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
             {/* Employee ID */}
             <div>
@@ -287,16 +253,18 @@ export const LoginPage: React.FC = () => {
             </button>
           </form>
         </div>
+      </main>
 
-        {/* Footer Security Info */}
-        <div className="pt-6 border-t border-zinc-200/80 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-zinc-400">
-          <div className="flex items-center gap-1.5">
-            <Lock className="w-3.5 h-3.5 text-zinc-400" />
-            <span className="font-medium">256-Bit SSL Encrypted • Role-Based Access</span>
-          </div>
-          <p className="font-medium">© 2026 JCB India Limited.</p>
+      {/* Footer Security Info */}
+      <footer className="relative z-10 w-full p-4 sm:p-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-zinc-600">
+        <div className="flex items-center gap-1.5 bg-white/75 px-3 py-1 rounded-md border border-zinc-200/60 shadow-2xs">
+          <Lock className="w-3.5 h-3.5 text-zinc-500" />
+          <span className="font-semibold text-zinc-700">256-Bit SSL Encrypted • Role-Based Access</span>
         </div>
-      </div>
+        <p className="font-semibold text-zinc-700 bg-white/75 px-3 py-1 rounded-md border border-zinc-200/60 shadow-2xs">
+          © 2026 JCB India Limited.
+        </p>
+      </footer>
     </div>
   );
 };
