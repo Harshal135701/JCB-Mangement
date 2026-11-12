@@ -109,7 +109,7 @@ export const LoginPage: React.FC = () => {
         style={{
           backgroundImage: "url('/images/jcb-login-hero-wide.png')",
           backgroundSize: 'cover',
-          backgroundPosition: 'left center',
+          backgroundPosition: 'left 55%',
           backgroundRepeat: 'no-repeat',
         }}
       />
@@ -141,7 +141,7 @@ export const LoginPage: React.FC = () => {
        *   → At 1366 px: card left ≈ 1366 − 40 − 420 =  906 px  > text right ≈  738 px ✓
        *   → At 1280 px: card left ≈ 1280 − 40 − 420 =  820 px  > text right ≈  738 px ✓
        */}
-      <main className="relative z-10 w-full flex-1 flex items-start justify-center lg:justify-end px-4 pt-16 pb-8 lg:pt-20 lg:pr-6 xl:pr-10">
+      <main className="relative z-10 w-full flex-1 flex items-center justify-center lg:justify-end px-4 py-6 sm:px-8 lg:pr-12 xl:pr-20">
 
         {/* ── White login card (design completely unchanged) ─────────────── */}
         <div className="w-full max-w-[420px] bg-white rounded-2xl shadow-[0_15px_45px_rgba(0,0,0,0.12)] border border-[#E5E7EB] p-8 sm:p-10 animate-in fade-in duration-200">
