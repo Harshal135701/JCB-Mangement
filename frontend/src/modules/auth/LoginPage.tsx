@@ -19,6 +19,7 @@ export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Inputs initialize empty by default — no prefill or hardcoded demo credentials
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -27,6 +28,7 @@ export const LoginPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [showForgotNotice, setShowForgotNotice] = useState(false);
 
+  // If already authenticated, redirect to user's role-specific dashboard
   useEffect(() => {
     if (user) {
       navigate(getRoleHomeRoute(user.role), { replace: true });
@@ -35,7 +37,10 @@ export const LoginPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Prevent duplicate submission
     if (loading) return;
+
     setError('');
 
     const cleanIdentifier = identifier.trim();
@@ -43,6 +48,7 @@ export const LoginPage: React.FC = () => {
       setError('Please enter your Employee ID or email.');
       return;
     }
+
     if (!password) {
       setError('Please enter your password.');
       return;
@@ -52,8 +58,10 @@ export const LoginPage: React.FC = () => {
       setLoading(true);
       const loggedInUser = await login(cleanIdentifier, password, rememberMe);
 
+      // Check for preserved redirect destination
       const fromLocation = (location.state as any)?.from;
       const intendedPath = fromLocation?.pathname;
+
       const targetRoute =
         intendedPath && intendedPath !== '/login' && intendedPath !== '/'
           ? intendedPath
@@ -72,149 +80,129 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <div
-      className="min-h-screen w-full flex flex-col font-sans selection:bg-[#F9B101] selection:text-black overflow-x-hidden"
-      style={{
-        /*
-         * Full-page background — wide JCB artwork.
-         * left center → anchors image left edge to viewport left edge.
-         * This keeps the JCB logo + title text in the LEFT zone of the
-         * viewport. The open-sky area of the image is on the right.
-         *
-         * background-size: 110% auto → zooms the image slightly so the
-         * title text shifts leftward (deeper into the left zone), giving
-         * the right sky area more breathing room for the login card.
-         */
-        backgroundImage: "url('/images/jcb-login-hero-wide.png')",
-        backgroundSize: '110% auto',
-        backgroundPosition: 'left center',
-        backgroundRepeat: 'no-repeat',
-        backgroundColor: '#d6e0ea',          /* fallback / fill on tall screens */
-      }}
-    >
-      {/* ─────────────────────────────────────────────────────────────────────
-          RIGHT-SIDE WHITE GRADIENT OVERLAY
-          Fades the image horizontally from fully transparent on the left to
-          near-opaque white on the right. This ensures the login card always
-          sits on a clean, white surface even if any image text bleeds right.
-          The gradient starts at ~50% of the viewport so the full excavator
-          + title text section remains sharp and unobscured.
-      ───────────────────────────────────────────────────────────────────── */}
+    <div className="min-h-screen w-full relative flex flex-col justify-between font-sans selection:bg-[#F9B101] selection:text-black overflow-x-hidden bg-[#EAEFF5]">
+      {/* 
+        High-Resolution JCB Excavator Background 
+        - Uses the supplied wide artwork (/images/jcb-login-hero-wide.png)
+        - Crisp, sharp, zero blur filters
+        - Cover scaling with responsive positioning 
+      */}
       <div
-        className="absolute inset-0 z-0 pointer-events-none"
+        className="absolute inset-0 z-0 bg-cover bg-no-repeat bg-[position:30%_center] lg:bg-center pointer-events-none select-none"
         style={{
-          background:
-            'linear-gradient(to right, transparent 40%, rgba(240,244,248,0.70) 58%, rgba(243,244,246,0.96) 70%, #F3F4F6 82%)',
+          backgroundImage: "url('/images/jcb-login-hero-wide.png')",
         }}
       />
 
-      {/* ── Top navigation bar ── */}
-      <header className="relative z-10 w-full px-5 py-4 flex items-center justify-between">
+      {/* Top Header Navigation Bar */}
+      <header className="relative z-10 w-full p-4 sm:p-6 lg:p-8 flex items-center justify-between">
         <Link
           to="/"
-          className="inline-flex items-center gap-1.5 text-xs font-bold text-zinc-700 hover:text-black bg-white/80 hover:bg-white px-3 py-1.5 rounded-lg border border-zinc-200/70 shadow-sm transition-all"
+          className="inline-flex items-center gap-2 text-xs font-bold text-zinc-700 hover:text-black bg-white/85 hover:bg-white px-3.5 py-1.5 rounded-lg border border-zinc-200/80 shadow-xs transition-all"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
-          Back to Home
+          <span>← Back to Home</span>
         </Link>
 
-        <span className="text-[11px] font-black text-zinc-500 uppercase tracking-widest bg-white/80 px-3 py-1 rounded-md border border-zinc-200/60 shadow-sm">
+        <span className="text-[11px] font-black text-zinc-700 uppercase tracking-widest bg-white/75 px-3 py-1 rounded-md border border-zinc-200/60 shadow-2xs">
           JCB INDIA CMMS
         </span>
       </header>
 
-      {/* ── Main — card lives in the right white-gradient zone ── */}
-      <main className="relative z-10 flex-1 flex items-center justify-end pr-6 sm:pr-10 lg:pr-14 xl:pr-20 py-6">
-
-        {/* White login card */}
-        <div className="w-full max-w-[390px] bg-white rounded-2xl shadow-[0_16px_48px_rgba(0,0,0,0.11)] border border-[#E5E7EB] p-7 sm:p-9">
-
-          {/* Header */}
+      {/* Main Content Area: Aligned to the Right Side of the Image */}
+      <main className="relative z-10 w-full flex-1 flex items-center justify-center lg:justify-end px-4 py-6 sm:px-8 lg:pr-14 xl:pr-24">
+        {/* Clean White Login Card */}
+        <div className="w-full max-w-[420px] bg-white rounded-2xl shadow-[0_15px_45px_rgba(0,0,0,0.12)] border border-[#E5E7EB] p-8 sm:p-10 my-auto animate-in fade-in duration-200">
+          {/* Card Header: Welcome & Sign in to continue */}
           <div className="mb-6">
-            <h2 className="text-2xl font-extrabold text-[#111827] tracking-tight">
+            <h2 className="text-3xl font-extrabold text-[#111827] tracking-tight">
               Welcome
             </h2>
-            <p className="text-xs text-zinc-500 font-medium mt-1">
+            <p className="text-sm text-zinc-500 font-medium mt-1">
               Sign in to continue
             </p>
           </div>
 
-          {/* Error banner */}
+          {/* Error Banner */}
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-start gap-2 animate-in fade-in duration-150">
+            <div className="mb-5 p-3.5 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-start gap-2.5 shadow-2xs animate-in fade-in duration-150">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
               <span className="font-medium leading-relaxed">{error}</span>
             </div>
           )}
 
-          {/* Forgot-password governance notice */}
+          {/* Centralized Governance Notice */}
           {showForgotNotice && (
-            <div className="mb-4 p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-xs relative animate-in fade-in duration-150">
+            <div className="mb-5 p-4 bg-amber-50 border border-amber-200 text-amber-950 rounded-xl text-xs relative shadow-2xs animate-in fade-in duration-150">
               <button
                 type="button"
                 onClick={() => setShowForgotNotice(false)}
                 className="absolute top-2.5 right-2.5 text-zinc-400 hover:text-zinc-700 transition cursor-pointer"
-                aria-label="Dismiss"
+                aria-label="Dismiss notice"
               >
                 <X className="w-4 h-4" />
               </button>
-              <div className="flex items-start gap-2 pr-4">
+              <div className="flex items-start gap-2.5 pr-4">
                 <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                 <div className="space-y-1">
                   <p className="font-bold text-amber-900">Centralized Access Governance</p>
                   <p className="text-zinc-700 text-[11px] leading-relaxed">
-                    Credentials are managed by JCB Plant Administration. Contact your System
-                    Administrator for access assistance.
+                    Employee credentials and password resets are managed centrally by JCB Plant Administration. Please contact your Plant System Administrator or Shift In-Charge for access assistance.
                   </p>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Login form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-
+          {/* Login Form */}
+          <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
             {/* Employee ID */}
             <div>
-              <label className="block text-[11px] font-bold text-zinc-600 uppercase tracking-wider mb-1.5">
+              <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-2">
                 Employee ID
               </label>
               <div className="relative">
-                <User className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <User className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type="text"
                   required
                   disabled={loading}
                   value={identifier}
-                  onChange={(e) => { setIdentifier(e.target.value); if (error) setError(''); }}
-                  placeholder="Employee ID or email"
+                  onChange={(e) => {
+                    setIdentifier(e.target.value);
+                    if (error) setError('');
+                  }}
+                  placeholder="Enter your employee ID or email"
                   autoComplete="username"
-                  className="w-full pl-9 pr-3 py-2.5 bg-white border border-[#D1D5DB] rounded-xl text-sm text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-[#F9B101] focus:ring-2 focus:ring-[#F9B101]/20 transition disabled:opacity-60"
+                  className="w-full pl-10 pr-4 py-3 bg-white border border-[#D1D5DB] rounded-xl text-sm text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-[#F9B101] focus:ring-2 focus:ring-[#F9B101]/20 transition font-medium shadow-2xs disabled:opacity-60"
                 />
               </div>
             </div>
 
             {/* Password */}
             <div>
-              <label className="block text-[11px] font-bold text-zinc-600 uppercase tracking-wider mb-1.5">
+              <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-2">
                 Password
               </label>
               <div className="relative">
-                <Lock className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <Lock className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   required
                   disabled={loading}
                   value={password}
-                  onChange={(e) => { setPassword(e.target.value); if (error) setError(''); }}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (error) setError('');
+                  }}
                   placeholder="Enter your password"
                   autoComplete="current-password"
-                  className="w-full pl-9 pr-10 py-2.5 bg-white border border-[#D1D5DB] rounded-xl text-sm text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-[#F9B101] focus:ring-2 focus:ring-[#F9B101]/20 transition disabled:opacity-60"
+                  className="w-full pl-10 pr-11 py-3 bg-white border border-[#D1D5DB] rounded-xl text-sm text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-[#F9B101] focus:ring-2 focus:ring-[#F9B101]/20 transition font-medium shadow-2xs disabled:opacity-60"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 focus:outline-none cursor-pointer p-1"
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 focus:outline-none cursor-pointer p-1"
                   tabIndex={-1}
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
@@ -223,15 +211,15 @@ export const LoginPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Remember Me + Forgot Password */}
-            <div className="flex items-center justify-between text-xs pt-0.5">
+            {/* Action Row: Remember Me & Forgot Password */}
+            <div className="flex items-center justify-between text-xs pt-1">
               <label className="flex items-center gap-2 cursor-pointer select-none text-zinc-600 font-medium hover:text-zinc-900 transition">
                 <input
                   type="checkbox"
                   disabled={loading}
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
-                  className="w-4 h-4 rounded border-[#D1D5DB] cursor-pointer accent-[#F9B101]"
+                  className="w-4 h-4 rounded border-[#D1D5DB] text-[#F9B101] focus:ring-[#F9B101] cursor-pointer accent-[#F9B101]"
                 />
                 <span>Remember Me</span>
               </label>
@@ -245,21 +233,21 @@ export const LoginPage: React.FC = () => {
               </button>
             </div>
 
-            {/* JCB Yellow Login Button */}
+            {/* Full-Width JCB Yellow Login Button with Arrow */}
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-[#F9B101] hover:bg-[#E5A401] active:scale-[0.99] text-black font-black py-3 rounded-xl transition-all duration-150 text-sm uppercase tracking-wider shadow-md hover:shadow-lg disabled:opacity-50 mt-1 flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full bg-[#F9B101] hover:bg-[#E5A401] active:scale-[0.99] text-[#000000] font-black py-3.5 rounded-xl transition-all duration-150 text-sm uppercase tracking-wider shadow-md hover:shadow-lg disabled:opacity-50 mt-3 flex items-center justify-center gap-2 border border-amber-500/40 cursor-pointer"
             >
               {loading ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin text-black" />
                   <span>Signing in...</span>
                 </>
               ) : (
                 <>
                   <span>LOGIN</span>
-                  <ArrowRight className="w-4 h-4 stroke-[2.5]" />
+                  <ArrowRight className="w-4 h-4 text-black font-black stroke-[2.5]" />
                 </>
               )}
             </button>
@@ -267,14 +255,14 @@ export const LoginPage: React.FC = () => {
         </div>
       </main>
 
-      {/* ── Footer ── */}
-      <footer className="relative z-10 w-full px-5 py-3 flex flex-col sm:flex-row items-center justify-between gap-1.5 text-[11px]">
-        <div className="flex items-center gap-1.5 bg-white/80 px-3 py-1 rounded-md border border-zinc-200/50">
-          <Lock className="w-3 h-3 text-zinc-500" />
+      {/* Footer Security Info */}
+      <footer className="relative z-10 w-full p-4 sm:p-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-zinc-600">
+        <div className="flex items-center gap-1.5 bg-white/75 px-3 py-1 rounded-md border border-zinc-200/60 shadow-2xs">
+          <Lock className="w-3.5 h-3.5 text-zinc-500" />
           <span className="font-semibold text-zinc-700">256-Bit SSL Encrypted • Role-Based Access</span>
         </div>
-        <p className="font-semibold text-zinc-700 bg-white/80 px-3 py-1 rounded-md border border-zinc-200/50">
-          © 2026 JCB India Limited
+        <p className="font-semibold text-zinc-700 bg-white/75 px-3 py-1 rounded-md border border-zinc-200/60 shadow-2xs">
+          © 2026 JCB India Limited.
         </p>
       </footer>
     </div>
