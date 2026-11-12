@@ -76,20 +76,39 @@ export const LoginPage: React.FC = () => {
       className="min-h-screen w-full flex flex-col font-sans selection:bg-[#F9B101] selection:text-black overflow-x-hidden"
       style={{
         /*
-         * Full-page background — the wide JCB artwork.
-         * background-position: left center  → anchors the image's LEFT edge to
-         * the viewport's left edge, pushing the centred title+logo LEFTWARD.
-         * The right portion of the image (open sky) stays on the right side of
-         * the viewport — exactly where the login card sits, with no overlap.
+         * Full-page background — wide JCB artwork.
+         * left center → anchors image left edge to viewport left edge.
+         * This keeps the JCB logo + title text in the LEFT zone of the
+         * viewport. The open-sky area of the image is on the right.
+         *
+         * background-size: 110% auto → zooms the image slightly so the
+         * title text shifts leftward (deeper into the left zone), giving
+         * the right sky area more breathing room for the login card.
          */
         backgroundImage: "url('/images/jcb-login-hero-wide.png')",
-        backgroundSize: 'cover',
+        backgroundSize: '110% auto',
         backgroundPosition: 'left center',
         backgroundRepeat: 'no-repeat',
-        backgroundAttachment: 'scroll',
+        backgroundColor: '#d6e0ea',          /* fallback / fill on tall screens */
       }}
     >
-      {/* ── Top bar ── */}
+      {/* ─────────────────────────────────────────────────────────────────────
+          RIGHT-SIDE WHITE GRADIENT OVERLAY
+          Fades the image horizontally from fully transparent on the left to
+          near-opaque white on the right. This ensures the login card always
+          sits on a clean, white surface even if any image text bleeds right.
+          The gradient starts at ~50% of the viewport so the full excavator
+          + title text section remains sharp and unobscured.
+      ───────────────────────────────────────────────────────────────────── */}
+      <div
+        className="absolute inset-0 z-0 pointer-events-none"
+        style={{
+          background:
+            'linear-gradient(to right, transparent 40%, rgba(240,244,248,0.70) 58%, rgba(243,244,246,0.96) 70%, #F3F4F6 82%)',
+        }}
+      />
+
+      {/* ── Top navigation bar ── */}
       <header className="relative z-10 w-full px-5 py-4 flex items-center justify-between">
         <Link
           to="/"
@@ -99,16 +118,16 @@ export const LoginPage: React.FC = () => {
           Back to Home
         </Link>
 
-        <span className="text-[11px] font-black text-zinc-700 uppercase tracking-widest bg-white/70 px-3 py-1 rounded-md border border-zinc-200/60 shadow-sm">
+        <span className="text-[11px] font-black text-zinc-500 uppercase tracking-widest bg-white/80 px-3 py-1 rounded-md border border-zinc-200/60 shadow-sm">
           JCB INDIA CMMS
         </span>
       </header>
 
-      {/* ── Main — card pushed hard to the right into the clear-sky zone ── */}
+      {/* ── Main — card lives in the right white-gradient zone ── */}
       <main className="relative z-10 flex-1 flex items-center justify-end pr-6 sm:pr-10 lg:pr-14 xl:pr-20 py-6">
 
-        {/* White login card — sits in the right open-sky area of the image */}
-        <div className="w-full max-w-[390px] bg-white/95 backdrop-blur-[1px] rounded-2xl shadow-[0_16px_48px_rgba(0,0,0,0.14)] border border-white/80 p-7 sm:p-9">
+        {/* White login card */}
+        <div className="w-full max-w-[390px] bg-white rounded-2xl shadow-[0_16px_48px_rgba(0,0,0,0.11)] border border-[#E5E7EB] p-7 sm:p-9">
 
           {/* Header */}
           <div className="mb-6">
@@ -144,7 +163,8 @@ export const LoginPage: React.FC = () => {
                 <div className="space-y-1">
                   <p className="font-bold text-amber-900">Centralized Access Governance</p>
                   <p className="text-zinc-700 text-[11px] leading-relaxed">
-                    Credentials are managed by JCB Plant Administration. Contact your System Administrator for access assistance.
+                    Credentials are managed by JCB Plant Administration. Contact your System
+                    Administrator for access assistance.
                   </p>
                 </div>
               </div>
@@ -249,11 +269,11 @@ export const LoginPage: React.FC = () => {
 
       {/* ── Footer ── */}
       <footer className="relative z-10 w-full px-5 py-3 flex flex-col sm:flex-row items-center justify-between gap-1.5 text-[11px]">
-        <div className="flex items-center gap-1.5 bg-white/70 px-3 py-1 rounded-md border border-zinc-200/50">
+        <div className="flex items-center gap-1.5 bg-white/80 px-3 py-1 rounded-md border border-zinc-200/50">
           <Lock className="w-3 h-3 text-zinc-500" />
           <span className="font-semibold text-zinc-700">256-Bit SSL Encrypted • Role-Based Access</span>
         </div>
-        <p className="font-semibold text-zinc-700 bg-white/70 px-3 py-1 rounded-md border border-zinc-200/50">
+        <p className="font-semibold text-zinc-700 bg-white/80 px-3 py-1 rounded-md border border-zinc-200/50">
           © 2026 JCB India Limited
         </p>
       </footer>
