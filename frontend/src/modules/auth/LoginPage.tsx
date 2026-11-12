@@ -114,6 +114,14 @@ export const LoginPage: React.FC = () => {
         }}
       />
 
+      {/* ── Transparent Grey Overlay over Background Image ─────────────── */}
+      <div
+        className="absolute inset-0 z-1 pointer-events-none select-none"
+        style={{
+          backgroundColor: 'rgba(80, 80, 80, 0.25)',
+        }}
+      />
+
       {/* ── Top navigation bar ──────────────────────────────────────────── */}
       <header className="relative z-10 w-full px-5 py-4 sm:px-8 sm:py-5 flex items-center justify-between flex-shrink-0">
         <Link
