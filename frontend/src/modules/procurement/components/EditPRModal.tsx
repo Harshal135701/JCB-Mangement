@@ -12,7 +12,9 @@ import {
   Calendar,
   FileText,
   Save,
-  ShieldAlert
+  ShieldAlert,
+  Eye,
+  Lock,
 } from 'lucide-react';
 
 export interface SparePartOption {
@@ -89,12 +91,7 @@ export const EditPRModal: React.FC<EditPRModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isEditable) {
-      setErrorMsg(
-        `Requisition in '${pr.status}' status cannot be modified. Only 'new' or 'under_review' requisitions are eligible for editing.`
-      );
-      return;
-    }
+    if (!isEditable) return; // Silently block — button is hidden anyway
 
     if (!partId) {
       setErrorMsg('Please select a valid spare part from the master catalog.');
@@ -149,25 +146,37 @@ export const EditPRModal: React.FC<EditPRModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
       <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] flex flex-col my-auto">
         {/* Header */}
-        <div className="bg-zinc-950 p-5 flex items-center justify-between border-b border-zinc-800 shrink-0">
+        <div className={`${isEditable ? 'bg-zinc-950' : 'bg-zinc-700'} p-5 flex items-center justify-between border-b border-zinc-800 shrink-0`}>
           <div className="flex items-center gap-3">
             <div className="bg-jcb-yellow text-black font-black text-sm px-2.5 py-1 rounded shadow uppercase tracking-wide">
               {pr.pr_number}
             </div>
             <div>
               <h3 className="text-base font-black text-white tracking-wide uppercase flex items-center gap-2">
-                Edit Purchase Requisition
+                {isEditable ? (
+                  'Edit Purchase Requisition'
+                ) : (
+                  <>
+                    <Lock className="w-4 h-4 text-zinc-300" />
+                    View Requisition (Read-Only)
+                  </>
+                )}
               </h3>
               <p className="text-xs text-zinc-400">
                 Created: {new Date(pr.created_at).toLocaleDateString()} | Requester:{' '}
                 {pr.requester_name || pr.requested_by_name || 'Technician'}
+                {!isEditable && (
+                  <span className="ml-2 bg-zinc-600 text-zinc-200 px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider">
+                    {pr.status.replace(/_/g, ' ')}
+                  </span>
+                )}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
             className="text-zinc-400 hover:text-white p-1 rounded-lg transition"
-            title="Close Modal"
+            title="Close"
           >
             <X className="w-5 h-5" />
           </button>
@@ -175,11 +184,11 @@ export const EditPRModal: React.FC<EditPRModalProps> = ({
 
         {/* Status Warning if not editable */}
         {!isEditable && (
-          <div className="bg-amber-50 border-b border-amber-200 p-4 flex items-start gap-3">
+          <div className="bg-amber-50 border-b border-amber-300 p-4 flex items-start gap-3">
             <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
             <div className="text-xs text-amber-900 leading-relaxed">
               <strong className="font-bold">Editing Restricted:</strong> This requisition is currently in{' '}
-              <span className="font-mono font-bold uppercase underline">{pr.status}</span> status.
+              <span className="font-mono font-bold uppercase underline">{pr.status.replace(/_/g, '_')}</span> status.
               Specifications cannot be modified once a vendor has been selected, approval granted, or a Purchase Order issued.
               To discontinue, please use <strong>Cancel Requisition</strong>.
             </div>
@@ -336,16 +345,18 @@ export const EditPRModal: React.FC<EditPRModalProps> = ({
               disabled={submitting}
               className="px-4 py-2 border border-zinc-300 text-zinc-700 rounded-xl text-xs font-bold hover:bg-zinc-100 transition"
             >
-              Cancel
+              {isEditable ? 'Cancel' : 'Close'}
             </button>
-            <button
-              type="submit"
-              disabled={!isEditable || submitting}
-              className="bg-jcb-yellow hover:bg-jcb-yellowDark text-black font-black px-6 py-2 rounded-xl text-xs uppercase tracking-wider transition shadow border border-amber-500 disabled:opacity-50 flex items-center gap-2"
-            >
-              <Save className="w-4 h-4" />
-              <span>{submitting ? 'Saving Changes...' : 'Save Changes'}</span>
-            </button>
+            {isEditable && (
+              <button
+                type="submit"
+                disabled={submitting}
+                className="bg-jcb-yellow hover:bg-jcb-yellowDark text-black font-black px-6 py-2 rounded-xl text-xs uppercase tracking-wider transition shadow border border-amber-500 disabled:opacity-50 flex items-center gap-2"
+              >
+                <Save className="w-4 h-4" />
+                <span>{submitting ? 'Saving Changes...' : 'Save Changes'}</span>
+              </button>
+            )}
           </div>
         </form>
       </div>
