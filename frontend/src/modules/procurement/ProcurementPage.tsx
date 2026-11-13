@@ -189,6 +189,15 @@ export const DEFAULT_PROCUREMENT_DASHBOARD: ProcurementDashboardData = {
 };
 
 export interface PRDetails extends PurchaseRequisition {
+  timeline?: Array<{
+    id: string;
+    action: string;
+    performed_by_name: string;
+    performed_by_role: string;
+    created_at: string;
+    details?: any;
+    new_values?: any;
+  }>;
   audit_logs?: Array<{
     id: string;
     action: string;
@@ -611,8 +620,12 @@ export const ProcurementPage: React.FC = () => {
     setPage(1);
   };
 
-  // Open PR Details Modal
-  const handleOpenDetails = async (prId: string) => {
+  // Open PR Details Modal with zero delay: display row data immediately
+  const handleOpenDetails = async (prItem: PurchaseRequisition | string) => {
+    const prId = typeof prItem === 'string' ? prItem : prItem.id;
+    if (typeof prItem !== 'string') {
+      setSelectedPRForDetails(prItem as any);
+    }
     try {
       setLoadingDetails(true);
       const res = await apiClient.get(`/procurement/pr/${prId}`);
@@ -620,10 +633,7 @@ export const ProcurementPage: React.FC = () => {
         setSelectedPRForDetails(res.data.data);
       }
     } catch (err: any) {
-      setFeedback({
-        type: 'error',
-        message: err.response?.data?.message || 'Failed to load requisition details.',
-      });
+      console.warn('Failed to load deep requisition details:', err);
     } finally {
       setLoadingDetails(false);
     }
@@ -1405,7 +1415,7 @@ export const ProcurementPage: React.FC = () => {
                             <div className="flex items-center justify-end gap-1.5 flex-wrap">
                               {/* Details Inspection */}
                               <button
-                                onClick={() => handleOpenDetails(pr.id)}
+                                onClick={() => handleOpenDetails(pr)}
                                 className="p-1.5 text-zinc-500 hover:text-black hover:bg-zinc-200 rounded-lg transition"
                                 title="View PR Full Details, Audit Logs & GRNs"
                               >
@@ -1413,21 +1423,15 @@ export const ProcurementPage: React.FC = () => {
                               </button>
 
                               {/* Edit Requisition */}
-                              <button
-                                onClick={() => setSelectedPRForEdit(pr)}
-                                className={`p-1.5 rounded-lg transition ${
-                                  ['new', 'under_review'].includes(pr.status)
-                                    ? 'text-blue-600 hover:text-blue-800 hover:bg-blue-100'
-                                    : 'text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100'
-                                }`}
-                                title={
-                                  ['new', 'under_review'].includes(pr.status)
-                                    ? 'Edit Purchase Requisition'
-                                    : `Requisition is '${pr.status}' (Specifications read-only)`
-                                }
-                              >
-                                <Pencil className="w-4 h-4" />
-                              </button>
+                              {(!pr.po_number && !['po_created', 'ordered', 'partially_received', 'fully_received', 'cancelled', 'rejected'].includes(pr.status?.toLowerCase())) && (
+                                <button
+                                  onClick={() => setSelectedPRForEdit(pr)}
+                                  className="p-1.5 rounded-lg transition text-blue-600 hover:text-blue-800 hover:bg-blue-100"
+                                  title="Edit Purchase Requisition"
+                                >
+                                  <Pencil className="w-4 h-4" />
+                                </button>
+                              )}
 
                               {/* Delete Requisition */}
                               <button
@@ -2747,14 +2751,14 @@ export const ProcurementPage: React.FC = () => {
               )}
 
               {/* Audit Logs Trail */}
-              {selectedPRForDetails.audit_logs && selectedPRForDetails.audit_logs.length > 0 && (
+              {((selectedPRForDetails.timeline && selectedPRForDetails.timeline.length > 0) || (selectedPRForDetails.audit_logs && selectedPRForDetails.audit_logs.length > 0)) && (
                 <div>
                   <h4 className="text-xs font-black text-zinc-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                     <ClipboardList className="w-3.5 h-3.5 text-zinc-600" />
                     <span>Regulatory Audit Trail</span>
                   </h4>
                   <div className="border border-zinc-200 rounded-xl overflow-hidden divide-y divide-zinc-100 text-xs">
-                    {selectedPRForDetails.audit_logs.map((log) => (
+                    {(selectedPRForDetails.timeline || selectedPRForDetails.audit_logs || []).map((log: any) => (
                       <div key={log.id} className="p-2.5 flex items-center justify-between">
                         <div>
                           <span className="font-mono font-bold text-zinc-900">{log.action}</span>

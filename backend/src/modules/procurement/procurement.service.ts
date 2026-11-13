@@ -852,48 +852,55 @@ export async function getPurchaseRequisitionDetailsService(
     }
   }
 
-  // Fetch GRN history (receipts)
+  // Fetch receipts, transactions, and audit timeline in parallel to minimize latency
   let receipts: any[] = [];
+  let transactions: any[] = [];
+  let timeline: any[] = [];
+
   try {
-    const grnRes = await query(
-      `SELECT gr.*, u.full_name as received_by_name, u.employee_code as received_by_code
-       FROM grn_receipts gr
-       JOIN users u ON gr.received_by = u.id
-       WHERE gr.pr_id = $1
-       ORDER BY gr.created_at DESC`,
-      [pr.id]
-    );
-    receipts = grnRes.rows;
+    const [grnRes, txRes, auditRes] = await Promise.all([
+      query(
+        `SELECT gr.*, u.full_name as received_by_name, u.employee_code as received_by_code
+         FROM grn_receipts gr
+         JOIN users u ON gr.received_by = u.id
+         WHERE gr.pr_id = $1
+         ORDER BY gr.created_at DESC`,
+        [pr.id]
+      ).catch(() => ({ rows: [] })),
+
+      query(
+        `SELECT it.*, u.full_name as performed_by_name
+         FROM inventory_transactions it
+         JOIN users u ON it.performed_by = u.id
+         WHERE it.part_id = $1 AND it.remarks LIKE $2
+         ORDER BY it.created_at DESC`,
+        [pr.part_id, `%[PR:${pr.id}]%`]
+      ).catch(() => ({ rows: [] })),
+
+      query(
+        `SELECT a.*, u.full_name as performed_by_name, u.role as performed_by_role
+         FROM audit_logs a
+         LEFT JOIN users u ON a.performed_by = u.id
+         WHERE a.entity_name = 'purchase_requisitions' AND a.entity_id = $1
+         ORDER BY a.created_at ASC`,
+        [pr.id]
+      ).catch(() => ({ rows: [] })),
+    ]);
+
+    receipts = grnRes.rows || [];
+    transactions = txRes.rows || [];
+    timeline = auditRes.rows || [];
   } catch {
-    // If grn_receipts table query fails in mock test environment, continue
+    // Continue with base details if auxiliary query fails
   }
-
-  // Fetch related stock transactions
-  const txRes = await query(
-    `SELECT it.*, u.full_name as performed_by_name
-     FROM inventory_transactions it
-     JOIN users u ON it.performed_by = u.id
-     WHERE it.part_id = $1 AND it.remarks LIKE $2
-     ORDER BY it.created_at DESC`,
-    [pr.part_id, `%[PR:${pr.id}]%`]
-  );
-
-  // Fetch audit log history
-  const auditRes = await query(
-    `SELECT a.*, u.full_name as performed_by_name, u.role as performed_by_role
-     FROM audit_logs a
-     LEFT JOIN users u ON a.performed_by = u.id
-     WHERE a.entity_name = 'purchase_requisitions' AND a.entity_id = $1
-     ORDER BY a.created_at ASC`,
-    [pr.id]
-  );
 
   return {
     ...pr,
     grn_receipts: receipts,
     receipts,
-    transactions: txRes.rows,
-    timeline: auditRes.rows,
+    transactions,
+    timeline,
+    audit_logs: timeline,
   };
 }
 
@@ -1393,10 +1400,11 @@ export async function editPurchaseRequisitionService(
       }
     }
 
-    // Status check: only permitted in 'new' or 'under_review' status
-    if (!['new', 'under_review'].includes(currentPR.status)) {
+    // Status check: permitted for pre-order requisitions (new, under_review, approval_pending, quotation_pending, vendor_selected)
+    const nonEditableStatuses = ['po_created', 'ordered', 'partially_received', 'fully_received', 'cancelled', 'rejected'];
+    if (nonEditableStatuses.includes(currentPR.status) || currentPR.po_number) {
       throw new ProcurementServiceError(
-        `Cannot edit requisition in '${currentPR.status}' status. Editing is only permitted for 'new' or 'under_review' requisitions before vendor selection, approval, or order placement.`,
+        `Cannot edit requisition in '${currentPR.status}' status. Specifications cannot be modified once a Purchase Order is issued or items ordered.`,
         409
       );
     }
@@ -1598,8 +1606,8 @@ export async function deletePurchaseRequisitionService(
       if (pr.requested_by !== user.id) {
         throw new ProcurementServiceError('Forbidden: Technicians can only delete their own purchase requisitions.', 403);
       }
-      if (pr.status !== 'new') {
-        throw new ProcurementServiceError('Forbidden: Technicians can only delete requisitions in draft new status.', 403);
+      if (pr.status !== 'new' && pr.status !== 'approval_pending' && pr.status !== 'under_review') {
+        throw new ProcurementServiceError('Forbidden: Technicians can only delete their own pending requisitions.', 403);
       }
     } else if (user.role === 'manager' || user.role === 'store_manager') {
       const authorizedPlantId = getAuthorizedPlantId(user);
