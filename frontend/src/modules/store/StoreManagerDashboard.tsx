@@ -136,8 +136,10 @@ interface DamagedStockItem {
   part_number: string;
   part_name: string;
   quantity: number;
-  damage_reason: string;
-  quarantined_bin: string;
+  damage_reason?: string;
+  reason?: string;
+  quarantined_bin?: string;
+  location?: string;
   disposition: 'quarantined' | 'scrapped' | 'returned_to_vendor' | 'repaired_restocked';
   reported_by_name?: string | null;
   disposition_by_name?: string | null;
@@ -150,6 +152,7 @@ interface MovementReportItem {
   transaction_type: string;
   transaction_count: number;
   total_units: number;
+  total_units_moved?: number;
 }
 
 interface ProcurementDashboardData {
@@ -408,9 +411,16 @@ export const StoreManagerDashboard: React.FC = () => {
       ]);
 
       if (moveRes.status === 'fulfilled' && moveRes.value.data?.success) {
-        const list = moveRes.value.data?.movement_by_type || moveRes.value.data?.data?.movement_by_type || (Array.isArray(moveRes.value.data?.data) ? moveRes.value.data?.data : []);
+        const rawList = moveRes.value.data?.movement_by_type || moveRes.value.data?.data?.movement_by_type || (Array.isArray(moveRes.value.data?.data) ? moveRes.value.data?.data : []);
+        const list = rawList.map((m: any) => ({
+          ...m,
+          total_units: Number(m.total_units ?? m.total_units_moved ?? 0),
+        }));
         setMovementReport(list);
-        const topParts = moveRes.value.data?.top_moved_parts || moveRes.value.data?.data?.top_moved_parts || [];
+        const topParts = (moveRes.value.data?.top_moved_parts || moveRes.value.data?.data?.top_moved_parts || []).map((tp: any) => ({
+          ...tp,
+          total_units: Number(tp.total_units ?? tp.total_units_moved ?? 0),
+        }));
         setTopMovedParts(topParts);
       }
       if (valRes.status === 'fulfilled' && valRes.value.data?.success && valRes.value.data?.data) {
@@ -438,7 +448,8 @@ export const StoreManagerDashboard: React.FC = () => {
   useEffect(() => {
     fetchDashboardSummary();
     fetchCatalogParts();
-  }, [fetchDashboardSummary, fetchCatalogParts]);
+    fetchReports();
+  }, [fetchDashboardSummary, fetchCatalogParts, fetchReports]);
 
   // Tab switch effect
   useEffect(() => {
@@ -787,7 +798,7 @@ export const StoreManagerDashboard: React.FC = () => {
               CENTRAL STORE & INVENTORY HUB
             </h1>
             <span className="bg-zinc-100 text-zinc-700 font-bold text-[10px] px-2.5 py-1 rounded-full uppercase tracking-wider border border-zinc-300">
-              {user?.plantName || 'Plant 1: Ballabgarh Works'}
+              {user?.plantName || (user as any)?.plant_name || 'Central Store Hub'}
             </span>
           </div>
           <p className="text-xs text-zinc-500 font-medium mt-1.5">
@@ -989,8 +1000,8 @@ export const StoreManagerDashboard: React.FC = () => {
             iconBgColor="bg-amber-100"
             iconColor="text-amber-900"
             label="Total Valuation"
-            value={`₹${(summary.total_inventory_valuation / 100000).toFixed(1)}L`}
-            subtitle={`₹${Number(summary.total_inventory_valuation || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
+            value={`₹${(Number(summary.total_inventory_valuation || 0) / 100000).toFixed(2)}L`}
+            subtitle={`₹${Number(summary.total_inventory_valuation || 0).toLocaleString('en-IN')}`}
             accentColor="border-l-4 border-l-jcb-yellow"
           />
         </div>
@@ -1000,14 +1011,18 @@ export const StoreManagerDashboard: React.FC = () => {
           {/* 7. Low-Stock Alerts */}
           <TopKPICard
             icon={AlertTriangle}
-            iconBgColor="bg-red-100"
-            iconColor="text-red-700"
+            iconBgColor={summary.low_stock_items_count > 0 ? "bg-red-100" : "bg-emerald-100"}
+            iconColor={summary.low_stock_items_count > 0 ? "text-red-700" : "text-emerald-700"}
             label="Low Stock Alert"
             value={summary.low_stock_items_count}
             trend={summary.low_stock_items_count > 0 ? `${summary.low_stock_items_count} Below Min` : 'Nominal'}
-            trendColor="bg-red-100 text-red-800 font-black border border-red-300"
-            subtitle="Safety threshold breached"
-            accentColor="border-l-4 border-l-red-600"
+            trendColor={
+              summary.low_stock_items_count > 0
+                ? 'bg-red-100 text-red-800 font-black border border-red-300'
+                : 'bg-emerald-50 text-emerald-800 font-bold border border-emerald-300'
+            }
+            subtitle={summary.low_stock_items_count > 0 ? 'Safety threshold breached' : 'All stock above safety minimum'}
+            accentColor={summary.low_stock_items_count > 0 ? 'border-l-4 border-l-red-600' : 'border-l-4 border-l-emerald-500'}
           />
 
           {/* 8. Pending Purchase Requisitions */}
@@ -1102,9 +1117,9 @@ export const StoreManagerDashboard: React.FC = () => {
         >
           <ShieldAlert className="w-4 h-4" />
           <span>Damaged & Quarantine Ledger</span>
-          {summary.total_quarantined_stock > 0 && (
+          {(dashboard?.damaged_stock?.total_damaged_reports ?? damagedItems.length) > 0 && (
             <span className="bg-purple-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full">
-              {summary.total_quarantined_stock} units
+              {dashboard?.damaged_stock?.total_damaged_reports ?? damagedItems.length}
             </span>
           )}
         </button>
@@ -1545,11 +1560,11 @@ export const StoreManagerDashboard: React.FC = () => {
                         <td className="px-4 py-3.5 font-mono font-black text-red-700 text-right">
                           {item.quantity}
                         </td>
-                        <td className="px-5 py-3.5 font-medium text-zinc-800 max-w-xs truncate" title={item.damage_reason}>
-                          {item.damage_reason}
+                        <td className="px-5 py-3.5 font-medium text-zinc-800 max-w-xs truncate" title={item.damage_reason || item.reason || 'Unspecified'}>
+                          {item.damage_reason || item.reason || 'Unspecified'}
                         </td>
                         <td className="px-4 py-3.5 font-mono font-bold text-purple-800">
-                          {item.quarantined_bin}
+                          {item.quarantined_bin || item.location || 'QUAR-BIN-01'}
                         </td>
                         <td className="px-4 py-3.5">
                           <span
@@ -1682,7 +1697,7 @@ export const StoreManagerDashboard: React.FC = () => {
                     {m.transaction_type.replace('_', ' ')}
                   </div>
                   <div className="text-2xl font-black font-mono text-zinc-950 mt-1">
-                    {m.total_units > 0 ? `+${m.total_units}` : m.total_units}
+                    {(m.total_units ?? m.total_units_moved ?? 0) > 0 ? `+${m.total_units ?? m.total_units_moved ?? 0}` : (m.total_units ?? m.total_units_moved ?? 0)}
                   </div>
                   <div className="text-[10px] text-zinc-400 font-bold mt-0.5">
                     {m.transaction_count} ledger events
@@ -1776,7 +1791,7 @@ export const StoreManagerDashboard: React.FC = () => {
                           {part.transaction_count} events
                         </td>
                         <td className="px-5 py-3.5 text-right font-mono font-black text-amber-700 text-sm">
-                          {Number(part.total_units_moved).toLocaleString('en-IN')} units
+                          {Number((part as any).total_units_moved ?? (part as any).total_units ?? 0).toLocaleString('en-IN')} units
                         </td>
                       </tr>
                     ))}

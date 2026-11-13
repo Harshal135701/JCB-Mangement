@@ -1359,7 +1359,7 @@ export async function getDamagedStockService(
 
   const queryParams = [...params, limit, offset];
   const listSql = `
-    SELECT ds.*, sp.part_number, sp.name AS part_name, sp.category, u.full_name AS reported_by_name
+    SELECT ds.*, ds.reason AS damage_reason, ds.location AS quarantined_bin, sp.part_number, sp.name AS part_name, sp.category, u.full_name AS reported_by_name
     FROM damaged_stock_items ds
     JOIN spare_parts sp ON ds.part_id = sp.id
     LEFT JOIN users u ON ds.reported_by = u.id
@@ -1657,7 +1657,8 @@ export async function getInventoryMovementReportService(
     SELECT
       it.transaction_type,
       COUNT(*)::int AS transaction_count,
-      COALESCE(SUM(ABS(it.quantity)), 0)::int AS total_units_moved
+      COALESCE(SUM(ABS(it.quantity)), 0)::int AS total_units_moved,
+      COALESCE(SUM(ABS(it.quantity)), 0)::int AS total_units
     FROM inventory_transactions it
     JOIN spare_parts sp ON it.part_id = sp.id
     WHERE ${dateFilter} ${plantFilter}
@@ -1672,7 +1673,8 @@ export async function getInventoryMovementReportService(
       sp.name AS part_name,
       sp.category,
       COUNT(it.id)::int AS transaction_count,
-      COALESCE(SUM(ABS(it.quantity)), 0)::int AS total_units_moved
+      COALESCE(SUM(ABS(it.quantity)), 0)::int AS total_units_moved,
+      COALESCE(SUM(ABS(it.quantity)), 0)::int AS total_units
     FROM inventory_transactions it
     JOIN spare_parts sp ON it.part_id = sp.id
     WHERE ${dateFilter} ${plantFilter}
