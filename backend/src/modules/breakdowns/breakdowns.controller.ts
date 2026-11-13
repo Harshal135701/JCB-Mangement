@@ -8,6 +8,19 @@ import {
   setWorkOrdersServiceIo,
   resetWorkOrdersServiceIo,
 } from '../work-orders/work-orders.service';
+import {
+  setAssignmentDb,
+  resetAssignmentDb,
+  setAssignmentIo,
+  resetAssignmentIo,
+  getBreakdownAssignmentService,
+  getBreakdownAssignmentHistoryService,
+  acceptBreakdownAssignmentService,
+  rejectBreakdownAssignmentService,
+  managerManualAssignService,
+  managerManualReassignService,
+  getEligibleTechniciansForBreakdownService,
+} from './breakdown-assignment.service';
 
 import {
   isUUID,
@@ -65,6 +78,7 @@ export const setBreakdownsDb = (
   activePool = customPool || (defaultPool as unknown as DbPoolLike);
   setWorkOrdersServiceDb(activeQuery, activePool);
   setBreakdownsServiceDb(activeQuery, activePool);
+  setAssignmentDb(activeQuery, activePool);
 };
 
 export const resetBreakdownsDb = (): void => {
@@ -72,18 +86,21 @@ export const resetBreakdownsDb = (): void => {
   activePool = defaultPool as unknown as DbPoolLike;
   resetWorkOrdersServiceDb();
   resetBreakdownsServiceDb();
+  resetAssignmentDb();
 };
 
 export const setBreakdownsIo = (custom: any): void => {
   customIo = custom;
   setWorkOrdersServiceIo(custom);
   setBreakdownsServiceIo(custom);
+  setAssignmentIo(custom);
 };
 
 export const resetBreakdownsIo = (): void => {
   customIo = undefined;
   resetWorkOrdersServiceIo();
   resetBreakdownsServiceIo();
+  resetAssignmentIo();
 };
 
 const getActiveIo = (override?: any): any => {
@@ -161,6 +178,8 @@ export const getBreakdowns = async (
       sort_order = 'desc',
       page = '1',
       limit = '50',
+      assigned_technician_id,
+      assignment_status,
     } = req.query as Record<string, string | undefined>;
 
     // 1. Pagination Validation
@@ -385,6 +404,16 @@ export const getBreakdowns = async (
       }
     }
 
+    if (assigned_technician_id && isUUID(assigned_technician_id)) {
+      params.push(assigned_technician_id);
+      whereClauses.push(`r.assigned_technician_id = $${params.length}`);
+    }
+
+    if (assignment_status) {
+      params.push(assignment_status.trim().toLowerCase());
+      whereClauses.push(`COALESCE(r.assignment_status, 'unassigned') = $${params.length}`);
+    }
+
     const searchQuery = search || q;
     if (searchQuery && searchQuery.trim().length > 0) {
       params.push(`%${searchQuery.trim()}%`);
@@ -419,15 +448,20 @@ export const getBreakdowns = async (
              r.reported_at, r.hour_meter_reading, r.temperature, r.pressure,
              r.problem_title, r.description, r.images_json, r.manager_remarks,
              r.created_at, r.updated_at,
+             r.assigned_technician_id,
+             COALESCE(r.assignment_status, 'unassigned') AS assignment_status,
+             r.current_assignment_id,
              m.machine_code, m.name AS machine_name, m.criticality, m.status AS machine_status,
              s.id AS shop_id, s.shop_name, s.plant_id,
              p.plant_name,
-             u.full_name AS reported_by_name, u.employee_code AS reported_by_code
+             u.full_name AS reported_by_name, u.employee_code AS reported_by_code,
+             tech.full_name AS assigned_technician_name, tech.employee_code AS assigned_technician_code
       FROM maintenance_requests r
       JOIN machines m ON r.machine_id = m.id
       JOIN shops s ON m.shop_id = s.id
       JOIN plants p ON s.plant_id = p.id
       JOIN users u ON r.reported_by_id = u.id
+      LEFT JOIN users tech ON r.assigned_technician_id = tech.id
       ${whereSql}
       ORDER BY r.${cleanSortBy} ${cleanSortOrder}
       LIMIT $${limitIdx} OFFSET $${offsetIdx}
@@ -477,8 +511,10 @@ export const getBreakdownDetails = async (
               u.full_name AS reported_by_name, u.employee_code AS reported_by_code,
               u.email AS reported_by_email, u.phone AS reported_by_phone,
               wo.id AS work_order_id, wo.wo_number, wo.status AS work_order_status,
-              wo.assigned_technician_id,
-              tech.full_name AS assigned_technician_name, tech.employee_code AS assigned_technician_code
+              COALESCE(wo.assigned_technician_id, r.assigned_technician_id) AS assigned_technician_id,
+              COALESCE(tech.full_name, ba_tech.full_name) AS assigned_technician_name,
+              COALESCE(tech.employee_code, ba_tech.employee_code) AS assigned_technician_code,
+              COALESCE(r.assignment_status, 'unassigned') AS assignment_status
        FROM maintenance_requests r
        JOIN machines m ON r.machine_id = m.id
        JOIN shops s ON m.shop_id = s.id
@@ -486,6 +522,7 @@ export const getBreakdownDetails = async (
        JOIN users u ON r.reported_by_id = u.id
        LEFT JOIN work_orders wo ON wo.complaint_id = r.id
        LEFT JOIN users tech ON wo.assigned_technician_id = tech.id
+       LEFT JOIN users ba_tech ON r.assigned_technician_id = ba_tech.id
        WHERE r.id = $1`,
       [id]
     );
@@ -1205,6 +1242,211 @@ export const convertBreakdownToWorkOrder = async (
         success: false,
         message: err.message,
       });
+      return;
+    }
+    next(err);
+  }
+};
+
+// GET /api/v1/breakdowns/:id/assignment
+export const getBreakdownAssignment = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    if (!isUUID(id)) {
+      res.status(400).json({ success: false, message: 'Invalid breakdown ID.' });
+      return;
+    }
+    const result = await getBreakdownAssignmentService(
+      { query: activeQuery, release: () => {} },
+      id,
+      req.user!
+    );
+    res.json({ success: true, data: result });
+  } catch (err: any) {
+    if (err instanceof BreakdownServiceError) {
+      res.status(err.statusCode).json({ success: false, message: err.message });
+      return;
+    }
+    next(err);
+  }
+};
+
+// GET /api/v1/breakdowns/:id/assignment/history & /assignments
+export const getBreakdownAssignmentHistory = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    if (!isUUID(id)) {
+      res.status(400).json({ success: false, message: 'Invalid breakdown ID.' });
+      return;
+    }
+    const result = await getBreakdownAssignmentHistoryService(
+      { query: activeQuery, release: () => {} },
+      id,
+      req.user!
+    );
+    res.json({ success: true, data: result });
+  } catch (err: any) {
+    if (err instanceof BreakdownServiceError) {
+      res.status(err.statusCode).json({ success: false, message: err.message });
+      return;
+    }
+    next(err);
+  }
+};
+
+// POST /api/v1/breakdowns/:id/assignment/accept
+export const acceptBreakdownAssignment = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  const client = await activePool.connect();
+  try {
+    const { id } = req.params;
+    if (!isUUID(id)) {
+      res.status(400).json({ success: false, message: 'Invalid breakdown ID.' });
+      return;
+    }
+    await client.query('BEGIN');
+    const result = await acceptBreakdownAssignmentService(client, id, req.user!, getActiveIo());
+    await client.query('COMMIT');
+    res.json(result);
+  } catch (err: any) {
+    try {
+      await client.query('ROLLBACK');
+    } catch {}
+    if (err instanceof BreakdownServiceError) {
+      res.status(err.statusCode).json({ success: false, message: err.message });
+      return;
+    }
+    next(err);
+  } finally {
+    client.release();
+  }
+};
+
+// POST /api/v1/breakdowns/:id/assignment/reject
+export const rejectBreakdownAssignment = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  const client = await activePool.connect();
+  try {
+    const { id } = req.params;
+    if (!isUUID(id)) {
+      res.status(400).json({ success: false, message: 'Invalid breakdown ID.' });
+      return;
+    }
+    await client.query('BEGIN');
+    const result = await rejectBreakdownAssignmentService(client, id, req.body || {}, req.user!, getActiveIo());
+    await client.query('COMMIT');
+    res.json(result);
+  } catch (err: any) {
+    try {
+      await client.query('ROLLBACK');
+    } catch {}
+    if (err instanceof BreakdownServiceError) {
+      res.status(err.statusCode).json({ success: false, message: err.message });
+      return;
+    }
+    next(err);
+  } finally {
+    client.release();
+  }
+};
+
+// POST /api/v1/breakdowns/:id/assignment/assign
+export const managerManualAssign = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  const client = await activePool.connect();
+  try {
+    const { id } = req.params;
+    if (!isUUID(id)) {
+      res.status(400).json({ success: false, message: 'Invalid breakdown ID.' });
+      return;
+    }
+    await client.query('BEGIN');
+    const result = await managerManualAssignService(client, id, req.body || {}, req.user!, getActiveIo());
+    await client.query('COMMIT');
+    res.status(201).json(result);
+  } catch (err: any) {
+    try {
+      await client.query('ROLLBACK');
+    } catch {}
+    if (err instanceof BreakdownServiceError) {
+      res.status(err.statusCode).json({ success: false, message: err.message });
+      return;
+    }
+    next(err);
+  } finally {
+    client.release();
+  }
+};
+
+// POST /api/v1/breakdowns/:id/assignment/reassign
+export const managerManualReassign = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  const client = await activePool.connect();
+  try {
+    const { id } = req.params;
+    if (!isUUID(id)) {
+      res.status(400).json({ success: false, message: 'Invalid breakdown ID.' });
+      return;
+    }
+    await client.query('BEGIN');
+    const result = await managerManualReassignService(client, id, req.body || {}, req.user!, getActiveIo());
+    await client.query('COMMIT');
+    res.json(result);
+  } catch (err: any) {
+    try {
+      await client.query('ROLLBACK');
+    } catch {}
+    if (err instanceof BreakdownServiceError) {
+      res.status(err.statusCode).json({ success: false, message: err.message });
+      return;
+    }
+    next(err);
+  } finally {
+    client.release();
+  }
+};
+
+// GET /api/v1/breakdowns/:id/eligible-technicians
+export const getEligibleTechnicians = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    if (!isUUID(id)) {
+      res.status(400).json({ success: false, message: 'Invalid breakdown ID.' });
+      return;
+    }
+    const result = await getEligibleTechniciansForBreakdownService(
+      { query: activeQuery, release: () => {} },
+      id,
+      req.user!
+    );
+    res.json({ success: true, data: result });
+  } catch (err: any) {
+    if (err instanceof BreakdownServiceError) {
+      res.status(err.statusCode).json({ success: false, message: err.message });
       return;
     }
     next(err);

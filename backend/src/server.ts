@@ -18,13 +18,15 @@ export const io = new SocketIOServer(server, {
 // Initialize authenticated Socket.IO gateway with JWT validation & secure room routing
 initSocketServer(io);
 
-server.listen(config.port, () => {
-  console.log(`=======================================================`);
-  console.log(`🚜 JCB SMART MACHINE MAINTENANCE MANAGEMENT SYSTEM`);
-  console.log(`🚀 Backend API Server running on port ${config.port}`);
-  console.log(`🛡️  Security Foundation active: CORS allowlist & Rate Limiting enabled`);
-  console.log(`📡 Socket.io Real-time Gateway active on port ${config.port}`);
-  console.log(`=======================================================`);
-});
+if (require.main === module) {
+  server.listen(config.port, () => {
+    console.log(`=======================================================`);
+    console.log(`🚜 JCB SMART MACHINE MAINTENANCE MANAGEMENT SYSTEM`);
+    console.log(`🚀 Backend API Server running on port ${config.port}`);
+    console.log(`🛡️  Security Foundation active: CORS allowlist & Rate Limiting enabled`);
+    console.log(`📡 Socket.io Real-time Gateway active on port ${config.port}`);
+    console.log(`=======================================================`);
+  });
+}
 
 export default server;

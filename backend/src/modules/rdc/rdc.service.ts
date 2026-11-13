@@ -1140,19 +1140,20 @@ export async function dispatchChallanService(
     // Determine target status:
     // If Non-Returnable (NRDC), it can be marked as 'closed' directly on dispatch, or 'dispatched'
     const targetStatus = challan.rdc_type === 'NRDC' ? 'closed' : 'dispatched';
+    const isClosed = targetStatus === 'closed';
 
     const updRes = await client.query(
       `UPDATE rdc_challans
-       SET status = $2,
+       SET status = $2::rdc_status,
            gate_pass_number = $3,
            vehicle_number = $4,
            transporter_name = $5,
-           dispatched_by = $6,
+           dispatched_by = $6::uuid,
            dispatched_at = NOW(),
-           closed_at = CASE WHEN $2 = 'closed' THEN NOW() ELSE NULL END,
-           closed_by = CASE WHEN $2 = 'closed' THEN $6 ELSE NULL END,
+           closed_at = CASE WHEN $7::boolean THEN NOW() ELSE NULL END,
+           closed_by = CASE WHEN $7::boolean THEN $6::uuid ELSE NULL END,
            updated_at = NOW()
-       WHERE id = $1
+       WHERE id = $1::uuid
        RETURNING *`,
       [
         id,
@@ -1161,6 +1162,7 @@ export async function dispatchChallanService(
         input.vehicle_number || null,
         input.transporter_name || null,
         user.id,
+        isClosed,
       ]
     );
     const updated = updRes.rows[0];
@@ -1230,13 +1232,14 @@ async function syncChallanStatusAfterItemMutation(
     newStatus = 'dispatched';
   }
 
+  const isFullyReturned = newStatus === 'fully_returned';
   await client.query(
     `UPDATE rdc_challans
-     SET status = $1,
-         actual_return_date = CASE WHEN $1 = 'fully_returned' THEN CURRENT_DATE ELSE actual_return_date END,
+     SET status = $1::rdc_status,
+         actual_return_date = CASE WHEN $3::boolean THEN CURRENT_DATE ELSE actual_return_date END,
          updated_at = NOW()
-     WHERE id = $2`,
-    [newStatus, challanId]
+     WHERE id = $2::uuid`,
+    [newStatus, challanId, isFullyReturned]
   );
 
   return newStatus;

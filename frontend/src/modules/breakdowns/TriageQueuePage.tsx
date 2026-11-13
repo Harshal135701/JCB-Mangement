@@ -1,8 +1,20 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import apiClient from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
+import { useSocket } from '../../context/SocketContext';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { BreakdownReportModal } from './components/BreakdownReportModal';
+import {
+  getBreakdownAssignment,
+  getBreakdownAssignmentHistory,
+  getEligibleTechnicians,
+  manualAssignTechnician,
+  manualReassignTechnician,
+  BreakdownAssignment,
+  BreakdownAssignmentDetails,
+  EligibleTechnician,
+  EligibleTechniciansResponse,
+} from '../../api/assignment';
 import { 
   AlertCircle, 
   UserCheck, 
@@ -30,8 +42,13 @@ import {
   Phone,
   Mail,
   Shield,
-  Layers
+  Layers,
+  Users,
+  Send,
+  Sparkles,
+  Info
 } from 'lucide-react';
+
 import { Link } from 'react-router-dom';
 
 interface TechnicianUser {
@@ -63,8 +80,66 @@ interface ShopOption {
   shop_code: string;
 }
 
+export const AssignmentBadge: React.FC<{ status?: string; method?: string }> = ({ status, method }) => {
+  const norm = (status || 'unassigned').toLowerCase().trim();
+
+  if (norm === 'pending') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-blue-50 text-blue-800 border border-blue-300">
+        <Clock className="w-3 h-3 text-blue-600 animate-pulse" />
+        <span>Pending Tech</span>
+        {method && (
+          <span className="ml-1 text-[8px] bg-blue-200/60 text-blue-900 px-1 py-0.2 rounded font-mono">
+            {method}
+          </span>
+        )}
+      </span>
+    );
+  }
+
+  if (norm === 'accepted') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-300">
+        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+        <span>Accepted</span>
+        {method && (
+          <span className="ml-1 text-[8px] bg-emerald-200/60 text-emerald-900 px-1 py-0.2 rounded font-mono">
+            {method}
+          </span>
+        )}
+      </span>
+    );
+  }
+
+  if (norm === 'rejected') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-red-50 text-red-800 border border-red-300">
+        <AlertTriangle className="w-3 h-3 text-red-600" />
+        <span>Rejected</span>
+      </span>
+    );
+  }
+
+  if (norm === 'reassigned') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-50 text-amber-900 border border-amber-300">
+        <RotateCcw className="w-3 h-3 text-amber-600" />
+        <span>Reassigned</span>
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-slate-100 text-zinc-600 border border-slate-300">
+      <User className="w-3 h-3 text-zinc-400" />
+      <span>Unassigned</span>
+    </span>
+  );
+};
+
 export const TriageQueuePage: React.FC = () => {
   const { user } = useAuth();
+  const { socket } = useSocket();
   const isManagerOrAdmin = user?.role === 'manager' || user?.role === 'admin';
 
   // Table Data & Pagination State
@@ -91,6 +166,7 @@ export const TriageQueuePage: React.FC = () => {
   // Search & Filter State
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [assignmentStatusFilter, setAssignmentStatusFilter] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [machineFilter, setMachineFilter] = useState('');
@@ -113,6 +189,32 @@ export const TriageQueuePage: React.FC = () => {
   const [rejectComplaint, setRejectComplaint] = useState<any | null>(null);
   const [infoComplaint, setInfoComplaint] = useState<any | null>(null);
 
+  // Technician Assignment Modals State
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyData, setHistoryData] = useState<BreakdownAssignment[]>([]);
+  const [historyComplaint, setHistoryComplaint] = useState<any | null>(null);
+
+  const [eligibleModalOpen, setEligibleModalOpen] = useState(false);
+  const [eligibleLoading, setEligibleLoading] = useState(false);
+  const [eligibleData, setEligibleData] = useState<EligibleTechniciansResponse | null>(null);
+  const [eligibleComplaint, setEligibleComplaint] = useState<any | null>(null);
+
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [manualAssignComplaint, setManualAssignComplaint] = useState<any | null>(null);
+  const [selectedTechId, setSelectedTechId] = useState('');
+  const [manualAssignNotes, setManualAssignNotes] = useState('');
+
+  const [reassignModalOpen, setReassignModalOpen] = useState(false);
+  const [manualReassignComplaint, setManualReassignComplaint] = useState<any | null>(null);
+  const [newReassignTechId, setNewReassignTechId] = useState('');
+  const [reassignReason, setReassignReason] = useState('');
+  const [reassignReasonError, setReassignReasonError] = useState('');
+
+  const [assignmentDetailModalOpen, setAssignmentDetailModalOpen] = useState(false);
+  const [assignmentDetailData, setAssignmentDetailData] = useState<BreakdownAssignmentDetails | null>(null);
+  const [assignmentDetailLoading, setAssignmentDetailLoading] = useState(false);
+
   // Form States
   const [assignForm, setAssignForm] = useState({
     technician_id: '',
@@ -124,6 +226,7 @@ export const TriageQueuePage: React.FC = () => {
   const [newPriority, setNewPriority] = useState('critical');
   const [rejectReason, setRejectReason] = useState('');
   const [infoRemarks, setInfoRemarks] = useState('');
+
 
   // 1. Fetch Technicians from /auth/users?role=technician
   const fetchTechnicians = useCallback(async () => {
@@ -195,6 +298,7 @@ export const TriageQueuePage: React.FC = () => {
 
       if (search.trim()) params.append('search', search.trim());
       if (statusFilter) params.append('status', statusFilter);
+      if (assignmentStatusFilter) params.append('assignment_status', assignmentStatusFilter);
       if (priorityFilter) params.append('priority', priorityFilter);
       if (categoryFilter) params.append('issue_category', categoryFilter);
       if (machineFilter) params.append('machine_id', machineFilter);
@@ -226,6 +330,7 @@ export const TriageQueuePage: React.FC = () => {
     pagination.limit,
     search,
     statusFilter,
+    assignmentStatusFilter,
     priorityFilter,
     categoryFilter,
     machineFilter,
@@ -241,6 +346,31 @@ export const TriageQueuePage: React.FC = () => {
     fetchBreakdowns();
   }, [fetchBreakdowns]);
 
+  // Real-time assignment updates via Socket.IO
+  useEffect(() => {
+    if (!socket) return;
+    const handleAssignmentUpdate = () => {
+      fetchBreakdowns();
+    };
+    socket.on('assignment:created', handleAssignmentUpdate);
+    socket.on('assignment:accepted', handleAssignmentUpdate);
+    socket.on('assignment:rejected', handleAssignmentUpdate);
+    socket.on('assignment:withdrawn', handleAssignmentUpdate);
+    socket.on('assignment:unassigned', handleAssignmentUpdate);
+    socket.on('technician:assigned', handleAssignmentUpdate);
+    socket.on('notification:new', handleAssignmentUpdate);
+
+    return () => {
+      socket.off('assignment:created', handleAssignmentUpdate);
+      socket.off('assignment:accepted', handleAssignmentUpdate);
+      socket.off('assignment:rejected', handleAssignmentUpdate);
+      socket.off('assignment:withdrawn', handleAssignmentUpdate);
+      socket.off('assignment:unassigned', handleAssignmentUpdate);
+      socket.off('technician:assigned', handleAssignmentUpdate);
+      socket.off('notification:new', handleAssignmentUpdate);
+    };
+  }, [socket, fetchBreakdowns]);
+
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setPagination((prev) => ({ ...prev, page: 1 }));
@@ -249,6 +379,7 @@ export const TriageQueuePage: React.FC = () => {
   const resetFilters = () => {
     setSearch('');
     setStatusFilter('');
+    setAssignmentStatusFilter('');
     setPriorityFilter('');
     setCategoryFilter('');
     setMachineFilter('');
@@ -260,6 +391,153 @@ export const TriageQueuePage: React.FC = () => {
     setSortOrder('desc');
     setPagination((prev) => ({ ...prev, page: 1 }));
   };
+
+  // Technician Assignment Actions
+  const openAssignmentDetails = async (complaint: any) => {
+    setAssignmentDetailModalOpen(true);
+    setAssignmentDetailLoading(true);
+    setAssignmentDetailData(null);
+    try {
+      const data = await getBreakdownAssignment(complaint.id);
+      setAssignmentDetailData(data);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to load assignment details.');
+    } finally {
+      setAssignmentDetailLoading(false);
+    }
+  };
+
+  const openHistoryModal = async (complaint: any) => {
+    setHistoryComplaint(complaint);
+    setHistoryModalOpen(true);
+    setHistoryLoading(true);
+    setHistoryData([]);
+    try {
+      const data = await getBreakdownAssignmentHistory(complaint.id);
+      setHistoryData(data);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to load assignment history.');
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const openEligibleModal = async (complaint: any) => {
+    setEligibleComplaint(complaint);
+    setEligibleModalOpen(true);
+    setEligibleLoading(true);
+    setEligibleData(null);
+    try {
+      const data = await getEligibleTechnicians(complaint.id);
+      setEligibleData(data);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to load eligible technicians.');
+    } finally {
+      setEligibleLoading(false);
+    }
+  };
+
+  const openManualAssignModal = async (complaint: any, preselectedTechId?: string) => {
+    setManualAssignComplaint(complaint);
+    setSelectedTechId(preselectedTechId || '');
+    setManualAssignNotes('');
+    setAssignModalOpen(true);
+    try {
+      const data = await getEligibleTechnicians(complaint.id);
+      setEligibleData(data);
+      if (!preselectedTechId) {
+        if (data.recommended_technician_id) {
+          setSelectedTechId(data.recommended_technician_id);
+        } else if (data.technicians?.length > 0) {
+          setSelectedTechId(data.technicians[0].id);
+        }
+      }
+    } catch {
+      if (technicians.length > 0 && !preselectedTechId) {
+        setSelectedTechId(technicians[0].id);
+      }
+    }
+  };
+
+  const handleManualAssignSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (actionLoading || !manualAssignComplaint || !selectedTechId) return;
+    try {
+      setActionLoading(true);
+      setError('');
+      setSuccessMsg('');
+      const res = await manualAssignTechnician(
+        manualAssignComplaint.id,
+        selectedTechId,
+        manualAssignNotes
+      );
+      if (res.success) {
+        setSuccessMsg(res.message || 'Technician assigned successfully.');
+        setAssignModalOpen(false);
+        fetchBreakdowns();
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to assign technician.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const openManualReassignModal = async (complaint: any, preselectedTechId?: string) => {
+    setManualReassignComplaint(complaint);
+    setNewReassignTechId(preselectedTechId || '');
+    setReassignReason('');
+    setReassignReasonError('');
+    setReassignModalOpen(true);
+    try {
+      const data = await getEligibleTechnicians(complaint.id);
+      setEligibleData(data);
+      if (!preselectedTechId) {
+        const available = data.technicians?.filter(
+          (t) => t.id !== complaint.assigned_technician_id
+        );
+        if (available && available.length > 0) {
+          setNewReassignTechId(available[0].id);
+        }
+      }
+    } catch {
+      const available = technicians.filter(
+        (t) => t.id !== complaint.assigned_technician_id
+      );
+      if (available.length > 0 && !preselectedTechId) {
+        setNewReassignTechId(available[0].id);
+      }
+    }
+  };
+
+  const handleManualReassignSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reassignReason.trim()) {
+      setReassignReasonError('Reassignment reason is mandatory.');
+      return;
+    }
+    if (actionLoading || !manualReassignComplaint || !newReassignTechId) return;
+    try {
+      setActionLoading(true);
+      setError('');
+      setSuccessMsg('');
+      const res = await manualReassignTechnician(
+        manualReassignComplaint.id,
+        newReassignTechId,
+        reassignReason.trim()
+      );
+      if (res.success) {
+        setSuccessMsg(res.message || 'Technician reassigned successfully.');
+        setReassignModalOpen(false);
+        fetchBreakdowns();
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to reassign technician.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
 
   // 4. Fetch Full Breakdown Details via GET /breakdowns/:id
   const openDetailModal = async (complaintId: string) => {
@@ -571,7 +849,7 @@ export const TriageQueuePage: React.FC = () => {
         </form>
 
         {/* Filter Dropdowns Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5 pt-2 border-t border-slate-100 text-xs">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5 pt-2 border-t border-slate-100 text-xs">
           {/* Status */}
           <div>
             <label className="block text-[10px] font-black text-zinc-400 uppercase mb-1">Status</label>
@@ -589,6 +867,26 @@ export const TriageQueuePage: React.FC = () => {
               <option value="work_order_created">Work Order Created</option>
               <option value="rejected">Rejected</option>
               <option value="closed">Closed</option>
+            </select>
+          </div>
+
+          {/* Assignment Status */}
+          <div>
+            <label className="block text-[10px] font-black text-zinc-400 uppercase mb-1">Assignment</label>
+            <select
+              value={assignmentStatusFilter}
+              onChange={(e) => {
+                setAssignmentStatusFilter(e.target.value);
+                setPagination((p) => ({ ...p, page: 1 }));
+              }}
+              className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-zinc-800 focus:outline-none focus:border-jcb-yellow"
+            >
+              <option value="">All Assignments</option>
+              <option value="unassigned">Unassigned</option>
+              <option value="pending">Pending Tech</option>
+              <option value="accepted">Accepted</option>
+              <option value="rejected">Rejected</option>
+              <option value="reassigned">Reassigned</option>
             </select>
           </div>
 
@@ -725,6 +1023,7 @@ export const TriageQueuePage: React.FC = () => {
                   <th className="py-3.5 px-4">Machine Asset</th>
                   <th className="py-3.5 px-4">Problem / Symptoms</th>
                   <th className="py-3.5 px-4">Priority</th>
+                  <th className="py-3.5 px-4">Technician Assignment</th>
                   <th className="py-3.5 px-4">Reported By / Shift</th>
                   <th className="py-3.5 px-4">Status</th>
                   <th className="py-3.5 px-4 text-right">Triage Actions</th>
@@ -791,6 +1090,78 @@ export const TriageQueuePage: React.FC = () => {
                           )}
                         </div>
                       </td>
+
+                      {/* Technician Assignment */}
+                      <td className="py-3 px-4 min-w-[190px]">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <AssignmentBadge status={t.assignment_status || 'unassigned'} />
+                            <button
+                              type="button"
+                              onClick={() => openAssignmentDetails(t)}
+                              className="text-[10px] text-zinc-500 hover:text-black font-bold underline cursor-pointer"
+                              title="Inspect Assignment Details"
+                            >
+                              Details
+                            </button>
+                          </div>
+                          {t.assigned_technician_name ? (
+                            <div className="flex items-center gap-1 font-bold text-zinc-900 text-xs">
+                              <UserCheck className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                              <span className="truncate max-w-[130px]" title={t.assigned_technician_name}>
+                                {t.assigned_technician_name}
+                              </span>
+                              <span className="text-[10px] text-zinc-400 font-mono">
+                                ({t.assigned_technician_code})
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="text-[11px] text-zinc-400 italic">No technician assigned</div>
+                          )}
+
+                          {/* Manager Assignment Actions */}
+                          {isManagerOrAdmin && !isClosed && !isRejected && (
+                            <div className="flex items-center gap-1 pt-0.5">
+                              {!t.assigned_technician_id || t.assignment_status === 'unassigned' ? (
+                                <button
+                                  type="button"
+                                  onClick={() => openManualAssignModal(t)}
+                                  className="px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-800 text-[9px] font-black uppercase rounded border border-blue-200 transition cursor-pointer"
+                                  title="Manually Assign Technician"
+                                >
+                                  Assign
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => openManualReassignModal(t)}
+                                  className="px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-900 text-[9px] font-black uppercase rounded border border-amber-200 transition cursor-pointer"
+                                  title="Reassign Technician"
+                                >
+                                  Reassign
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => openHistoryModal(t)}
+                                className="p-1 hover:bg-slate-100 text-zinc-500 hover:text-zinc-800 rounded transition cursor-pointer"
+                                title="View Attempt History"
+                              >
+                                <History className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openEligibleModal(t)}
+                                className="p-1 hover:bg-slate-100 text-zinc-500 hover:text-zinc-800 rounded transition cursor-pointer"
+                                title="View Eligible Technicians & Workloads"
+                              >
+                                <Users className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+
 
                       {/* Reported By & Shift */}
                       <td className="py-3 px-4">
@@ -1057,6 +1428,71 @@ export const TriageQueuePage: React.FC = () => {
                       <span className="text-[10px] font-bold uppercase text-zinc-400">Timestamp</span>
                       <p className="font-bold text-zinc-900">{new Date(detailComplaint.reported_at || detailComplaint.created_at).toLocaleString()}</p>
                       <p className="text-[11px] text-zinc-500">Shift: {detailComplaint.shift || 'Shift A'}</p>
+                    </div>
+                  </div>
+
+                  {/* Technician Assignment Card */}
+                  <div className="p-3.5 bg-blue-50/50 rounded-xl border border-blue-200 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black uppercase text-blue-900 tracking-wider flex items-center gap-1.5">
+                        <UserCheck className="w-3.5 h-3.5 text-blue-600" />
+                        <span>Technician Assignment</span>
+                      </span>
+                      <AssignmentBadge status={detailComplaint.assignment_status || 'unassigned'} />
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs pt-0.5">
+                      <div>
+                        {detailComplaint.assigned_technician_name ? (
+                          <div>
+                            <span className="font-bold text-zinc-900">
+                              {detailComplaint.assigned_technician_name}
+                            </span>
+                            <span className="text-[11px] text-zinc-500 font-mono ml-1.5">
+                              ({detailComplaint.assigned_technician_code})
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-zinc-500 italic">No technician currently assigned</span>
+                        )}
+                      </div>
+
+                      {/* Manager Actions */}
+                      {isManagerOrAdmin && (
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => openHistoryModal(detailComplaint)}
+                            className="px-2.5 py-1 bg-white hover:bg-slate-100 text-zinc-700 rounded-lg border border-slate-200 font-bold text-[10px] transition cursor-pointer"
+                          >
+                            History
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openEligibleModal(detailComplaint)}
+                            className="px-2.5 py-1 bg-white hover:bg-slate-100 text-zinc-700 rounded-lg border border-slate-200 font-bold text-[10px] transition cursor-pointer"
+                          >
+                            Candidates
+                          </button>
+                          {!detailComplaint.assigned_technician_id || detailComplaint.assignment_status === 'unassigned' ? (
+                            <button
+                              type="button"
+                              onClick={() => openManualAssignModal(detailComplaint)}
+                              className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-[10px] transition cursor-pointer"
+                            >
+                              Assign
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => openManualReassignModal(detailComplaint)}
+                              className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-black rounded-lg font-bold text-[10px] transition cursor-pointer"
+                            >
+                              Reassign
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -1437,7 +1873,608 @@ export const TriageQueuePage: React.FC = () => {
         </div>
       )}
 
+      {/* MODAL 6: Assignment Details Modal */}
+      {assignmentDetailModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-lg w-full border-2 border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="p-4 bg-zinc-950 text-white flex items-center justify-between border-b border-zinc-800">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-blue-600/30 text-blue-400 border border-blue-500/40 flex items-center justify-center">
+                  <UserCheck className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black uppercase tracking-wider">
+                    Technician Assignment Details
+                  </h3>
+                  <p className="text-[10px] text-zinc-400 font-mono">
+                    {assignmentDetailData?.complaint_number || 'Breakdown Assignment'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setAssignmentDetailModalOpen(false)}
+                className="text-zinc-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs">
+              {assignmentDetailLoading ? (
+                <div className="py-12 text-center text-zinc-400 font-bold flex flex-col items-center gap-2">
+                  <RefreshCw className="w-5 h-5 animate-spin text-amber-500" />
+                  <span>Loading assignment details...</span>
+                </div>
+              ) : assignmentDetailData?.current_assignment ? (
+                <>
+                  <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200">
+                    <div>
+                      <span className="text-[10px] font-black uppercase text-zinc-400 block">Status</span>
+                      <AssignmentBadge
+                        status={assignmentDetailData.current_assignment.status}
+                        method={assignmentDetailData.current_assignment.assignment_method}
+                      />
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] font-black uppercase text-zinc-400 block">Attempt</span>
+                      <span className="font-mono font-bold text-zinc-900">
+                        Attempt #{assignmentDetailData.current_assignment.attempt_number}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                    <span className="text-[10px] font-black uppercase text-zinc-400 block">Assigned Technician</span>
+                    <div className="font-bold text-sm text-zinc-900 flex items-center justify-between">
+                      <span>{assignmentDetailData.current_assignment.technician_name}</span>
+                      <span className="font-mono text-xs text-zinc-500">
+                        {assignmentDetailData.current_assignment.technician_code}
+                      </span>
+                    </div>
+                    {assignmentDetailData.current_assignment.technician_email && (
+                      <div className="text-[11px] text-zinc-600 flex items-center gap-1.5">
+                        <Mail className="w-3.5 h-3.5 text-zinc-400" />
+                        <span>{assignmentDetailData.current_assignment.technician_email}</span>
+                      </div>
+                    )}
+                    {assignmentDetailData.current_assignment.technician_phone && (
+                      <div className="text-[11px] text-zinc-600 flex items-center gap-1.5">
+                        <Phone className="w-3.5 h-3.5 text-zinc-400" />
+                        <span>{assignmentDetailData.current_assignment.technician_phone}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-[11px]">
+                    <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase block">Assignment Method</span>
+                      <span className="font-bold text-zinc-800">
+                        {assignmentDetailData.current_assignment.assignment_method === 'AUTOMATIC'
+                          ? 'Automatic Engine'
+                          : `Manual (${assignmentDetailData.current_assignment.assigned_by_name || 'Manager'})`}
+                      </span>
+                    </div>
+                    <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase block">Assigned At</span>
+                      <span className="font-medium text-zinc-800">
+                        {new Date(assignmentDetailData.current_assignment.assigned_at).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+
+                  {assignmentDetailData.current_assignment.responded_at && (
+                    <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-[11px]">
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase block">Technician Responded At</span>
+                      <span className="font-medium text-zinc-800">
+                        {new Date(assignmentDetailData.current_assignment.responded_at).toLocaleString()}
+                      </span>
+                    </div>
+                  )}
+
+                  {assignmentDetailData.current_assignment.rejection_reason && (
+                    <div className="p-3 bg-red-50 rounded-xl border border-red-200 text-xs">
+                      <span className="text-[10px] font-black uppercase text-red-900 block mb-1">
+                        Rejection Reason
+                      </span>
+                      <p className="text-red-800 italic">"{assignmentDetailData.current_assignment.rejection_reason}"</p>
+                    </div>
+                  )}
+
+                  {assignmentDetailData.current_assignment.reassignment_reason && (
+                    <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs">
+                      <span className="text-[10px] font-black uppercase text-amber-900 block mb-1">
+                        Reassignment Reason
+                      </span>
+                      <p className="text-amber-800 italic">"{assignmentDetailData.current_assignment.reassignment_reason}"</p>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="py-8 text-center text-zinc-400 space-y-1">
+                  <User className="w-8 h-8 mx-auto text-zinc-300" />
+                  <p className="font-bold text-zinc-600">No active assignment</p>
+                  <p className="text-[11px]">This breakdown currently has no assigned technician.</p>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (assignmentDetailData) {
+                        openHistoryModal({ id: assignmentDetailData.breakdown_id, complaint_number: assignmentDetailData.complaint_number });
+                      }
+                    }}
+                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-zinc-700 font-bold rounded-xl text-xs transition cursor-pointer"
+                  >
+                    View History
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (assignmentDetailData) {
+                        openEligibleModal({ id: assignmentDetailData.breakdown_id, complaint_number: assignmentDetailData.complaint_number });
+                      }
+                    }}
+                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-zinc-700 font-bold rounded-xl text-xs transition cursor-pointer"
+                  >
+                    Candidates
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAssignmentDetailModalOpen(false)}
+                    className="px-4 py-2 border border-slate-300 rounded-xl text-xs font-bold text-zinc-700 hover:bg-slate-50 cursor-pointer"
+                  >
+                    Close
+                  </button>
+                  {isManagerOrAdmin && assignmentDetailData && (
+                    assignmentDetailData.assigned_technician_id ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAssignmentDetailModalOpen(false);
+                          openManualReassignModal({ id: assignmentDetailData.breakdown_id, complaint_number: assignmentDetailData.complaint_number, assigned_technician_id: assignmentDetailData.assigned_technician_id });
+                        }}
+                        className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-black font-black uppercase rounded-xl text-xs transition cursor-pointer"
+                      >
+                        Reassign
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAssignmentDetailModalOpen(false);
+                          openManualAssignModal({ id: assignmentDetailData.breakdown_id, complaint_number: assignmentDetailData.complaint_number });
+                        }}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-black uppercase rounded-xl text-xs transition cursor-pointer"
+                      >
+                        Assign Tech
+                      </button>
+                    )
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 7: Assignment Attempt History Modal */}
+      {historyModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-xl w-full border-2 border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 max-h-[85vh] flex flex-col">
+            <div className="p-4 bg-zinc-950 text-white flex items-center justify-between border-b border-zinc-800 shrink-0">
+              <div className="flex items-center gap-2">
+                <History className="w-5 h-5 text-jcb-yellow" />
+                <div>
+                  <h3 className="text-sm font-black uppercase tracking-wider">
+                    Technician Assignment History
+                  </h3>
+                  <p className="text-[10px] text-zinc-400 font-mono">
+                    Ticket: {historyComplaint?.complaint_number || ''}
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setHistoryModalOpen(false)} className="text-zinc-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-3 overflow-y-auto flex-1 text-xs">
+              {historyLoading ? (
+                <div className="py-12 text-center text-zinc-400 font-bold flex flex-col items-center gap-2">
+                  <RefreshCw className="w-5 h-5 animate-spin text-amber-500" />
+                  <span>Loading chronological assignment history...</span>
+                </div>
+              ) : historyData.length === 0 ? (
+                <div className="py-10 text-center text-zinc-400 space-y-1">
+                  <History className="w-8 h-8 mx-auto text-zinc-300" />
+                  <p className="font-bold text-zinc-600">No Assignment Attempts Recorded</p>
+                  <p className="text-[11px]">This ticket has not had any automatic or manual assignment attempts yet.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {historyData.map((h, idx) => (
+                    <div
+                      key={h.id || idx}
+                      className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2 hover:bg-white transition"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-black text-xs text-zinc-900 bg-slate-200 px-2 py-0.5 rounded">
+                            Attempt #{h.attempt_number}
+                          </span>
+                          <AssignmentBadge status={h.status} method={h.assignment_method} />
+                        </div>
+                        <span className="text-[10px] text-zinc-400 font-mono">
+                          {h.assigned_at ? new Date(h.assigned_at).toLocaleString() : ''}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between text-xs">
+                        <div className="font-bold text-zinc-900 flex items-center gap-1.5">
+                          <UserCheck className="w-3.5 h-3.5 text-blue-600" />
+                          <span>{h.technician_name}</span>
+                          <span className="text-[10px] text-zinc-400 font-mono">({h.technician_code})</span>
+                        </div>
+                        <span className="text-[10px] text-zinc-500">
+                          Assigned via: <strong>{h.assignment_method}</strong> {h.assigned_by_name ? `(${h.assigned_by_name})` : ''}
+                        </span>
+                      </div>
+
+                      {h.rejection_reason && (
+                        <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-900">
+                          <span className="font-bold block text-[10px] uppercase text-red-700">Rejection Reason:</span>
+                          <p className="italic mt-0.5">"{h.rejection_reason}"</p>
+                        </div>
+                      )}
+
+                      {h.reassignment_reason && (
+                        <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900">
+                          <span className="font-bold block text-[10px] uppercase text-amber-700">Reassignment Reason:</span>
+                          <p className="italic mt-0.5">"{h.reassignment_reason}"</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end shrink-0">
+              <button
+                type="button"
+                onClick={() => setHistoryModalOpen(false)}
+                className="px-4 py-2 bg-zinc-900 hover:bg-black text-white rounded-xl text-xs font-bold cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 8: Eligible Technicians & Workload Balancing Modal */}
+      {eligibleModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-2xl w-full border-2 border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 max-h-[85vh] flex flex-col">
+            <div className="p-4 bg-zinc-950 text-white flex items-center justify-between border-b border-zinc-800 shrink-0">
+              <div className="flex items-center gap-2">
+                <Users className="w-5 h-5 text-jcb-yellow" />
+                <div>
+                  <h3 className="text-sm font-black uppercase tracking-wider">
+                    Eligible Technicians & Workload Balancing
+                  </h3>
+                  <p className="text-[10px] text-zinc-400 font-mono">
+                    Complaint: {eligibleComplaint?.complaint_number || ''}
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setEligibleModalOpen(false)} className="text-zinc-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 overflow-y-auto flex-1 text-xs">
+              {eligibleLoading ? (
+                <div className="py-12 text-center text-zinc-400 font-bold flex flex-col items-center gap-2">
+                  <RefreshCw className="w-5 h-5 animate-spin text-amber-500" />
+                  <span>Evaluating candidate eligibility and active workloads...</span>
+                </div>
+              ) : eligibleData ? (
+                <>
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs">
+                    <div>
+                      <span className="text-[10px] font-black uppercase text-zinc-400 block">Selection Strategy</span>
+                      <span className="font-bold text-zinc-900">{eligibleData.strategy}</span>
+                    </div>
+                    {eligibleData.recommended_technician_id && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-100 text-amber-900 border border-amber-300 rounded-lg text-[11px] font-black uppercase">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                        <span>Recommended Candidate Identified</span>
+                      </span>
+                    )}
+                  </div>
+
+                  {eligibleData.technicians.length === 0 ? (
+                    <div className="py-8 text-center text-zinc-400 space-y-1">
+                      <AlertTriangle className="w-8 h-8 mx-auto text-amber-500" />
+                      <p className="font-bold text-zinc-700">No Eligible Technicians in Facility</p>
+                      <p className="text-[11px]">All technicians in this plant/shop are unavailable, inactive, or over workload capacity.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {eligibleData.technicians.map((tech) => {
+                        const isRecommended = tech.id === eligibleData.recommended_technician_id;
+                        const isCurrentlyAssigned = tech.id === eligibleComplaint?.assigned_technician_id;
+
+                        return (
+                          <div
+                            key={tech.id}
+                            className={`p-3.5 rounded-xl border transition flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                              isRecommended
+                                ? 'bg-amber-50/60 border-amber-300 shadow-xs'
+                                : 'bg-slate-50 border-slate-200'
+                            }`}
+                          >
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-sm text-zinc-900">{tech.full_name}</span>
+                                <span className="font-mono text-[10px] text-zinc-500 bg-white px-1.5 py-0.5 rounded border border-slate-200">
+                                  {tech.employee_code}
+                                </span>
+                                {isRecommended && (
+                                  <span className="text-[9px] font-black uppercase bg-amber-200 text-amber-900 px-1.5 py-0.2 rounded flex items-center gap-0.5">
+                                    <Sparkles className="w-2.5 h-2.5" /> Best Match
+                                  </span>
+                                )}
+                                {isCurrentlyAssigned && (
+                                  <span className="text-[9px] font-black uppercase bg-blue-100 text-blue-900 px-1.5 py-0.2 rounded">
+                                    Currently Assigned
+                                  </span>
+                                )}
+                                {tech.previously_rejected && (
+                                  <span className="text-[9px] font-bold uppercase bg-red-100 text-red-800 px-1.5 py-0.2 rounded">
+                                    Previously Rejected
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-3 text-[11px] text-zinc-600">
+                                <span>
+                                  Active Workload: <strong>{tech.active_assignments}</strong> / {tech.max_active_assignments} tasks
+                                </span>
+                                <span>•</span>
+                                <span>Status: {tech.is_available ? 'Available' : 'Unavailable'}</span>
+                              </div>
+
+                              {tech.skills_json && tech.skills_json.length > 0 && (
+                                <div className="flex items-center gap-1 flex-wrap pt-0.5">
+                                  {tech.skills_json.map((skill, sIdx) => (
+                                    <span
+                                      key={sIdx}
+                                      className="text-[9px] font-medium bg-white text-zinc-600 px-1.5 py-0.5 rounded border border-slate-200"
+                                    >
+                                      {skill}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Direct Assignment Button */}
+                            {isManagerOrAdmin && !isCurrentlyAssigned && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEligibleModalOpen(false);
+                                  if (!eligibleComplaint?.assigned_technician_id || eligibleComplaint.assignment_status === 'unassigned') {
+                                    openManualAssignModal(eligibleComplaint, tech.id);
+                                  } else {
+                                    openManualReassignModal(eligibleComplaint, tech.id);
+                                  }
+                                }}
+                                className="px-3.5 py-1.5 bg-zinc-900 hover:bg-black text-white text-xs font-bold rounded-xl transition cursor-pointer self-start sm:self-center shrink-0"
+                              >
+                                {!eligibleComplaint?.assigned_technician_id || eligibleComplaint.assignment_status === 'unassigned'
+                                  ? 'Assign'
+                                  : 'Reassign to Tech'}
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              ) : null}
+            </div>
+
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end shrink-0">
+              <button
+                type="button"
+                onClick={() => setEligibleModalOpen(false)}
+                className="px-4 py-2 border border-slate-300 rounded-xl text-xs font-bold text-zinc-700 hover:bg-white cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 9: Manually Assign Technician Modal */}
+      {assignModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-md w-full border-2 border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="p-4 bg-zinc-950 text-white flex items-center justify-between border-b border-zinc-800">
+              <div className="flex items-center gap-2">
+                <UserCheck className="w-5 h-5 text-jcb-yellow" />
+                <h3 className="text-sm font-black uppercase tracking-wider">
+                  Manually Assign Technician
+                </h3>
+              </div>
+              <button onClick={() => setAssignModalOpen(false)} className="text-zinc-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleManualAssignSubmit} className="p-5 space-y-4 text-xs">
+              <p className="text-zinc-600 font-medium">
+                Assigning breakdown ticket <strong className="text-zinc-900">{manualAssignComplaint?.complaint_number}</strong> on machine <strong className="text-zinc-900">{manualAssignComplaint?.machine_code}</strong>.
+              </p>
+
+              <div>
+                <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1">
+                  Select Technician *
+                </label>
+                <select
+                  required
+                  value={selectedTechId}
+                  onChange={(e) => setSelectedTechId(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                >
+                  <option value="">-- Choose Candidate Technician --</option>
+                  {(eligibleData?.technicians || technicians).map((tech) => (
+                    <option key={tech.id} value={tech.id}>
+                      {tech.full_name} ({tech.employee_code}){(tech as any).active_assignments !== undefined ? ` - ${(tech as any).active_assignments} active tasks` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1">
+                  Assignment Instructions / Notes (Optional)
+                </label>
+                <textarea
+                  rows={3}
+                  placeholder="e.g. Priority machine repair; bring specialized hydraulic pressure testing gauges."
+                  value={manualAssignNotes}
+                  onChange={(e) => setManualAssignNotes(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-medium text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setAssignModalOpen(false)}
+                  disabled={actionLoading}
+                  className="px-4 py-2 border border-slate-300 rounded-xl text-xs font-bold text-zinc-700 hover:bg-slate-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={actionLoading || !selectedTechId}
+                  className="px-5 py-2.5 bg-jcb-yellow hover:bg-jcb-yellowDark text-black rounded-xl text-xs font-black uppercase tracking-wider shadow disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                >
+                  {actionLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <UserCheck className="w-3.5 h-3.5" />}
+                  <span>{actionLoading ? 'Assigning...' : 'Confirm Assignment'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 10: Manually Reassign Technician Modal */}
+      {reassignModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-md w-full border-2 border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="p-4 bg-zinc-950 text-white flex items-center justify-between border-b border-zinc-800">
+              <div className="flex items-center gap-2">
+                <RotateCcw className="w-5 h-5 text-amber-500" />
+                <h3 className="text-sm font-black uppercase tracking-wider text-amber-400">
+                  Reassign Breakdown Technician
+                </h3>
+              </div>
+              <button onClick={() => setReassignModalOpen(false)} className="text-zinc-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleManualReassignSubmit} className="p-5 space-y-4 text-xs">
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 space-y-1">
+                <span className="font-bold block">Notice:</span>
+                <p>
+                  Reassignment will withdraw the ticket from the currently assigned technician and dispatch an immediate alert to the newly selected technician.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1">
+                  New Technician Target *
+                </label>
+                <select
+                  required
+                  value={newReassignTechId}
+                  onChange={(e) => setNewReassignTechId(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-amber-500"
+                >
+                  <option value="">-- Choose New Technician --</option>
+                  {(eligibleData?.technicians || technicians)
+                    .filter((tech) => tech.id !== manualReassignComplaint?.assigned_technician_id)
+                    .map((tech) => (
+                      <option key={tech.id} value={tech.id}>
+                        {tech.full_name} ({tech.employee_code}){(tech as any).active_assignments !== undefined ? ` - ${(tech as any).active_assignments} active tasks` : ''}
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1">
+                  Reassignment Reason (Mandatory) *
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  placeholder="e.g. Previous technician occupied on emergency line stoppage; reallocating to available shift technician."
+                  value={reassignReason}
+                  onChange={(e) => {
+                    setReassignReason(e.target.value);
+                    if (reassignReasonError) setReassignReasonError('');
+                  }}
+                  className={`w-full p-2.5 bg-slate-50 border rounded-lg text-xs font-medium text-zinc-900 focus:outline-none ${
+                    reassignReasonError ? 'border-red-500' : 'border-slate-300 focus:border-amber-500'
+                  }`}
+                />
+                {reassignReasonError && (
+                  <p className="text-[11px] text-red-600 font-bold mt-1">{reassignReasonError}</p>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setReassignModalOpen(false)}
+                  disabled={actionLoading}
+                  className="px-4 py-2 border border-slate-300 rounded-xl text-xs font-bold text-zinc-700 hover:bg-slate-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={actionLoading || !newReassignTechId || !reassignReason.trim()}
+                  className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-black rounded-xl text-xs font-black uppercase tracking-wider shadow disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                >
+                  {actionLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                  <span>{actionLoading ? 'Reassigning...' : 'Confirm Reassignment'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Report Breakdown Modal */}
+
       <BreakdownReportModal
         isOpen={isReportModalOpen}
         onClose={() => setIsReportModalOpen(false)}

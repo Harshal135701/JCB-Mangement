@@ -1,4 +1,5 @@
 import { query as defaultQuery, pool as defaultPool } from '../../config/db';
+import { autoAssignBreakdownService } from './breakdown-assignment.service';
 
 export const isUUID = (value: unknown): value is string =>
   typeof value === 'string' &&
@@ -402,6 +403,27 @@ export async function createBreakdownComplaintService(
           `/breakdowns/${complaint.id}`,
         ]
       );
+    }
+
+    // 15b. Automatic Technician Assignment
+    try {
+      const assignmentResult = await autoAssignBreakdownService(client, complaint.id, customIoParam, {
+        breakdown: complaint,
+        machine,
+      });
+      if (assignmentResult && assignmentResult.assigned && assignmentResult.assignment) {
+        complaint.assigned_technician_id = assignmentResult.assignment.technician_id;
+        complaint.assignment_status = (assignmentResult.assignment.status || 'PENDING').toLowerCase();
+        complaint.current_assignment_id = assignmentResult.assignment.id;
+      } else {
+        complaint.assigned_technician_id = null;
+        complaint.assignment_status = 'unassigned';
+        complaint.current_assignment_id = null;
+      }
+    } catch {
+      complaint.assigned_technician_id = null;
+      complaint.assignment_status = 'unassigned';
+      complaint.current_assignment_id = null;
     }
 
     await client.query('COMMIT');
