@@ -273,6 +273,10 @@ interface MockNotification {
   message: string;
   type: string;
   link_url?: string;
+  entity_type?: string;
+  entity_id?: string;
+  plant_id?: string;
+  shop_id?: string;
   is_read: boolean;
   created_at: Date;
 }
@@ -826,11 +830,25 @@ class MockProcurementDatabase implements DbPoolLike {
         message: params[2],
         type: params[3],
         link_url: params[4] || undefined,
+        entity_type: params[5] || undefined,
+        entity_id: params[6] || undefined,
+        plant_id: params[7] || undefined,
+        shop_id: params[8] || undefined,
         is_read: false,
         created_at: new Date(),
       };
       this.notifications.push(notif);
       return { rows: [{ ...notif }], rowCount: 1 };
+    }
+
+    // 13b. Check existing notifications (for duplicate prevention)
+    if (trimmed.startsWith('SELECT') && trimmed.includes('FROM notifications')) {
+      const recipientId = params[0];
+      let matches = this.notifications.filter((n) => n.recipient_id === recipientId);
+      if (trimmed.includes('Good news')) {
+        matches = matches.filter((n) => n.message && n.message.includes('Good news! The spare part you reported as unavailable'));
+      }
+      return { rows: matches.map((m) => ({ id: m.id })), rowCount: matches.length };
     }
 
     // 14. Managers query for notifications
@@ -2728,6 +2746,211 @@ describe('Procurement & Purchase Requisition Module (CMMS Module 4)', () => {
       assert.equal(ctx2.res.responseData.receipt_details.total_inwarded, 70); // 40 + 30 = 70
       assert.equal(ctx2.res.responseData.receipt_details.remaining_quantity, 30); // 100 - 70 = 30
       assert.equal(part.current_physical_stock, initialStock + 70);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // SECTION 8: Inventory Unavailable -> Received -> Technician Notification Flow
+  // -------------------------------------------------------------------------
+  describe('8. Inventory Unavailable -> Inventory Received -> Notify Original Technician Flow', () => {
+    it('46. Scenario Step 1 & 2: Technician raises PR for unavailable part; Manager reviews/accepts it -> Only standard approval notification sent, NO arrival notification yet', async () => {
+      // 1. Tech1 raises PR
+      const createCtx = createMockContext(
+        {
+          part_id: '30000000-0000-0000-0000-000000000001',
+          quantity_required: 2,
+          urgency: 'critical',
+          technical_justification: 'Hydraulic pump failure - part unavailable in store stock',
+        },
+        {},
+        {},
+        {},
+        tech1User
+      );
+      await createPurchaseRequisition(createCtx.req, createCtx.res, createCtx.next);
+      assert.equal(createCtx.res.statusCode, 201);
+      const prId = createCtx.res.responseData.data.id;
+
+      // Clear notifications generated during creation
+      mockDb.notifications = [];
+      mockIo.emissions = [];
+
+      // 2. Manager reviews/accepts the issue (transitions to vendor_selected)
+      const acceptCtx = createMockContext(
+        {
+          status: 'vendor_selected',
+          supplier_name: 'Bosch Rexroth India',
+          unit_price: 5200,
+          remarks: 'Reviewed and approved for vendor quotation',
+        },
+        { id: prId },
+        {},
+        {},
+        puneManagerUser
+      );
+      await updatePRStatus(acceptCtx.req, acceptCtx.res, acceptCtx.next);
+      assert.equal(acceptCtx.res.statusCode, 200);
+
+      // Verify notification sent was standard status update
+      const arrivalNotif = mockDb.notifications.find((n) =>
+        n.message && n.message.includes('Good news! The spare part you reported as unavailable')
+      );
+      assert.equal(arrivalNotif, undefined, 'Arrival notification must NOT trigger when manager accepts PR');
+
+      // Verify standard update notification was sent to tech1
+      const updateNotif = mockDb.notifications.find((n) => n.recipient_id === tech1User.id);
+      assert.ok(updateNotif);
+      assert.match(updateNotif.title, /Status Updated/i);
+    });
+
+    it('47. Scenario Step 3, 4 & 5: Inventory arrives in store; Manager updates status to fully_received -> Automatically notifies original technician with exact message', async () => {
+      const pr = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000001')!;
+      pr.status = 'ordered';
+      pr.requested_by = tech1User.id; // Original technician
+      mockDb.notifications = [];
+      mockIo.emissions = [];
+
+      // Manager updates status to fully_received (goods arrived/issue resolved)
+      const updateCtx = createMockContext(
+        {
+          status: 'fully_received',
+          remarks: 'Shipment received at store and verified',
+        },
+        { id: pr.id },
+        {},
+        {},
+        puneManagerUser
+      );
+      await updatePRStatus(updateCtx.req, updateCtx.res, updateCtx.next);
+      assert.equal(updateCtx.res.statusCode, 200);
+
+      // Verify notification sent to the ORIGINAL technician
+      const techNotif = mockDb.notifications.find((n) => n.recipient_id === tech1User.id);
+      assert.ok(techNotif, 'Technician who raised the PR must receive notification');
+
+      // Verify exact expected message
+      assert.match(
+        techNotif.message,
+        /Good news! The spare part you reported as unavailable is now available in the store\. Your inventory request has been updated\./
+      );
+
+      // Verify Request ID and spare part details are in the notification
+      assert.match(techNotif.message, /PR-2026-00001/);
+      assert.match(techNotif.title, /Spare Part Available/i);
+      assert.match(techNotif.title, /Hydraulic Pump Filter Element/i);
+
+      // Verify link_url routes to /procurement?prId=${pr.id}
+      assert.equal(techNotif.link_url, `/procurement?prId=${pr.id}`);
+      assert.equal((techNotif as any).entity_type, 'purchase_requisitions');
+      assert.equal((techNotif as any).entity_id, pr.id);
+
+      // Verify real-time Socket.IO emission to technician
+      const socketNotifNew = mockIo.emissions.find(
+        (e) => e.event === 'notification:new' && e.room === `user:${tech1User.id}`
+      );
+      assert.ok(socketNotifNew, 'Socket.IO notification:new must be emitted to technician user room');
+      assert.equal(socketNotifNew.data.link_url, `/procurement?prId=${pr.id}`);
+
+      const socketInventoryAvail = mockIo.emissions.find(
+        (e) => e.event === 'inventory:available' && e.room === `user:${tech1User.id}`
+      );
+      assert.ok(socketInventoryAvail, 'Socket.IO inventory:available must be emitted to technician');
+      assert.equal(socketInventoryAvail.data.pr_id, pr.id);
+    });
+
+    it('48. Duplicate prevention: Manager saving completed status multiple times does NOT generate duplicate notifications', async () => {
+      const pr = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000001')!;
+      pr.status = 'ordered';
+      pr.requested_by = tech1User.id;
+      mockDb.notifications = [];
+
+      // First update to fully_received
+      const ctx1 = createMockContext(
+        { status: 'fully_received', remarks: 'First receipt' },
+        { id: pr.id },
+        {},
+        {},
+        puneManagerUser
+      );
+      await updatePRStatus(ctx1.req, ctx1.res, ctx1.next);
+      assert.equal(ctx1.res.statusCode, 200);
+
+      const countAfterFirst = mockDb.notifications.filter(
+        (n) => n.recipient_id === tech1User.id && n.message.includes('Good news! The spare part you reported as unavailable')
+      ).length;
+      assert.equal(countAfterFirst, 1);
+
+      // Second update with same status / updated remarks
+      const ctx2 = createMockContext(
+        { status: 'fully_received', remarks: 'Re-saving remarks after stock binning' },
+        { id: pr.id },
+        {},
+        {},
+        puneManagerUser
+      );
+      await updatePRStatus(ctx2.req, ctx2.res, ctx2.next);
+      assert.equal(ctx2.res.statusCode, 200);
+
+      const countAfterSecond = mockDb.notifications.filter(
+        (n) => n.recipient_id === tech1User.id && n.message.includes('Good news! The spare part you reported as unavailable')
+      ).length;
+      assert.equal(countAfterSecond, 1, 'Duplicate notifications must be prevented');
+    });
+
+    it('49. Goods Receipt Note (GRN) inwarding triggers arrival notification to original technician only', async () => {
+      const pr = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000002')!;
+      pr.status = 'ordered';
+      pr.requested_by = tech1User.id;
+      mockDb.notifications = [];
+      mockIo.emissions = [];
+
+      const grnCtx = createMockContext(
+        {
+          accepted_quantity: pr.quantity_required,
+          rejected_quantity: 0,
+          delivery_note_number: 'GRN-INWARD-999',
+        },
+        { id: pr.id },
+        {},
+        {},
+        puneManagerUser
+      );
+      await processGRNInward(grnCtx.req, grnCtx.res, grnCtx.next);
+      assert.equal(grnCtx.res.statusCode, 200);
+
+      // Tech1 receives the notification
+      const tech1Notif = mockDb.notifications.find(
+        (n) => n.recipient_id === tech1User.id && n.message.includes('Good news! The spare part you reported as unavailable')
+      );
+      assert.ok(tech1Notif, 'Original technician must receive arrival notification on GRN inwarding');
+      assert.equal(tech1Notif.link_url, `/procurement?prId=${pr.id}`);
+
+      // Tech2 (unrelated user) does NOT receive the notification
+      const tech2Notif = mockDb.notifications.find(
+        (n) => n.recipient_id === '00000000-0000-0000-0000-000000000005'
+      );
+      assert.equal(tech2Notif, undefined, 'Unrelated technicians must NOT receive the notification');
+    });
+
+    it('50. Missing technician ID or incomplete request data is handled safely without crashing', async () => {
+      const pr = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000001')!;
+      pr.status = 'ordered';
+      pr.requested_by = null as any; // Missing technician ID
+      mockDb.notifications = [];
+
+      const updateCtx = createMockContext(
+        {
+          status: 'fully_received',
+          remarks: 'Received without requester ID',
+        },
+        { id: pr.id },
+        {},
+        {},
+        puneManagerUser
+      );
+      await updatePRStatus(updateCtx.req, updateCtx.res, updateCtx.next);
+      assert.equal(updateCtx.res.statusCode, 200);
+      assert.equal(updateCtx.res.responseData.success, true);
     });
   });
 });

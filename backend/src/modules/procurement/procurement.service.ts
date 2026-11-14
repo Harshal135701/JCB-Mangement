@@ -98,10 +98,10 @@ export type PRUrgency = (typeof VALID_URGENCIES)[number];
 
 export const PR_STATUS_TRANSITIONS: Record<PRStatus, readonly PRStatus[]> = Object.freeze({
   new: ['under_review', 'quotation_pending', 'vendor_selected', 'approval_pending', 'cancelled', 'rejected'],
-  under_review: ['quotation_pending', 'vendor_selected', 'approval_pending', 'cancelled', 'rejected'],
-  quotation_pending: ['vendor_selected', 'approval_pending', 'cancelled', 'rejected'],
-  vendor_selected: ['approval_pending', 'po_created', 'ordered', 'cancelled', 'rejected'],
-  approval_pending: ['po_created', 'ordered', 'under_review', 'cancelled', 'rejected'],
+  under_review: ['quotation_pending', 'vendor_selected', 'approval_pending', 'partially_received', 'fully_received', 'cancelled', 'rejected'],
+  quotation_pending: ['vendor_selected', 'approval_pending', 'partially_received', 'fully_received', 'cancelled', 'rejected'],
+  vendor_selected: ['approval_pending', 'po_created', 'ordered', 'partially_received', 'fully_received', 'cancelled', 'rejected'],
+  approval_pending: ['po_created', 'ordered', 'under_review', 'partially_received', 'fully_received', 'cancelled', 'rejected'],
   po_created: ['ordered', 'partially_received', 'fully_received', 'cancelled'],
   ordered: ['partially_received', 'fully_received', 'cancelled'],
   partially_received: ['partially_received', 'fully_received', 'cancelled'],
@@ -1057,17 +1057,89 @@ export async function updatePRStatusService(
     );
 
     // In-app notification to requester
-    if (currentPR.requested_by !== user.id) {
-      await client.query(
-        `INSERT INTO notifications (recipient_id, title, message, type, link_url)
-         VALUES ($1, $2, $3, 'approval', $4)`,
-        [
-          currentPR.requested_by,
-          `PR ${currentPR.pr_number} Status Updated`,
-          `Your requisition status was updated to '${nextStatus}' by ${(user as any).full_name || user.employee_code || 'Management'}. ${input.remarks || ''}`,
-          `/procurement/pr/${id}`,
-        ]
-      );
+    let technicianAvailabilityNotification: any = null;
+    let partName = 'spare part';
+    let partNumber = '';
+
+    const isReceiptTransition = ['fully_received', 'partially_received'].includes(nextStatus);
+    const wasAlreadyReceived = ['fully_received', 'partially_received'].includes(currentPR.status);
+
+    if (isReceiptTransition) {
+      // 1. Fetch spare part details
+      if (currentPR.part_id) {
+        try {
+          const partRes = await client.query(
+            `SELECT name, part_number FROM spare_parts WHERE id = $1`,
+            [currentPR.part_id]
+          );
+          if (partRes.rows.length > 0) {
+            partName = partRes.rows[0].name || partName;
+            partNumber = partRes.rows[0].part_number || '';
+          }
+        } catch {
+          // Graceful fallback for mock DB or missing part
+        }
+      }
+
+      // 2. Check for duplicate notification (only notify once when newly received)
+      let alreadyNotified = false;
+      if (currentPR.requested_by) {
+        try {
+          const existingNotifRes = await client.query(
+            `SELECT id FROM notifications 
+             WHERE recipient_id = $1 
+               AND (entity_id = $2 OR link_url LIKE $3)
+               AND message LIKE '%Good news! The spare part you reported as unavailable%'
+             LIMIT 1`,
+            [currentPR.requested_by, id, `%/procurement?prId=${id}%`]
+          );
+          if (existingNotifRes.rows.length > 0) {
+            alreadyNotified = true;
+          }
+        } catch {
+          // Graceful fallback
+        }
+      }
+
+      // 3. Insert notification only if not already received and not already notified
+      if (!wasAlreadyReceived && !alreadyNotified && currentPR.requested_by) {
+        const partDetail = partNumber ? `${partName} (${partNumber})` : partName;
+        const notifTitle = `Spare Part Available: ${partDetail}`;
+        const notifMessage = `Good news! The spare part you reported as unavailable is now available in the store. Your inventory request has been updated. (Request ID: ${currentPR.pr_number} | Part: ${partDetail})`;
+        const notifLinkUrl = `/procurement?prId=${id}`;
+
+        try {
+          const notifRes = await client.query(
+            `INSERT INTO notifications (recipient_id, title, message, type, link_url, entity_type, entity_id, plant_id, shop_id, created_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+             RETURNING *`,
+            [currentPR.requested_by, notifTitle, notifMessage, 'system', notifLinkUrl, 'purchase_requisitions', id, effectivePlantId || null, null]
+          );
+          technicianAvailabilityNotification = notifRes.rows[0];
+        } catch {
+          const fallbackRes = await client.query(
+            `INSERT INTO notifications (recipient_id, title, message, type, link_url, created_at)
+             VALUES ($1, $2, $3, $4, $5, NOW())
+             RETURNING *`,
+            [currentPR.requested_by, notifTitle, notifMessage, 'system', notifLinkUrl]
+          );
+          technicianAvailabilityNotification = fallbackRes.rows[0];
+        }
+      }
+    } else {
+      // Standard status transition notification (under_review, vendor_selected, approval_pending, etc.)
+      if (currentPR.requested_by && currentPR.requested_by !== user.id) {
+        await client.query(
+          `INSERT INTO notifications (recipient_id, title, message, type, link_url)
+           VALUES ($1, $2, $3, 'approval', $4)`,
+          [
+            currentPR.requested_by,
+            `PR ${currentPR.pr_number} Status Updated`,
+            `Your requisition status was updated to '${nextStatus}' by ${(user as any).full_name || user.employee_code || 'Management'}. ${input.remarks || ''}`,
+            `/procurement?prId=${id}`,
+          ]
+        );
+      }
     }
 
     await client.query('COMMIT');
@@ -1082,7 +1154,29 @@ export async function updatePRStatusService(
       if (effectivePlantId) {
         emitToPlant(effectivePlantId, 'pr:status_changed', payload, io);
       }
-      emitToUser(currentPR.requested_by, 'pr:status_changed', payload, io);
+      if (currentPR.requested_by) {
+        emitToUser(currentPR.requested_by, 'pr:status_changed', payload, io);
+      }
+
+      // If inventory availability notification was generated, emit dedicated real-time socket events to the technician
+      if (technicianAvailabilityNotification && currentPR.requested_by) {
+        const notifPayload = {
+          ...technicianAvailabilityNotification,
+          link_url: technicianAvailabilityNotification.link_url || `/procurement?prId=${id}`,
+          action_url: technicianAvailabilityNotification.link_url || `/procurement?prId=${id}`,
+        };
+        emitToUser(currentPR.requested_by, 'notification:new', notifPayload, io);
+        emitToUser(currentPR.requested_by, 'notification', notifPayload, io);
+        emitToUser(currentPR.requested_by, 'inventory:available', {
+          pr_id: id,
+          pr_number: currentPR.pr_number,
+          part_id: currentPR.part_id,
+          part_name: partName,
+          part_number: partNumber,
+          status: nextStatus,
+          message: technicianAvailabilityNotification.message,
+        }, io);
+      }
     }
 
     return updatedPR;
@@ -2325,7 +2419,7 @@ export async function processGRNInwardService(
 
     // 3. Lock Spare Part row FOR UPDATE
     const partRes = await client.query(
-      `SELECT id, current_physical_stock, available_stock, warehouse_zone, bin_location
+      `SELECT id, current_physical_stock, available_stock, warehouse_zone, bin_location, name, part_number
        FROM spare_parts
        WHERE id = $1
        FOR UPDATE`,
@@ -2528,18 +2622,54 @@ export async function processGRNInwardService(
       ]
     );
 
-    // 10. Notify Requester
-    if (pr.requested_by !== user.id) {
-      await client.query(
-        `INSERT INTO notifications (recipient_id, title, message, type, link_url)
-         VALUES ($1, $2, $3, 'system', $4)`,
-        [
-          pr.requested_by,
-          `Parts Arrived for PR ${pr.pr_number}`,
-          `GRN ${grnNumber} processed: ${finalAcceptedQty} unit(s) accepted into store. Status: ${nextStatus}.`,
-          `/procurement/pr/${pr.id}`,
-        ]
-      );
+    // 10. Notify Requester (Inventory Available)
+    let grnTechnicianNotification: any = null;
+    let grnPartName = (partRes.rows[0]?.name) || pr.part_name || 'spare part';
+    let grnPartNumber = (partRes.rows[0]?.part_number) || pr.part_number || '';
+
+    if (pr.requested_by) {
+      // Check duplicate prevention
+      let alreadyNotified = false;
+      try {
+        const existingNotifRes = await client.query(
+          `SELECT id FROM notifications 
+           WHERE recipient_id = $1 
+             AND (entity_id = $2 OR link_url LIKE $3)
+             AND message LIKE '%Good news! The spare part you reported as unavailable%'
+           LIMIT 1`,
+          [pr.requested_by, pr.id, `%/procurement?prId=${pr.id}%`]
+        );
+        if (existingNotifRes.rows.length > 0) {
+          alreadyNotified = true;
+        }
+      } catch {
+        // Safe fallback
+      }
+
+      if (!alreadyNotified) {
+        const partDetail = grnPartNumber ? `${grnPartName} (${grnPartNumber})` : grnPartName;
+        const grnTitle = `Spare Part Available: ${partDetail}`;
+        const grnMessage = `Good news! The spare part you reported as unavailable is now available in the store. Your inventory request has been updated. (Request ID: ${pr.pr_number} | Part: ${partDetail} | GRN: ${grnNumber})`;
+        const grnLinkUrl = `/procurement?prId=${pr.id}`;
+
+        try {
+          const insertNotifRes = await client.query(
+            `INSERT INTO notifications (recipient_id, title, message, type, link_url, entity_type, entity_id, plant_id, shop_id, created_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+             RETURNING *`,
+            [pr.requested_by, grnTitle, grnMessage, 'system', grnLinkUrl, 'purchase_requisitions', pr.id, effectivePlantId || null, null]
+          );
+          grnTechnicianNotification = insertNotifRes.rows[0];
+        } catch {
+          const fallbackRes = await client.query(
+            `INSERT INTO notifications (recipient_id, title, message, type, link_url, created_at)
+             VALUES ($1, $2, $3, $4, $5, NOW())
+             RETURNING *`,
+            [pr.requested_by, grnTitle, grnMessage, 'system', grnLinkUrl]
+          );
+          grnTechnicianNotification = fallbackRes.rows[0];
+        }
+      }
     }
 
     await client.query('COMMIT');
@@ -2560,7 +2690,30 @@ export async function processGRNInwardService(
       if (effectivePlantId) {
         emitToPlant(effectivePlantId, 'grn:processed', payload, io);
       }
-      emitToUser(pr.requested_by, 'grn:processed', payload, io);
+      if (pr.requested_by) {
+        emitToUser(pr.requested_by, 'grn:processed', payload, io);
+      }
+
+      // If inventory availability notification was generated, emit dedicated real-time socket events to the technician
+      if (grnTechnicianNotification && pr.requested_by) {
+        const notifPayload = {
+          ...grnTechnicianNotification,
+          link_url: grnTechnicianNotification.link_url || `/procurement?prId=${pr.id}`,
+          action_url: grnTechnicianNotification.link_url || `/procurement?prId=${pr.id}`,
+        };
+        emitToUser(pr.requested_by, 'notification:new', notifPayload, io);
+        emitToUser(pr.requested_by, 'notification', notifPayload, io);
+        emitToUser(pr.requested_by, 'inventory:available', {
+          pr_id: pr.id,
+          pr_number: pr.pr_number,
+          part_id: pr.part_id,
+          part_name: grnPartName,
+          part_number: grnPartNumber,
+          grn_number: grnNumber,
+          status: nextStatus,
+          message: grnTechnicianNotification.message,
+        }, io);
+      }
 
       if (pr.work_order_id && isFullyReceived) {
         io.to(`workorder:${pr.work_order_id}`).emit('workorder:part_arrived', {
