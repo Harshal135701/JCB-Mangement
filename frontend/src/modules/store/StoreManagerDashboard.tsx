@@ -882,52 +882,52 @@ export const StoreManagerDashboard: React.FC = () => {
       {/* =========================================================================
           STORE MANAGER MODULE QUICK NAVIGATION
           ========================================================================= */}
-      <div className="bg-zinc-900 rounded-2xl p-3 border border-zinc-800 flex items-center justify-between gap-2 overflow-x-auto text-xs shadow-xs">
-        <span className="text-[10px] font-black uppercase text-amber-400 tracking-wider px-3 shrink-0 flex items-center gap-1.5">
+      <div className="bg-white rounded-2xl p-3 border-2 border-zinc-200 flex items-center justify-between gap-2 overflow-x-auto text-xs shadow-sm">
+        <span className="text-[10px] font-black uppercase text-amber-600 tracking-wider px-3 shrink-0 flex items-center gap-1.5">
           <Warehouse className="w-3.5 h-3.5" />
           <span>STORE MODULES:</span>
         </span>
         <div className="flex items-center gap-2 shrink-0">
           <Link
             to="/inventory"
-            className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white font-bold transition flex items-center gap-1.5"
+            className="px-3 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold transition flex items-center gap-1.5 border border-zinc-200"
           >
-            <Package className="w-3.5 h-3.5 text-amber-400" />
+            <Package className="w-3.5 h-3.5 text-amber-600" />
             <span>Spare Parts Catalog</span>
           </Link>
           <Link
             to="/procurement"
-            className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white font-bold transition flex items-center gap-1.5"
+            className="px-3 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold transition flex items-center gap-1.5 border border-zinc-200"
           >
-            <FileText className="w-3.5 h-3.5 text-blue-400" />
+            <FileText className="w-3.5 h-3.5 text-blue-600" />
             <span>Requisitions & POs</span>
           </Link>
           <Link
             to="/procurement"
-            className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white font-bold transition flex items-center gap-1.5"
+            className="px-3 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold transition flex items-center gap-1.5 border border-zinc-200"
           >
-            <Truck className="w-3.5 h-3.5 text-emerald-400" />
+            <Truck className="w-3.5 h-3.5 text-emerald-600" />
             <span>Goods Receipt (GRN)</span>
           </Link>
           <Link
             to="/rdc"
-            className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white font-bold transition flex items-center gap-1.5"
+            className="px-3 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold transition flex items-center gap-1.5 border border-zinc-200"
           >
-            <FileCheck className="w-3.5 h-3.5 text-purple-400" />
+            <FileCheck className="w-3.5 h-3.5 text-purple-600" />
             <span>RDC Gate Passes</span>
           </Link>
           <Link
             to="/audit"
-            className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white font-bold transition flex items-center gap-1.5"
+            className="px-3 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold transition flex items-center gap-1.5 border border-zinc-200"
           >
-            <Clock className="w-3.5 h-3.5 text-cyan-400" />
+            <Clock className="w-3.5 h-3.5 text-cyan-600" />
             <span>Audit Ledger</span>
           </Link>
           <Link
             to="/work-orders"
-            className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white font-bold transition flex items-center gap-1.5"
+            className="px-3 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold transition flex items-center gap-1.5 border border-zinc-200"
           >
-            <ClipboardList className="w-3.5 h-3.5 text-zinc-400" />
+            <ClipboardList className="w-3.5 h-3.5 text-zinc-500" />
             <span>Work Orders (Parts)</span>
           </Link>
         </div>

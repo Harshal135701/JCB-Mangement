@@ -505,16 +505,16 @@ export const TechnicianDashboard: React.FC = () => {
       {/* =========================================================================
           BREAKDOWN ASSIGNMENT INBOX: Incoming Automatic Breakdown Assignments
           ========================================================================= */}
-      <div id="assignment-inbox-section" className="bg-white rounded-2xl border-2 border-slate-200/90 shadow-sm overflow-hidden">
+      <div id="assignment-inbox-section" className="bg-white rounded-2xl border-2 border-zinc-200 shadow-sm overflow-hidden">
         {/* Inbox Header */}
-        <div className="p-4 sm:p-5 bg-zinc-950 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800">
+        <div className="p-4 sm:p-5 bg-white text-zinc-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b-2 border-zinc-200">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-jcb-yellow text-black flex items-center justify-center font-black shadow-xs">
+            <div className="w-10 h-10 rounded-xl bg-jcb-yellow text-zinc-900 flex items-center justify-center font-black shadow-xs">
               <Inbox className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-sm sm:text-base font-black uppercase tracking-wider text-white">
+                <h3 className="text-sm sm:text-base font-black uppercase tracking-wider text-zinc-900">
                   Breakdown Assignment Inbox
                 </h3>
                 {pendingAssignments.length > 0 && (
@@ -523,21 +523,21 @@ export const TechnicianDashboard: React.FC = () => {
                   </span>
                 )}
               </div>
-              <p className="text-[11px] text-zinc-400">
+              <p className="text-[11px] text-zinc-500">
                 Incoming machine breakdowns allocated via CMMS automatic technician assignment
               </p>
             </div>
           </div>
 
           {/* Segmented Tabs: Pending vs Accepted */}
-          <div className="flex items-center bg-zinc-900 p-1 rounded-xl border border-zinc-800 self-start sm:self-center">
+          <div className="flex items-center bg-zinc-100 p-1 rounded-xl border border-zinc-200 self-start sm:self-center">
             <button
               type="button"
               onClick={() => setAssignmentTab('pending')}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition flex items-center gap-1.5 cursor-pointer ${
                 assignmentTab === 'pending'
                   ? 'bg-jcb-yellow text-black shadow-xs'
-                  : 'text-zinc-400 hover:text-white'
+                  : 'text-zinc-600 hover:text-zinc-900'
               }`}
             >
               <Clock className="w-3.5 h-3.5" />
@@ -549,7 +549,7 @@ export const TechnicianDashboard: React.FC = () => {
               className={`px-3.5 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition flex items-center gap-1.5 cursor-pointer ${
                 assignmentTab === 'accepted'
                   ? 'bg-jcb-yellow text-black shadow-xs'
-                  : 'text-zinc-400 hover:text-white'
+                  : 'text-zinc-600 hover:text-zinc-900'
               }`}
             >
               <CheckCircle2 className="w-3.5 h-3.5" />
