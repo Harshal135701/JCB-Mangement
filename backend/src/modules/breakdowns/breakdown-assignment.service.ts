@@ -534,7 +534,7 @@ export async function autoAssignBreakdownService(
           'No Eligible Technician Available',
           warnMsg,
           'warning',
-          `/breakdowns/${breakdownId}`,
+          `/triage?breakdownId=${breakdownId}`,
           'assignment:unassigned',
           { breakdown_id: breakdownId, message: warnMsg },
           ioInstance
@@ -606,7 +606,7 @@ export async function autoAssignBreakdownService(
     'New Breakdown Assignment',
     notifMsg,
     'assignment',
-    `/breakdowns/${breakdownId}`,
+    `/technician/dashboard?breakdownId=${breakdownId}`,
     'technician:assigned',
     {
       assignment,
@@ -748,7 +748,7 @@ export async function acceptBreakdownAssignmentService(
       'Technician Accepted Assignment',
       acceptMsg,
       'info',
-      `/breakdowns/${breakdownId}`,
+      `/triage?breakdownId=${breakdownId}`,
       'assignment:accepted',
       {
         breakdown_id: breakdownId,
@@ -887,7 +887,7 @@ export async function rejectBreakdownAssignmentService(
       'Technician Rejected Assignment',
       rejectMsg,
       'warning',
-      `/breakdowns/${breakdownId}`,
+      `/triage?breakdownId=${breakdownId}`,
       'assignment:rejected',
       {
         breakdown_id: breakdownId,
@@ -975,7 +975,7 @@ export async function rejectBreakdownAssignmentService(
       'New Breakdown Assignment',
       nextNotifMsg,
       'assignment',
-      `/breakdowns/${breakdownId}`,
+      `/technician/dashboard?breakdownId=${breakdownId}`,
       'technician:assigned',
       {
         assignment: newAssignment,
@@ -1028,7 +1028,7 @@ export async function rejectBreakdownAssignmentService(
         'Breakdown Assignment Exhausted',
         exhaustMsg,
         'critical',
-        `/breakdowns/${breakdownId}`,
+        `/triage?breakdownId=${breakdownId}`,
         'assignment:exhausted',
         { breakdown_id: breakdownId, message: exhaustMsg },
         ioInstance
@@ -1191,7 +1191,7 @@ export async function managerManualAssignService(
     'New Breakdown Assignment (Manual)',
     notifMsg,
     'assignment',
-    `/breakdowns/${breakdownId}`,
+    `/technician/dashboard?breakdownId=${breakdownId}`,
     'technician:assigned',
     { assignment, breakdown_id: breakdownId },
     ioInstance
@@ -1327,7 +1327,7 @@ export async function managerManualReassignService(
         'Assignment Withdrawn / Reassigned',
         prevMsg,
         'info',
-        `/breakdowns/${breakdownId}`,
+        `/technician/dashboard?breakdownId=${breakdownId}`,
         'assignment:withdrawn',
         { breakdown_id: breakdownId, reason },
         ioInstance
@@ -1389,7 +1389,7 @@ export async function managerManualReassignService(
     'New Breakdown Assignment (Reassigned)',
     newNotifMsg,
     'assignment',
-    `/breakdowns/${breakdownId}`,
+    `/technician/dashboard?breakdownId=${breakdownId}`,
     'technician:assigned',
     { assignment: newAssignment, breakdown_id: breakdownId },
     ioInstance

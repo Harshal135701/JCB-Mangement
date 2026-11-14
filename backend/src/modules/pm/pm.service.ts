@@ -109,7 +109,7 @@ async function sendPMNotification(
   title: string,
   message: string,
   type = 'info',
-  linkUrl = '/pm/plans'
+  linkUrl = '/pm'
 ): Promise<void> {
   try {
     await client.query(

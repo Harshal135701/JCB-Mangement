@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import apiClient from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -404,6 +405,41 @@ export const RDCPage: React.FC = () => {
     setSelectedChallan(null);
     setChallanHistory([]);
   };
+
+  // Open Challan Details Drawer by ID (used for notification redirection)
+  const openDrawerById = useCallback(async (challanId: string) => {
+    setIsDrawerOpen(true);
+    setDrawerTab('items');
+    try {
+      const detailRes = await apiClient.get(`/rdc/${challanId}`);
+      if (detailRes.data?.success && detailRes.data.data) {
+        setSelectedChallan(detailRes.data.data);
+      }
+    } catch (err) {
+      console.warn('Failed to load full challan details:', err);
+    }
+    try {
+      setLoadingHistory(true);
+      const histRes = await apiClient.get(`/rdc/${challanId}/history`);
+      if (histRes.data?.success) {
+        setChallanHistory(histRes.data.data || []);
+      }
+    } catch (err) {
+      console.warn('Failed to load challan history:', err);
+    } finally {
+      setLoadingHistory(false);
+    }
+  }, []);
+
+  // Auto-open specific challan if specified in query params
+  const [searchParams] = useSearchParams();
+  const targetChallanId = searchParams.get('challanId') || searchParams.get('id');
+
+  useEffect(() => {
+    if (targetChallanId) {
+      openDrawerById(targetChallanId);
+    }
+  }, [targetChallanId, openDrawerById]);
 
   // Refresh current challan in drawer
   const refreshCurrentChallan = async () => {

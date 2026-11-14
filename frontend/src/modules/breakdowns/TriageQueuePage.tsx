@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import apiClient from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
@@ -559,6 +560,19 @@ export const TriageQueuePage: React.FC = () => {
       setDetailLoading(false);
     }
   };
+
+  // Auto-open specific breakdown record if specified in URL query parameters
+  const [searchParams] = useSearchParams();
+  const targetBreakdownId =
+    searchParams.get('breakdownId') ||
+    searchParams.get('complaint_id') ||
+    searchParams.get('id');
+
+  useEffect(() => {
+    if (targetBreakdownId) {
+      openDetailModal(targetBreakdownId);
+    }
+  }, [targetBreakdownId]);
 
   // Action 1: Acknowledge Complaint
   const handleAcknowledge = async (complaintId: string) => {

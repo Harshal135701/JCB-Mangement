@@ -289,6 +289,7 @@ export async function notifyUsers(
           title,
           message,
           type,
+          linkUrl: challanId ? `/rdc?challanId=${challanId}` : '/rdc',
           entityType: 'rdc_challans',
           entityId: challanId,
           plantId: plantId || undefined,

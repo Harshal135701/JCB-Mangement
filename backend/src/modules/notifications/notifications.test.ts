@@ -261,7 +261,7 @@ class MockDatabase {
 
     // 2. Notifications INSERT
     if (trimmed.startsWith('INSERT INTO notifications')) {
-      const [recipient_id, title, message, type, link_url] = params;
+      const [recipient_id, title, message, type, link_url, entity_type, entity_id, plant_id, shop_id] = params;
       const notif = {
         id: `a0000000-0000-0000-0000-${String(this.notifications.length + 1).padStart(12, '0')}`,
         recipient_id,
@@ -269,6 +269,10 @@ class MockDatabase {
         message,
         type: type || 'info',
         link_url: link_url || null,
+        entity_type: entity_type || null,
+        entity_id: entity_id || null,
+        plant_id: plant_id || null,
+        shop_id: shop_id || null,
         is_read: false,
         created_at: new Date(),
         read_at: null,
@@ -777,6 +781,7 @@ describe('JCB Real-Time Notification & Socket.IO Architecture Test Suite', () =>
       assert.ok(mgrNotif);
       assert.match(mgrNotif.message, /JCB-CNC-001/);
       assert.match(mgrNotif.message, /Ramesh Operator/);
+      assert.equal(mgrNotif.link_url, `/triage?breakdownId=${complaint.id}`);
 
       // Verify real-time socket event dispatched to user room
       const socketEvt = mockIo.emittedEvents.find(
@@ -1033,6 +1038,7 @@ describe('JCB Real-Time Notification & Socket.IO Architecture Test Suite', () =>
       );
       assert.ok(oprNotif);
       assert.match(oprNotif.message, /repaired and verified/i);
+      assert.equal(oprNotif.link_url, `/operator/dashboard?ticketId=${wo.complaint_id}`);
 
       // Verify real-time socket event for operator
       const oprSocketEvt = mockIo.emittedEvents.find(
@@ -1115,6 +1121,100 @@ describe('JCB Real-Time Notification & Socket.IO Architecture Test Suite', () =>
         (n) => n.recipient_id === tech2Id && n.title === 'Work Order Reassigned'
       );
       assert.ok(newTechNotif);
+    });
+  });
+
+  describe('4. Notification Redirection & Role-Aware Navigation Contracts', () => {
+    it('4.1. RDC notification dispatch populates canonical linkUrl with challanId', async () => {
+      mockIo.clear();
+      const challanId = '55555555-5555-5555-5555-555555555555';
+      const recipientId = 'f0000000-0000-0000-0000-000000000002'; // Manager
+
+      const created = await createAndSendNotification(
+        {
+          recipientId,
+          title: 'Delivery Challan Submitted',
+          message: 'Challan RDC-2026-0001 submitted for your review.',
+          type: 'approval',
+          linkUrl: `/rdc?challanId=${challanId}`,
+          entityType: 'rdc_challans',
+          entityId: challanId,
+        },
+        mockDb.getPool() as any,
+        mockIo
+      );
+
+      assert.ok(created.id);
+      assert.equal(created.link_url, `/rdc?challanId=${challanId}`);
+      assert.equal(created.entity_type, 'rdc_challans');
+      assert.equal(created.entity_id, challanId);
+    });
+
+    it('4.2. Work order repair verification notification routes operator to operator dashboard with ticketId', async () => {
+      const compId = '20000000-0000-0000-0000-000000000099';
+      const oprId = 'f0000000-0000-0000-0000-000000000005';
+      const woId = '30000000-0000-0000-0000-000000000099';
+      mockIo.clear();
+
+      mockDb.complaints.set(compId, {
+        id: compId,
+        complaint_number: 'CMP-2026-00099',
+        machine_id: '10000000-0000-0000-0000-000000000001',
+        reported_by_id: oprId,
+        status: 'in_progress',
+      });
+
+      mockDb.workOrders.set(woId, {
+        id: woId,
+        wo_number: 'WO-2026-00099',
+        complaint_id: compId,
+        machine_id: '10000000-0000-0000-0000-000000000001',
+        assigned_technician_id: 'f0000000-0000-0000-0000-000000000003',
+        assigned_manager_id: 'f0000000-0000-0000-0000-000000000002',
+        machine_code: 'JCB-CNC-001',
+        status: 'submitted_verification',
+        plant_id: 'b0000000-0000-0000-0000-000000000001',
+        shop_id: 'c0000000-0000-0000-0000-000000000001',
+      });
+
+      await verifyAndCloseWorkOrderService(
+        woId,
+        { result: 'APPROVED', remarks: 'Repaired and verified.' },
+        mockDb.users.get('f0000000-0000-0000-0000-000000000002'),
+        mockDb.getPool() as any,
+        mockIo
+      );
+
+      const oprNotif = mockDb.notifications.find(
+        (n) => n.recipient_id === oprId && n.title === 'Machine Repair Verified'
+      );
+      assert.ok(oprNotif);
+      assert.equal(oprNotif.link_url, `/operator/dashboard?ticketId=${compId}`);
+    });
+
+    it('4.3. Breakdown reported to manager points to /triage?breakdownId=...', async () => {
+      mockIo.clear();
+      const operatorUser = mockDb.users.get('f0000000-0000-0000-0000-000000000005');
+
+      const complaint = await createBreakdownComplaintService(
+        {
+          machine_id: '10000000-0000-0000-0000-000000000001',
+          issue_category: 'mechanical',
+          priority: 'high',
+          problem_title: 'Spindle bearing vibration',
+          description: 'Spindle bearing abnormal noise and vibration.',
+        },
+        operatorUser,
+        mockDb.getPool() as any,
+        mockIo
+      );
+
+      assert.ok(complaint.id);
+      const mgrNotif = mockDb.notifications.find(
+        (n) => n.recipient_id === 'f0000000-0000-0000-0000-000000000002' && n.title === 'New Breakdown Reported'
+      );
+      assert.ok(mgrNotif);
+      assert.equal(mgrNotif.link_url, `/triage?breakdownId=${complaint.id}`);
     });
   });
 });

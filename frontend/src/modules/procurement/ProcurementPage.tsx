@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams, useParams } from 'react-router-dom';
 import apiClient from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -727,6 +728,17 @@ export const ProcurementPage: React.FC = () => {
       setLoadingDetails(false);
     }
   };
+
+  // Auto-open specific Purchase Requisition if specified in query params or route
+  const [searchParams] = useSearchParams();
+  const { id: routePrId } = useParams<{ id?: string }>();
+  const targetPrId = searchParams.get('prId') || searchParams.get('id') || routePrId;
+
+  useEffect(() => {
+    if (targetPrId) {
+      handleOpenDetails(targetPrId);
+    }
+  }, [targetPrId]);
 
   // ============================================================================
   // WORKFLOW ACTION HANDLERS

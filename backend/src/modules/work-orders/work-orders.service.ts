@@ -1744,7 +1744,7 @@ export async function verifyAndCloseWorkOrderService(
               'Machine Repair Verified',
               `Your reported machine issue has been repaired and verified. Machine: ${machineLabel}. Work Order: ${wo.wo_number}.`,
               'info',
-              `/breakdowns/${wo.complaint_id}`,
+              `/operator/dashboard?ticketId=${wo.complaint_id}`,
               'repair:verified',
               {
                 workOrder: verifiedWo,

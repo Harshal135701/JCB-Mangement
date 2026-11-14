@@ -1,9 +1,10 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
 import { Layout } from './layouts/Layout';
 import { RoleGuard } from './components/common/RoleGuard';
+import { resolveNotificationRoute } from './utils/notificationRouteResolver';
 
 // Pages & Dashboards
 import { WelcomePage } from './modules/welcome/WelcomePage';
@@ -27,6 +28,16 @@ import { UserManagementPage } from './modules/users/UserManagementPage';
 import { PreShiftInspectionPage } from './modules/inspections/PreShiftInspectionPage';
 import { WorkOrderListPage } from './modules/work-orders/WorkOrderListPage';
 import { WorkOrderDetailPage } from './modules/work-orders/WorkOrderDetailPage';
+
+function BreakdownRedirectRoute() {
+  const { user } = useAuth();
+  const { id } = useParams<{ id?: string }>();
+  const target = resolveNotificationRoute(
+    { link_url: id ? `/breakdowns/${id}` : '/breakdowns' },
+    user?.role
+  );
+  return <Navigate to={target} replace />;
+}
 
 export default function App() {
   return (
@@ -109,6 +120,10 @@ export default function App() {
                 }
               />
 
+              {/* Breakdown Redirect Routes (Role-aware mapping for direct links and legacy URLs) */}
+              <Route path="/breakdowns" element={<BreakdownRedirectRoute />} />
+              <Route path="/breakdowns/:id" element={<BreakdownRedirectRoute />} />
+
               {/* Work Order Engine */}
               <Route
                 path="/work-orders"
@@ -128,6 +143,14 @@ export default function App() {
               />
               <Route
                 path="/procurement"
+                element={
+                  <RoleGuard allowedRoles={['manager', 'admin', 'technician', 'store_manager']}>
+                    <ProcurementPage />
+                  </RoleGuard>
+                }
+              />
+              <Route
+                path="/procurement/pr/:id"
                 element={
                   <RoleGuard allowedRoles={['manager', 'admin', 'technician', 'store_manager']}>
                     <ProcurementPage />
@@ -196,6 +219,14 @@ export default function App() {
               />
               <Route
                 path="/pm"
+                element={
+                  <RoleGuard allowedRoles={['admin', 'manager', 'technician']}>
+                    <PMCalendarPage />
+                  </RoleGuard>
+                }
+              />
+              <Route
+                path="/pm/plans"
                 element={
                   <RoleGuard allowedRoles={['admin', 'manager', 'technician']}>
                     <PMCalendarPage />

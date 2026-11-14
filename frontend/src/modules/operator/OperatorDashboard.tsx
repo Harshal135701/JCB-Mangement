@@ -14,7 +14,7 @@ import {
   ClipboardCheck,
   AlertCircle
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { DashboardHeader } from '../../components/dashboard/DashboardHeader';
 import { TopKPICard } from '../../components/dashboard/TopKPICard';
 import { MachineStatusDonut } from '../../components/dashboard/MachineStatusDonut';
@@ -36,6 +36,13 @@ export const OperatorDashboard: React.FC = () => {
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [selectedMachineId, setSelectedMachineId] = useState<string>('');
   const [reportSuccess, setReportSuccess] = useState('');
+
+  // Read ticket/breakdown target from notification URL
+  const [searchParams] = useSearchParams();
+  const targetTicketId =
+    searchParams.get('ticketId') ||
+    searchParams.get('breakdownId') ||
+    searchParams.get('id');
 
   const fetchData = async () => {
     try {
@@ -493,8 +500,22 @@ export const OperatorDashboard: React.FC = () => {
                         })
                       : 'N/A';
 
+                    const isTargeted =
+                      Boolean(targetTicketId) &&
+                      (item.id === targetTicketId ||
+                        item.complaint_number === targetTicketId ||
+                        (typeof item.id === 'string' && item.id.startsWith(targetTicketId)));
+
                     return (
-                      <tr key={item.id} className="hover:bg-slate-50/70 transition">
+                      <tr
+                        key={item.id}
+                        id={`ticket-${item.id}`}
+                        className={`transition ${
+                          isTargeted
+                            ? 'bg-amber-100/80 border-l-4 border-amber-500 shadow-sm'
+                            : 'hover:bg-slate-50/70'
+                        }`}
+                      >
                         <td className="py-3 px-3 font-mono font-bold text-zinc-950">
                           {ticketId}
                         </td>

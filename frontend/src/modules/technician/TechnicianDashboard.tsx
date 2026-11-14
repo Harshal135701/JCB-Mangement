@@ -21,7 +21,7 @@ import {
   X,
   RotateCcw
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { DashboardHeader } from '../../components/dashboard/DashboardHeader';
 import { TopKPICard } from '../../components/dashboard/TopKPICard';
 import { MachineStatusDonut } from '../../components/dashboard/MachineStatusDonut';
@@ -50,6 +50,20 @@ export const TechnicianDashboard: React.FC = () => {
   const [technicianRejectReason, setTechnicianRejectReason] = useState('');
   const [technicianRejectReasonError, setTechnicianRejectReasonError] = useState('');
   const [assignmentNotice, setAssignmentNotice] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
+
+  // Auto-switch to pending assignments if a breakdown is targeted via notification
+  const [searchParams] = useSearchParams();
+  const targetBreakdownId = searchParams.get('breakdownId') || searchParams.get('id');
+
+  useEffect(() => {
+    if (targetBreakdownId) {
+      setAssignmentTab('pending');
+      const el = document.getElementById(`breakdown-${targetBreakdownId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  }, [targetBreakdownId, assignedBreakdowns]);
 
 
   const fetchWorkOrders = async () => {
@@ -604,7 +618,12 @@ export const TechnicianDashboard: React.FC = () => {
                 {pendingAssignments.map((b) => (
                   <div
                     key={b.id}
-                    className="p-4 rounded-xl border-2 border-blue-200 bg-blue-50/20 hover:bg-blue-50/40 transition space-y-3"
+                    id={`breakdown-${b.id}`}
+                    className={`p-4 rounded-xl border-2 transition space-y-3 ${
+                      b.id === targetBreakdownId
+                        ? 'border-amber-500 bg-amber-50/50 shadow-md ring-2 ring-amber-400'
+                        : 'border-blue-200 bg-blue-50/20 hover:bg-blue-50/40'
+                    }`}
                   >
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-blue-100 pb-2.5">
                       <div className="flex items-center gap-2 flex-wrap">

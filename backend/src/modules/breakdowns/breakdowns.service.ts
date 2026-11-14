@@ -400,7 +400,7 @@ export async function createBreakdownComplaintService(
           notifTitle,
           notifMessage,
           cleanPriority === 'critical' ? 'critical' : 'warning',
-          `/breakdowns/${complaint.id}`,
+          `/triage?breakdownId=${complaint.id}`,
         ]
       );
     }

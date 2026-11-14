@@ -20,6 +20,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+import { resolveNotificationRoute } from '../../utils/notificationRouteResolver';
 
 interface HeaderProps {
   onMobileMenuToggle: () => void;
@@ -51,12 +52,18 @@ export const Header: React.FC<HeaderProps> = ({ onMobileMenuToggle }) => {
   }, []);
 
   const handleNotificationClick = async (item: NotificationItem) => {
+    // 1. Mark as read non-blockingly (API failure must never prevent navigation)
     if (!item.is_read) {
-      await markAsRead(item.id);
+      try {
+        await markAsRead(item.id);
+      } catch (err) {
+        console.warn('[Header] Failed to mark notification as read:', err);
+      }
     }
     setIsNotifOpen(false);
 
-    const targetUrl = item.link_url || item.action_url;
+    // 2. Resolve destination route in a role-aware, entity-safe manner
+    const targetUrl = resolveNotificationRoute(item, user?.role);
     if (targetUrl) {
       navigate(targetUrl);
     }

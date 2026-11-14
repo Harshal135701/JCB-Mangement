@@ -740,7 +740,7 @@ export const acknowledgeBreakdown = async (
         'Breakdown Acknowledged',
         `Your breakdown complaint ${breakdown.complaint_number} has been acknowledged by management.`,
         'info',
-        `/breakdowns/${breakdown.id}`,
+        `/operator/dashboard?ticketId=${breakdown.id}`,
       ]
     );
 
@@ -875,7 +875,7 @@ export const updateBreakdownPriority = async (
             'CRITICAL Breakdown Escalation',
             `Breakdown ${breakdown.complaint_number} on ${breakdown.machine_code} has been escalated to CRITICAL priority.`,
             'critical',
-            `/breakdowns/${id}`,
+            `/triage?breakdownId=${id}`,
           ]
         );
       }
@@ -997,7 +997,7 @@ export const requestAdditionalInfo = async (
         'Additional Information Requested',
         `Manager requested information regarding complaint ${breakdown.complaint_number}: ${cleanRemarks}`,
         'warning',
-        `/breakdowns/${id}`,
+        `/operator/dashboard?ticketId=${id}`,
       ]
     );
 
@@ -1157,7 +1157,7 @@ export const rejectBreakdown = async (
         'Breakdown Complaint Rejected',
         `Your breakdown complaint ${breakdown.complaint_number} was rejected by management: ${cleanReason}`,
         'alert',
-        `/breakdowns/${id}`,
+        `/operator/dashboard?ticketId=${id}`,
       ]
     );
 
