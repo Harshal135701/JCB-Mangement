@@ -153,19 +153,19 @@ export const EditPRModal: React.FC<EditPRModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
       <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] flex flex-col my-auto">
         {/* Header */}
-        <div className="bg-zinc-950 p-5 flex items-center justify-between border-b border-zinc-800 shrink-0">
+        <div className="bg-white p-5 flex items-center justify-between border-b-2 border-zinc-200 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="bg-jcb-yellow text-black font-black text-sm px-2.5 py-1 rounded shadow uppercase tracking-wide">
+            <div className="bg-jcb-yellow text-zinc-950 font-black text-sm px-2.5 py-1 rounded shadow-sm border border-amber-400 uppercase tracking-wide">
               {pr.pr_number}
             </div>
             <div>
-              <h3 className="text-base font-black text-white tracking-wide uppercase flex items-center gap-2">
+              <h3 className="text-base font-black text-zinc-950 tracking-wide uppercase flex items-center gap-2">
                 Edit Purchase Requisition
               </h3>
-              <p className="text-xs text-zinc-400">
+              <p className="text-xs text-zinc-500">
                 Created: {new Date(pr.created_at).toLocaleDateString()} | Requester:{' '}
                 {pr.requester_name || pr.requested_by_name || 'Technician'}
-                <span className="ml-2 bg-zinc-800 text-zinc-300 px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider">
+                <span className="ml-2 bg-zinc-100 text-zinc-800 border border-zinc-200 px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider">
                   {pr.status.replace(/_/g, ' ')}
                 </span>
               </p>
@@ -173,7 +173,7 @@ export const EditPRModal: React.FC<EditPRModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="text-zinc-400 hover:text-white p-1 rounded-lg transition"
+            className="text-zinc-400 hover:text-zinc-900 p-1 rounded-lg hover:bg-zinc-100 transition cursor-pointer"
             title="Close"
           >
             <X className="w-5 h-5" />

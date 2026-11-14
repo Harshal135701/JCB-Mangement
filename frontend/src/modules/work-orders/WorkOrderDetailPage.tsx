@@ -731,13 +731,13 @@ export const WorkOrderDetailPage: React.FC = () => {
       </div>
 
       {/* Action Control Station: STRICT Role-Based Separation */}
-      <div className="p-5 sm:p-6 bg-zinc-950 text-white rounded-2xl border-2 border-zinc-800 shadow-md space-y-4">
+      <div className="p-5 sm:p-6 bg-white text-zinc-900 rounded-2xl border-2 border-zinc-200 shadow-sm space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <span className="text-[10px] uppercase font-black tracking-widest text-jcb-yellow block">
+            <span className="text-[10px] uppercase font-black tracking-widest text-amber-600 block">
               Action Control Station
             </span>
-            <h3 className="text-base font-black tracking-wide uppercase">
+            <h3 className="text-base font-black tracking-wide uppercase text-zinc-900">
               {isClosed || isCompleted
                 ? 'Work Order Verified & Completed'
                 : isAssignedTechnician
@@ -769,7 +769,7 @@ export const WorkOrderDetailPage: React.FC = () => {
                       type="button"
                       onClick={() => setIsScheduleModalOpen(true)}
                       disabled={actionLoading}
-                      className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition border border-zinc-700 cursor-pointer disabled:opacity-50"
+                      className="px-4 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold text-xs uppercase tracking-wider rounded-xl transition border border-zinc-300 cursor-pointer disabled:opacity-50"
                     >
                       Schedule Visit
                     </button>
@@ -777,7 +777,7 @@ export const WorkOrderDetailPage: React.FC = () => {
                       type="button"
                       onClick={() => setIsDeclineModalOpen(true)}
                       disabled={actionLoading}
-                      className="px-3.5 py-2 bg-red-950 hover:bg-red-900 text-red-200 font-bold text-xs uppercase tracking-wider rounded-xl transition border border-red-800 cursor-pointer disabled:opacity-50"
+                      className="px-3.5 py-2 bg-red-100 hover:bg-red-200 text-red-800 font-bold text-xs uppercase tracking-wider rounded-xl transition border border-red-300 cursor-pointer disabled:opacity-50"
                     >
                       Decline
                     </button>
@@ -821,7 +821,7 @@ export const WorkOrderDetailPage: React.FC = () => {
                       type="button"
                       onClick={() => setIsProgressModalOpen(true)}
                       disabled={actionLoading}
-                      className="px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs uppercase rounded-xl border border-zinc-700 cursor-pointer disabled:opacity-50"
+                      className="px-3.5 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold text-xs uppercase rounded-xl border border-zinc-300 cursor-pointer disabled:opacity-50"
                     >
                       Log Intermediate Findings
                     </button>
@@ -844,7 +844,7 @@ export const WorkOrderDetailPage: React.FC = () => {
                       type="button"
                       onClick={() => setIsProgressModalOpen(true)}
                       disabled={actionLoading}
-                      className="px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs uppercase rounded-xl border border-zinc-700 cursor-pointer disabled:opacity-50"
+                      className="px-3.5 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold text-xs uppercase rounded-xl border border-zinc-300 cursor-pointer disabled:opacity-50"
                     >
                       Progress Notes
                     </button>
@@ -890,7 +890,7 @@ export const WorkOrderDetailPage: React.FC = () => {
 
             {/* If logged in user is a technician NOT assigned to this work order */}
             {isTechnician && !isAssignedTechnician && (
-              <span className="text-xs text-zinc-400 font-medium italic">
+              <span className="text-xs text-zinc-500 font-medium italic">
                 Read-only: Assigned to {workOrder.technician_name || 'another technician'}.
               </span>
             )}
@@ -911,13 +911,13 @@ export const WorkOrderDetailPage: React.FC = () => {
             )}
 
             {isSubmitted && !isManagerOrAdmin && (
-              <span className="text-xs text-zinc-400 font-medium italic">
+              <span className="text-xs text-zinc-500 font-medium italic">
                 Awaiting maintenance manager inspection and production sign-off.
               </span>
             )}
 
             {(isClosed || isCompleted) && (
-              <span className="inline-flex items-center gap-1.5 text-xs text-emerald-400 font-black uppercase tracking-wider">
+              <span className="inline-flex items-center gap-1.5 text-xs text-emerald-600 font-black uppercase tracking-wider">
                 <CheckCircle2 className="w-4 h-4" />
                 <span>Order Closed • Machine Operational</span>
               </span>

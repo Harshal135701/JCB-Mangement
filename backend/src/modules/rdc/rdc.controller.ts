@@ -29,6 +29,7 @@ import {
   recordWriteOffService,
   cancelChallanService,
   closeChallanService,
+  deleteChallanService,
   getChallanHistoryService,
   getDashboardMetricsService,
   getOverdueChallansService,
@@ -630,6 +631,34 @@ export const getRDCHistory = async (req: Request, res: Response, next: NextFunct
     res.json({
       success: true,
       data: history,
+    });
+  } catch (err: any) {
+    if (err instanceof RdcServiceError) {
+      res.status(err.statusCode).json({ success: false, message: err.message });
+      return;
+    }
+    next(err);
+  }
+};
+
+/**
+ * DELETE /api/v1/rdc/:id
+ * Delete delivery challan (draft, rejected, or cancelled)
+ */
+export const deleteRDC = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = getAuthUser(req);
+    const { id } = req.params;
+    if (!uuidSchema.safeParse(id).success) {
+      res.status(400).json({ success: false, message: 'Invalid challan ID format.' });
+      return;
+    }
+
+    const result = await deleteChallanService(id, user);
+    res.json({
+      success: true,
+      message: result.message,
+      data: { id: result.id },
     });
   } catch (err: any) {
     if (err instanceof RdcServiceError) {

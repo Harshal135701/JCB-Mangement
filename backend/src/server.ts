@@ -9,7 +9,18 @@ const server = http.createServer(app);
 // Initialize Socket.io with origin allowlist
 export const io = new SocketIOServer(server, {
   cors: {
-    origin: config.allowedOrigins,
+    origin: (origin, callback) => {
+      if (!origin || config.allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      if (config.nodeEnv !== 'production') {
+        const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+        if (isLocalhost) {
+          return callback(null, true);
+        }
+      }
+      return callback(new Error('Not allowed by CORS'), false);
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
   },

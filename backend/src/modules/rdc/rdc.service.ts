@@ -2214,3 +2214,50 @@ export async function getOverdueChallansService(
   const res = await query(overdueSql, params);
   return res.rows;
 }
+
+/**
+ * 17. Delete Delivery Challan (Draft, Rejected, or Cancelled status only)
+ */
+export async function deleteChallanService(
+  challanId: string,
+  user: AuthenticatedUser
+): Promise<{ id: string; message: string }> {
+  const { pool } = getRdcServiceDb();
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const sel = await client.query('SELECT * FROM rdc_challans WHERE id = $1 FOR UPDATE', [challanId]);
+    if (sel.rows.length === 0) {
+      throw new RdcServiceError('Delivery Challan not found.', 404);
+    }
+    const challan = sel.rows[0];
+    validatePlantAccess(user, challan.plant_id, 'delete');
+
+    if (!['draft', 'rejected', 'cancelled'].includes(challan.status)) {
+      throw new RdcServiceError(
+        `Cannot delete delivery challan in '${challan.status}' status. Only draft, rejected, or cancelled challans can be deleted.`,
+        400
+      );
+    }
+
+    if (user.role === 'technician' && challan.created_by !== user.id) {
+      throw new RdcServiceError('Forbidden: Technicians can only delete their own challans.', 403);
+    }
+
+    await client.query('DELETE FROM rdc_items WHERE rdc_id = $1', [challanId]);
+    await client.query('DELETE FROM rdc_challans WHERE id = $1', [challanId]);
+
+    await client.query('COMMIT');
+    return {
+      id: challanId,
+      message: `Delivery Challan ${challan.challan_number} deleted successfully from database.`,
+    };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}

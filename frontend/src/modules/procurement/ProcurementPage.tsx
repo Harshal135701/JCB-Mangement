@@ -1156,11 +1156,10 @@ export const ProcurementPage: React.FC = () => {
       {/* Toast Feedback Notification */}
       {feedback && (
         <div
-          className={`fixed top-5 right-5 z-50 flex items-center gap-3 px-5 py-3.5 rounded-xl shadow-2xl border text-xs font-bold transition-all animate-in fade-in slide-in-from-top-4 duration-200 ${
-            feedback.type === 'success'
-              ? 'bg-emerald-950 text-emerald-100 border-emerald-500/50 shadow-emerald-950/20'
-              : 'bg-red-950 text-red-100 border-red-500/50 shadow-red-950/20'
-          }`}
+          className={`fixed top-5 right-5 z-50 flex items-center gap-3 px-5 py-3.5 rounded-xl shadow-2xl border text-xs font-bold transition-all animate-in fade-in slide-in-from-top-4 duration-200 ${feedback.type === 'success'
+            ? 'bg-emerald-950 text-emerald-100 border-emerald-500/50 shadow-emerald-950/20'
+            : 'bg-red-950 text-red-100 border-red-500/50 shadow-red-950/20'
+            }`}
         >
           {feedback.type === 'success' ? (
             <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
@@ -1286,19 +1285,17 @@ export const ProcurementPage: React.FC = () => {
       <div className="flex items-center gap-2 border-b-2 border-zinc-200 pb-1 overflow-x-auto">
         <button
           onClick={() => setActiveTab('prs')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${
-            activeTab === 'prs'
-              ? 'bg-zinc-900 text-white shadow'
-              : 'text-zinc-600 hover:text-black hover:bg-zinc-100'
-          }`}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${activeTab === 'prs'
+            ? 'bg-zinc-900 text-white shadow'
+            : 'text-zinc-600 hover:text-black hover:bg-zinc-100'
+            }`}
         >
           <ShoppingCart className="w-4 h-4" />
           <span>Requisition Queue</span>
           {totalPRCount > 0 && (
             <span
-              className={`px-2 py-0.5 rounded-full text-[10px] ${
-                activeTab === 'prs' ? 'bg-jcb-yellow text-black' : 'bg-zinc-200 text-zinc-700'
-              }`}
+              className={`px-2 py-0.5 rounded-full text-[10px] ${activeTab === 'prs' ? 'bg-jcb-yellow text-black' : 'bg-zinc-200 text-zinc-700'
+                }`}
             >
               {totalPRCount}
             </span>
@@ -1309,18 +1306,16 @@ export const ProcurementPage: React.FC = () => {
           <>
             <button
               onClick={() => setActiveTab('pos')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${
-                activeTab === 'pos'
-                  ? 'bg-zinc-900 text-white shadow'
-                  : 'text-zinc-600 hover:text-black hover:bg-zinc-100'
-              }`}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${activeTab === 'pos'
+                ? 'bg-zinc-900 text-white shadow'
+                : 'text-zinc-600 hover:text-black hover:bg-zinc-100'
+                }`}
             >
               <FileText className="w-4 h-4" />
               <span>Purchase Orders (POs)</span>
               <span
-                className={`px-2 py-0.5 rounded-full text-[10px] ${
-                  activeTab === 'pos' ? 'bg-blue-400 text-black' : 'bg-zinc-200 text-zinc-700'
-                }`}
+                className={`px-2 py-0.5 rounded-full text-[10px] ${activeTab === 'pos' ? 'bg-blue-400 text-black' : 'bg-zinc-200 text-zinc-700'
+                  }`}
               >
                 {dashboardData?.summary?.active_pos ?? 0}
               </span>
@@ -1328,11 +1323,10 @@ export const ProcurementPage: React.FC = () => {
 
             <button
               onClick={() => setActiveTab('vendors')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${
-                activeTab === 'vendors'
-                  ? 'bg-zinc-900 text-white shadow'
-                  : 'text-zinc-600 hover:text-black hover:bg-zinc-100'
-              }`}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${activeTab === 'vendors'
+                ? 'bg-zinc-900 text-white shadow'
+                : 'text-zinc-600 hover:text-black hover:bg-zinc-100'
+                }`}
             >
               <Building className="w-4 h-4" />
               <span>Vendor Directory</span>
@@ -1341,11 +1335,10 @@ export const ProcurementPage: React.FC = () => {
             {(dashboardData?.summary?.overdue_pos ?? 0) > 0 && (
               <button
                 onClick={() => setActiveTab('analytics')}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${
-                  activeTab === 'analytics'
-                    ? 'bg-red-600 text-white shadow'
-                    : 'text-red-700 hover:bg-red-50'
-                }`}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${activeTab === 'analytics'
+                  ? 'bg-red-600 text-white shadow'
+                  : 'text-red-700 hover:bg-red-50'
+                  }`}
               >
                 <AlertTriangle className="w-4 h-4" />
                 <span>Overdue Alerts</span>
@@ -1609,11 +1602,10 @@ export const ProcurementPage: React.FC = () => {
                               {/* Delete Requisition */}
                               <button
                                 onClick={() => setSelectedPRForDelete(pr)}
-                                className={`p-1.5 rounded-lg transition ${
-                                  pr.po_number || ['po_created', 'ordered', 'partially_received', 'fully_received'].includes(pr.status)
-                                    ? 'text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100'
-                                    : 'text-red-600 hover:text-red-800 hover:bg-red-100'
-                                }`}
+                                className={`p-1.5 rounded-lg transition ${pr.po_number || ['po_created', 'ordered', 'partially_received', 'fully_received'].includes(pr.status)
+                                  ? 'text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100'
+                                  : 'text-red-600 hover:text-red-800 hover:bg-red-100'
+                                  }`}
                                 title={
                                   pr.po_number || ['po_created', 'ordered', 'partially_received', 'fully_received'].includes(pr.status)
                                     ? 'Deletion restricted: PO issued or items received'
@@ -1729,11 +1721,10 @@ export const ProcurementPage: React.FC = () => {
                   setPoFilterOverdue(!poFilterOverdue);
                   setPoPage(1);
                 }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase transition ${
-                  poFilterOverdue
-                    ? 'bg-red-600 text-white'
-                    : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
-                }`}
+                className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase transition ${poFilterOverdue
+                  ? 'bg-red-600 text-white'
+                  : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
+                  }`}
               >
                 {poFilterOverdue ? 'Overdue POs Only' : 'Show All POs'}
               </button>
@@ -2134,23 +2125,23 @@ export const ProcurementPage: React.FC = () => {
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] flex flex-col">
-            <div className="bg-zinc-950 p-5 flex items-center justify-between border-b border-zinc-800 shrink-0">
+            <div className="bg-white p-5 flex items-center justify-between border-b-2 border-zinc-200 shrink-0">
               <div className="flex items-center gap-3">
-                <div className="bg-jcb-yellow text-black font-black text-xl px-2.5 py-0.5 rounded shadow">
+                <div className="bg-jcb-yellow text-zinc-950 font-black text-xl px-2.5 py-0.5 rounded shadow-sm border border-amber-400">
                   PR
                 </div>
                 <div>
-                  <h3 className="text-base font-black text-white tracking-wide">
+                  <h3 className="text-base font-black text-zinc-950 tracking-wide uppercase">
                     RAISE PURCHASE REQUISITION
                   </h3>
-                  <p className="text-[10px] text-zinc-400 font-medium">
+                  <p className="text-[11px] text-zinc-500 font-medium">
                     Submit spare part procurement request to plant maintenance authority.
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setIsCreateModalOpen(false)}
-                className="text-zinc-400 hover:text-white p-1"
+                className="text-zinc-400 hover:text-zinc-900 p-1 rounded-lg hover:bg-zinc-100 transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -2271,11 +2262,10 @@ export const ProcurementPage: React.FC = () => {
                       type="button"
                       key={urg}
                       onClick={() => setCreateForm({ ...createForm, urgency: urg })}
-                      className={`py-2 rounded-xl text-xs font-black uppercase transition border ${
-                        createForm.urgency === urg
-                          ? 'bg-zinc-900 text-white border-black shadow'
-                          : 'bg-zinc-50 text-zinc-600 border-zinc-200 hover:bg-zinc-100'
-                      }`}
+                      className={`py-2 rounded-xl text-xs font-black uppercase transition border ${createForm.urgency === urg
+                        ? 'bg-zinc-900 text-white border-black shadow'
+                        : 'bg-zinc-50 text-zinc-600 border-zinc-200 hover:bg-zinc-100'
+                        }`}
                     >
                       {urg}
                     </button>
@@ -2327,14 +2317,16 @@ export const ProcurementPage: React.FC = () => {
       {selectedPRForApprove && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="bg-zinc-950 p-5 flex items-center justify-between border-b border-zinc-800">
+            <div className="bg-white p-5 flex items-center justify-between border-b-2 border-zinc-200">
               <div className="flex items-center gap-3">
-                <CheckCircle2 className="w-5 h-5 text-jcb-yellow" />
-                <h3 className="text-base font-black text-white">APPROVE REQUISITION</h3>
+                <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center font-black">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                </div>
+                <h3 className="text-base font-black text-zinc-950 uppercase">APPROVE REQUISITION</h3>
               </div>
               <button
                 onClick={() => setSelectedPRForApprove(null)}
-                className="text-zinc-400 hover:text-white p-1"
+                className="text-zinc-400 hover:text-zinc-900 p-1 rounded-lg hover:bg-zinc-100 transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -2475,14 +2467,16 @@ export const ProcurementPage: React.FC = () => {
       {selectedPRForCancel && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border-2 border-zinc-300 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="bg-zinc-900 p-5 flex items-center justify-between border-b border-zinc-800">
+            <div className="bg-white p-5 flex items-center justify-between border-b-2 border-zinc-200">
               <div className="flex items-center gap-3">
-                <Ban className="w-5 h-5 text-amber-400" />
-                <h3 className="text-base font-black text-white">CANCEL REQUISITION</h3>
+                <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center font-black">
+                  <Ban className="w-5 h-5 text-amber-600" />
+                </div>
+                <h3 className="text-base font-black text-zinc-950 uppercase">CANCEL REQUISITION</h3>
               </div>
               <button
                 onClick={() => setSelectedPRForCancel(null)}
-                className="text-zinc-400 hover:text-white p-1"
+                className="text-zinc-400 hover:text-zinc-900 p-1 rounded-lg hover:bg-zinc-100 transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -2535,19 +2529,21 @@ export const ProcurementPage: React.FC = () => {
       {selectedPRForPO && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 max-h-[92vh] flex flex-col">
-            <div className="bg-zinc-950 p-5 flex items-center justify-between border-b border-zinc-800 shrink-0">
+            <div className="bg-white p-5 flex items-center justify-between border-b-2 border-zinc-200 shrink-0">
               <div className="flex items-center gap-3">
-                <Truck className="w-5 h-5 text-jcb-yellow" />
+                <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-800 flex items-center justify-center font-black">
+                  <Truck className="w-5 h-5 text-blue-600" />
+                </div>
                 <div>
-                  <h3 className="text-base font-black text-white">ISSUE PURCHASE ORDER</h3>
-                  <p className="text-[10px] text-zinc-400 font-medium">
+                  <h3 className="text-base font-black text-zinc-950 uppercase">ISSUE PURCHASE ORDER</h3>
+                  <p className="text-[10px] text-zinc-500 font-medium">
                     Commercial order placement &amp; transportation booking
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setSelectedPRForPO(null)}
-                className="text-zinc-400 hover:text-white p-1"
+                className="text-zinc-400 hover:text-zinc-900 p-1 rounded-lg hover:bg-zinc-100 transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -3158,233 +3154,235 @@ export const ProcurementPage: React.FC = () => {
             </div>
           </div>
         );
-      })()}
+      })()
+      }
 
       {/* ==================================================================== */}
       {/* MODAL 7: FULL PR DETAILS & REGULATORY AUDIT LOGS                    */}
       {/* ==================================================================== */}
-      {selectedPRForDetails && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] flex flex-col">
-            <div className="bg-zinc-950 p-5 flex items-center justify-between border-b border-zinc-800 shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="bg-jcb-yellow text-black font-black text-xl px-2.5 py-0.5 rounded shadow">
-                  PR
-                </div>
-                <div>
-                  <h3 className="text-base font-black text-white font-mono">
-                    {selectedPRForDetails.pr_number}
-                  </h3>
-                  <div className="text-[10px] text-zinc-400">
-                    Requisition Specifications &amp; Regulatory Audit Trail
+      {
+        selectedPRForDetails && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] flex flex-col">
+              <div className="bg-white p-5 flex items-center justify-between border-b-2 border-zinc-200 shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="bg-jcb-yellow text-zinc-950 font-black text-xl px-2.5 py-0.5 rounded shadow-sm border border-amber-400">
+                    PR
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-zinc-950 font-mono">
+                      {selectedPRForDetails.pr_number}
+                    </h3>
+                    <div className="text-[11px] text-zinc-500 font-medium">
+                      Requisition Specifications &amp; Regulatory Audit Trail
+                    </div>
                   </div>
                 </div>
+                <button
+                  onClick={() => setSelectedPRForDetails(null)}
+                  className="text-zinc-400 hover:text-zinc-900 p-1 rounded-lg hover:bg-zinc-100 transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
-              <button
-                onClick={() => setSelectedPRForDetails(null)}
-                className="text-zinc-400 hover:text-white p-1"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
 
-            <div className="p-6 space-y-6 overflow-y-auto">
-              {/* Header Info Banner */}
-              <div className="flex items-center justify-between p-4 bg-zinc-50 rounded-xl border border-zinc-200 flex-wrap gap-2">
-                <div>
-                  <span className="text-[10px] font-bold text-zinc-400 uppercase block">Status</span>
-                  <span
-                    className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${
-                      getStatusBadge(selectedPRForDetails.status).color
-                    }`}
-                  >
-                    {getStatusBadge(selectedPRForDetails.status).label}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold text-zinc-400 uppercase block">Urgency</span>
-                  <span
-                    className={`px-2 py-0.5 rounded text-[10px] uppercase ${getUrgencyBadge(
-                      selectedPRForDetails.urgency
-                    )}`}
-                  >
-                    {selectedPRForDetails.urgency}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold text-zinc-400 uppercase block">Fulfillment Progress</span>
-                  <div className="font-mono font-black text-xs text-zinc-900">
-                    Req: {selectedPRForDetails.quantity_required} | Recv: <span className="text-emerald-700">{selectedPRForDetails.received_quantity || 0}</span> | Rem: <span className="text-amber-700">{Math.max(0, selectedPRForDetails.quantity_required - (selectedPRForDetails.received_quantity || 0))}</span>
+              <div className="p-6 space-y-6 overflow-y-auto">
+                {/* Header Info Banner */}
+                <div className="flex items-center justify-between p-4 bg-zinc-50 rounded-xl border border-zinc-200 flex-wrap gap-2">
+                  <div>
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase block">Status</span>
+                    <span
+                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${getStatusBadge(selectedPRForDetails.status).color
+                        }`}
+                    >
+                      {getStatusBadge(selectedPRForDetails.status).label}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase block">Urgency</span>
+                    <span
+                      className={`px-2 py-0.5 rounded text-[10px] uppercase ${getUrgencyBadge(
+                        selectedPRForDetails.urgency
+                      )}`}
+                    >
+                      {selectedPRForDetails.urgency}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase block">Fulfillment Progress</span>
+                    <div className="font-mono font-black text-xs text-zinc-900">
+                      Req: {selectedPRForDetails.quantity_required} | Recv: <span className="text-emerald-700">{selectedPRForDetails.received_quantity || 0}</span> | Rem: <span className="text-amber-700">{Math.max(0, selectedPRForDetails.quantity_required - (selectedPRForDetails.received_quantity || 0))}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase block">PO Number</span>
+                    <span className="font-mono font-bold text-xs text-blue-700">
+                      {selectedPRForDetails.po_number || 'Not Issued'}
+                    </span>
                   </div>
                 </div>
-                <div>
-                  <span className="text-[10px] font-bold text-zinc-400 uppercase block">PO Number</span>
-                  <span className="font-mono font-bold text-xs text-blue-700">
-                    {selectedPRForDetails.po_number || 'Not Issued'}
-                  </span>
-                </div>
-              </div>
 
-              {/* Component & Asset Details */}
-              <div className="grid grid-cols-2 gap-4 text-xs">
-                <div>
-                  <span className="text-[10px] text-zinc-400 font-bold uppercase block">Spare Part</span>
-                  <div className="font-black text-zinc-900">{selectedPRForDetails.part_name}</div>
-                  <div className="font-mono text-zinc-600 font-semibold">{selectedPRForDetails.part_number}</div>
-                  {selectedPRForDetails.sku && (
-                    <div className="text-[10px] text-zinc-400 font-mono">SKU: {selectedPRForDetails.sku}</div>
-                  )}
-                </div>
-                <div>
-                  <span className="text-[10px] text-zinc-400 font-bold uppercase block">Target Machine</span>
-                  <div className="font-black text-zinc-900">
-                    {selectedPRForDetails.machine_code || 'General Stock Refill'}
+                {/* Component & Asset Details */}
+                <div className="grid grid-cols-2 gap-4 text-xs">
+                  <div>
+                    <span className="text-[10px] text-zinc-400 font-bold uppercase block">Spare Part</span>
+                    <div className="font-black text-zinc-900">{selectedPRForDetails.part_name}</div>
+                    <div className="font-mono text-zinc-600 font-semibold">{selectedPRForDetails.part_number}</div>
+                    {selectedPRForDetails.sku && (
+                      <div className="text-[10px] text-zinc-400 font-mono">SKU: {selectedPRForDetails.sku}</div>
+                    )}
                   </div>
-                  <div className="text-zinc-500 font-medium">{selectedPRForDetails.machine_name}</div>
+                  <div>
+                    <span className="text-[10px] text-zinc-400 font-bold uppercase block">Target Machine</span>
+                    <div className="font-black text-zinc-900">
+                      {selectedPRForDetails.machine_code || 'General Stock Refill'}
+                    </div>
+                    <div className="text-zinc-500 font-medium">{selectedPRForDetails.machine_name}</div>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-zinc-400 font-bold uppercase block">Requester</span>
+                    <div className="font-bold text-zinc-900">{selectedPRForDetails.requester_name || 'Technician'}</div>
+                    <div className="text-[10px] text-zinc-500 uppercase">{selectedPRForDetails.requester_role}</div>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-zinc-400 font-bold uppercase block">Approved By</span>
+                    <div className="font-bold text-zinc-900">{selectedPRForDetails.approver_name || 'Pending Review'}</div>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-[10px] text-zinc-400 font-bold uppercase block">Requester</span>
-                  <div className="font-bold text-zinc-900">{selectedPRForDetails.requester_name || 'Technician'}</div>
-                  <div className="text-[10px] text-zinc-500 uppercase">{selectedPRForDetails.requester_role}</div>
-                </div>
-                <div>
-                  <span className="text-[10px] text-zinc-400 font-bold uppercase block">Approved By</span>
-                  <div className="font-bold text-zinc-900">{selectedPRForDetails.approver_name || 'Pending Review'}</div>
-                </div>
-              </div>
 
-              {/* Technical Justification */}
-              <div>
-                <span className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">
-                  Technical Justification
-                </span>
-                <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200 text-xs font-medium text-zinc-800 leading-relaxed">
-                  {selectedPRForDetails.technical_justification}
-                </div>
-              </div>
-
-              {/* GRN Receipts Section */}
-              {selectedPRForDetails.grn_receipts && selectedPRForDetails.grn_receipts.length > 0 && (
+                {/* Technical Justification */}
                 <div>
-                  <h4 className="text-xs font-black text-zinc-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                    <Boxes className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Inwarded Goods Receipt Notes (GRNs) &amp; QC Reports</span>
-                  </h4>
-                  <div className="space-y-3">
-                    {selectedPRForDetails.grn_receipts.map((grn) => {
-                      const qcBadge = getInspectionStatusBadge(grn.inspection_status);
-                      const transportBadge = getTransportModeBadge(grn.transport_mode);
+                  <span className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">
+                    Technical Justification
+                  </span>
+                  <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200 text-xs font-medium text-zinc-800 leading-relaxed">
+                    {selectedPRForDetails.technical_justification}
+                  </div>
+                </div>
 
-                      return (
-                        <div
-                          key={grn.id}
-                          className="p-3.5 bg-emerald-50/50 rounded-xl border border-emerald-200 text-xs space-y-2"
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono font-black text-emerald-950 text-sm">{grn.grn_number}</span>
-                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase border ${qcBadge.color}`}>
-                                {qcBadge.label}
+                {/* GRN Receipts Section */}
+                {selectedPRForDetails.grn_receipts && selectedPRForDetails.grn_receipts.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-black text-zinc-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                      <Boxes className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Inwarded Goods Receipt Notes (GRNs) &amp; QC Reports</span>
+                    </h4>
+                    <div className="space-y-3">
+                      {selectedPRForDetails.grn_receipts.map((grn) => {
+                        const qcBadge = getInspectionStatusBadge(grn.inspection_status);
+                        const transportBadge = getTransportModeBadge(grn.transport_mode);
+
+                        return (
+                          <div
+                            key={grn.id}
+                            className="p-3.5 bg-emerald-50/50 rounded-xl border border-emerald-200 text-xs space-y-2"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono font-black text-emerald-950 text-sm">{grn.grn_number}</span>
+                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase border ${qcBadge.color}`}>
+                                  {qcBadge.label}
+                                </span>
+                              </div>
+                              <span className="text-[10px] text-zinc-500 font-mono">
+                                {new Date(grn.created_at).toLocaleString()}
                               </span>
                             </div>
-                            <span className="text-[10px] text-zinc-500 font-mono">
-                              {new Date(grn.created_at).toLocaleString()}
-                            </span>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 font-mono text-[11px] bg-white p-2.5 rounded-lg border border-emerald-100">
+                              <div>
+                                Batch Total: <span className="font-black text-zinc-900">{grn.received_quantity}</span>
+                              </div>
+                              <div>
+                                Accepted (Usable): <span className="font-black text-emerald-700">{grn.accepted_quantity}</span>
+                              </div>
+                              <div>
+                                Rejected: <span className="font-black text-red-700">{grn.rejected_quantity}</span>
+                              </div>
+                              <div>
+                                Damaged: <span className="font-black text-amber-700">{grn.damaged_quantity || 0}</span>
+                              </div>
+                              <div>
+                                Defective: <span className="font-black text-purple-700">{grn.defective_quantity || 0}</span>
+                              </div>
+                            </div>
+
+                            {/* Transportation Details in GRN History */}
+                            <div className="flex items-center justify-between text-[11px] text-zinc-600 flex-wrap gap-1">
+                              <div className="flex items-center gap-1.5">
+                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border flex items-center gap-1 ${transportBadge.color}`}>
+                                  {transportBadge.icon}
+                                  <span>{transportBadge.label}</span>
+                                </span>
+                                {grn.transporter_name && (
+                                  <span className="font-semibold text-zinc-800">Carrier: {grn.transporter_name}</span>
+                                )}
+                                {grn.lr_tracking_number && (
+                                  <span className="font-mono text-zinc-500 text-[10px]">(LR/AWB: {grn.lr_tracking_number})</span>
+                                )}
+                              </div>
+                              <div className="font-mono text-[10px] text-zinc-500">
+                                DC: <strong className="text-zinc-800">{grn.delivery_note_number}</strong>
+                                {grn.invoice_number && <span> | Inv: <strong className="text-zinc-800">{grn.invoice_number}</strong></span>}
+                              </div>
+                            </div>
+
+                            {grn.inspection_remarks && (
+                              <div className="text-[11px] text-zinc-700 font-medium bg-zinc-100/70 p-2 rounded">
+                                <strong>Inspection Remarks:</strong> {grn.inspection_remarks}
+                              </div>
+                            )}
+
+                            {grn.rejection_reason && (
+                              <div className="text-[11px] text-red-700 font-medium bg-red-100/60 p-2 rounded border border-red-200">
+                                <strong>Rejection / Defect Reason:</strong> {grn.rejection_reason}
+                              </div>
+                            )}
                           </div>
-
-                          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 font-mono text-[11px] bg-white p-2.5 rounded-lg border border-emerald-100">
-                            <div>
-                              Batch Total: <span className="font-black text-zinc-900">{grn.received_quantity}</span>
-                            </div>
-                            <div>
-                              Accepted (Usable): <span className="font-black text-emerald-700">{grn.accepted_quantity}</span>
-                            </div>
-                            <div>
-                              Rejected: <span className="font-black text-red-700">{grn.rejected_quantity}</span>
-                            </div>
-                            <div>
-                              Damaged: <span className="font-black text-amber-700">{grn.damaged_quantity || 0}</span>
-                            </div>
-                            <div>
-                              Defective: <span className="font-black text-purple-700">{grn.defective_quantity || 0}</span>
-                            </div>
-                          </div>
-
-                          {/* Transportation Details in GRN History */}
-                          <div className="flex items-center justify-between text-[11px] text-zinc-600 flex-wrap gap-1">
-                            <div className="flex items-center gap-1.5">
-                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border flex items-center gap-1 ${transportBadge.color}`}>
-                                {transportBadge.icon}
-                                <span>{transportBadge.label}</span>
-                              </span>
-                              {grn.transporter_name && (
-                                <span className="font-semibold text-zinc-800">Carrier: {grn.transporter_name}</span>
-                              )}
-                              {grn.lr_tracking_number && (
-                                <span className="font-mono text-zinc-500 text-[10px]">(LR/AWB: {grn.lr_tracking_number})</span>
-                              )}
-                            </div>
-                            <div className="font-mono text-[10px] text-zinc-500">
-                              DC: <strong className="text-zinc-800">{grn.delivery_note_number}</strong>
-                              {grn.invoice_number && <span> | Inv: <strong className="text-zinc-800">{grn.invoice_number}</strong></span>}
-                            </div>
-                          </div>
-
-                          {grn.inspection_remarks && (
-                            <div className="text-[11px] text-zinc-700 font-medium bg-zinc-100/70 p-2 rounded">
-                              <strong>Inspection Remarks:</strong> {grn.inspection_remarks}
-                            </div>
-                          )}
-
-                          {grn.rejection_reason && (
-                            <div className="text-[11px] text-red-700 font-medium bg-red-100/60 p-2 rounded border border-red-200">
-                              <strong>Rejection / Defect Reason:</strong> {grn.rejection_reason}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {/* Audit Logs Trail */}
-              {((selectedPRForDetails.timeline && selectedPRForDetails.timeline.length > 0) || (selectedPRForDetails.audit_logs && selectedPRForDetails.audit_logs.length > 0)) && (
-                <div>
-                  <h4 className="text-xs font-black text-zinc-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                    <ClipboardList className="w-3.5 h-3.5 text-zinc-600" />
-                    <span>Regulatory Audit Trail</span>
-                  </h4>
-                  <div className="border border-zinc-200 rounded-xl overflow-hidden divide-y divide-zinc-100 text-xs">
-                    {(selectedPRForDetails.timeline || selectedPRForDetails.audit_logs || []).map((log: any) => (
-                      <div key={log.id} className="p-2.5 flex items-center justify-between">
-                        <div>
-                          <span className="font-mono font-bold text-zinc-900">{log.action}</span>
-                          <div className="text-[10px] text-zinc-500">
-                            By {log.performed_by_name} ({log.performed_by_role})
+                {/* Audit Logs Trail */}
+                {((selectedPRForDetails.timeline && selectedPRForDetails.timeline.length > 0) || (selectedPRForDetails.audit_logs && selectedPRForDetails.audit_logs.length > 0)) && (
+                  <div>
+                    <h4 className="text-xs font-black text-zinc-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                      <ClipboardList className="w-3.5 h-3.5 text-zinc-600" />
+                      <span>Regulatory Audit Trail</span>
+                    </h4>
+                    <div className="border border-zinc-200 rounded-xl overflow-hidden divide-y divide-zinc-100 text-xs">
+                      {(selectedPRForDetails.timeline || selectedPRForDetails.audit_logs || []).map((log: any) => (
+                        <div key={log.id} className="p-2.5 flex items-center justify-between">
+                          <div>
+                            <span className="font-mono font-bold text-zinc-900">{log.action}</span>
+                            <div className="text-[10px] text-zinc-500">
+                              By {log.performed_by_name} ({log.performed_by_role})
+                            </div>
                           </div>
+                          <span className="text-[10px] text-zinc-400 font-mono">
+                            {new Date(log.created_at).toLocaleString()}
+                          </span>
                         </div>
-                        <span className="text-[10px] text-zinc-400 font-mono">
-                          {new Date(log.created_at).toLocaleString()}
-                        </span>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
 
-            <div className="p-4 border-t border-zinc-200 bg-zinc-50 flex items-center justify-end shrink-0">
-              <button
-                onClick={() => setSelectedPRForDetails(null)}
-                className="px-4 py-2 bg-zinc-900 text-white rounded-xl text-xs font-bold hover:bg-black transition"
-              >
-                Close Details
-              </button>
+              <div className="p-4 border-t border-zinc-200 bg-zinc-50 flex items-center justify-end shrink-0">
+                <button
+                  onClick={() => setSelectedPRForDetails(null)}
+                  className="px-4 py-2 bg-zinc-900 text-white rounded-xl text-xs font-bold hover:bg-black transition"
+                >
+                  Close Details
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Edit Purchase Requisition Modal */}
       <EditPRModal
@@ -3421,6 +3419,6 @@ export const ProcurementPage: React.FC = () => {
         userRole={user?.role}
         userId={user?.id}
       />
-    </div>
+    </div >
   );
 };

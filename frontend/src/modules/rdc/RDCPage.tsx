@@ -43,6 +43,7 @@ import {
   ExternalLink,
   Trash2,
   RotateCcw,
+  Edit2,
 } from 'lucide-react';
 
 // ============================================================================
@@ -54,61 +55,61 @@ const getStatusBadge = (status: RdcStatus) => {
     case 'draft':
       return {
         label: 'Draft',
-        classes: 'bg-zinc-800 text-zinc-300 border-zinc-700',
+        classes: 'bg-zinc-100 text-zinc-800 border-zinc-300',
         dot: 'bg-zinc-500',
       };
     case 'pending_approval':
       return {
         label: 'Pending Approval',
-        classes: 'bg-amber-950/70 text-amber-300 border-amber-600/50',
-        dot: 'bg-amber-400 animate-pulse',
+        classes: 'bg-amber-100 text-amber-900 border-amber-300',
+        dot: 'bg-amber-500 animate-pulse',
       };
     case 'approved':
       return {
         label: 'Approved / Ready',
-        classes: 'bg-blue-950/70 text-blue-300 border-blue-600/50',
-        dot: 'bg-blue-400',
+        classes: 'bg-blue-100 text-blue-900 border-blue-300',
+        dot: 'bg-blue-500',
       };
     case 'dispatched':
       return {
         label: 'In Transit / Dispatched',
-        classes: 'bg-purple-950/70 text-purple-300 border-purple-600/50',
-        dot: 'bg-purple-400',
+        classes: 'bg-purple-100 text-purple-900 border-purple-300',
+        dot: 'bg-purple-500',
       };
     case 'partially_returned':
       return {
         label: 'Partially Returned',
-        classes: 'bg-yellow-950/70 text-yellow-300 border-yellow-600/50',
-        dot: 'bg-yellow-400',
+        classes: 'bg-yellow-100 text-yellow-900 border-yellow-300',
+        dot: 'bg-yellow-500',
       };
     case 'fully_returned':
       return {
         label: 'Fully Returned',
-        classes: 'bg-emerald-950/70 text-emerald-300 border-emerald-600/50',
-        dot: 'bg-emerald-400',
+        classes: 'bg-emerald-100 text-emerald-900 border-emerald-300',
+        dot: 'bg-emerald-500',
       };
     case 'closed':
       return {
         label: 'Closed & Reconciled',
-        classes: 'bg-zinc-900 text-zinc-400 border-zinc-700',
-        dot: 'bg-emerald-500',
+        classes: 'bg-zinc-200 text-zinc-800 border-zinc-300',
+        dot: 'bg-emerald-600',
       };
     case 'rejected':
       return {
         label: 'Rejected',
-        classes: 'bg-red-950/70 text-red-300 border-red-600/50',
-        dot: 'bg-red-400',
+        classes: 'bg-red-100 text-red-900 border-red-300',
+        dot: 'bg-red-500',
       };
     case 'cancelled':
       return {
         label: 'Cancelled',
-        classes: 'bg-zinc-900 text-zinc-500 border-zinc-800 line-through',
-        dot: 'bg-zinc-600',
+        classes: 'bg-zinc-100 text-zinc-500 border-zinc-300 line-through',
+        dot: 'bg-zinc-400',
       };
     default:
       return {
         label: status,
-        classes: 'bg-zinc-800 text-zinc-300 border-zinc-700',
+        classes: 'bg-zinc-100 text-zinc-800 border-zinc-300',
         dot: 'bg-zinc-400',
       };
   }
@@ -117,15 +118,15 @@ const getStatusBadge = (status: RdcStatus) => {
 const getPriorityBadge = (priority: RdcPriority) => {
   switch (priority) {
     case 'urgent':
-      return 'bg-red-600 text-white font-black animate-pulse';
+      return 'bg-red-100 text-red-900 border border-red-300 font-black';
     case 'high':
-      return 'bg-amber-500 text-black font-extrabold';
+      return 'bg-amber-100 text-amber-900 border border-amber-300 font-extrabold';
     case 'medium':
-      return 'bg-blue-600 text-white font-bold';
+      return 'bg-blue-100 text-blue-900 border border-blue-300 font-bold';
     case 'low':
-      return 'bg-zinc-700 text-zinc-200 font-medium';
+      return 'bg-zinc-100 text-zinc-700 border border-zinc-300 font-medium';
     default:
-      return 'bg-zinc-700 text-zinc-200 font-medium';
+      return 'bg-zinc-100 text-zinc-700 border border-zinc-300 font-medium';
   }
 };
 
@@ -195,8 +196,9 @@ export const RDCPage: React.FC = () => {
   const [challanHistory, setChallanHistory] = useState<RdcAuditLog[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
-  // Create Modal State
+  // Create & Edit Modal State
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [editingChallanId, setEditingChallanId] = useState<string | null>(null);
   const [createSubmitting, setCreateSubmitting] = useState(false);
 
   // Initial Multi-Item Creation Form
@@ -478,6 +480,103 @@ export const RDCPage: React.FC = () => {
     );
   }, [createForm.items]);
 
+  const openCreateModal = () => {
+    setEditingChallanId(null);
+    setCreateForm({
+      rdc_type: 'RDC',
+      priority: 'medium',
+      vendor_party_name: '',
+      vendor_gstin: '',
+      vendor_address: '',
+      contact_person: '',
+      contact_phone: '',
+      contact_email: '',
+      purpose: '',
+      machine_id: '',
+      document_reference: '',
+      expected_return_date: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+      submission_notes: '',
+      save_as_draft: false,
+      items: [
+        {
+          part_id: '',
+          item_description: '',
+          serial_number: '',
+          quantity_dispatched: 1,
+          unit_cost: 0,
+          remarks: '',
+        },
+      ],
+    });
+    setIsCreateModalOpen(true);
+  };
+
+  const openEditModal = (rdc: RdcChallan) => {
+    setEditingChallanId(rdc.id);
+    setCreateForm({
+      rdc_type: rdc.rdc_type,
+      priority: rdc.priority,
+      vendor_party_name: rdc.vendor_party_name,
+      vendor_gstin: rdc.vendor_gstin || '',
+      vendor_address: rdc.vendor_address || '',
+      contact_person: rdc.contact_person || '',
+      contact_phone: rdc.contact_phone || '',
+      contact_email: rdc.contact_email || '',
+      purpose: rdc.purpose || '',
+      machine_id: rdc.machine_id || '',
+      document_reference: rdc.document_reference || '',
+      expected_return_date: rdc.expected_return_date ? rdc.expected_return_date.split('T')[0] : '',
+      submission_notes: '',
+      save_as_draft: rdc.status === 'draft',
+      items: rdc.items && rdc.items.length > 0
+        ? rdc.items.map((it) => ({
+            part_id: it.part_id || '',
+            item_description: it.item_description,
+            serial_number: it.serial_number || '',
+            quantity_dispatched: it.quantity_dispatched,
+            unit_cost: Number(it.unit_cost) || 0,
+            remarks: it.remarks || '',
+          }))
+        : [
+            {
+              part_id: '',
+              item_description: '',
+              serial_number: '',
+              quantity_dispatched: 1,
+              unit_cost: 0,
+              remarks: '',
+            },
+          ],
+    });
+    setIsCreateModalOpen(true);
+  };
+
+  const handleDeleteChallan = async (challan: RdcChallan) => {
+    if (!window.confirm(`Are you sure you want to delete delivery challan ${challan.challan_number}? This action cannot be undone.`)) {
+      return;
+    }
+    try {
+      setActionSubmitting(true);
+      const res = await apiClient.delete(`/rdc/${challan.id}`);
+      if (res.data?.success) {
+        setFeedback({
+          type: 'success',
+          message: res.data.message || `Delivery challan ${challan.challan_number} deleted successfully.`,
+        });
+        setSelectedChallan(null);
+        fetchChallans();
+        fetchMetrics();
+      }
+    } catch (err: any) {
+      setFeedback({
+        type: 'error',
+        message: err.response?.data?.message || 'Failed to delete delivery challan.',
+      });
+    } finally {
+      setActionSubmitting(false);
+    }
+  };
+
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -544,47 +643,61 @@ export const RDCPage: React.FC = () => {
         })),
       };
 
-      const res = await apiClient.post('/rdc', payload);
-      if (res.data?.success) {
-        setFeedback({
-          type: 'success',
-          message: `Delivery Challan ${res.data.data?.challan_number || ''} created successfully!`,
-        });
-        setIsCreateModalOpen(false);
-        // Reset form
-        setCreateForm({
-          rdc_type: 'RDC',
-          priority: 'medium',
-          vendor_party_name: '',
-          vendor_gstin: '',
-          vendor_address: '',
-          contact_person: '',
-          contact_phone: '',
-          contact_email: '',
-          purpose: '',
-          machine_id: '',
-          document_reference: '',
-          expected_return_date: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
-          submission_notes: '',
-          save_as_draft: false,
-          items: [
-            {
-              part_id: '',
-              item_description: '',
-              serial_number: '',
-              quantity_dispatched: 1,
-              unit_cost: 0,
-              remarks: '',
-            },
-          ],
-        });
-        fetchChallans();
-        fetchMetrics();
+      if (editingChallanId) {
+        const res = await apiClient.patch(`/rdc/${editingChallanId}`, payload);
+        if (res.data?.success) {
+          setFeedback({
+            type: 'success',
+            message: `Delivery Challan ${res.data.data?.challan_number || ''} updated successfully.`,
+          });
+          setIsCreateModalOpen(false);
+          setEditingChallanId(null);
+          fetchChallans();
+          fetchMetrics();
+        }
+      } else {
+        const res = await apiClient.post('/rdc', payload);
+        if (res.data?.success) {
+          setFeedback({
+            type: 'success',
+            message: `Delivery Challan ${res.data.data?.challan_number || ''} created successfully!`,
+          });
+          setIsCreateModalOpen(false);
+          // Reset form
+          setCreateForm({
+            rdc_type: 'RDC',
+            priority: 'medium',
+            vendor_party_name: '',
+            vendor_gstin: '',
+            vendor_address: '',
+            contact_person: '',
+            contact_phone: '',
+            contact_email: '',
+            purpose: '',
+            machine_id: '',
+            document_reference: '',
+            expected_return_date: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+            submission_notes: '',
+            save_as_draft: false,
+            items: [
+              {
+                part_id: '',
+                item_description: '',
+                serial_number: '',
+                quantity_dispatched: 1,
+                unit_cost: 0,
+                remarks: '',
+              },
+            ],
+          });
+          fetchChallans();
+          fetchMetrics();
+        }
       }
     } catch (err: any) {
       setFeedback({
         type: 'error',
-        message: err.response?.data?.message || 'Failed to create Delivery Challan.',
+        message: err.response?.data?.message || 'Failed to save Delivery Challan.',
       });
     } finally {
       setCreateSubmitting(false);
@@ -956,24 +1069,24 @@ export const RDCPage: React.FC = () => {
   // ============================================================================
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 p-4 md:p-8 space-y-6">
+    <div className="space-y-6 bg-slate-50 min-h-screen p-2 sm:p-6 font-sans text-zinc-900 pb-12">
       {/* ---------------------------------------------------------------------- */}
       {/* 1. PAGE HEADER & QUICK ACTIONS */}
       {/* ---------------------------------------------------------------------- */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-800 pb-5">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 bg-white rounded-2xl border-2 border-zinc-200 shadow-sm">
         <div>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-400 text-black flex items-center justify-center font-black shadow-lg shadow-amber-400/20">
+            <div className="w-10 h-10 rounded-xl bg-jcb-yellow text-black flex items-center justify-center font-black shadow-sm border border-amber-500">
               <Truck className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="text-2xl font-black tracking-wider uppercase text-zinc-100 flex items-center gap-2">
+              <h1 className="text-xl sm:text-2xl font-black tracking-wider uppercase text-zinc-950 flex items-center gap-2">
                 RDC & NRDC Material Gate Passes
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-zinc-800 text-amber-400 border border-zinc-700">
+                <span className="text-[10px] font-black px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300">
                   v2.4 Enterprise
                 </span>
               </h1>
-              <p className="text-xs text-zinc-400">
+              <p className="text-xs text-zinc-500 font-medium">
                 Authorized material movement, external repair tracking, gate security authorization
                 & inventory reconciliation
               </p>
@@ -989,18 +1102,18 @@ export const RDCPage: React.FC = () => {
               fetchOverdue();
             }}
             disabled={loading}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 text-zinc-300 text-xs font-semibold transition"
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-zinc-100 border border-zinc-300 hover:bg-zinc-200 text-zinc-800 text-xs font-bold transition shadow-2xs cursor-pointer"
             title="Refresh Table"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-amber-400' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-amber-600' : ''}`} />
             Refresh
           </button>
 
           {/* Technicians, Store Managers, Managers & Admins can issue Delivery Challans */}
           {(isTechnician || isStoreManager) && (
             <button
-              onClick={() => setIsCreateModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-400 hover:bg-amber-300 text-black font-extrabold text-xs uppercase tracking-wider transition shadow-lg shadow-amber-400/20"
+              onClick={openCreateModal}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-jcb-yellow hover:bg-jcb-yellowDark text-black font-black text-xs uppercase tracking-wider transition shadow-sm border border-amber-500 cursor-pointer"
             >
               <Plus className="w-4 h-4 stroke-[3]" />
               Issue Delivery Challan
@@ -1016,21 +1129,21 @@ export const RDCPage: React.FC = () => {
         <div
           className={`flex items-center justify-between p-4 rounded-xl border text-sm font-medium transition ${
             feedback.type === 'success'
-              ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-200'
+              ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
               : feedback.type === 'error'
-              ? 'bg-red-950/80 border-red-500/50 text-red-200'
-              : 'bg-blue-950/80 border-blue-500/50 text-blue-200'
+              ? 'bg-red-50 border-red-300 text-red-900'
+              : 'bg-blue-50 border-blue-300 text-blue-900'
           }`}
         >
           <div className="flex items-center gap-3">
-            {feedback.type === 'success' && <CheckCircle2 className="w-5 h-5 text-emerald-400" />}
-            {feedback.type === 'error' && <AlertCircle className="w-5 h-5 text-red-400" />}
-            {feedback.type === 'info' && <Info className="w-5 h-5 text-blue-400" />}
-            <span>{feedback.message}</span>
+            {feedback.type === 'success' && <CheckCircle2 className="w-5 h-5 text-emerald-600" />}
+            {feedback.type === 'error' && <AlertCircle className="w-5 h-5 text-red-600" />}
+            {feedback.type === 'info' && <Info className="w-5 h-5 text-blue-600" />}
+            <span className="font-semibold">{feedback.message}</span>
           </div>
           <button
             onClick={() => setFeedback(null)}
-            className="text-zinc-400 hover:text-zinc-200 text-xs font-bold"
+            className="text-zinc-400 hover:text-zinc-600 text-xs font-bold p-1 cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -1042,94 +1155,96 @@ export const RDCPage: React.FC = () => {
       {/* ---------------------------------------------------------------------- */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {/* Total RDC */}
-        <div className="bg-zinc-900/90 border border-zinc-800 rounded-xl p-3.5 flex flex-col justify-between">
-          <div className="flex items-center justify-between text-zinc-400 text-xs font-bold uppercase tracking-wider">
+        <div className="bg-white rounded-2xl border-2 border-zinc-200 shadow-sm p-4 flex flex-col justify-between hover:border-zinc-300 transition">
+          <div className="flex items-center justify-between text-zinc-500 text-xs font-black uppercase tracking-wider">
             <span>Returnable</span>
-            <span className="w-2 h-2 rounded-full bg-amber-400" />
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
           </div>
           <div className="mt-2 flex items-baseline justify-between">
-            <span className="text-2xl font-black text-amber-400">{metrics.total_rdc}</span>
-            <span className="text-[10px] text-zinc-500 font-bold">RDC Challans</span>
+            <span className="text-2xl font-black text-amber-600">{metrics.total_rdc}</span>
+            <span className="text-[10px] text-zinc-400 font-bold">RDC Challans</span>
           </div>
         </div>
 
         {/* Total NRDC */}
-        <div className="bg-zinc-900/90 border border-zinc-800 rounded-xl p-3.5 flex flex-col justify-between">
-          <div className="flex items-center justify-between text-zinc-400 text-xs font-bold uppercase tracking-wider">
+        <div className="bg-white rounded-2xl border-2 border-zinc-200 shadow-sm p-4 flex flex-col justify-between hover:border-zinc-300 transition">
+          <div className="flex items-center justify-between text-zinc-500 text-xs font-black uppercase tracking-wider">
             <span>Non-Return</span>
-            <span className="w-2 h-2 rounded-full bg-cyan-400" />
+            <span className="w-2.5 h-2.5 rounded-full bg-cyan-500" />
           </div>
           <div className="mt-2 flex items-baseline justify-between">
-            <span className="text-2xl font-black text-cyan-400">{metrics.total_nrdc}</span>
-            <span className="text-[10px] text-zinc-500 font-bold">NRDC Challans</span>
+            <span className="text-2xl font-black text-cyan-600">{metrics.total_nrdc}</span>
+            <span className="text-[10px] text-zinc-400 font-bold">NRDC Challans</span>
           </div>
         </div>
 
         {/* Pending Approval */}
-        <div className="bg-zinc-900/90 border border-zinc-800 rounded-xl p-3.5 flex flex-col justify-between relative overflow-hidden">
+        <div className="bg-white rounded-2xl border-2 border-zinc-200 shadow-sm p-4 flex flex-col justify-between relative overflow-hidden hover:border-zinc-300 transition">
           {metrics.pending_approval > 0 && (
             <div className="absolute top-0 right-0 w-12 h-12 bg-amber-500/10 rounded-bl-full pointer-events-none" />
           )}
-          <div className="flex items-center justify-between text-zinc-400 text-xs font-bold uppercase tracking-wider">
+          <div className="flex items-center justify-between text-zinc-500 text-xs font-black uppercase tracking-wider">
             <span>Pending Review</span>
-            <Clock className="w-3.5 h-3.5 text-amber-400" />
+            <Clock className="w-3.5 h-3.5 text-amber-600" />
           </div>
           <div className="mt-2 flex items-baseline justify-between">
-            <span className="text-2xl font-black text-amber-300">{metrics.pending_approval}</span>
-            <span className="text-[10px] text-amber-500 font-bold">Requires Action</span>
+            <span className="text-2xl font-black text-amber-600">{metrics.pending_approval}</span>
+            <span className="text-[10px] text-amber-700 font-bold">Requires Action</span>
           </div>
         </div>
 
         {/* In Transit / Dispatched */}
-        <div className="bg-zinc-900/90 border border-zinc-800 rounded-xl p-3.5 flex flex-col justify-between">
-          <div className="flex items-center justify-between text-zinc-400 text-xs font-bold uppercase tracking-wider">
+        <div className="bg-white rounded-2xl border-2 border-zinc-200 shadow-sm p-4 flex flex-col justify-between hover:border-zinc-300 transition">
+          <div className="flex items-center justify-between text-zinc-500 text-xs font-black uppercase tracking-wider">
             <span>In Transit</span>
-            <Truck className="w-3.5 h-3.5 text-purple-400" />
+            <Truck className="w-3.5 h-3.5 text-purple-600" />
           </div>
           <div className="mt-2 flex items-baseline justify-between">
-            <span className="text-2xl font-black text-purple-400">{metrics.dispatched}</span>
-            <span className="text-[10px] text-zinc-500 font-bold">Active Passes</span>
+            <span className="text-2xl font-black text-purple-700">{metrics.dispatched}</span>
+            <span className="text-[10px] text-zinc-400 font-bold">Active Passes</span>
           </div>
         </div>
 
         {/* Overdue Returns */}
         <div
-          className={`border rounded-xl p-3.5 flex flex-col justify-between cursor-pointer transition ${
+          className={`rounded-2xl p-4 flex flex-col justify-between cursor-pointer transition border-2 shadow-sm ${
             metrics.overdue_returns > 0
-              ? 'bg-red-950/40 border-red-700/60 hover:bg-red-950/60'
-              : 'bg-zinc-900/90 border-zinc-800'
+              ? 'bg-red-50 border-red-300 hover:bg-red-100/70'
+              : 'bg-white border-zinc-200 hover:border-zinc-300'
           }`}
           onClick={() => setActiveTab('overdue')}
         >
-          <div className="flex items-center justify-between text-zinc-400 text-xs font-bold uppercase tracking-wider">
-            <span className={metrics.overdue_returns > 0 ? 'text-red-400 font-black' : ''}>
+          <div className="flex items-center justify-between text-zinc-500 text-xs font-black uppercase tracking-wider">
+            <span className={metrics.overdue_returns > 0 ? 'text-red-700 font-black' : ''}>
               Overdue
             </span>
             <AlertTriangle
-              className={`w-3.5 h-3.5 ${metrics.overdue_returns > 0 ? 'text-red-400 animate-pulse' : 'text-zinc-600'}`}
+              className={`w-3.5 h-3.5 ${metrics.overdue_returns > 0 ? 'text-red-600 animate-pulse' : 'text-zinc-400'}`}
             />
           </div>
           <div className="mt-2 flex items-baseline justify-between">
             <span
-              className={`text-2xl font-black ${metrics.overdue_returns > 0 ? 'text-red-400' : 'text-zinc-300'}`}
+              className={`text-2xl font-black ${metrics.overdue_returns > 0 ? 'text-red-600' : 'text-zinc-950'}`}
             >
               {metrics.overdue_returns}
             </span>
-            <span className="text-[10px] text-zinc-500 font-bold">Past Return Date</span>
+            <span className={`text-[10px] font-bold ${metrics.overdue_returns > 0 ? 'text-red-700' : 'text-zinc-400'}`}>
+              Past Return Date
+            </span>
           </div>
         </div>
 
         {/* Total Outstanding Balance Units */}
-        <div className="bg-zinc-900/90 border border-zinc-800 rounded-xl p-3.5 flex flex-col justify-between">
-          <div className="flex items-center justify-between text-zinc-400 text-xs font-bold uppercase tracking-wider">
+        <div className="bg-white rounded-2xl border-2 border-zinc-200 shadow-sm p-4 flex flex-col justify-between hover:border-zinc-300 transition">
+          <div className="flex items-center justify-between text-zinc-500 text-xs font-black uppercase tracking-wider">
             <span>Outstanding</span>
-            <Boxes className="w-3.5 h-3.5 text-amber-400" />
+            <Boxes className="w-3.5 h-3.5 text-amber-600" />
           </div>
           <div className="mt-2 flex items-baseline justify-between">
-            <span className="text-2xl font-black text-zinc-100">
+            <span className="text-2xl font-black text-zinc-950">
               {metrics.total_outstanding_quantity}
             </span>
-            <span className="text-[10px] text-zinc-500 font-bold">Units Dispatched</span>
+            <span className="text-[10px] text-zinc-400 font-bold">Units Dispatched</span>
           </div>
         </div>
       </div>
@@ -1137,34 +1252,34 @@ export const RDCPage: React.FC = () => {
       {/* ---------------------------------------------------------------------- */}
       {/* 3. NAVIGATION TABS */}
       {/* ---------------------------------------------------------------------- */}
-      <div className="flex items-center gap-2 border-b border-zinc-800">
+      <div className="flex items-center gap-2 border-b border-zinc-200">
         <button
           onClick={() => setActiveTab('challans')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-extrabold uppercase tracking-wider border-b-2 transition ${
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-black uppercase tracking-wider transition cursor-pointer rounded-t-xl ${
             activeTab === 'challans'
-              ? 'border-amber-400 text-amber-400 bg-zinc-900/40'
-              : 'border-transparent text-zinc-400 hover:text-zinc-200'
+              ? 'bg-zinc-950 text-white shadow-sm'
+              : 'text-zinc-600 hover:text-black hover:bg-zinc-100'
           }`}
         >
           <FileText className="w-4 h-4" />
           Delivery Challans
-          <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-zinc-800 text-zinc-300">
+          <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${activeTab === 'challans' ? 'bg-zinc-800 text-zinc-200' : 'bg-zinc-200 text-zinc-800'}`}>
             {totalCount}
           </span>
         </button>
 
         <button
           onClick={() => setActiveTab('overdue')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-extrabold uppercase tracking-wider border-b-2 transition ${
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-black uppercase tracking-wider transition cursor-pointer rounded-t-xl ${
             activeTab === 'overdue'
-              ? 'border-red-500 text-red-400 bg-red-950/20'
-              : 'border-transparent text-zinc-400 hover:text-zinc-200'
+              ? 'bg-red-600 text-white shadow-sm'
+              : 'text-zinc-600 hover:text-black hover:bg-zinc-100'
           }`}
         >
-          <AlertTriangle className="w-4 h-4 text-red-400" />
+          <AlertTriangle className={`w-4 h-4 ${activeTab === 'overdue' ? 'text-white' : 'text-red-600'}`} />
           Overdue Returns
           {metrics.overdue_returns > 0 && (
-            <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-red-600 text-white font-black animate-pulse">
+            <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-red-700 text-white font-black animate-pulse">
               {metrics.overdue_returns}
             </span>
           )}
@@ -1177,10 +1292,10 @@ export const RDCPage: React.FC = () => {
       {activeTab === 'challans' && (
         <div className="space-y-4">
           {/* FILTER TOOLBAR */}
-          <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-4 flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+          <div className="bg-white rounded-2xl border-2 border-zinc-200 shadow-sm p-4 flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
             {/* Search Input */}
             <div className="relative flex-1">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
               <input
                 type="text"
                 placeholder="Search Challan #, Gate Pass #, Vendor, Purpose..."
@@ -1189,7 +1304,7 @@ export const RDCPage: React.FC = () => {
                   setSearch(e.target.value);
                   setPage(1);
                 }}
-                className="w-full pl-9 pr-4 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-amber-400"
+                className="w-full pl-9 pr-4 py-2 rounded-xl bg-zinc-50 border border-zinc-300 text-xs text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-jcb-yellow focus:ring-1 focus:ring-jcb-yellow font-medium"
               />
             </div>
 
@@ -1212,10 +1327,10 @@ export const RDCPage: React.FC = () => {
                     setStatusFilter(st);
                     setPage(1);
                   }}
-                  className={`px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase tracking-wider transition ${
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition cursor-pointer ${
                     statusFilter === st
-                      ? 'bg-amber-400 text-black shadow-md'
-                      : 'bg-zinc-950 text-zinc-400 border border-zinc-800 hover:text-zinc-200 hover:bg-zinc-800'
+                      ? 'bg-jcb-yellow text-black shadow-xs border border-amber-500'
+                      : 'bg-zinc-100 text-zinc-700 border border-zinc-200 hover:text-black hover:bg-zinc-200 font-bold'
                   }`}
                 >
                   {st.replace('_', ' ')}
@@ -1231,7 +1346,7 @@ export const RDCPage: React.FC = () => {
                   setTypeFilter(e.target.value);
                   setPage(1);
                 }}
-                className="px-2.5 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-zinc-300 focus:outline-none focus:border-amber-400 font-bold"
+                className="px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-300 text-xs text-zinc-800 focus:outline-none focus:border-jcb-yellow font-bold cursor-pointer"
               >
                 <option value="ALL">All Types</option>
                 <option value="RDC">RDC (Returnable)</option>
@@ -1244,7 +1359,7 @@ export const RDCPage: React.FC = () => {
                   setPriorityFilter(e.target.value);
                   setPage(1);
                 }}
-                className="px-2.5 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-zinc-300 focus:outline-none focus:border-amber-400 font-bold"
+                className="px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-300 text-xs text-zinc-800 focus:outline-none focus:border-jcb-yellow font-bold cursor-pointer"
               >
                 <option value="ALL">All Priorities</option>
                 <option value="urgent">Urgent</option>
@@ -1256,11 +1371,11 @@ export const RDCPage: React.FC = () => {
           </div>
 
           {/* TABLE CONTAINER */}
-          <div className="bg-zinc-900/90 border border-zinc-800 rounded-xl overflow-hidden shadow-xl">
+          <div className="bg-white rounded-2xl border-2 border-zinc-200 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr className="bg-zinc-950 border-b border-zinc-800 text-zinc-400 uppercase font-black tracking-wider text-[11px]">
+                  <tr className="bg-zinc-50 border-b border-zinc-200 text-zinc-600 uppercase font-black tracking-wider text-[11px]">
                     <th className="py-3.5 px-4">Challan / Gate Pass</th>
                     <th className="py-3.5 px-4">Type & Priority</th>
                     <th className="py-3.5 px-4">Vendor / Destination</th>
@@ -1272,17 +1387,17 @@ export const RDCPage: React.FC = () => {
                     <th className="py-3.5 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-800/60 font-medium">
+                <tbody className="divide-y divide-zinc-200 font-medium">
                   {loading ? (
                     <tr>
                       <td colSpan={9} className="py-12 text-center text-zinc-500">
-                        <RefreshCw className="w-6 h-6 animate-spin mx-auto text-amber-400 mb-2" />
+                        <RefreshCw className="w-6 h-6 animate-spin mx-auto text-amber-600 mb-2" />
                         Loading Delivery Challans...
                       </td>
                     </tr>
                   ) : rdcs.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="py-12 text-center text-zinc-500">
+                      <td colSpan={9} className="py-12 text-center text-zinc-500 font-medium">
                         No delivery challans found matching current filters.
                       </td>
                     </tr>
@@ -1297,21 +1412,21 @@ export const RDCPage: React.FC = () => {
                       return (
                         <tr
                           key={rdc.id}
-                          className="hover:bg-zinc-800/40 transition cursor-pointer"
+                          className="hover:bg-amber-50/40 transition cursor-pointer"
                           onClick={() => openDrawer(rdc)}
                         >
                           {/* Challan & Gate Pass */}
                           <td className="py-3 px-4">
-                            <div className="font-mono font-bold text-amber-400 flex items-center gap-1.5">
+                            <div className="font-mono font-black text-amber-700 hover:text-amber-900 flex items-center gap-1.5">
                               {rdc.challan_number}
                             </div>
                             {rdc.gate_pass_number ? (
-                              <div className="font-mono text-[10px] text-purple-400 font-semibold flex items-center gap-1 mt-0.5">
+                              <div className="font-mono text-[10px] text-purple-700 font-bold flex items-center gap-1 mt-0.5">
                                 <Truck className="w-3 h-3" />
                                 {rdc.gate_pass_number}
                               </div>
                             ) : (
-                              <span className="text-[10px] text-zinc-600 italic">No Gate Pass</span>
+                              <span className="text-[10px] text-zinc-400 italic">No Gate Pass</span>
                             )}
                           </td>
 
@@ -1321,14 +1436,14 @@ export const RDCPage: React.FC = () => {
                               <span
                                 className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${
                                   rdc.rdc_type === 'RDC'
-                                    ? 'bg-amber-400 text-black'
-                                    : 'bg-cyan-900/70 text-cyan-200 border border-cyan-700/50'
+                                    ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                    : 'bg-cyan-100 text-cyan-900 border border-cyan-300'
                                 }`}
                               >
                                 {rdc.rdc_type}
                               </span>
                               <span
-                                className={`px-1.5 py-0.2 rounded text-[9px] uppercase tracking-wider ${getPriorityBadge(
+                                className={`px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wider ${getPriorityBadge(
                                   rdc.priority
                                 )}`}
                               >
@@ -1339,7 +1454,7 @@ export const RDCPage: React.FC = () => {
 
                           {/* Vendor */}
                           <td className="py-3 px-4">
-                            <div className="font-bold text-zinc-200 truncate max-w-[180px]">
+                            <div className="font-bold text-zinc-900 truncate max-w-[180px]">
                               {rdc.vendor_party_name}
                             </div>
                             {rdc.contact_person && (
@@ -1351,7 +1466,7 @@ export const RDCPage: React.FC = () => {
 
                           {/* Plant / Shop */}
                           <td className="py-3 px-4">
-                            <div className="text-zinc-300 font-semibold">
+                            <div className="text-zinc-800 font-semibold">
                               {rdc.plant_name || 'Plant General'}
                             </div>
                             <div className="text-[10px] text-zinc-500">
@@ -1361,11 +1476,11 @@ export const RDCPage: React.FC = () => {
 
                           {/* Purpose / Asset */}
                           <td className="py-3 px-4 max-w-[200px]">
-                            <div className="text-zinc-300 truncate" title={rdc.purpose}>
+                            <div className="text-zinc-800 truncate" title={rdc.purpose}>
                               {rdc.purpose}
                             </div>
                             {rdc.machine_code && (
-                              <div className="text-[10px] text-amber-500/80 font-mono">
+                              <div className="text-[10px] text-amber-700 font-mono font-bold">
                                 Machine: {rdc.machine_code}
                               </div>
                             )}
@@ -1373,10 +1488,10 @@ export const RDCPage: React.FC = () => {
 
                           {/* Items count & Approx Value */}
                           <td className="py-3 px-4 text-center">
-                            <div className="font-bold text-zinc-200">
+                            <div className="font-bold text-zinc-900">
                               {rdc.items ? rdc.items.length : 1} Line(s)
                             </div>
-                            <div className="text-[10px] text-zinc-400 font-mono">
+                            <div className="text-[10px] text-zinc-600 font-mono font-bold">
                               ₹
                               {(Number(rdc.approximate_value) || 0).toLocaleString('en-IN', {
                                 maximumFractionDigits: 0,
@@ -1389,18 +1504,18 @@ export const RDCPage: React.FC = () => {
                             {rdc.rdc_type === 'RDC' && rdc.expected_return_date ? (
                               <div>
                                 <div
-                                  className={`font-mono text-xs ${isOverdue ? 'text-red-400 font-black' : 'text-zinc-300'}`}
+                                  className={`font-mono text-xs ${isOverdue ? 'text-red-700 font-black' : 'text-zinc-800'}`}
                                 >
                                   {new Date(rdc.expected_return_date).toLocaleDateString()}
                                 </div>
                                 {isOverdue && (
-                                  <span className="inline-block mt-0.5 px-1.5 py-0.2 rounded bg-red-950 text-red-400 border border-red-800 text-[9px] font-black uppercase">
+                                  <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded bg-red-100 text-red-800 border border-red-300 text-[9px] font-black uppercase">
                                     Overdue
                                   </span>
                                 )}
                               </div>
                             ) : (
-                              <span className="text-[10px] text-zinc-600">N/A (Non-Return)</span>
+                              <span className="text-[10px] text-zinc-400">N/A (Non-Return)</span>
                             )}
                           </td>
 
@@ -1419,24 +1534,40 @@ export const RDCPage: React.FC = () => {
                             <div className="flex items-center justify-end gap-1.5">
                               <button
                                 onClick={() => openDrawer(rdc)}
-                                className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition"
+                                className="p-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-700 hover:text-black transition cursor-pointer border border-zinc-300"
                                 title="Inspect Challan & Line Items"
                               >
                                 <Eye className="w-3.5 h-3.5" />
                               </button>
 
-                              {/* Quick Submit for Draft */}
+                              {/* Quick Edit & Delete for Draft */}
                               {(rdc.status === 'draft' || rdc.status === 'rejected') && (
-                                <button
-                                  onClick={() => {
-                                    setSelectedChallan(rdc);
-                                    setActiveActionModal('submit');
-                                  }}
-                                  className="px-2 py-1 rounded bg-amber-400/20 hover:bg-amber-400 text-amber-300 hover:text-black font-extrabold text-[10px] transition border border-amber-400/40"
-                                  title="Submit for Approval"
-                                >
-                                  Submit
-                                </button>
+                                <>
+                                  <button
+                                    onClick={() => openEditModal(rdc)}
+                                    className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 hover:text-blue-900 transition cursor-pointer border border-blue-200"
+                                    title="Edit Draft Challan & Items"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteChallan(rdc)}
+                                    className="p-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 hover:text-red-900 transition cursor-pointer border border-red-200"
+                                    title="Delete Draft Challan"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setSelectedChallan(rdc);
+                                      setActiveActionModal('submit');
+                                    }}
+                                    className="px-2.5 py-1 rounded-lg bg-amber-100 hover:bg-jcb-yellow text-amber-950 hover:text-black font-extrabold text-[10px] transition border border-amber-300 cursor-pointer uppercase"
+                                    title="Submit for Approval"
+                                  >
+                                    Submit
+                                  </button>
+                                </>
                               )}
 
                               {/* Quick Approve for Manager */}
@@ -1447,10 +1578,10 @@ export const RDCPage: React.FC = () => {
                                     setSelectedChallan(rdc);
                                     handleApprove();
                                   }}
-                                  className={`px-2 py-1 rounded text-[10px] font-extrabold transition border ${
+                                  className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold transition border uppercase cursor-pointer ${
                                     rdc.created_by === user?.id
-                                      ? 'bg-zinc-800 text-zinc-500 border-zinc-700 cursor-not-allowed'
-                                      : 'bg-emerald-950/80 hover:bg-emerald-500 text-emerald-300 hover:text-black border-emerald-600/50'
+                                      ? 'bg-zinc-100 text-zinc-400 border-zinc-300 cursor-not-allowed'
+                                      : 'bg-emerald-100 hover:bg-emerald-600 text-emerald-900 hover:text-white border-emerald-300'
                                   }`}
                                   title={
                                     rdc.created_by === user?.id
@@ -1469,7 +1600,7 @@ export const RDCPage: React.FC = () => {
                                     setSelectedChallan(rdc);
                                     setActiveActionModal('dispatch');
                                   }}
-                                  className="px-2 py-1 rounded bg-purple-950/80 hover:bg-purple-600 text-purple-300 hover:text-white text-[10px] font-extrabold transition border border-purple-600/50 flex items-center gap-1"
+                                  className="px-2.5 py-1 rounded-lg bg-purple-100 hover:bg-purple-600 text-purple-900 hover:text-white text-[10px] font-extrabold transition border border-purple-300 flex items-center gap-1 cursor-pointer uppercase"
                                   title="Dispatch & Issue Gate Pass"
                                 >
                                   <Truck className="w-3 h-3" />
@@ -1487,12 +1618,12 @@ export const RDCPage: React.FC = () => {
             </div>
 
             {/* PAGINATION FOOTER */}
-            <div className="bg-zinc-950 border-t border-zinc-800 px-4 py-3 flex items-center justify-between text-xs text-zinc-400">
+            <div className="bg-zinc-50 border-t border-zinc-200 px-4 py-3 flex items-center justify-between text-xs text-zinc-600">
               <div className="flex items-center gap-2">
                 <span>Showing</span>
-                <span className="font-bold text-zinc-200">{rdcs.length}</span>
+                <span className="font-bold text-zinc-900">{rdcs.length}</span>
                 <span>of</span>
-                <span className="font-bold text-zinc-200">{totalCount}</span>
+                <span className="font-bold text-zinc-900">{totalCount}</span>
                 <span>Challans</span>
               </div>
 
@@ -1505,7 +1636,7 @@ export const RDCPage: React.FC = () => {
                       setLimit(Number(e.target.value));
                       setPage(1);
                     }}
-                    className="bg-zinc-900 border border-zinc-800 rounded px-1.5 py-0.5 text-zinc-300"
+                    className="bg-white border border-zinc-300 rounded-lg px-2 py-0.5 text-zinc-800 font-bold"
                   >
                     <option value={10}>10</option>
                     <option value={25}>25</option>
@@ -1517,17 +1648,17 @@ export const RDCPage: React.FC = () => {
                   <button
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
                     disabled={page <= 1}
-                    className="p-1 rounded bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 disabled:hover:bg-zinc-800 text-zinc-300"
+                    className="p-1 rounded-lg bg-white border border-zinc-300 hover:bg-zinc-100 disabled:opacity-40 text-zinc-700 cursor-pointer"
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </button>
-                  <span className="px-2 font-mono text-[11px] font-bold text-zinc-200">
+                  <span className="px-2 font-mono text-[11px] font-bold text-zinc-800">
                     Page {page} / {totalPages}
                   </span>
                   <button
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                     disabled={page >= totalPages}
-                    className="p-1 rounded bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 disabled:hover:bg-zinc-800 text-zinc-300"
+                    className="p-1 rounded-lg bg-white border border-zinc-300 hover:bg-zinc-100 disabled:opacity-40 text-zinc-700 cursor-pointer"
                   >
                     <ChevronRight className="w-4 h-4" />
                   </button>
@@ -1543,14 +1674,16 @@ export const RDCPage: React.FC = () => {
       {/* ---------------------------------------------------------------------- */}
       {activeTab === 'overdue' && (
         <div className="space-y-4">
-          <div className="bg-red-950/20 border border-red-900/40 rounded-xl p-4 flex items-center justify-between">
+          <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-5 flex items-center justify-between shadow-sm">
             <div className="flex items-center gap-3">
-              <AlertTriangle className="w-6 h-6 text-red-400" />
+              <div className="p-2.5 bg-red-100 rounded-xl border border-red-300">
+                <AlertTriangle className="w-6 h-6 text-red-600" />
+              </div>
               <div>
-                <h2 className="text-sm font-black text-red-200 uppercase tracking-wider">
+                <h2 className="text-sm font-black text-red-950 uppercase tracking-wider">
                   Overdue Returnable Delivery Challans (RDC)
                 </h2>
-                <p className="text-xs text-red-300/80">
+                <p className="text-xs text-red-800 font-medium">
                   Material dispatched to external vendors past the committed return deadline.
                   Requires vendor follow-up or formal write-off.
                 </p>
@@ -1558,17 +1691,17 @@ export const RDCPage: React.FC = () => {
             </div>
             <button
               onClick={fetchOverdue}
-              className="px-3 py-1.5 rounded-lg bg-red-900/40 hover:bg-red-900/60 text-red-200 text-xs font-bold transition flex items-center gap-1.5"
+              className="px-3.5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loadingOverdue ? 'animate-spin' : ''}`} />
               Refresh Overdue
             </button>
           </div>
 
-          <div className="bg-zinc-900/90 border border-zinc-800 rounded-xl overflow-hidden shadow-xl">
+          <div className="bg-white rounded-2xl border-2 border-zinc-200 shadow-sm overflow-hidden">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="bg-zinc-950 border-b border-zinc-800 text-zinc-400 uppercase font-black tracking-wider text-[11px]">
+                <tr className="bg-zinc-50 border-b border-zinc-200 text-zinc-600 uppercase font-black tracking-wider text-[11px]">
                   <th className="py-3.5 px-4">Challan / Gate Pass</th>
                   <th className="py-3.5 px-4">Vendor & Contact</th>
                   <th className="py-3.5 px-4">Plant</th>
@@ -1578,18 +1711,18 @@ export const RDCPage: React.FC = () => {
                   <th className="py-3.5 px-4 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-800/60 font-medium">
+              <tbody className="divide-y divide-zinc-200 font-medium">
                 {loadingOverdue ? (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-zinc-500">
-                      <RefreshCw className="w-6 h-6 animate-spin mx-auto text-red-400 mb-2" />
+                    <td colSpan={7} className="py-12 text-center text-zinc-500 font-medium">
+                      <RefreshCw className="w-6 h-6 animate-spin mx-auto text-red-600 mb-2" />
                       Loading Overdue Challans...
                     </td>
                   </tr>
                 ) : overdueList.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-zinc-400">
-                      <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
+                    <td colSpan={7} className="py-12 text-center text-zinc-600 font-medium">
+                      <CheckCircle2 className="w-8 h-8 text-emerald-600 mx-auto mb-2" />
                       All returnable challans are on track! Zero overdue returns.
                     </td>
                   </tr>
@@ -1597,13 +1730,13 @@ export const RDCPage: React.FC = () => {
                   overdueList.map((od) => (
                     <tr
                       key={od.id}
-                      className="hover:bg-zinc-800/40 transition cursor-pointer"
+                      className="hover:bg-amber-50/40 transition cursor-pointer"
                       onClick={() => openDrawer(od as any)}
                     >
                       <td className="py-3.5 px-4">
-                        <div className="font-mono font-bold text-amber-400">{od.challan_number}</div>
+                        <div className="font-mono font-black text-amber-700">{od.challan_number}</div>
                         {od.gate_pass_number && (
-                          <div className="font-mono text-[10px] text-purple-400 flex items-center gap-1">
+                          <div className="font-mono text-[10px] text-purple-700 font-bold flex items-center gap-1">
                             <Truck className="w-3 h-3" />
                             {od.gate_pass_number}
                           </div>
@@ -1611,22 +1744,22 @@ export const RDCPage: React.FC = () => {
                       </td>
 
                       <td className="py-3.5 px-4">
-                        <div className="font-bold text-zinc-200">{od.vendor_party_name}</div>
+                        <div className="font-bold text-zinc-900">{od.vendor_party_name}</div>
                         {od.contact_phone && (
-                          <div className="text-[10px] text-zinc-400">Tel: {od.contact_phone}</div>
+                          <div className="text-[10px] text-zinc-500">Tel: {od.contact_phone}</div>
                         )}
                       </td>
 
-                      <td className="py-3.5 px-4 text-zinc-300">
+                      <td className="py-3.5 px-4 text-zinc-800 font-semibold">
                         {od.plant_name || 'Plant General'}
                       </td>
 
-                      <td className="py-3.5 px-4 font-mono text-zinc-300">
+                      <td className="py-3.5 px-4 font-mono text-zinc-800">
                         {new Date(od.expected_return_date).toLocaleDateString()}
                       </td>
 
                       <td className="py-3.5 px-4 text-center">
-                        <span className="px-2.5 py-1 rounded bg-red-950 text-red-300 border border-red-700 font-mono font-black text-xs inline-block animate-pulse">
+                        <span className="px-2.5 py-1 rounded-full bg-red-100 text-red-900 border border-red-300 font-mono font-black text-xs inline-block animate-pulse">
                           +{od.days_overdue} Days
                         </span>
                       </td>
@@ -1634,8 +1767,8 @@ export const RDCPage: React.FC = () => {
                       <td className="py-3.5 px-4">
                         <div className="space-y-1">
                           {od.items.map((it) => (
-                            <div key={it.id} className="text-[11px] text-zinc-300">
-                              <span className="font-bold text-amber-400">
+                            <div key={it.id} className="text-[11px] text-zinc-800">
+                              <span className="font-bold text-amber-800">
                                 {it.outstanding_quantity} qty
                               </span>{' '}
                               — {it.item_description}
@@ -1647,7 +1780,7 @@ export const RDCPage: React.FC = () => {
                       <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
                         <button
                           onClick={() => openDrawer(od as any)}
-                          className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white font-bold text-xs uppercase transition shadow-md shadow-red-600/20"
+                          className="px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-wider transition shadow-sm cursor-pointer"
                         >
                           Inspect & Inward
                         </button>
@@ -1665,17 +1798,17 @@ export const RDCPage: React.FC = () => {
       {/* 4. CHALLAN DETAIL & GOVERNANCE DRAWER */}
       {/* ---------------------------------------------------------------------- */}
       {isDrawerOpen && selectedChallan && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/70 backdrop-blur-sm animate-fade-in">
-          <div className="w-full max-w-3xl bg-zinc-950 border-l border-zinc-800 h-full flex flex-col shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-xs animate-fade-in">
+          <div className="w-full max-w-3xl bg-white border-l-2 border-zinc-200 h-full flex flex-col shadow-2xl overflow-hidden text-zinc-900">
             {/* DRAWER HEADER */}
-            <div className="p-5 border-b border-zinc-800 bg-zinc-900/80 flex items-center justify-between">
+            <div className="p-5 border-b border-zinc-200 bg-zinc-50 flex items-center justify-between">
               <div>
                 <div className="flex items-center gap-2">
                   <span
                     className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${
                       selectedChallan.rdc_type === 'RDC'
-                        ? 'bg-amber-400 text-black'
-                        : 'bg-cyan-900/70 text-cyan-200 border border-cyan-700/50'
+                        ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                        : 'bg-cyan-100 text-cyan-900 border border-cyan-300'
                     }`}
                   >
                     {selectedChallan.rdc_type}
@@ -1687,12 +1820,12 @@ export const RDCPage: React.FC = () => {
                   >
                     {selectedChallan.priority}
                   </span>
-                  <h2 className="text-xl font-mono font-black text-amber-400">
+                  <h2 className="text-xl font-mono font-black text-zinc-950">
                     {selectedChallan.challan_number}
                   </h2>
                 </div>
                 {selectedChallan.gate_pass_number && (
-                  <div className="mt-1 flex items-center gap-2 text-xs text-purple-400 font-mono font-semibold">
+                  <div className="mt-1 flex items-center gap-2 text-xs text-purple-700 font-mono font-bold">
                     <Truck className="w-3.5 h-3.5" />
                     Security Gate Pass: {selectedChallan.gate_pass_number}
                   </div>
@@ -1715,7 +1848,7 @@ export const RDCPage: React.FC = () => {
 
                 <button
                   onClick={closeDrawer}
-                  className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition"
+                  className="p-1.5 rounded-xl bg-white hover:bg-zinc-100 text-zinc-500 hover:text-black transition border border-zinc-300 cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -1723,23 +1856,23 @@ export const RDCPage: React.FC = () => {
             </div>
 
             {/* DRAWER TABS */}
-            <div className="flex border-b border-zinc-800 bg-zinc-900/40 px-5">
+            <div className="flex border-b border-zinc-200 bg-zinc-100/60 px-5">
               <button
                 onClick={() => setDrawerTab('items')}
-                className={`py-3 px-4 text-xs font-black uppercase tracking-wider border-b-2 transition ${
+                className={`py-3 px-4 text-xs font-black uppercase tracking-wider border-b-2 transition cursor-pointer ${
                   drawerTab === 'items'
-                    ? 'border-amber-400 text-amber-400'
-                    : 'border-transparent text-zinc-400 hover:text-zinc-200'
+                    ? 'border-amber-500 text-zinc-950'
+                    : 'border-transparent text-zinc-500 hover:text-black'
                 }`}
               >
                 Line Items & Materials ({selectedChallan.items?.length || 0})
               </button>
               <button
                 onClick={() => setDrawerTab('history')}
-                className={`py-3 px-4 text-xs font-black uppercase tracking-wider border-b-2 transition ${
+                className={`py-3 px-4 text-xs font-black uppercase tracking-wider border-b-2 transition cursor-pointer ${
                   drawerTab === 'history'
-                    ? 'border-amber-400 text-amber-400'
-                    : 'border-transparent text-zinc-400 hover:text-zinc-200'
+                    ? 'border-amber-500 text-zinc-950'
+                    : 'border-transparent text-zinc-500 hover:text-black'
                 }`}
               >
                 Audit Trail & History
@@ -1752,45 +1885,45 @@ export const RDCPage: React.FC = () => {
               {drawerTab === 'items' && (
                 <>
                   {/* METADATA GRID */}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-zinc-900/60 p-4 rounded-xl border border-zinc-800/80 text-xs">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-zinc-50 p-4 rounded-xl border border-zinc-200 text-xs">
                     <div>
-                      <span className="text-zinc-500 font-semibold block text-[10px] uppercase">
+                      <span className="text-zinc-500 font-bold block text-[10px] uppercase">
                         Vendor Party
                       </span>
-                      <span className="text-zinc-100 font-bold block mt-0.5">
+                      <span className="text-zinc-900 font-bold block mt-0.5">
                         {selectedChallan.vendor_party_name}
                       </span>
                       {selectedChallan.vendor_gstin && (
-                        <span className="text-[10px] font-mono text-zinc-400 block">
+                        <span className="text-[10px] font-mono text-zinc-500 block">
                           GST: {selectedChallan.vendor_gstin}
                         </span>
                       )}
                     </div>
 
                     <div>
-                      <span className="text-zinc-500 font-semibold block text-[10px] uppercase">
+                      <span className="text-zinc-500 font-bold block text-[10px] uppercase">
                         Dispatch Purpose
                       </span>
-                      <span className="text-zinc-200 block mt-0.5">
+                      <span className="text-zinc-800 font-medium block mt-0.5">
                         {selectedChallan.purpose}
                       </span>
                     </div>
 
                     <div>
-                      <span className="text-zinc-500 font-semibold block text-[10px] uppercase">
+                      <span className="text-zinc-500 font-bold block text-[10px] uppercase">
                         Plant / Shop
                       </span>
-                      <span className="text-zinc-200 font-semibold block mt-0.5">
+                      <span className="text-zinc-800 font-semibold block mt-0.5">
                         {selectedChallan.plant_name || 'General'}
                         {selectedChallan.shop_name ? ` • ${selectedChallan.shop_name}` : ''}
                       </span>
                     </div>
 
                     <div>
-                      <span className="text-zinc-500 font-semibold block text-[10px] uppercase">
+                      <span className="text-zinc-500 font-bold block text-[10px] uppercase">
                         Expected Return
                       </span>
-                      <span className="text-zinc-200 font-mono font-bold block mt-0.5">
+                      <span className="text-zinc-900 font-mono font-bold block mt-0.5">
                         {selectedChallan.expected_return_date
                           ? new Date(selectedChallan.expected_return_date).toLocaleDateString()
                           : 'N/A (Non-Returnable)'}
@@ -1798,29 +1931,29 @@ export const RDCPage: React.FC = () => {
                     </div>
 
                     <div>
-                      <span className="text-zinc-500 font-semibold block text-[10px] uppercase">
+                      <span className="text-zinc-500 font-bold block text-[10px] uppercase">
                         Created By
                       </span>
-                      <span className="text-zinc-200 font-semibold block mt-0.5">
+                      <span className="text-zinc-800 font-semibold block mt-0.5">
                         {selectedChallan.created_by_name || selectedChallan.created_by_code || 'User'}
                       </span>
                     </div>
 
                     <div>
-                      <span className="text-zinc-500 font-semibold block text-[10px] uppercase">
+                      <span className="text-zinc-500 font-bold block text-[10px] uppercase">
                         Document Ref
                       </span>
-                      <span className="text-zinc-300 font-mono block mt-0.5">
+                      <span className="text-zinc-700 font-mono block mt-0.5">
                         {selectedChallan.document_reference || 'None specified'}
                       </span>
                     </div>
 
                     {selectedChallan.vehicle_number && (
                       <div>
-                        <span className="text-zinc-500 font-semibold block text-[10px] uppercase">
+                        <span className="text-zinc-500 font-bold block text-[10px] uppercase">
                           Transport Vehicle
                         </span>
-                        <span className="text-purple-300 font-mono font-bold block mt-0.5">
+                        <span className="text-purple-800 font-mono font-bold block mt-0.5">
                           {selectedChallan.vehicle_number}{' '}
                           {selectedChallan.transporter_name
                             ? `(${selectedChallan.transporter_name})`
@@ -1832,8 +1965,8 @@ export const RDCPage: React.FC = () => {
 
                   {/* SPECIAL REASON BANNERS */}
                   {selectedChallan.rejection_reason && (
-                    <div className="p-3 bg-red-950/60 border border-red-800 rounded-xl text-xs text-red-200">
-                      <span className="font-black uppercase text-[10px] block text-red-400">
+                    <div className="p-3 bg-red-50 border border-red-300 rounded-xl text-xs text-red-900">
+                      <span className="font-black uppercase text-[10px] block text-red-700">
                         Manager Rejection Reason:
                       </span>
                       {selectedChallan.rejection_reason}
@@ -1841,8 +1974,8 @@ export const RDCPage: React.FC = () => {
                   )}
 
                   {selectedChallan.cancellation_reason && (
-                    <div className="p-3 bg-zinc-900 border border-zinc-700 rounded-xl text-xs text-zinc-300">
-                      <span className="font-black uppercase text-[10px] block text-zinc-400">
+                    <div className="p-3 bg-zinc-100 border border-zinc-300 rounded-xl text-xs text-zinc-800">
+                      <span className="font-black uppercase text-[10px] block text-zinc-600">
                         Cancellation Justification:
                       </span>
                       {selectedChallan.cancellation_reason}
@@ -1851,9 +1984,9 @@ export const RDCPage: React.FC = () => {
 
                   {/* LINE ITEMS BREAKDOWN */}
                   <div className="space-y-3">
-                    <h3 className="text-xs font-black uppercase tracking-wider text-zinc-400 flex items-center justify-between">
+                    <h3 className="text-xs font-black uppercase tracking-wider text-zinc-600 flex items-center justify-between">
                       <span>Line Items & Inventory Traceability</span>
-                      <span className="font-mono text-amber-400">
+                      <span className="font-mono font-bold text-amber-800">
                         Total Value: ₹
                         {(Number(selectedChallan.approximate_value) || 0).toLocaleString('en-IN')}
                       </span>
@@ -1873,21 +2006,21 @@ export const RDCPage: React.FC = () => {
                         return (
                           <div
                             key={item.id || idx}
-                            className="bg-zinc-900/90 border border-zinc-800 rounded-xl p-4 space-y-3"
+                            className="bg-white border-2 border-zinc-200 rounded-xl p-4 space-y-3 shadow-xs"
                           >
                             <div className="flex items-start justify-between">
                               <div>
-                                <span className="font-black text-sm text-zinc-100 block">
+                                <span className="font-black text-sm text-zinc-950 block">
                                   #{idx + 1}. {item.item_description}
                                 </span>
                                 {item.serial_number && (
-                                  <span className="text-[11px] font-mono text-zinc-400 block mt-0.5">
+                                  <span className="text-[11px] font-mono text-zinc-500 block mt-0.5">
                                     Serial / Asset Tag: {item.serial_number}
                                   </span>
                                 )}
                               </div>
                               <div className="text-right">
-                                <span className="text-xs font-mono font-bold text-amber-400 block">
+                                <span className="text-xs font-mono font-black text-amber-800 block">
                                   {dispatched} Dispatched
                                 </span>
                                 {item.unit_cost && (
@@ -1900,49 +2033,49 @@ export const RDCPage: React.FC = () => {
 
                             {/* QUANTITY PILLS */}
                             <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center text-xs">
-                              <div className="bg-zinc-950 p-2 rounded-lg border border-zinc-800">
+                              <div className="bg-zinc-50 p-2 rounded-lg border border-zinc-200">
                                 <span className="text-[9px] uppercase font-bold text-zinc-500 block">
                                   Usable Return
                                 </span>
-                                <span className="font-mono font-bold text-emerald-400 text-sm">
+                                <span className="font-mono font-bold text-emerald-700 text-sm">
                                   {returned}
                                 </span>
                               </div>
 
-                              <div className="bg-zinc-950 p-2 rounded-lg border border-zinc-800">
+                              <div className="bg-zinc-50 p-2 rounded-lg border border-zinc-200">
                                 <span className="text-[9px] uppercase font-bold text-zinc-500 block">
                                   Replacement
                                 </span>
-                                <span className="font-mono font-bold text-cyan-400 text-sm">
+                                <span className="font-mono font-bold text-cyan-700 text-sm">
                                   {replacement}
                                 </span>
                               </div>
 
-                              <div className="bg-zinc-950 p-2 rounded-lg border border-zinc-800">
+                              <div className="bg-zinc-50 p-2 rounded-lg border border-zinc-200">
                                 <span className="text-[9px] uppercase font-bold text-zinc-500 block">
                                   Quarantine / Damaged
                                 </span>
-                                <span className="font-mono font-bold text-red-400 text-sm">
+                                <span className="font-mono font-bold text-red-700 text-sm">
                                   {damaged}
                                 </span>
                               </div>
 
-                              <div className="bg-zinc-950 p-2 rounded-lg border border-zinc-800">
+                              <div className="bg-zinc-50 p-2 rounded-lg border border-zinc-200">
                                 <span className="text-[9px] uppercase font-bold text-zinc-500 block">
                                   Written Off
                                 </span>
-                                <span className="font-mono font-bold text-zinc-400 text-sm">
+                                <span className="font-mono font-bold text-zinc-600 text-sm">
                                   {writtenOff}
                                 </span>
                               </div>
 
-                              <div className="bg-zinc-950 p-2 rounded-lg border border-zinc-800 col-span-2 sm:col-span-1">
-                                <span className="text-[9px] uppercase font-bold text-amber-500 block">
+                              <div className="bg-zinc-50 p-2 rounded-lg border border-zinc-200 col-span-2 sm:col-span-1">
+                                <span className="text-[9px] uppercase font-bold text-amber-700 block">
                                   Outstanding
                                 </span>
                                 <span
                                   className={`font-mono font-black text-sm ${
-                                    outstanding > 0 ? 'text-amber-400' : 'text-zinc-600'
+                                    outstanding > 0 ? 'text-amber-800' : 'text-zinc-500'
                                   }`}
                                 >
                                   {outstanding}
@@ -1956,14 +2089,14 @@ export const RDCPage: React.FC = () => {
                                 <span>Reconciliation Progress</span>
                                 <span>{progressPct}% Accounted</span>
                               </div>
-                              <div className="w-full bg-zinc-950 h-2 rounded-full overflow-hidden border border-zinc-800">
+                              <div className="w-full bg-zinc-100 h-2 rounded-full overflow-hidden border border-zinc-200">
                                 <div
                                   className={`h-full transition-all duration-300 ${
                                     progressPct === 100
                                       ? 'bg-emerald-500'
                                       : progressPct > 0
                                       ? 'bg-amber-400'
-                                      : 'bg-zinc-700'
+                                      : 'bg-zinc-300'
                                   }`}
                                   style={{ width: `${progressPct}%` }}
                                 />
@@ -1980,27 +2113,27 @@ export const RDCPage: React.FC = () => {
               {/* TAB 2: AUDIT TRAIL TIMELINE */}
               {drawerTab === 'history' && (
                 <div className="space-y-4">
-                  <h3 className="text-xs font-black uppercase tracking-wider text-zinc-400">
+                  <h3 className="text-xs font-black uppercase tracking-wider text-zinc-600">
                     Regulatory Audit Log & Event Timeline
                   </h3>
 
                   {loadingHistory ? (
-                    <div className="py-8 text-center text-zinc-500">
-                      <RefreshCw className="w-6 h-6 animate-spin mx-auto text-amber-400 mb-2" />
+                    <div className="py-8 text-center text-zinc-500 font-medium">
+                      <RefreshCw className="w-6 h-6 animate-spin mx-auto text-amber-600 mb-2" />
                       Loading audit timeline...
                     </div>
                   ) : challanHistory.length === 0 ? (
-                    <div className="py-8 text-center text-zinc-500 text-xs">
+                    <div className="py-8 text-center text-zinc-500 text-xs font-medium">
                       No historical events recorded for this delivery challan.
                     </div>
                   ) : (
-                    <div className="relative border-l border-zinc-800 ml-3 space-y-6">
+                    <div className="relative border-l-2 border-zinc-200 ml-3 space-y-6">
                       {challanHistory.map((log) => (
                         <div key={log.id} className="relative pl-6">
-                          <div className="absolute -left-1.5 top-1 w-3 h-3 rounded-full bg-amber-400 border-2 border-zinc-950" />
-                          <div className="bg-zinc-900 border border-zinc-800/80 rounded-xl p-3 text-xs space-y-1.5">
+                          <div className="absolute -left-2 top-1 w-3.5 h-3.5 rounded-full bg-jcb-yellow border-2 border-white shadow-2xs" />
+                          <div className="bg-white border-2 border-zinc-200 rounded-xl p-3 text-xs space-y-1.5 shadow-2xs">
                             <div className="flex items-center justify-between">
-                              <span className="font-mono font-bold text-amber-400 text-[11px] uppercase">
+                              <span className="font-mono font-bold text-amber-800 text-[11px] uppercase">
                                 {log.action.replace('_', ' ')}
                               </span>
                               <span className="text-[10px] text-zinc-500 font-mono">
@@ -2008,12 +2141,12 @@ export const RDCPage: React.FC = () => {
                               </span>
                             </div>
 
-                            <div className="text-zinc-300 font-medium">
-                              By: <span className="text-zinc-100 font-bold">{log.actor_name || log.performed_by}</span>
+                            <div className="text-zinc-700 font-medium">
+                              By: <span className="text-zinc-950 font-bold">{log.actor_name || log.performed_by}</span>
                             </div>
 
                             {log.new_state && (
-                              <pre className="bg-zinc-950 p-2 rounded text-[10px] font-mono text-zinc-400 overflow-x-auto border border-zinc-800/50">
+                              <pre className="bg-zinc-50 p-2 rounded text-[10px] font-mono text-zinc-800 overflow-x-auto border border-zinc-200">
                                 {JSON.stringify(log.new_state, null, 2)}
                               </pre>
                             )}
@@ -2027,7 +2160,7 @@ export const RDCPage: React.FC = () => {
             </div>
 
             {/* DRAWER ACTION TOOLBAR */}
-            <div className="p-4 border-t border-zinc-800 bg-zinc-950 flex flex-wrap items-center justify-between gap-2">
+            <div className="p-4 border-t border-zinc-200 bg-white flex flex-wrap items-center justify-between gap-2 shadow-sm">
               <div className="flex items-center gap-2">
                 {/* Cancel (Draft, Pending Approval, or Approved) */}
                 {['draft', 'pending_approval', 'approved', 'rejected'].includes(
@@ -2035,7 +2168,7 @@ export const RDCPage: React.FC = () => {
                 ) && (
                   <button
                     onClick={() => setActiveActionModal('cancel')}
-                    className="px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-red-950/40 hover:text-red-300 text-zinc-400 text-xs font-bold transition flex items-center gap-1.5"
+                    className="px-3.5 py-2 rounded-xl bg-zinc-100 border border-zinc-300 hover:bg-red-50 hover:text-red-700 hover:border-red-300 text-zinc-700 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
                   >
                     <Ban className="w-3.5 h-3.5" />
                     Cancel Challan
@@ -2044,15 +2177,31 @@ export const RDCPage: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-2 flex-wrap">
-                {/* 1. Submit for Approval (Draft or Rejected) */}
+                {/* 1. Edit, Delete & Submit for Approval (Draft or Rejected) */}
                 {(selectedChallan.status === 'draft' || selectedChallan.status === 'rejected') && (
-                  <button
-                    onClick={() => setActiveActionModal('submit')}
-                    className="px-4 py-2 rounded-lg bg-amber-400 hover:bg-amber-300 text-black font-extrabold text-xs uppercase tracking-wider transition shadow-lg shadow-amber-400/20 flex items-center gap-1.5"
-                  >
-                    <Send className="w-4 h-4" />
-                    Submit for Approval
-                  </button>
+                  <>
+                    <button
+                      onClick={() => openEditModal(selectedChallan)}
+                      className="px-3.5 py-2 rounded-xl bg-blue-100 hover:bg-blue-200 text-blue-900 border border-blue-300 font-black text-xs uppercase transition flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                      Edit Draft
+                    </button>
+                    <button
+                      onClick={() => handleDeleteChallan(selectedChallan)}
+                      className="px-3.5 py-2 rounded-xl bg-red-100 hover:bg-red-200 text-red-900 border border-red-300 font-black text-xs uppercase transition flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Delete Draft
+                    </button>
+                    <button
+                      onClick={() => setActiveActionModal('submit')}
+                      className="px-4 py-2 rounded-xl bg-jcb-yellow hover:bg-jcb-yellowDark text-black font-black text-xs uppercase tracking-wider transition shadow-sm border border-amber-500 flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Send className="w-4 h-4" />
+                      Submit for Approval
+                    </button>
+                  </>
                 )}
 
                 {/* 2. Approve & Reject (Pending Approval, Manager/Admin only) */}
@@ -2060,7 +2209,7 @@ export const RDCPage: React.FC = () => {
                   <>
                     <button
                       onClick={() => setActiveActionModal('reject')}
-                      className="px-3 py-2 rounded-lg bg-red-950/80 hover:bg-red-900 text-red-200 border border-red-700/60 font-bold text-xs uppercase transition flex items-center gap-1.5"
+                      className="px-3.5 py-2 rounded-xl bg-red-100 hover:bg-red-200 text-red-900 border border-red-300 font-black text-xs uppercase transition flex items-center gap-1.5 cursor-pointer"
                     >
                       <X className="w-4 h-4" />
                       Reject
@@ -2069,10 +2218,10 @@ export const RDCPage: React.FC = () => {
                     <button
                       disabled={selectedChallan.created_by === user?.id || actionSubmitting}
                       onClick={handleApprove}
-                      className={`px-4 py-2 rounded-lg font-extrabold text-xs uppercase tracking-wider transition flex items-center gap-1.5 shadow-lg ${
+                      className={`px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition flex items-center gap-1.5 shadow-sm border ${
                         selectedChallan.created_by === user?.id
-                          ? 'bg-zinc-800 text-zinc-500 border border-zinc-700 cursor-not-allowed'
-                          : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20'
+                          ? 'bg-zinc-100 text-zinc-400 border-zinc-300 cursor-not-allowed'
+                          : 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600 cursor-pointer'
                       }`}
                       title={
                         selectedChallan.created_by === user?.id
@@ -2090,7 +2239,7 @@ export const RDCPage: React.FC = () => {
                 {selectedChallan.status === 'approved' && isStoreManager && (
                   <button
                     onClick={() => setActiveActionModal('dispatch')}
-                    className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs uppercase tracking-wider transition shadow-lg shadow-purple-600/20 flex items-center gap-1.5"
+                    className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-black text-xs uppercase tracking-wider transition shadow-sm border border-purple-600 flex items-center gap-1.5 cursor-pointer"
                   >
                     <Truck className="w-4 h-4" />
                     Dispatch & Issue Gate Pass
@@ -2121,7 +2270,7 @@ export const RDCPage: React.FC = () => {
                           }
                           setActiveActionModal('return');
                         }}
-                        className="px-3 py-2 rounded-lg bg-emerald-950/90 hover:bg-emerald-900 border border-emerald-600/60 text-emerald-200 font-extrabold text-xs uppercase transition flex items-center gap-1"
+                        className="px-3.5 py-2 rounded-xl bg-emerald-100 hover:bg-emerald-600 text-emerald-900 hover:text-white border border-emerald-300 font-black text-xs uppercase transition flex items-center gap-1 cursor-pointer"
                       >
                         <ArrowDownLeft className="w-3.5 h-3.5" />
                         Inward Return
@@ -2141,7 +2290,7 @@ export const RDCPage: React.FC = () => {
                           }
                           setActiveActionModal('replacement');
                         }}
-                        className="px-3 py-2 rounded-lg bg-cyan-950/90 hover:bg-cyan-900 border border-cyan-600/60 text-cyan-200 font-extrabold text-xs uppercase transition flex items-center gap-1"
+                        className="px-3.5 py-2 rounded-xl bg-cyan-100 hover:bg-cyan-600 text-cyan-900 hover:text-white border border-cyan-300 font-black text-xs uppercase transition flex items-center gap-1 cursor-pointer"
                       >
                         <RotateCcw className="w-3.5 h-3.5" />
                         Replacement
@@ -2160,7 +2309,7 @@ export const RDCPage: React.FC = () => {
                           }
                           setActiveActionModal('damage');
                         }}
-                        className="px-3 py-2 rounded-lg bg-red-950/80 hover:bg-red-900 border border-red-700/60 text-red-200 font-extrabold text-xs uppercase transition flex items-center gap-1"
+                        className="px-3.5 py-2 rounded-xl bg-red-100 hover:bg-red-600 text-red-900 hover:text-white border border-red-300 font-black text-xs uppercase transition flex items-center gap-1 cursor-pointer"
                       >
                         <AlertTriangle className="w-3.5 h-3.5" />
                         Report Damaged
@@ -2180,7 +2329,7 @@ export const RDCPage: React.FC = () => {
                             }
                             setActiveActionModal('writeoff');
                           }}
-                          className="px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 font-bold text-xs uppercase transition"
+                          className="px-3.5 py-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 border border-zinc-300 text-zinc-800 font-black text-xs uppercase transition cursor-pointer"
                         >
                           Write-Off
                         </button>
@@ -2195,7 +2344,7 @@ export const RDCPage: React.FC = () => {
                   isStoreManager && (
                     <button
                       onClick={() => setActiveActionModal('close')}
-                      className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs uppercase tracking-wider transition shadow-lg shadow-emerald-600/20 flex items-center gap-1.5"
+                      className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider transition shadow-sm border border-emerald-600 flex items-center gap-1.5 cursor-pointer"
                     >
                       <CheckCircle2 className="w-4 h-4" />
                       Close Reconciled Challan
@@ -2211,43 +2360,48 @@ export const RDCPage: React.FC = () => {
       {/* 5. CREATE DELIVERY CHALLAN MODAL */}
       {/* ---------------------------------------------------------------------- */}
       {isCreateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto animate-fade-in">
-          <div className="w-full max-w-4xl bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden my-8">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto animate-fade-in">
+          <div className="w-full max-w-4xl bg-white border-2 border-zinc-200 rounded-2xl shadow-2xl overflow-hidden my-8 text-zinc-900">
             {/* MODAL HEADER */}
-            <div className="p-5 border-b border-zinc-800 bg-zinc-900/90 flex items-center justify-between">
+            <div className="p-5 border-b border-zinc-200 bg-zinc-50 flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-black uppercase tracking-wider text-zinc-100 flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-amber-400" />
-                  Issue Delivery Challan
+                <h2 className="text-lg font-black uppercase tracking-wider text-zinc-950 flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-amber-600" />
+                  {editingChallanId ? 'Edit Delivery Challan Draft' : 'Issue Delivery Challan'}
                 </h2>
-                <p className="text-xs text-zinc-400">
-                  Generate authorized material movement gate pass with real-time stock allocation
+                <p className="text-xs text-zinc-500 font-medium">
+                  {editingChallanId
+                    ? 'Modify draft challan specifications, return target, and line items'
+                    : 'Generate authorized material movement gate pass with real-time stock allocation'}
                 </p>
               </div>
               <button
-                onClick={() => setIsCreateModalOpen(false)}
-                className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition"
+                onClick={() => {
+                  setIsCreateModalOpen(false);
+                  setEditingChallanId(null);
+                }}
+                className="p-1.5 rounded-xl bg-white border border-zinc-300 hover:bg-zinc-100 text-zinc-500 hover:text-black transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* FORM BODY */}
-            <form onSubmit={handleCreateSubmit} className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
+            <form onSubmit={handleCreateSubmit} className="p-6 space-y-6 max-h-[80vh] overflow-y-auto bg-white text-zinc-900">
               {/* CHALLAN TYPE & PRIORITY */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-1.5">
-                    Challan Type <span className="text-red-400">*</span>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-zinc-700 mb-1.5">
+                    Challan Type <span className="text-red-500">*</span>
                   </label>
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
                       onClick={() => setCreateForm((f) => ({ ...f, rdc_type: 'RDC' }))}
-                      className={`py-2 text-xs font-black uppercase rounded-lg border transition ${
+                      className={`py-2 text-xs font-black uppercase rounded-xl border transition cursor-pointer ${
                         createForm.rdc_type === 'RDC'
-                          ? 'bg-amber-400 text-black border-amber-400 shadow-md shadow-amber-400/20'
-                          : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:bg-zinc-850'
+                          ? 'bg-jcb-yellow text-black border-amber-500 shadow-xs'
+                          : 'bg-zinc-100 text-zinc-700 border-zinc-200 hover:bg-zinc-200'
                       }`}
                     >
                       Returnable (RDC)
@@ -2255,10 +2409,10 @@ export const RDCPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setCreateForm((f) => ({ ...f, rdc_type: 'NRDC' }))}
-                      className={`py-2 text-xs font-black uppercase rounded-lg border transition ${
+                      className={`py-2 text-xs font-black uppercase rounded-xl border transition cursor-pointer ${
                         createForm.rdc_type === 'NRDC'
-                          ? 'bg-cyan-500 text-black border-cyan-500 shadow-md shadow-cyan-500/20'
-                          : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:bg-zinc-850'
+                          ? 'bg-cyan-500 text-white border-cyan-600 shadow-xs'
+                          : 'bg-zinc-100 text-zinc-700 border-zinc-200 hover:bg-zinc-200'
                       }`}
                     >
                       Non-Return (NRDC)
@@ -2267,15 +2421,15 @@ export const RDCPage: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-1.5">
-                    Priority <span className="text-red-400">*</span>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-zinc-700 mb-1.5">
+                    Priority <span className="text-red-500">*</span>
                   </label>
                   <select
                     value={createForm.priority}
                     onChange={(e) =>
                       setCreateForm((f) => ({ ...f, priority: e.target.value as RdcPriority }))
                     }
-                    className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 focus:outline-none focus:border-amber-400 font-bold"
+                    className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-300 text-xs text-zinc-800 focus:outline-none focus:border-jcb-yellow font-bold cursor-pointer"
                   >
                     <option value="low">Low Priority</option>
                     <option value="medium">Medium Priority</option>
@@ -2285,13 +2439,13 @@ export const RDCPage: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-1.5">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-zinc-700 mb-1.5">
                     Associated Machine (Optional)
                   </label>
                   <select
                     value={createForm.machine_id}
                     onChange={(e) => setCreateForm((f) => ({ ...f, machine_id: e.target.value }))}
-                    className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 focus:outline-none focus:border-amber-400"
+                    className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-300 text-xs text-zinc-800 focus:outline-none focus:border-jcb-yellow cursor-pointer"
                   >
                     <option value="">No machine attached</option>
                     {machines.map((m) => (
@@ -2304,16 +2458,16 @@ export const RDCPage: React.FC = () => {
               </div>
 
               {/* VENDOR DETAILS */}
-              <div className="bg-zinc-900/60 p-4 rounded-xl border border-zinc-800 space-y-3">
-                <h3 className="text-xs font-black uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+              <div className="bg-zinc-50 p-4 rounded-xl border border-zinc-200 space-y-3">
+                <h3 className="text-xs font-black uppercase tracking-wider text-amber-800 flex items-center gap-1.5">
                   <Building className="w-4 h-4" />
                   Vendor / Destination Party Information
                 </h3>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="sm:col-span-2">
-                    <label className="block text-[11px] font-bold text-zinc-400 mb-1">
-                      Vendor / Party Name <span className="text-red-400">*</span>
+                    <label className="block text-[11px] font-bold text-zinc-700 mb-1">
+                      Vendor / Party Name <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
@@ -2323,12 +2477,12 @@ export const RDCPage: React.FC = () => {
                       onChange={(e) =>
                         setCreateForm((f) => ({ ...f, vendor_party_name: e.target.value }))
                       }
-                      className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-amber-400"
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-zinc-300 text-xs text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-jcb-yellow"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold text-zinc-400 mb-1">
+                    <label className="block text-[11px] font-bold text-zinc-700 mb-1">
                       Vendor GSTIN
                     </label>
                     <input
@@ -2338,14 +2492,14 @@ export const RDCPage: React.FC = () => {
                       onChange={(e) =>
                         setCreateForm((f) => ({ ...f, vendor_gstin: e.target.value }))
                       }
-                      className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-amber-400 font-mono"
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-zinc-300 text-xs text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-jcb-yellow font-mono"
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <label className="block text-[11px] font-bold text-zinc-400 mb-1">
+                    <label className="block text-[11px] font-bold text-zinc-700 mb-1">
                       Contact Person
                     </label>
                     <input
@@ -2355,12 +2509,12 @@ export const RDCPage: React.FC = () => {
                       onChange={(e) =>
                         setCreateForm((f) => ({ ...f, contact_person: e.target.value }))
                       }
-                      className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-amber-400"
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-zinc-300 text-xs text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-jcb-yellow"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold text-zinc-400 mb-1">
+                    <label className="block text-[11px] font-bold text-zinc-700 mb-1">
                       Contact Phone
                     </label>
                     <input
@@ -2370,12 +2524,12 @@ export const RDCPage: React.FC = () => {
                       onChange={(e) =>
                         setCreateForm((f) => ({ ...f, contact_phone: e.target.value }))
                       }
-                      className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-amber-400"
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-zinc-300 text-xs text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-jcb-yellow"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold text-zinc-400 mb-1">
+                    <label className="block text-[11px] font-bold text-zinc-700 mb-1">
                       Contact Email
                     </label>
                     <input
@@ -2385,13 +2539,13 @@ export const RDCPage: React.FC = () => {
                       onChange={(e) =>
                         setCreateForm((f) => ({ ...f, contact_email: e.target.value }))
                       }
-                      className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-amber-400"
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-zinc-300 text-xs text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-jcb-yellow"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-zinc-400 mb-1">
+                  <label className="block text-[11px] font-bold text-zinc-700 mb-1">
                     Vendor Address / Destination Facility
                   </label>
                   <input
@@ -2401,7 +2555,7 @@ export const RDCPage: React.FC = () => {
                     onChange={(e) =>
                       setCreateForm((f) => ({ ...f, vendor_address: e.target.value }))
                     }
-                    className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-amber-400"
+                    className="w-full px-3 py-2 rounded-xl bg-white border border-zinc-300 text-xs text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-jcb-yellow"
                   />
                 </div>
               </div>
@@ -2409,8 +2563,8 @@ export const RDCPage: React.FC = () => {
               {/* DISPATCH PURPOSE & DEADLINES */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="sm:col-span-2">
-                  <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-1.5">
-                    Dispatch Purpose & Technical Scope <span className="text-red-400">*</span>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-zinc-700 mb-1.5">
+                    Dispatch Purpose & Technical Scope <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -2418,14 +2572,14 @@ export const RDCPage: React.FC = () => {
                     placeholder="e.g. External Spindle Re-Balancing & Grinding under warranty"
                     value={createForm.purpose}
                     onChange={(e) => setCreateForm((f) => ({ ...f, purpose: e.target.value }))}
-                    className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-amber-400"
+                    className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-300 text-xs text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-jcb-yellow"
                   />
                 </div>
 
                 {createForm.rdc_type === 'RDC' && (
                   <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-1.5">
-                      Expected Return Date <span className="text-red-400">*</span>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-zinc-700 mb-1.5">
+                      Expected Return Date <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="date"
@@ -2434,7 +2588,7 @@ export const RDCPage: React.FC = () => {
                       onChange={(e) =>
                         setCreateForm((f) => ({ ...f, expected_return_date: e.target.value }))
                       }
-                      className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-100 focus:outline-none focus:border-amber-400 font-mono"
+                      className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-300 text-xs text-zinc-900 focus:outline-none focus:border-jcb-yellow font-mono"
                     />
                   </div>
                 )}
@@ -2442,7 +2596,7 @@ export const RDCPage: React.FC = () => {
 
               {/* DOCUMENT REFERENCE */}
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-1.5">
+                <label className="block text-xs font-bold uppercase tracking-wider text-zinc-700 mb-1.5">
                   Supporting Document Reference (e.g. PO #, Service Order #, Waybill)
                 </label>
                 <input
@@ -2452,21 +2606,21 @@ export const RDCPage: React.FC = () => {
                   onChange={(e) =>
                     setCreateForm((f) => ({ ...f, document_reference: e.target.value }))
                   }
-                  className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-amber-400 font-mono"
+                  className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-300 text-xs text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-jcb-yellow font-mono"
                 />
               </div>
 
               {/* MULTI-ITEM ROW BUILDER */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-black uppercase tracking-wider text-zinc-300 flex items-center gap-1.5">
-                    <Package className="w-4 h-4 text-amber-400" />
+                  <h3 className="text-xs font-black uppercase tracking-wider text-zinc-700 flex items-center gap-1.5">
+                    <Package className="w-4 h-4 text-amber-600" />
                     Challan Line Items ({createForm.items.length})
                   </h3>
                   <button
                     type="button"
                     onClick={handleAddItemRow}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded bg-zinc-900 hover:bg-zinc-800 text-amber-400 border border-zinc-700 text-xs font-bold transition"
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-800 border border-zinc-300 text-xs font-bold transition cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     Add Another Item
@@ -2477,17 +2631,17 @@ export const RDCPage: React.FC = () => {
                   {createForm.items.map((row, idx) => (
                     <div
                       key={idx}
-                      className="bg-zinc-900/80 p-4 rounded-xl border border-zinc-800 space-y-3 relative"
+                      className="bg-zinc-50 p-4 rounded-xl border border-zinc-200 space-y-3 relative"
                     >
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-black uppercase text-amber-400">
+                        <span className="text-xs font-black uppercase text-amber-800">
                           Item #{idx + 1}
                         </span>
                         {createForm.items.length > 1 && (
                           <button
                             type="button"
                             onClick={() => handleRemoveItemRow(idx)}
-                            className="text-zinc-500 hover:text-red-400 p-1 transition"
+                            className="text-zinc-400 hover:text-red-600 p-1 transition cursor-pointer"
                             title="Remove Line Item"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -2497,8 +2651,8 @@ export const RDCPage: React.FC = () => {
 
                       <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                         <div className="sm:col-span-2">
-                          <label className="block text-[11px] font-bold text-zinc-400 mb-1">
-                            Item Description <span className="text-red-400">*</span>
+                          <label className="block text-[11px] font-bold text-zinc-700 mb-1">
+                            Item Description <span className="text-red-500">*</span>
                           </label>
                           <input
                             type="text"
@@ -2508,18 +2662,18 @@ export const RDCPage: React.FC = () => {
                             onChange={(e) =>
                               handleItemFieldChange(idx, 'item_description', e.target.value)
                             }
-                            className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 focus:outline-none focus:border-amber-400"
+                            className="w-full px-3 py-2 rounded-xl bg-white border border-zinc-300 text-xs text-zinc-900 focus:outline-none focus:border-jcb-yellow"
                           />
                         </div>
 
                         <div>
-                          <label className="block text-[11px] font-bold text-zinc-400 mb-1">
+                          <label className="block text-[11px] font-bold text-zinc-700 mb-1">
                             Inventory Part Lookup
                           </label>
                           <select
                             value={row.part_id}
                             onChange={(e) => handleItemFieldChange(idx, 'part_id', e.target.value)}
-                            className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-zinc-200 focus:outline-none focus:border-amber-400"
+                            className="w-full px-3 py-2 rounded-xl bg-white border border-zinc-300 text-xs text-zinc-800 focus:outline-none focus:border-jcb-yellow cursor-pointer"
                           >
                             <option value="">Non-Inventory Item</option>
                             {inventoryParts.map((p) => (
@@ -2531,7 +2685,7 @@ export const RDCPage: React.FC = () => {
                         </div>
 
                         <div>
-                          <label className="block text-[11px] font-bold text-zinc-400 mb-1">
+                          <label className="block text-[11px] font-bold text-zinc-700 mb-1">
                             Serial / Tag Number
                           </label>
                           <input
@@ -2541,15 +2695,15 @@ export const RDCPage: React.FC = () => {
                             onChange={(e) =>
                               handleItemFieldChange(idx, 'serial_number', e.target.value)
                             }
-                            className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 focus:outline-none focus:border-amber-400 font-mono"
+                            className="w-full px-3 py-2 rounded-xl bg-white border border-zinc-300 text-xs text-zinc-900 focus:outline-none focus:border-jcb-yellow font-mono"
                           />
                         </div>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div>
-                          <label className="block text-[11px] font-bold text-zinc-400 mb-1">
-                            Dispatched Quantity <span className="text-red-400">*</span>
+                          <label className="block text-[11px] font-bold text-zinc-700 mb-1">
+                            Dispatched Quantity <span className="text-red-500">*</span>
                           </label>
                           <input
                             type="number"
@@ -2559,12 +2713,12 @@ export const RDCPage: React.FC = () => {
                             onChange={(e) =>
                               handleItemFieldChange(idx, 'quantity_dispatched', e.target.value)
                             }
-                            className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 focus:outline-none focus:border-amber-400 font-mono"
+                            className="w-full px-3 py-2 rounded-xl bg-white border border-zinc-300 text-xs text-zinc-900 focus:outline-none focus:border-jcb-yellow font-mono"
                           />
                         </div>
 
                         <div>
-                          <label className="block text-[11px] font-bold text-zinc-400 mb-1">
+                          <label className="block text-[11px] font-bold text-zinc-700 mb-1">
                             Unit Cost (₹)
                           </label>
                           <input
@@ -2575,15 +2729,15 @@ export const RDCPage: React.FC = () => {
                             onChange={(e) =>
                               handleItemFieldChange(idx, 'unit_cost', e.target.value)
                             }
-                            className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 focus:outline-none focus:border-amber-400 font-mono"
+                            className="w-full px-3 py-2 rounded-xl bg-white border border-zinc-300 text-xs text-zinc-900 focus:outline-none focus:border-jcb-yellow font-mono"
                           />
                         </div>
 
                         <div>
-                          <label className="block text-[11px] font-bold text-zinc-400 mb-1">
+                          <label className="block text-[11px] font-bold text-zinc-700 mb-1">
                             Line Total Estimate
                           </label>
-                          <div className="px-3 py-2 rounded-lg bg-zinc-950/60 border border-zinc-800/60 text-xs text-amber-400 font-mono font-bold">
+                          <div className="px-3 py-2 rounded-xl bg-zinc-100 border border-zinc-200 text-xs text-amber-800 font-mono font-bold">
                             ₹
                             {(
                               (Number(row.quantity_dispatched) || 0) * (Number(row.unit_cost) || 0)
@@ -2597,7 +2751,7 @@ export const RDCPage: React.FC = () => {
               </div>
 
               {/* SUMMARY & SUBMISSION CONTROLS */}
-              <div className="pt-4 border-t border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="pt-4 border-t border-zinc-200 flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
@@ -2606,9 +2760,9 @@ export const RDCPage: React.FC = () => {
                     onChange={(e) =>
                       setCreateForm((f) => ({ ...f, save_as_draft: e.target.checked }))
                     }
-                    className="w-4 h-4 rounded bg-zinc-900 border-zinc-700 text-amber-400 focus:ring-amber-400"
+                    className="w-4 h-4 rounded border-zinc-300 text-amber-500 focus:ring-amber-400 cursor-pointer"
                   />
-                  <label htmlFor="saveAsDraft" className="text-xs text-zinc-300 font-semibold cursor-pointer">
+                  <label htmlFor="saveAsDraft" className="text-xs text-zinc-700 font-semibold cursor-pointer">
                     Save as editable draft (do not submit for approval yet)
                   </label>
                 </div>
@@ -2618,15 +2772,18 @@ export const RDCPage: React.FC = () => {
                     <span className="text-[10px] uppercase font-bold text-zinc-500 block">
                       Total Approximate Value
                     </span>
-                    <span className="text-base font-mono font-black text-amber-400">
+                    <span className="text-base font-mono font-black text-amber-800">
                       ₹{calculatedTotalApproxValue.toLocaleString('en-IN')}
                     </span>
                   </div>
 
                   <button
                     type="button"
-                    onClick={() => setIsCreateModalOpen(false)}
-                    className="px-4 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-bold text-xs uppercase"
+                    onClick={() => {
+                      setIsCreateModalOpen(false);
+                      setEditingChallanId(null);
+                    }}
+                    className="px-4 py-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold text-xs uppercase cursor-pointer border border-zinc-300 transition"
                   >
                     Cancel
                   </button>
@@ -2634,10 +2791,12 @@ export const RDCPage: React.FC = () => {
                   <button
                     type="submit"
                     disabled={createSubmitting}
-                    className="px-5 py-2 rounded-lg bg-amber-400 hover:bg-amber-300 text-black font-black text-xs uppercase tracking-wider transition shadow-lg shadow-amber-400/20"
+                    className="px-5 py-2 rounded-xl bg-jcb-yellow hover:bg-jcb-yellowDark text-black font-black text-xs uppercase tracking-wider transition shadow-sm border border-amber-500 cursor-pointer"
                   >
                     {createSubmitting
-                      ? 'Creating...'
+                      ? 'Saving...'
+                      : editingChallanId
+                      ? 'Save Changes'
                       : createForm.save_as_draft
                       ? 'Save as Draft'
                       : 'Submit Challan'}
@@ -2655,17 +2814,17 @@ export const RDCPage: React.FC = () => {
 
       {/* MODAL: SUBMIT DRAFT */}
       {activeActionModal === 'submit' && selectedChallan && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-zinc-950 border border-zinc-800 rounded-xl p-5 space-y-4 shadow-2xl">
-            <h3 className="text-sm font-black uppercase text-amber-400 flex items-center gap-2">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md bg-white border-2 border-zinc-200 rounded-2xl p-6 space-y-4 shadow-2xl text-zinc-900">
+            <h3 className="text-sm font-black uppercase text-amber-800 flex items-center gap-2">
               <Send className="w-4 h-4" />
               Submit Delivery Challan for Approval
             </h3>
-            <p className="text-xs text-zinc-400">
-              Challan <span className="font-mono text-zinc-200">{selectedChallan.challan_number}</span> will transition to pending_approval for manager review.
+            <p className="text-xs text-zinc-600 font-medium">
+              Challan <span className="font-mono font-bold text-zinc-950">{selectedChallan.challan_number}</span> will transition to pending_approval for manager review.
             </p>
             <div>
-              <label className="block text-[11px] font-bold text-zinc-400 mb-1">
+              <label className="block text-[11px] font-bold text-zinc-700 mb-1">
                 Submission Notes / Remarks (Optional)
               </label>
               <textarea
@@ -2673,20 +2832,20 @@ export const RDCPage: React.FC = () => {
                 placeholder="e.g. Critical breakdown part for Line 1; expedited quote approved."
                 value={submitNotes}
                 onChange={(e) => setSubmitNotes(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-amber-400"
+                className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-300 text-xs text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-jcb-yellow"
               />
             </div>
-            <div className="flex justify-end gap-2 pt-2 border-t border-zinc-800">
+            <div className="flex justify-end gap-2 pt-3 border-t border-zinc-200">
               <button
                 onClick={() => setActiveActionModal(null)}
-                className="px-3 py-1.5 rounded-lg bg-zinc-900 text-zinc-300 text-xs font-bold"
+                className="px-3.5 py-1.5 rounded-xl bg-zinc-100 border border-zinc-300 hover:bg-zinc-200 text-zinc-700 text-xs font-bold cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 disabled={actionSubmitting}
                 onClick={handleSubmitDraft}
-                className="px-4 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-black text-xs font-black uppercase tracking-wider"
+                className="px-4 py-1.5 rounded-xl bg-jcb-yellow hover:bg-jcb-yellowDark text-black text-xs font-black uppercase tracking-wider shadow-sm border border-amber-500 cursor-pointer"
               >
                 {actionSubmitting ? 'Submitting...' : 'Confirm Submit'}
               </button>
@@ -2697,18 +2856,18 @@ export const RDCPage: React.FC = () => {
 
       {/* MODAL: REJECT CHALLAN */}
       {activeActionModal === 'reject' && selectedChallan && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-zinc-950 border border-red-900/60 rounded-xl p-5 space-y-4 shadow-2xl">
-            <h3 className="text-sm font-black uppercase text-red-400 flex items-center gap-2">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md bg-white border-2 border-red-200 rounded-2xl p-6 space-y-4 shadow-2xl text-zinc-900">
+            <h3 className="text-sm font-black uppercase text-red-700 flex items-center gap-2">
               <X className="w-4 h-4" />
               Reject Delivery Challan
             </h3>
-            <p className="text-xs text-zinc-400">
+            <p className="text-xs text-zinc-600 font-medium">
               Please provide the mandatory rejection reason. The creator will be notified and can revise the challan.
             </p>
             <div>
-              <label className="block text-[11px] font-bold text-zinc-400 mb-1">
-                Rejection Reason <span className="text-red-400">*</span>
+              <label className="block text-[11px] font-bold text-zinc-700 mb-1">
+                Rejection Reason <span className="text-red-500">*</span>
               </label>
               <textarea
                 rows={3}
@@ -2716,20 +2875,20 @@ export const RDCPage: React.FC = () => {
                 placeholder="e.g. Vendor not authorized for electrical overhaul; please re-route to Plant B vendor."
                 value={rejectionReason}
                 onChange={(e) => setRejectionReason(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500"
+                className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-300 text-xs text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-red-500"
               />
             </div>
-            <div className="flex justify-end gap-2 pt-2 border-t border-zinc-800">
+            <div className="flex justify-end gap-2 pt-3 border-t border-zinc-200">
               <button
                 onClick={() => setActiveActionModal(null)}
-                className="px-3 py-1.5 rounded-lg bg-zinc-900 text-zinc-300 text-xs font-bold"
+                className="px-3.5 py-1.5 rounded-xl bg-zinc-100 border border-zinc-300 hover:bg-zinc-200 text-zinc-700 text-xs font-bold cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 disabled={actionSubmitting}
                 onClick={handleReject}
-                className="px-4 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-black uppercase tracking-wider"
+                className="px-4 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-black uppercase tracking-wider shadow-sm cursor-pointer"
               >
                 {actionSubmitting ? 'Rejecting...' : 'Confirm Rejection'}
               </button>
@@ -2740,18 +2899,18 @@ export const RDCPage: React.FC = () => {
 
       {/* MODAL: DISPATCH & GATE PASS */}
       {activeActionModal === 'dispatch' && selectedChallan && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-zinc-950 border border-purple-900/60 rounded-xl p-5 space-y-4 shadow-2xl">
-            <h3 className="text-sm font-black uppercase text-purple-400 flex items-center gap-2">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md bg-white border-2 border-purple-200 rounded-2xl p-6 space-y-4 shadow-2xl text-zinc-900">
+            <h3 className="text-sm font-black uppercase text-purple-800 flex items-center gap-2">
               <Truck className="w-4 h-4" />
               Authorize Dispatch & Generate Gate Pass
             </h3>
-            <p className="text-xs text-zinc-400">
+            <p className="text-xs text-zinc-600 font-medium">
               Issuing Gate Pass will record inventory movement, decrement available stock, and authorize physical security exit.
             </p>
             <div className="space-y-3">
               <div>
-                <label className="block text-[11px] font-bold text-zinc-400 mb-1">
+                <label className="block text-[11px] font-bold text-zinc-700 mb-1">
                   Vehicle / Transport Number
                 </label>
                 <input
@@ -2761,12 +2920,12 @@ export const RDCPage: React.FC = () => {
                   onChange={(e) =>
                     setDispatchData((d) => ({ ...d, vehicle_number: e.target.value }))
                   }
-                  className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-purple-500 font-mono"
+                  className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-300 text-xs text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-purple-500 font-mono"
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-zinc-400 mb-1">
+                <label className="block text-[11px] font-bold text-zinc-700 mb-1">
                   Transporter / Logistics Carrier Name
                 </label>
                 <input
@@ -2776,21 +2935,21 @@ export const RDCPage: React.FC = () => {
                   onChange={(e) =>
                     setDispatchData((d) => ({ ...d, transporter_name: e.target.value }))
                   }
-                  className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-purple-500"
+                  className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-300 text-xs text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-purple-500"
                 />
               </div>
             </div>
-            <div className="flex justify-end gap-2 pt-2 border-t border-zinc-800">
+            <div className="flex justify-end gap-2 pt-3 border-t border-zinc-200">
               <button
                 onClick={() => setActiveActionModal(null)}
-                className="px-3 py-1.5 rounded-lg bg-zinc-900 text-zinc-300 text-xs font-bold"
+                className="px-3.5 py-1.5 rounded-xl bg-zinc-100 border border-zinc-300 hover:bg-zinc-200 text-zinc-700 text-xs font-bold cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 disabled={actionSubmitting}
                 onClick={handleDispatch}
-                className="px-4 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-xs font-black uppercase tracking-wider"
+                className="px-4 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-black uppercase tracking-wider shadow-sm cursor-pointer"
               >
                 {actionSubmitting ? 'Generating...' : 'Authorize Dispatch'}
               </button>
@@ -2801,26 +2960,26 @@ export const RDCPage: React.FC = () => {
 
       {/* MODAL: INWARD RETURN */}
       {activeActionModal === 'return' && selectedChallan && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-zinc-950 border border-emerald-900/60 rounded-xl p-5 space-y-4 shadow-2xl">
-            <h3 className="text-sm font-black uppercase text-emerald-400 flex items-center gap-2">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md bg-white border-2 border-emerald-200 rounded-2xl p-6 space-y-4 shadow-2xl text-zinc-900">
+            <h3 className="text-sm font-black uppercase text-emerald-800 flex items-center gap-2">
               <ArrowDownLeft className="w-4 h-4" />
               Inward Returned Goods (Usable Stock)
             </h3>
-            <p className="text-xs text-zinc-400">
+            <p className="text-xs text-zinc-600 font-medium">
               Material will be returned to usable stock and stock ledger incremented.
             </p>
             <div className="space-y-3">
               <div>
-                <label className="block text-[11px] font-bold text-zinc-400 mb-1">
-                  Select Line Item <span className="text-red-400">*</span>
+                <label className="block text-[11px] font-bold text-zinc-700 mb-1">
+                  Select Line Item <span className="text-red-500">*</span>
                 </label>
                 <select
                   value={returnItemForm.item_id}
                   onChange={(e) =>
                     setReturnItemForm((f) => ({ ...f, item_id: e.target.value }))
                   }
-                  className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 focus:outline-none focus:border-emerald-500"
+                  className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-300 text-xs text-zinc-800 focus:outline-none focus:border-emerald-500 font-bold cursor-pointer"
                 >
                   {selectedChallan.items?.map((it) => (
                     <option key={it.id} value={it.id}>
@@ -2831,8 +2990,8 @@ export const RDCPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-zinc-400 mb-1">
-                  Returned Quantity <span className="text-red-400">*</span>
+                <label className="block text-[11px] font-bold text-zinc-700 mb-1">
+                  Returned Quantity <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="number"
@@ -2845,12 +3004,12 @@ export const RDCPage: React.FC = () => {
                       returned_quantity: Number(e.target.value),
                     }))
                   }
-                  className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-100 focus:outline-none focus:border-emerald-500 font-mono"
+                  className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-300 text-xs text-zinc-900 focus:outline-none focus:border-emerald-500 font-mono"
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-zinc-400 mb-1">
+                <label className="block text-[11px] font-bold text-zinc-700 mb-1">
                   Remarks / Inward Inspection Note
                 </label>
                 <input
@@ -2860,21 +3019,21 @@ export const RDCPage: React.FC = () => {
                   onChange={(e) =>
                     setReturnItemForm((f) => ({ ...f, remarks: e.target.value }))
                   }
-                  className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-500"
+                  className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-300 text-xs text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-emerald-500"
                 />
               </div>
             </div>
-            <div className="flex justify-end gap-2 pt-2 border-t border-zinc-800">
+            <div className="flex justify-end gap-2 pt-3 border-t border-zinc-200">
               <button
                 onClick={() => setActiveActionModal(null)}
-                className="px-3 py-1.5 rounded-lg bg-zinc-900 text-zinc-300 text-xs font-bold"
+                className="px-3.5 py-1.5 rounded-xl bg-zinc-100 border border-zinc-300 hover:bg-zinc-200 text-zinc-700 text-xs font-bold cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 disabled={actionSubmitting}
                 onClick={handleRecordReturn}
-                className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-wider"
+                className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-wider shadow-sm cursor-pointer"
               >
                 {actionSubmitting ? 'Inwarding...' : 'Confirm Inward'}
               </button>
@@ -2885,26 +3044,26 @@ export const RDCPage: React.FC = () => {
 
       {/* MODAL: RECEIVE REPLACEMENT */}
       {activeActionModal === 'replacement' && selectedChallan && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-zinc-950 border border-cyan-900/60 rounded-xl p-5 space-y-4 shadow-2xl">
-            <h3 className="text-sm font-black uppercase text-cyan-400 flex items-center gap-2">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md bg-white border-2 border-cyan-200 rounded-2xl p-6 space-y-4 shadow-2xl text-zinc-900">
+            <h3 className="text-sm font-black uppercase text-cyan-800 flex items-center gap-2">
               <RotateCcw className="w-4 h-4" />
               Receive Replacement Material
             </h3>
-            <p className="text-xs text-zinc-400">
+            <p className="text-xs text-zinc-600 font-medium">
               Record receipt of new replacement unit from vendor. Serial number will be updated in inventory ledger.
             </p>
             <div className="space-y-3">
               <div>
-                <label className="block text-[11px] font-bold text-zinc-400 mb-1">
-                  Select Line Item <span className="text-red-400">*</span>
+                <label className="block text-[11px] font-bold text-zinc-700 mb-1">
+                  Select Line Item <span className="text-red-500">*</span>
                 </label>
                 <select
                   value={replacementItemForm.item_id}
                   onChange={(e) =>
                     setReplacementItemForm((f) => ({ ...f, item_id: e.target.value }))
                   }
-                  className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 focus:outline-none focus:border-cyan-500"
+                  className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-300 text-xs text-zinc-800 focus:outline-none focus:border-cyan-500 font-bold cursor-pointer"
                 >
                   {selectedChallan.items?.map((it) => (
                     <option key={it.id} value={it.id}>
@@ -2915,8 +3074,8 @@ export const RDCPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-zinc-400 mb-1">
-                  Replacement Quantity <span className="text-red-400">*</span>
+                <label className="block text-[11px] font-bold text-zinc-700 mb-1">
+                  Replacement Quantity <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="number"
@@ -2929,12 +3088,12 @@ export const RDCPage: React.FC = () => {
                       replacement_quantity: Number(e.target.value),
                     }))
                   }
-                  className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-100 focus:outline-none focus:border-cyan-500 font-mono"
+                  className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-300 text-xs text-zinc-900 focus:outline-none focus:border-cyan-500 font-mono"
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-zinc-400 mb-1">
+                <label className="block text-[11px] font-bold text-zinc-700 mb-1">
                   New Serial / Tag Number
                 </label>
                 <input
@@ -2947,21 +3106,21 @@ export const RDCPage: React.FC = () => {
                       new_serial_number: e.target.value,
                     }))
                   }
-                  className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-cyan-500 font-mono"
+                  className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-300 text-xs text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-cyan-500 font-mono"
                 />
               </div>
             </div>
-            <div className="flex justify-end gap-2 pt-2 border-t border-zinc-800">
+            <div className="flex justify-end gap-2 pt-3 border-t border-zinc-200">
               <button
                 onClick={() => setActiveActionModal(null)}
-                className="px-3 py-1.5 rounded-lg bg-zinc-900 text-zinc-300 text-xs font-bold"
+                className="px-3.5 py-1.5 rounded-xl bg-zinc-100 border border-zinc-300 hover:bg-zinc-200 text-zinc-700 text-xs font-bold cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 disabled={actionSubmitting}
                 onClick={handleRecordReplacement}
-                className="px-4 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-black uppercase tracking-wider"
+                className="px-4 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-black uppercase tracking-wider shadow-sm cursor-pointer"
               >
                 {actionSubmitting ? 'Recording...' : 'Accept Replacement'}
               </button>
@@ -2972,26 +3131,26 @@ export const RDCPage: React.FC = () => {
 
       {/* MODAL: REPORT DAMAGED */}
       {activeActionModal === 'damage' && selectedChallan && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-zinc-950 border border-red-900/60 rounded-xl p-5 space-y-4 shadow-2xl">
-            <h3 className="text-sm font-black uppercase text-red-400 flex items-center gap-2">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md bg-white border-2 border-red-200 rounded-2xl p-6 space-y-4 shadow-2xl text-zinc-900">
+            <h3 className="text-sm font-black uppercase text-red-700 flex items-center gap-2">
               <AlertTriangle className="w-4 h-4" />
               Report Damaged / Defective Material (Quarantine)
             </h3>
-            <p className="text-xs text-zinc-400">
+            <p className="text-xs text-zinc-600 font-medium">
               Damaged goods are segregated into physical quarantine. Usable warehouse stock will NOT be increased until disposition.
             </p>
             <div className="space-y-3">
               <div>
-                <label className="block text-[11px] font-bold text-zinc-400 mb-1">
-                  Select Line Item <span className="text-red-400">*</span>
+                <label className="block text-[11px] font-bold text-zinc-700 mb-1">
+                  Select Line Item <span className="text-red-500">*</span>
                 </label>
                 <select
                   value={damageItemForm.item_id}
                   onChange={(e) =>
                     setDamageItemForm((f) => ({ ...f, item_id: e.target.value }))
                   }
-                  className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 focus:outline-none focus:border-red-500"
+                  className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-300 text-xs text-zinc-800 focus:outline-none focus:border-red-500 font-bold cursor-pointer"
                 >
                   {selectedChallan.items?.map((it) => (
                     <option key={it.id} value={it.id}>
@@ -3002,8 +3161,8 @@ export const RDCPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-zinc-400 mb-1">
-                  Damaged Quantity <span className="text-red-400">*</span>
+                <label className="block text-[11px] font-bold text-zinc-700 mb-1">
+                  Damaged Quantity <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="number"
@@ -3016,13 +3175,13 @@ export const RDCPage: React.FC = () => {
                       damaged_quantity: Number(e.target.value),
                     }))
                   }
-                  className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-100 focus:outline-none focus:border-red-500 font-mono"
+                  className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-300 text-xs text-zinc-900 focus:outline-none focus:border-red-500 font-mono"
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-zinc-400 mb-1">
-                  Damage Description / Quarantine Reason <span className="text-red-400">*</span>
+                <label className="block text-[11px] font-bold text-zinc-700 mb-1">
+                  Damage Description / Quarantine Reason <span className="text-red-500">*</span>
                 </label>
                 <textarea
                   rows={3}
@@ -3032,21 +3191,21 @@ export const RDCPage: React.FC = () => {
                   onChange={(e) =>
                     setDamageItemForm((f) => ({ ...f, reason: e.target.value }))
                   }
-                  className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500"
+                  className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-300 text-xs text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-red-500"
                 />
               </div>
             </div>
-            <div className="flex justify-end gap-2 pt-2 border-t border-zinc-800">
+            <div className="flex justify-end gap-2 pt-3 border-t border-zinc-200">
               <button
                 onClick={() => setActiveActionModal(null)}
-                className="px-3 py-1.5 rounded-lg bg-zinc-900 text-zinc-300 text-xs font-bold"
+                className="px-3.5 py-1.5 rounded-xl bg-zinc-100 border border-zinc-300 hover:bg-zinc-200 text-zinc-700 text-xs font-bold cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 disabled={actionSubmitting}
                 onClick={handleRecordDamage}
-                className="px-4 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-black uppercase tracking-wider"
+                className="px-4 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-black uppercase tracking-wider shadow-sm cursor-pointer"
               >
                 {actionSubmitting ? 'Quarantining...' : 'Confirm Quarantine'}
               </button>
@@ -3057,26 +3216,26 @@ export const RDCPage: React.FC = () => {
 
       {/* MODAL: AUTHORIZE WRITE-OFF */}
       {activeActionModal === 'writeoff' && selectedChallan && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-zinc-950 border border-zinc-700 rounded-xl p-5 space-y-4 shadow-2xl">
-            <h3 className="text-sm font-black uppercase text-zinc-200 flex items-center gap-2">
-              <ShieldAlert className="w-4 h-4 text-amber-400" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md bg-white border-2 border-zinc-200 rounded-2xl p-6 space-y-4 shadow-2xl text-zinc-900">
+            <h3 className="text-sm font-black uppercase text-zinc-950 flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-amber-600" />
               Authorize Managerial Material Write-Off
             </h3>
-            <p className="text-xs text-zinc-400">
+            <p className="text-xs text-zinc-600 font-medium">
               Only authorized managers can write off unrecoverable or destroyed material balances. Regulatory scrap entry will be recorded.
             </p>
             <div className="space-y-3">
               <div>
-                <label className="block text-[11px] font-bold text-zinc-400 mb-1">
-                  Select Line Item <span className="text-red-400">*</span>
+                <label className="block text-[11px] font-bold text-zinc-700 mb-1">
+                  Select Line Item <span className="text-red-500">*</span>
                 </label>
                 <select
                   value={writeOffItemForm.item_id}
                   onChange={(e) =>
                     setWriteOffItemForm((f) => ({ ...f, item_id: e.target.value }))
                   }
-                  className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 focus:outline-none focus:border-amber-400"
+                  className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-300 text-xs text-zinc-800 focus:outline-none focus:border-amber-500 font-bold cursor-pointer"
                 >
                   {selectedChallan.items?.map((it) => (
                     <option key={it.id} value={it.id}>
@@ -3087,8 +3246,8 @@ export const RDCPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-zinc-400 mb-1">
-                  Write-off Quantity <span className="text-red-400">*</span>
+                <label className="block text-[11px] font-bold text-zinc-700 mb-1">
+                  Write-off Quantity <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="number"
@@ -3101,13 +3260,13 @@ export const RDCPage: React.FC = () => {
                       writeoff_quantity: Number(e.target.value),
                     }))
                   }
-                  className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-100 focus:outline-none focus:border-amber-400 font-mono"
+                  className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-300 text-xs text-zinc-900 focus:outline-none focus:border-amber-500 font-mono"
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-zinc-400 mb-1">
-                  Managerial Justification / Write-off Reason <span className="text-red-400">*</span>
+                <label className="block text-[11px] font-bold text-zinc-700 mb-1">
+                  Managerial Justification / Write-off Reason <span className="text-red-500">*</span>
                 </label>
                 <textarea
                   rows={3}
@@ -3117,21 +3276,21 @@ export const RDCPage: React.FC = () => {
                   onChange={(e) =>
                     setWriteOffItemForm((f) => ({ ...f, reason: e.target.value }))
                   }
-                  className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-amber-400"
+                  className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-300 text-xs text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-amber-500"
                 />
               </div>
             </div>
-            <div className="flex justify-end gap-2 pt-2 border-t border-zinc-800">
+            <div className="flex justify-end gap-2 pt-3 border-t border-zinc-200">
               <button
                 onClick={() => setActiveActionModal(null)}
-                className="px-3 py-1.5 rounded-lg bg-zinc-900 text-zinc-300 text-xs font-bold"
+                className="px-3.5 py-1.5 rounded-xl bg-zinc-100 border border-zinc-300 hover:bg-zinc-200 text-zinc-700 text-xs font-bold cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 disabled={actionSubmitting}
                 onClick={handleRecordWriteOff}
-                className="px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black text-xs font-black uppercase tracking-wider"
+                className="px-4 py-1.5 rounded-xl bg-jcb-yellow hover:bg-jcb-yellowDark text-black text-xs font-black uppercase tracking-wider shadow-sm border border-amber-500 cursor-pointer"
               >
                 {actionSubmitting ? 'Authorizing...' : 'Authorize Write-Off'}
               </button>
@@ -3142,26 +3301,26 @@ export const RDCPage: React.FC = () => {
 
       {/* MODAL: CLOSE CHALLAN */}
       {activeActionModal === 'close' && selectedChallan && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-zinc-950 border border-emerald-900/60 rounded-xl p-5 space-y-4 shadow-2xl">
-            <h3 className="text-sm font-black uppercase text-emerald-400 flex items-center gap-2">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md bg-white border-2 border-emerald-200 rounded-2xl p-6 space-y-4 shadow-2xl text-zinc-900">
+            <h3 className="text-sm font-black uppercase text-emerald-800 flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4" />
               Close Delivery Challan
             </h3>
-            <p className="text-xs text-zinc-300">
-              All materials for challan <span className="font-mono text-amber-400">{selectedChallan.challan_number}</span> are fully accounted for. Closing will mark this transaction formally completed and archived.
+            <p className="text-xs text-zinc-600 font-medium">
+              All materials for challan <span className="font-mono font-bold text-amber-800">{selectedChallan.challan_number}</span> are fully accounted for. Closing will mark this transaction formally completed and archived.
             </p>
-            <div className="flex justify-end gap-2 pt-2 border-t border-zinc-800">
+            <div className="flex justify-end gap-2 pt-3 border-t border-zinc-200">
               <button
                 onClick={() => setActiveActionModal(null)}
-                className="px-3 py-1.5 rounded-lg bg-zinc-900 text-zinc-300 text-xs font-bold"
+                className="px-3.5 py-1.5 rounded-xl bg-zinc-100 border border-zinc-300 hover:bg-zinc-200 text-zinc-700 text-xs font-bold cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 disabled={actionSubmitting}
                 onClick={handleCloseChallan}
-                className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-wider"
+                className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-wider shadow-sm cursor-pointer"
               >
                 {actionSubmitting ? 'Closing...' : 'Confirm Closure'}
               </button>
@@ -3172,18 +3331,18 @@ export const RDCPage: React.FC = () => {
 
       {/* MODAL: CANCEL CHALLAN */}
       {activeActionModal === 'cancel' && selectedChallan && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-zinc-950 border border-red-900/60 rounded-xl p-5 space-y-4 shadow-2xl">
-            <h3 className="text-sm font-black uppercase text-red-400 flex items-center gap-2">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md bg-white border-2 border-red-200 rounded-2xl p-6 space-y-4 shadow-2xl text-zinc-900">
+            <h3 className="text-sm font-black uppercase text-red-700 flex items-center gap-2">
               <Ban className="w-4 h-4" />
               Cancel Delivery Challan
             </h3>
-            <p className="text-xs text-zinc-400">
-              Challan <span className="font-mono text-zinc-200">{selectedChallan.challan_number}</span> has not been physically dispatched. Cancelling will release any draft reservations.
+            <p className="text-xs text-zinc-600 font-medium">
+              Challan <span className="font-mono font-bold text-zinc-950">{selectedChallan.challan_number}</span> has not been physically dispatched. Cancelling will release any draft reservations.
             </p>
             <div>
-              <label className="block text-[11px] font-bold text-zinc-400 mb-1">
-                Cancellation Reason <span className="text-red-400">*</span>
+              <label className="block text-[11px] font-bold text-zinc-700 mb-1">
+                Cancellation Reason <span className="text-red-500">*</span>
               </label>
               <textarea
                 rows={3}
@@ -3191,20 +3350,20 @@ export const RDCPage: React.FC = () => {
                 placeholder="e.g. Work order cancelled; vendor quote rejected."
                 value={cancellationReason}
                 onChange={(e) => setCancellationReason(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-500"
+                className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-300 text-xs text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-red-500"
               />
             </div>
-            <div className="flex justify-end gap-2 pt-2 border-t border-zinc-800">
+            <div className="flex justify-end gap-2 pt-3 border-t border-zinc-200">
               <button
                 onClick={() => setActiveActionModal(null)}
-                className="px-3 py-1.5 rounded-lg bg-zinc-900 text-zinc-300 text-xs font-bold"
+                className="px-3.5 py-1.5 rounded-xl bg-zinc-100 border border-zinc-300 hover:bg-zinc-200 text-zinc-700 text-xs font-bold cursor-pointer"
               >
                 Back
               </button>
               <button
                 disabled={actionSubmitting}
                 onClick={handleCancelChallan}
-                className="px-4 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-black uppercase tracking-wider"
+                className="px-4 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-black uppercase tracking-wider shadow-sm cursor-pointer"
               >
                 {actionSubmitting ? 'Cancelling...' : 'Confirm Cancellation'}
               </button>
