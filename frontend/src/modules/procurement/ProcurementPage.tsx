@@ -32,7 +32,11 @@ import {
   Boxes,
   ClipboardList,
   Sparkles,
-  Info
+  Info,
+  Plane,
+  Train,
+  Ship,
+  ShieldCheck
 } from 'lucide-react';
 import { EditPRModal } from './components/EditPRModal';
 import { DeletePRModal } from './components/DeletePRModal';
@@ -60,6 +64,7 @@ export interface PurchaseRequisition {
   pr_number: string;
   part_id: string;
   part_number: string;
+  sku?: string;
   part_name: string;
   category?: string;
   quantity_required: number;
@@ -83,11 +88,17 @@ export interface PurchaseRequisition {
   challan_type?: string | null;
   vendor_challan_number?: string | null;
   expected_dispatch_date?: string | null;
+  dispatch_location?: string | null;
+  destination_plant_name?: string | null;
+  transport_mode?: string | null;
   transporter_name?: string | null;
   vehicle_number?: string | null;
   lr_tracking_number?: string | null;
+  freight_cost?: number | null;
+  overall_shipment_cost?: number | null;
   delivery_remarks?: string | null;
   received_quantity?: number;
+  remaining_quantity?: number;
   requested_by?: string;
   requested_by_name?: string | null;
   requested_by_code?: string | null;
@@ -108,20 +119,28 @@ export interface PurchaseOrder {
   supplier_name: string;
   unit_price: number;
   total_spend: number;
+  total_order_cost?: number;
   quantity_required: number;
   received_quantity: number;
+  remaining_quantity?: number;
   expected_delivery_date?: string | null;
   supply_method?: string | null;
   delivery_document_type?: string | null;
   challan_type?: string | null;
   vendor_challan_number?: string | null;
   expected_dispatch_date?: string | null;
+  dispatch_location?: string | null;
+  destination_plant_name?: string | null;
+  transport_mode?: string | null;
   transporter_name?: string | null;
   vehicle_number?: string | null;
   lr_tracking_number?: string | null;
+  freight_cost?: number | null;
+  overall_shipment_cost?: number | null;
   delivery_remarks?: string | null;
   status: PRStatus;
   part_number: string;
+  sku?: string;
   part_name: string;
   created_at: string;
   days_overdue?: number;
@@ -213,14 +232,24 @@ export interface PRDetails extends PurchaseRequisition {
     received_quantity: number;
     accepted_quantity: number;
     rejected_quantity: number;
+    damaged_quantity?: number;
+    defective_quantity?: number;
+    inspection_status?: string;
+    inspection_remarks?: string | null;
     rejection_reason?: string | null;
     delivery_note_number: string;
     vendor_challan_number?: string | null;
     supply_method?: string | null;
     delivery_document_type?: string | null;
     challan_type?: string | null;
+    dispatch_location?: string | null;
+    destination_plant_name?: string | null;
+    transport_mode?: string | null;
+    transporter_name?: string | null;
     vehicle_number?: string | null;
     lr_tracking_number?: string | null;
+    freight_cost?: number | null;
+    overall_shipment_cost?: number | null;
     invoice_number?: string | null;
     delivery_date?: string;
     remarks?: string | null;
@@ -295,6 +324,51 @@ const getUrgencyBadge = (urgency: PRUrgency) => {
   }
 };
 
+export const getTransportModeBadge = (mode?: string | null) => {
+  const m = (mode || '').toLowerCase();
+  if (m.includes('air')) {
+    return {
+      label: 'Air Freight',
+      icon: <Plane className="w-3.5 h-3.5 text-sky-600 shrink-0" />,
+      color: 'bg-sky-50 text-sky-800 border-sky-300',
+    };
+  }
+  if (m.includes('rail')) {
+    return {
+      label: 'Rail Freight',
+      icon: <Train className="w-3.5 h-3.5 text-purple-600 shrink-0" />,
+      color: 'bg-purple-50 text-purple-800 border-purple-300',
+    };
+  }
+  if (m.includes('sea')) {
+    return {
+      label: 'Sea Freight',
+      icon: <Ship className="w-3.5 h-3.5 text-teal-600 shrink-0" />,
+      color: 'bg-teal-50 text-teal-800 border-teal-300',
+    };
+  }
+  return {
+    label: 'Road Freight',
+    icon: <Truck className="w-3.5 h-3.5 text-amber-600 shrink-0" />,
+    color: 'bg-amber-50 text-amber-800 border-amber-300',
+  };
+};
+
+export const getInspectionStatusBadge = (status?: string | null) => {
+  switch (status) {
+    case 'passed':
+      return { label: 'QC Passed', color: 'bg-emerald-100 text-emerald-900 border-emerald-300' };
+    case 'partially_passed':
+      return { label: 'Partially Passed', color: 'bg-yellow-100 text-yellow-900 border-yellow-300' };
+    case 'failed':
+      return { label: 'QC Failed', color: 'bg-red-100 text-red-900 border-red-300' };
+    case 'quarantined':
+      return { label: 'Quarantined', color: 'bg-purple-100 text-purple-900 border-purple-300' };
+    default:
+      return { label: status || 'Pending QC', color: 'bg-zinc-100 text-zinc-700 border-zinc-200' };
+  }
+};
+
 // ============================================================================
 // MAIN PROCUREMENT COMPONENT
 // ============================================================================
@@ -310,9 +384,14 @@ export const INITIAL_PO_FORM = {
   challan_type: 'Non-Returnable',
   vendor_challan_number: '',
   expected_dispatch_date: '',
-  transporter_name: '',
+  dispatch_location: 'Pune Central Distribution Hub',
+  destination_plant_name: 'Ballabgarh Plant 1',
+  transport_mode: 'Road Freight',
+  transporter_name: 'Blue Dart Express',
   vehicle_number: '',
   lr_tracking_number: '',
+  freight_cost: 1500,
+  overall_shipment_cost: 0,
   delivery_remarks: '',
 };
 
@@ -323,11 +402,21 @@ export const INITIAL_GRN_FORM = {
   supply_method: 'Vendor Direct Delivery',
   delivery_document_type: 'Delivery Challan',
   challan_type: 'Non-Returnable',
+  dispatch_location: '',
+  destination_plant_name: '',
+  transport_mode: 'Road Freight',
+  transporter_name: '',
   vehicle_number: '',
   lr_tracking_number: '',
+  freight_cost: 0,
+  overall_shipment_cost: 0,
   delivery_date: new Date().toISOString().split('T')[0],
   accepted_quantity: 1,
   rejected_quantity: 0,
+  damaged_quantity: 0,
+  defective_quantity: 0,
+  inspection_status: 'passed',
+  inspection_remarks: 'Components verified compliant with JCB engineering tolerances.',
   rejection_reason: '',
   remarks: '',
 };
@@ -839,10 +928,23 @@ export const ProcurementPage: React.FC = () => {
 
     try {
       setActionLoading(true);
+      const totalPartCost = Number(poForm.unit_price) * Number(selectedPRForPO.quantity_required);
+      const freightCost = Number(poForm.freight_cost) || 0;
+      const overallCost = totalPartCost + freightCost;
+
       const payload: any = {
         supplier_name: poForm.supplier_name.trim(),
         unit_price: Number(poForm.unit_price),
         mark_as_ordered: poForm.mark_as_ordered,
+        dispatch_location: poForm.dispatch_location?.trim() || undefined,
+        destination_plant_name: poForm.destination_plant_name?.trim() || undefined,
+        transport_mode: poForm.transport_mode || 'Road Freight',
+        transporter_name: poForm.transporter_name?.trim() || undefined,
+        vehicle_number: poForm.vehicle_number?.trim() || undefined,
+        lr_tracking_number: poForm.lr_tracking_number?.trim() || undefined,
+        freight_cost: freightCost,
+        overall_shipment_cost: overallCost,
+        delivery_remarks: poForm.delivery_remarks?.trim() || undefined,
       };
       if (poForm.expected_delivery_date) {
         payload.expected_delivery_date = poForm.expected_delivery_date;
@@ -879,17 +981,40 @@ export const ProcurementPage: React.FC = () => {
     e.preventDefault();
     if (!selectedPRForGRN) return;
 
-    const accepted = Number(grnForm.accepted_quantity);
-    const rejected = Number(grnForm.rejected_quantity);
-    const totalBatch = accepted + rejected;
+    const accepted = Number(grnForm.accepted_quantity) || 0;
+    const rejected = Number(grnForm.rejected_quantity) || 0;
+    const damaged = Number(grnForm.damaged_quantity) || 0;
+    const defective = Number(grnForm.defective_quantity) || 0;
+    const totalBatch = accepted + rejected + damaged;
 
     if (totalBatch <= 0) {
       setFeedback({
         type: 'error',
-        message: 'Delivered batch total (Accepted + Rejected) must be greater than zero.',
+        message: 'Delivered batch total (Accepted + Rejected + Damaged) must be greater than zero.',
       });
       return;
     }
+
+    if (defective < 0 || defective > (rejected + damaged)) {
+      setFeedback({
+        type: 'error',
+        message: `Defective quantity (${defective}) cannot exceed total non-conforming (rejected + damaged) quantity (${rejected + damaged}). Defective stock is a classified sub-category of rejected/damaged goods.`,
+      });
+      return;
+    }
+
+    const previouslyReceived = Number(selectedPRForGRN.received_quantity || 0);
+    const totalOrdered = Number(selectedPRForGRN.quantity_required || 1);
+    const maxAllowed = Math.max(0, totalOrdered - previouslyReceived);
+
+    if (totalBatch > maxAllowed) {
+      setFeedback({
+        type: 'error',
+        message: `Over-receipt violation: Incoming batch of ${totalBatch} exceeds outstanding required quantity of ${maxAllowed} units. Over-receipt without authorization is prohibited.`,
+      });
+      return;
+    }
+
     if (!grnForm.delivery_note_number.trim()) {
       setFeedback({
         type: 'error',
@@ -897,12 +1022,21 @@ export const ProcurementPage: React.FC = () => {
       });
       return;
     }
-    if (rejected > 0 && grnForm.rejection_reason.trim().length < 5) {
+
+    if ((rejected > 0 || damaged > 0) && grnForm.rejection_reason.trim().length < 5) {
       setFeedback({
         type: 'error',
-        message: 'Quality rejection reason is mandatory (min 5 chars) when rejected quantity > 0.',
+        message: 'Quality rejection / damage reason is mandatory (min 5 chars) when rejected or damaged stock > 0.',
       });
       return;
+    }
+
+    // Determine strict inspection status
+    let finalInspectionStatus = grnForm.inspection_status || 'passed';
+    if (accepted > 0 && (rejected > 0 || damaged > 0)) {
+      finalInspectionStatus = 'partially_passed';
+    } else if (accepted === 0 && (rejected > 0 || damaged > 0)) {
+      finalInspectionStatus = 'failed';
     }
 
     try {
@@ -911,19 +1045,31 @@ export const ProcurementPage: React.FC = () => {
         received_quantity: totalBatch,
         accepted_quantity: accepted,
         rejected_quantity: rejected,
+        damaged_quantity: damaged,
+        defective_quantity: defective,
+        inspection_status: finalInspectionStatus,
+        inspection_remarks: grnForm.inspection_remarks.trim() || grnForm.remarks.trim() || 'QC Verified & Segregated',
         delivery_note_number: grnForm.delivery_note_number.trim(),
         remarks: grnForm.remarks.trim() || 'QC Verified & Store Inwarded',
+        dispatch_location: grnForm.dispatch_location?.trim() || undefined,
+        destination_plant_name: grnForm.destination_plant_name?.trim() || undefined,
+        transport_mode: grnForm.transport_mode || 'Road Freight',
+        transporter_name: grnForm.transporter_name?.trim() || undefined,
+        vehicle_number: grnForm.vehicle_number?.trim() || undefined,
+        lr_tracking_number: grnForm.lr_tracking_number?.trim() || undefined,
+        freight_cost: Number(grnForm.freight_cost) || 0,
+        overall_shipment_cost: Number(grnForm.overall_shipment_cost) || 0,
       };
       if (grnForm.invoice_number.trim()) payload.invoice_number = grnForm.invoice_number.trim();
       if (grnForm.delivery_date) payload.delivery_date = grnForm.delivery_date;
-      if (rejected > 0) payload.rejection_reason = grnForm.rejection_reason.trim();
+      if (rejected > 0 || damaged > 0) payload.rejection_reason = grnForm.rejection_reason.trim();
 
       const res = await apiClient.post(`/procurement/pr/${selectedPRForGRN.id}/grn`, payload);
       if (res.data?.success) {
         const grnNum = res.data.data?.grn_number;
         setFeedback({
           type: 'success',
-          message: `GRN ${grnNum || ''} posted successfully! Usable stock increased by ${accepted} units.`,
+          message: `GRN ${grnNum || ''} posted successfully! Usable stock increased by ${accepted} units. (Rejected/Damaged: ${rejected + damaged} segregated).`,
         });
         setSelectedPRForGRN(null);
         setGrnForm(INITIAL_GRN_FORM);
@@ -945,9 +1091,11 @@ export const ProcurementPage: React.FC = () => {
   const openPOModal = (pr: PurchaseRequisition) => {
     setSelectedPRForPO(pr);
     const part = parts.find((p) => p.id === pr.part_id);
+    const unitPrice = pr.unit_price || part?.unit_cost || 1000;
+    const freight = pr.freight_cost || 1500;
     setPoForm({
       supplier_name: pr.supplier_name || 'JCB Genuine Parts Co.',
-      unit_price: pr.unit_price || part?.unit_cost || 1000,
+      unit_price: unitPrice,
       expected_delivery_date: pr.expected_delivery_date ? pr.expected_delivery_date.split('T')[0] : '',
       mark_as_ordered: true,
       po_number: '',
@@ -956,9 +1104,14 @@ export const ProcurementPage: React.FC = () => {
       challan_type: pr.challan_type || 'Non-Returnable',
       vendor_challan_number: pr.vendor_challan_number || `DC-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`,
       expected_dispatch_date: pr.expected_dispatch_date ? pr.expected_dispatch_date.split('T')[0] : new Date().toISOString().split('T')[0],
-      transporter_name: pr.transporter_name || '',
+      dispatch_location: pr.dispatch_location || 'Pune Central Distribution Hub',
+      destination_plant_name: pr.destination_plant_name || pr.plant_name || 'Ballabgarh Plant 1',
+      transport_mode: pr.transport_mode || 'Road Freight',
+      transporter_name: pr.transporter_name || 'Blue Dart Express',
       vehicle_number: pr.vehicle_number || '',
-      lr_tracking_number: pr.lr_tracking_number || '',
+      lr_tracking_number: pr.lr_tracking_number || `LR-${Math.floor(100000 + Math.random() * 900000)}`,
+      freight_cost: freight,
+      overall_shipment_cost: (unitPrice * pr.quantity_required) + freight,
       delivery_remarks: pr.delivery_remarks || '',
     });
   };
@@ -966,7 +1119,7 @@ export const ProcurementPage: React.FC = () => {
   // Helper to open GRN modal prefilled
   const openGRNModal = (pr: PurchaseRequisition) => {
     setSelectedPRForGRN(pr);
-    const remaining = Math.max(1, (pr.quantity_required || 1) - (pr.received_quantity || 0));
+    const remaining = Math.max(0, (pr.quantity_required || 1) - (pr.received_quantity || 0));
     setGrnForm({
       delivery_note_number: pr.vendor_challan_number || `DC-${Math.floor(100000 + Math.random() * 900000)}`,
       vendor_challan_number: pr.vendor_challan_number || '',
@@ -974,11 +1127,21 @@ export const ProcurementPage: React.FC = () => {
       supply_method: pr.supply_method || 'Vendor Direct Delivery',
       delivery_document_type: pr.delivery_document_type || 'Delivery Challan',
       challan_type: pr.challan_type || 'Non-Returnable',
-      vehicle_number: pr.vehicle_number || '',
-      lr_tracking_number: pr.lr_tracking_number || '',
+      dispatch_location: (pr as any).dispatch_location || 'Pune Hub',
+      destination_plant_name: (pr as any).destination_plant_name || (pr as any).plant_name || 'Ballabgarh Plant 1',
+      transport_mode: (pr as any).transport_mode || 'Road Freight',
+      transporter_name: (pr as any).transporter_name || 'Blue Dart Express',
+      vehicle_number: (pr as any).vehicle_number || '',
+      lr_tracking_number: (pr as any).lr_tracking_number || '',
+      freight_cost: (pr as any).freight_cost || 0,
+      overall_shipment_cost: (pr as any).overall_shipment_cost || 0,
       delivery_date: new Date().toISOString().split('T')[0],
       accepted_quantity: remaining,
       rejected_quantity: 0,
+      damaged_quantity: 0,
+      defective_quantity: 0,
+      inspection_status: 'passed',
+      inspection_remarks: 'All received components verified compliant with JCB engineering tolerances.',
       rejection_reason: '',
       remarks: 'Goods verified in satisfactory condition against JCB PO specifications.',
     });
@@ -1353,11 +1516,18 @@ export const ProcurementPage: React.FC = () => {
                             <div className="text-zinc-600 font-medium line-clamp-1">
                               {pr.part_name}
                             </div>
-                            {pr.category && (
-                              <span className="text-[9px] font-black uppercase text-zinc-400">
-                                {pr.category}
-                              </span>
-                            )}
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              {pr.sku && (
+                                <span className="font-mono text-[9px] font-bold text-zinc-500 bg-zinc-100 px-1 py-0.2 rounded border border-zinc-200">
+                                  SKU: {pr.sku}
+                                </span>
+                              )}
+                              {pr.category && (
+                                <span className="text-[9px] font-black uppercase text-zinc-400">
+                                  {pr.category}
+                                </span>
+                              )}
+                            </div>
                           </td>
 
                           {/* Quantities */}
@@ -1367,6 +1537,9 @@ export const ProcurementPage: React.FC = () => {
                             </div>
                             <div className="font-mono text-[11px] text-zinc-500">
                               Recv: <span className="font-bold text-emerald-700">{pr.received_quantity || 0}</span>
+                            </div>
+                            <div className="font-mono text-[11px] text-zinc-500">
+                              Rem: <span className="font-bold text-amber-700">{Math.max(0, pr.quantity_required - (pr.received_quantity || 0))}</span>
                             </div>
                           </td>
 
@@ -1575,12 +1748,12 @@ export const ProcurementPage: React.FC = () => {
               <table className="w-full text-left text-xs">
                 <thead className="bg-zinc-100 border-b border-zinc-200 text-zinc-700 font-black uppercase tracking-wider">
                   <tr>
-                    <th className="px-5 py-3.5">PO Number</th>
-                    <th className="px-5 py-3.5">Supplier / Vendor</th>
-                    <th className="px-5 py-3.5">Component</th>
-                    <th className="px-5 py-3.5">Unit Price &amp; Total</th>
-                    <th className="px-5 py-3.5">Delivery Target</th>
-                    <th className="px-5 py-3.5">Fulfillment</th>
+                    <th className="px-5 py-3.5">PO &amp; Delivery Target</th>
+                    <th className="px-5 py-3.5">Supplier &amp; Route</th>
+                    <th className="px-5 py-3.5">Spare Part &amp; SKU</th>
+                    <th className="px-5 py-3.5">Quantities</th>
+                    <th className="px-5 py-3.5">Shipment &amp; Logistics</th>
+                    <th className="px-5 py-3.5">Commercials</th>
                     <th className="px-5 py-3.5 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -1600,38 +1773,33 @@ export const ProcurementPage: React.FC = () => {
                   ) : (
                     pos.map((po) => {
                       const badge = getStatusBadge(po.status);
+                      const transport = getTransportModeBadge(po.transport_mode);
+                      const received = Number(po.received_quantity || 0);
+                      const required = Number(po.quantity_required || 0);
+                      const remaining = Math.max(0, required - received);
+                      const partCost = Number(po.total_order_cost || po.total_spend || (po.unit_price * required));
+                      const freightCost = Number(po.freight_cost || 0);
+                      const overallCost = Number(po.overall_shipment_cost || (partCost + freightCost));
+
                       return (
                         <tr key={po.id} className="hover:bg-zinc-50/80 transition">
+                          {/* PO Number & Target */}
                           <td className="px-5 py-3.5">
                             <div className="font-mono text-xs font-black text-blue-700">
                               {po.po_number}
                             </div>
                             <div className="font-mono text-[10px] text-zinc-400">PR: {po.pr_number}</div>
-                          </td>
-                          <td className="px-5 py-3.5 font-bold text-zinc-900">
-                            {po.supplier_name || 'N/A'}
-                          </td>
-                          <td className="px-5 py-3.5">
-                            <div className="font-black text-zinc-900">{po.part_number}</div>
-                            <div className="text-zinc-500 line-clamp-1">{po.part_name}</div>
-                          </td>
-                          <td className="px-5 py-3.5 font-mono">
-                            <div className="font-bold text-zinc-900">
-                              ₹{Number(po.unit_price || 0).toLocaleString('en-IN')} / unit
-                            </div>
-                            <div className="text-[10px] text-zinc-500 font-semibold">
-                              Total: ₹{Number(po.total_spend || 0).toLocaleString('en-IN')}
-                            </div>
-                          </td>
-                          <td className="px-5 py-3.5">
                             {po.expected_delivery_date ? (
-                              <div className="space-y-0.5">
-                                <div className="text-xs font-semibold text-zinc-800">
-                                  {new Date(po.expected_delivery_date).toLocaleDateString('en-IN', {
-                                    day: '2-digit',
-                                    month: 'short',
-                                    year: 'numeric',
-                                  })}
+                              <div className="space-y-0.5 mt-1">
+                                <div className="text-[11px] font-semibold text-zinc-800 flex items-center gap-1">
+                                  <Calendar className="w-3 h-3 text-zinc-400 shrink-0" />
+                                  <span>
+                                    {new Date(po.expected_delivery_date).toLocaleDateString('en-IN', {
+                                      day: '2-digit',
+                                      month: 'short',
+                                      year: 'numeric',
+                                    })}
+                                  </span>
                                 </div>
                                 {po.is_overdue && (
                                   <span className="bg-red-100 text-red-800 text-[9px] font-black px-1.5 py-0.5 rounded uppercase">
@@ -1640,12 +1808,37 @@ export const ProcurementPage: React.FC = () => {
                                 )}
                               </div>
                             ) : (
-                              <span className="text-zinc-400">Not specified</span>
+                              <span className="text-[10px] text-zinc-400 block mt-1">Delivery TBD</span>
                             )}
                           </td>
+
+                          {/* Supplier & Route */}
                           <td className="px-5 py-3.5">
-                            <div className="font-mono text-xs font-bold">
-                              {po.received_quantity || 0} / {po.quantity_required} Units
+                            <div className="font-bold text-zinc-950 text-xs">{po.supplier_name || 'N/A'}</div>
+                            <div className="text-[10px] text-zinc-500 font-medium mt-0.5">
+                              {po.dispatch_location || 'Pune Hub'} <ArrowRight className="w-2.5 h-2.5 inline mx-0.5 text-zinc-400" /> {po.destination_plant_name || 'Ballabgarh Plant 1'}
+                            </div>
+                          </td>
+
+                          {/* Spare Part & SKU */}
+                          <td className="px-5 py-3.5">
+                            <div className="font-black text-zinc-900">{po.part_name}</div>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <span className="font-mono text-[11px] font-bold text-zinc-600">{po.part_number}</span>
+                              {po.sku && (
+                                <span className="font-mono text-[9px] font-bold text-blue-700 bg-blue-50 px-1 py-0.2 rounded border border-blue-200">
+                                  SKU: {po.sku}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* Quantities (Ordered, Received, Remaining) */}
+                          <td className="px-5 py-3.5">
+                            <div className="space-y-0.5 font-mono text-[11px]">
+                              <div>Ordered: <span className="font-black text-zinc-900">{required}</span></div>
+                              <div>Received: <span className="font-bold text-emerald-700">{received}</span></div>
+                              <div>Remaining: <span className="font-bold text-amber-700">{remaining}</span></div>
                             </div>
                             <span
                               className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border ${badge.color} inline-block mt-1`}
@@ -1653,6 +1846,44 @@ export const ProcurementPage: React.FC = () => {
                               {badge.label}
                             </span>
                           </td>
+
+                          {/* Shipment & Logistics */}
+                          <td className="px-5 py-3.5">
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className={`px-2 py-0.5 rounded-md text-[10px] font-bold border flex items-center gap-1 ${transport.color}`}
+                              >
+                                {transport.icon}
+                                <span>{transport.label}</span>
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-zinc-600 font-semibold mt-1">
+                              Carrier: <span className="font-bold text-zinc-900">{po.transporter_name || 'Blue Dart Express'}</span>
+                            </div>
+                            {po.lr_tracking_number && (
+                              <div className="font-mono text-[10px] text-zinc-500">
+                                Ref: <span className="font-bold text-zinc-700">{po.lr_tracking_number}</span>
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Commercials */}
+                          <td className="px-5 py-3.5 font-mono text-right">
+                            <div className="font-bold text-zinc-900 text-xs">
+                              ₹{Number(po.unit_price || 0).toLocaleString('en-IN')} <span className="text-[10px] text-zinc-500 font-normal">/ unit</span>
+                            </div>
+                            <div className="text-[10px] text-zinc-500 mt-0.5">
+                              Order: ₹{partCost.toLocaleString('en-IN')}
+                            </div>
+                            <div className="text-[10px] text-zinc-500">
+                              Freight: ₹{freightCost.toLocaleString('en-IN')}
+                            </div>
+                            <div className="text-[11px] font-black text-zinc-950 pt-0.5 border-t border-zinc-200 mt-0.5">
+                              Total: ₹{overallCost.toLocaleString('en-IN')}
+                            </div>
+                          </td>
+
+                          {/* Actions */}
                           <td className="px-5 py-3.5 text-right">
                             <div className="flex items-center justify-end gap-2">
                               {['ordered', 'partially_received', 'po_created'].includes(po.status) && (
@@ -1664,6 +1895,7 @@ export const ProcurementPage: React.FC = () => {
                                       pr_number: po.pr_number,
                                       part_id: '',
                                       part_number: po.part_number,
+                                      sku: po.sku,
                                       part_name: po.part_name,
                                       quantity_required: po.quantity_required,
                                       urgency: 'high',
@@ -1672,13 +1904,21 @@ export const ProcurementPage: React.FC = () => {
                                       po_number: po.po_number,
                                       supplier_name: po.supplier_name,
                                       received_quantity: po.received_quantity,
+                                      dispatch_location: po.dispatch_location,
+                                      destination_plant_name: po.destination_plant_name,
+                                      transport_mode: po.transport_mode,
+                                      transporter_name: po.transporter_name,
+                                      vehicle_number: po.vehicle_number,
+                                      lr_tracking_number: po.lr_tracking_number,
+                                      freight_cost: po.freight_cost,
+                                      overall_shipment_cost: po.overall_shipment_cost,
                                       created_at: po.created_at,
                                       updated_at: po.created_at,
                                     });
                                   }}
                                   className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black px-3 py-1.5 rounded-lg shadow-sm transition uppercase flex items-center gap-1"
                                 >
-                                  <Truck className="w-3.5 h-3.5" />
+                                  <Boxes className="w-3.5 h-3.5" />
                                   <span>Inward GRN</span>
                                 </button>
                               )}
@@ -2294,11 +2534,16 @@ export const ProcurementPage: React.FC = () => {
       {/* ==================================================================== */}
       {selectedPRForPO && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="bg-zinc-950 p-5 flex items-center justify-between border-b border-zinc-800">
+          <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 max-h-[92vh] flex flex-col">
+            <div className="bg-zinc-950 p-5 flex items-center justify-between border-b border-zinc-800 shrink-0">
               <div className="flex items-center gap-3">
                 <Truck className="w-5 h-5 text-jcb-yellow" />
-                <h3 className="text-base font-black text-white">ISSUE PURCHASE ORDER</h3>
+                <div>
+                  <h3 className="text-base font-black text-white">ISSUE PURCHASE ORDER</h3>
+                  <p className="text-[10px] text-zinc-400 font-medium">
+                    Commercial order placement &amp; transportation booking
+                  </p>
+                </div>
               </div>
               <button
                 onClick={() => setSelectedPRForPO(null)}
@@ -2308,10 +2553,15 @@ export const ProcurementPage: React.FC = () => {
               </button>
             </div>
 
-            <form onSubmit={handleIssuePO} className="p-6 space-y-4">
+            <form onSubmit={handleIssuePO} className="p-6 space-y-4 overflow-y-auto">
               <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-200 text-xs">
-                <div className="font-mono font-bold text-amber-800">{selectedPRForPO.pr_number}</div>
-                <div className="font-black text-zinc-900">
+                <div className="flex items-center justify-between font-mono">
+                  <span className="font-bold text-amber-800">{selectedPRForPO.pr_number}</span>
+                  {selectedPRForPO.sku && (
+                    <span className="font-bold text-zinc-600 bg-zinc-200 px-1.5 py-0.2 rounded">SKU: {selectedPRForPO.sku}</span>
+                  )}
+                </div>
+                <div className="font-black text-zinc-900 mt-1">
                   {selectedPRForPO.part_number} — {selectedPRForPO.part_name}
                 </div>
                 <div className="text-zinc-500 font-semibold mt-0.5">
@@ -2353,14 +2603,115 @@ export const ProcurementPage: React.FC = () => {
 
                 <div>
                   <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
-                    Total Order Value (₹)
+                    Custom PO Number (Optional)
                   </label>
-                  <div className="w-full px-3 py-2 bg-zinc-100 border border-zinc-200 rounded-xl text-xs font-black text-zinc-900">
-                    ₹{(poForm.unit_price * selectedPRForPO.quantity_required).toLocaleString('en-IN')}
+                  <input
+                    type="text"
+                    placeholder="Auto: PO-YYYY-XXXXX"
+                    value={poForm.po_number}
+                    onChange={(e) => setPoForm({ ...poForm, po_number: e.target.value })}
+                    className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-xl text-xs font-mono font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                  />
+                </div>
+              </div>
+
+              {/* Transportation & Shipment Logistics Section */}
+              <div className="p-3.5 bg-zinc-50 rounded-xl border border-zinc-200 space-y-3">
+                <div className="flex items-center gap-1.5 font-black text-zinc-900 text-xs uppercase tracking-wider">
+                  <Truck className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Shipment &amp; Transportation Details</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-black text-zinc-600 uppercase mb-1">
+                      Transportation Mode *
+                    </label>
+                    <select
+                      value={poForm.transport_mode}
+                      onChange={(e) => setPoForm({ ...poForm, transport_mode: e.target.value })}
+                      className="w-full px-2.5 py-1.5 bg-white border border-zinc-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                    >
+                      <option value="Road Freight">Road Freight (Truck / Express)</option>
+                      <option value="Air Freight">Air Freight (Express Cargo)</option>
+                      <option value="Rail Freight">Rail Freight (Container Logistics)</option>
+                      <option value="Sea Freight">Sea Freight (Maritime Ocean)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-zinc-600 uppercase mb-1">
+                      Carrier / Transporter Name
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Blue Dart Express, VRL Logistics"
+                      value={poForm.transporter_name}
+                      onChange={(e) => setPoForm({ ...poForm, transporter_name: e.target.value })}
+                      className="w-full px-2.5 py-1.5 bg-white border border-zinc-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-black text-zinc-600 uppercase mb-1">
+                      Supplier Dispatch Origin
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Pune Central Distribution Hub"
+                      value={poForm.dispatch_location}
+                      onChange={(e) => setPoForm({ ...poForm, dispatch_location: e.target.value })}
+                      className="w-full px-2.5 py-1.5 bg-white border border-zinc-300 rounded-lg text-xs font-medium text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-zinc-600 uppercase mb-1">
+                      Destination Plant
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Ballabgarh Plant 1"
+                      value={poForm.destination_plant_name}
+                      onChange={(e) => setPoForm({ ...poForm, destination_plant_name: e.target.value })}
+                      className="w-full px-2.5 py-1.5 bg-white border border-zinc-300 rounded-lg text-xs font-medium text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-black text-zinc-600 uppercase mb-1">
+                      AWB / LR / Tracking Number
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. BLUEDART-884912"
+                      value={poForm.lr_tracking_number}
+                      onChange={(e) => setPoForm({ ...poForm, lr_tracking_number: e.target.value })}
+                      className="w-full px-2.5 py-1.5 bg-white border border-zinc-300 rounded-lg text-xs font-mono font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-zinc-600 uppercase mb-1">
+                      Freight &amp; Logistics Cost (₹)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={poForm.freight_cost}
+                      onChange={(e) => setPoForm({ ...poForm, freight_cost: parseFloat(e.target.value) || 0 })}
+                      className="w-full px-2.5 py-1.5 bg-white border border-zinc-300 rounded-lg text-xs font-mono font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                    />
                   </div>
                 </div>
               </div>
 
+              {/* Delivery Target & Commercial Summary */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
@@ -2376,17 +2727,23 @@ export const ProcurementPage: React.FC = () => {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
-                    Custom PO Number (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Auto: PO-YYYY-XXXXX"
-                    value={poForm.po_number}
-                    onChange={(e) => setPoForm({ ...poForm, po_number: e.target.value })}
-                    className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-xl text-xs font-mono font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
-                  />
+                <div className="p-3 bg-zinc-100 rounded-xl border border-zinc-200 font-mono text-xs space-y-0.5">
+                  <div className="flex justify-between text-[11px] text-zinc-600">
+                    <span>Part Value:</span>
+                    <span className="font-bold text-zinc-900">
+                      ₹{(poForm.unit_price * selectedPRForPO.quantity_required).toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-[11px] text-zinc-600">
+                    <span>Freight:</span>
+                    <span className="font-bold text-zinc-900">₹{Number(poForm.freight_cost || 0).toLocaleString('en-IN')}</span>
+                  </div>
+                  <div className="flex justify-between text-xs font-black text-zinc-950 pt-1 border-t border-zinc-200">
+                    <span>Total Cost:</span>
+                    <span>
+                      ₹{((poForm.unit_price * selectedPRForPO.quantity_required) + Number(poForm.freight_cost || 0)).toLocaleString('en-IN')}
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -2403,7 +2760,7 @@ export const ProcurementPage: React.FC = () => {
                 </label>
               </div>
 
-              <div className="pt-4 border-t border-zinc-200 flex items-center justify-end gap-3">
+              <div className="pt-4 border-t border-zinc-200 flex items-center justify-end gap-3 shrink-0">
                 <button
                   type="button"
                   onClick={() => setSelectedPRForPO(null)}
@@ -2427,187 +2784,381 @@ export const ProcurementPage: React.FC = () => {
       {/* ==================================================================== */}
       {/* MODAL 6: INWARD GRN & QUALITY INSPECTION                             */}
       {/* ==================================================================== */}
-      {selectedPRForGRN && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] flex flex-col">
-            <div className="bg-zinc-950 p-5 flex items-center justify-between border-b border-zinc-800 shrink-0">
-              <div className="flex items-center gap-3">
-                <Boxes className="w-5 h-5 text-emerald-400" />
-                <div>
-                  <h3 className="text-base font-black text-white">GOODS RECEIPT NOTE (GRN) &amp; QC</h3>
-                  <p className="text-[10px] text-zinc-400 font-medium">
-                    Store gate receipt inspection &amp; inventory update
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setSelectedPRForGRN(null)}
-                className="text-zinc-400 hover:text-white p-1"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      {selectedPRForGRN && (() => {
+        const orderedQty = Number(selectedPRForGRN.quantity_required || 0);
+        const previouslyReceivedQty = Number(selectedPRForGRN.received_quantity || 0);
+        const acceptedInput = Number(grnForm.accepted_quantity) || 0;
+        const rejectedInput = Number(grnForm.rejected_quantity) || 0;
+        const damagedInput = Number(grnForm.damaged_quantity) || 0;
+        const defectiveInput = Number(grnForm.defective_quantity) || 0;
+        const newlyReceivedQty = acceptedInput + rejectedInput + damagedInput;
+        const cumulativeReceivedQty = previouslyReceivedQty + newlyReceivedQty;
+        const remainingQty = orderedQty - cumulativeReceivedQty;
+        const isOverReceipt = cumulativeReceivedQty > orderedQty;
+        const isDefectiveInvalid = defectiveInput < 0 || defectiveInput > (rejectedInput + damagedInput);
 
-            <form onSubmit={handleInwardGRN} className="p-6 space-y-4 overflow-y-auto">
-              {/* Order Context */}
-              <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-200 text-xs space-y-1">
-                <div className="flex items-center justify-between font-mono">
-                  <span className="font-bold text-amber-800">{selectedPRForGRN.pr_number}</span>
-                  {selectedPRForGRN.po_number && (
-                    <span className="font-black text-blue-700">PO: {selectedPRForGRN.po_number}</span>
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 max-h-[92vh] flex flex-col">
+              <div className="bg-zinc-950 p-5 flex items-center justify-between border-b border-zinc-800 shrink-0">
+                <div className="flex items-center gap-3">
+                  <Boxes className="w-5 h-5 text-emerald-400" />
+                  <div>
+                    <h3 className="text-base font-black text-white">GOODS RECEIPT NOTE (GRN) &amp; QUALITY CONTROL</h3>
+                    <p className="text-[10px] text-zinc-400 font-medium">
+                      Store gate receipt inspection &amp; physical inventory reconciliation
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedPRForGRN(null)}
+                  className="text-zinc-400 hover:text-white p-1"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleInwardGRN} className="p-6 space-y-4 overflow-y-auto">
+                {/* Requisition & Component Context */}
+                <div className="bg-zinc-50 p-3.5 rounded-xl border border-zinc-200 text-xs space-y-1">
+                  <div className="flex items-center justify-between font-mono">
+                    <span className="font-bold text-amber-800">{selectedPRForGRN.pr_number}</span>
+                    {selectedPRForGRN.po_number && (
+                      <span className="font-black text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                        PO: {selectedPRForGRN.po_number}
+                      </span>
+                    )}
+                  </div>
+                  <div className="font-black text-zinc-950 text-sm mt-1">{selectedPRForGRN.part_name}</div>
+                  <div className="font-mono text-[11px] text-zinc-500">
+                    Part No: <span className="font-bold text-zinc-800">{selectedPRForGRN.part_number}</span>
+                    {selectedPRForGRN.sku && (
+                      <span className="ml-2 bg-zinc-200 px-1 py-0.2 rounded font-bold text-zinc-700">SKU: {selectedPRForGRN.sku}</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Prominent GRN Quantity Validation & Live Calculations Card */}
+                <div className="p-4 bg-slate-900 text-white rounded-xl border border-slate-800 shadow-inner">
+                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2 flex items-center justify-between">
+                    <span>GRN Quantity Calculation Ledger</span>
+                    <span className="font-mono text-[9px] text-slate-400">Remaining = Ordered − Cumulative</span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center">
+                    <div className="p-2 bg-slate-800/80 rounded-lg border border-slate-700">
+                      <div className="text-[9px] uppercase font-bold text-slate-400">Ordered</div>
+                      <div className="text-base font-black font-mono text-white mt-0.5">{orderedQty}</div>
+                    </div>
+                    <div className="p-2 bg-slate-800/80 rounded-lg border border-slate-700">
+                      <div className="text-[9px] uppercase font-bold text-slate-400">Prev Received</div>
+                      <div className="text-base font-black font-mono text-blue-400 mt-0.5">{previouslyReceivedQty}</div>
+                    </div>
+                    <div className="p-2 bg-slate-800/80 rounded-lg border border-slate-700">
+                      <div className="text-[9px] uppercase font-bold text-slate-400">Newly Received</div>
+                      <div className="text-base font-black font-mono text-jcb-yellow mt-0.5">{newlyReceivedQty}</div>
+                    </div>
+                    <div className="p-2 bg-slate-800/80 rounded-lg border border-slate-700">
+                      <div className="text-[9px] uppercase font-bold text-slate-400">Cumulative</div>
+                      <div className="text-base font-black font-mono text-emerald-400 mt-0.5">{cumulativeReceivedQty}</div>
+                    </div>
+                    <div className="p-2 bg-slate-800/80 rounded-lg border border-slate-700 col-span-2 sm:col-span-1">
+                      <div className="text-[9px] uppercase font-bold text-slate-400">Remaining</div>
+                      <div className={`text-base font-black font-mono mt-0.5 ${remainingQty < 0 ? 'text-red-400' : 'text-amber-400'}`}>
+                        {remainingQty}
+                      </div>
+                    </div>
+                  </div>
+
+                  {isOverReceipt && (
+                    <div className="mt-2.5 p-2 bg-red-950/80 border border-red-500/60 rounded-lg flex items-center gap-2 text-[11px] text-red-200 font-bold">
+                      <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                      <span>Over-receipt warning: Cumulative received ({cumulativeReceivedQty}) exceeds ordered ({orderedQty}) by {cumulativeReceivedQty - orderedQty} units.</span>
+                    </div>
                   )}
                 </div>
-                <div className="font-black text-zinc-950">{selectedPRForGRN.part_name}</div>
-                <div className="flex items-center justify-between text-zinc-600 font-semibold pt-1 border-t border-zinc-200">
-                  <span>Total Ordered: {selectedPRForGRN.quantity_required}</span>
-                  <span>Received So Far: {selectedPRForGRN.received_quantity || 0}</span>
-                  <span className="text-emerald-700 font-black">
-                    Remaining: {Math.max(0, selectedPRForGRN.quantity_required - (selectedPRForGRN.received_quantity || 0))}
-                  </span>
-                </div>
-              </div>
 
-              {/* Delivery Note & Date */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
-                    Delivery Note / DC Number *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="DC-98421"
-                    value={grnForm.delivery_note_number}
-                    onChange={(e) => setGrnForm({ ...grnForm, delivery_note_number: e.target.value })}
-                    className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-xl text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
-                    Invoice Number (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="INV-2026-4412"
-                    value={grnForm.invoice_number}
-                    onChange={(e) => setGrnForm({ ...grnForm, invoice_number: e.target.value })}
-                    className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-xl text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
-                  />
-                </div>
-              </div>
+                {/* Quality Control Inspection Quantities */}
+                <div className="p-3.5 bg-zinc-50 rounded-xl border border-zinc-200 space-y-3">
+                  <div className="flex items-center gap-1.5 font-black text-zinc-900 text-xs uppercase tracking-wider">
+                    <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                    <span>Quality Control Breakdown (Accepted vs Segregated)</span>
+                  </div>
 
-              {/* Quantities Inspection */}
-              <div className="grid grid-cols-2 gap-4 p-3 bg-zinc-50 rounded-xl border border-zinc-200">
-                <div>
-                  <label className="block text-[11px] font-black text-emerald-800 uppercase mb-1">
-                    Accepted / Usable Stock *
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    required
-                    value={grnForm.accepted_quantity}
-                    onChange={(e) =>
-                      setGrnForm({
-                        ...grnForm,
-                        accepted_quantity: Math.max(0, parseInt(e.target.value, 10) || 0),
-                      })
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+                    {/* Accepted Quantity */}
+                    <div className="p-2.5 bg-white rounded-lg border border-emerald-300">
+                      <label className="block text-[10px] font-black text-emerald-800 uppercase mb-1">
+                        Accepted Stock *
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        required
+                        value={grnForm.accepted_quantity}
+                        onChange={(e) =>
+                          setGrnForm({
+                            ...grnForm,
+                            accepted_quantity: Math.max(0, parseInt(e.target.value, 10) || 0),
+                          })
+                        }
+                        className="w-full px-2.5 py-1.5 bg-emerald-50/40 border border-emerald-300 rounded text-xs font-black text-emerald-950 font-mono focus:outline-none focus:border-emerald-500"
+                      />
+                      <span className="text-[9px] text-emerald-700 font-bold block mt-1">
+                        ✓ Added to stock
+                      </span>
+                    </div>
+
+                    {/* Rejected Quantity */}
+                    <div className="p-2.5 bg-white rounded-lg border border-red-300">
+                      <label className="block text-[10px] font-black text-red-800 uppercase mb-1">
+                        Rejected / QC Fail
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        required
+                        value={grnForm.rejected_quantity}
+                        onChange={(e) =>
+                          setGrnForm({
+                            ...grnForm,
+                            rejected_quantity: Math.max(0, parseInt(e.target.value, 10) || 0),
+                          })
+                        }
+                        className="w-full px-2.5 py-1.5 bg-red-50/40 border border-red-300 rounded text-xs font-black text-red-950 font-mono focus:outline-none focus:border-red-500"
+                      />
+                      <span className="text-[9px] text-red-700 font-bold block mt-1">
+                        ✗ Quarantined
+                      </span>
+                    </div>
+
+                    {/* Damaged Quantity */}
+                    <div className="p-2.5 bg-white rounded-lg border border-amber-300">
+                      <label className="block text-[10px] font-black text-amber-800 uppercase mb-1">
+                        Damaged in Transit
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        required
+                        value={grnForm.damaged_quantity}
+                        onChange={(e) =>
+                          setGrnForm({
+                            ...grnForm,
+                            damaged_quantity: Math.max(0, parseInt(e.target.value, 10) || 0),
+                          })
+                        }
+                        className="w-full px-2.5 py-1.5 bg-amber-50/40 border border-amber-300 rounded text-xs font-black text-amber-950 font-mono focus:outline-none focus:border-amber-500"
+                      />
+                      <span className="text-[9px] text-amber-700 font-bold block mt-1">
+                        ⚠️ Damaged stock
+                      </span>
+                    </div>
+
+                    {/* Defective Quantity (Classified sub-quantity of rejected/damaged) */}
+                    <div className="p-2.5 bg-white rounded-lg border border-purple-300">
+                      <label className="block text-[10px] font-black text-purple-800 uppercase mb-1">
+                        Defective (Classified)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max={rejectedInput + damagedInput}
+                        step="1"
+                        value={grnForm.defective_quantity}
+                        onChange={(e) =>
+                          setGrnForm({
+                            ...grnForm,
+                            defective_quantity: Math.max(0, parseInt(e.target.value, 10) || 0),
+                          })
+                        }
+                        className="w-full px-2.5 py-1.5 bg-purple-50/40 border border-purple-300 rounded text-xs font-black text-purple-950 font-mono focus:outline-none focus:border-purple-500"
+                      />
+                      <span className="text-[9px] text-purple-700 font-bold block mt-1">
+                        ℹ Sub-category (≤ rej+dam)
+                      </span>
+                    </div>
+                  </div>
+
+                  {isDefectiveInvalid && (
+                    <div className="p-2 bg-red-100 border border-red-300 rounded-lg text-xs font-bold text-red-800">
+                      Defective quantity ({defectiveInput}) cannot exceed total rejected and damaged units ({rejectedInput + damagedInput}). Defective units are a classification within non-conforming stock.
+                    </div>
+                  )}
+
+                  {/* Quality Inspection Status & Remarks */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <div>
+                      <label className="block text-[10px] font-black text-zinc-700 uppercase mb-1">
+                        Inspection Status Result *
+                      </label>
+                      <select
+                        value={grnForm.inspection_status}
+                        onChange={(e) => setGrnForm({ ...grnForm, inspection_status: e.target.value })}
+                        className="w-full px-2.5 py-1.5 bg-white border border-zinc-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                      >
+                        <option value="passed">Inspection Passed (100% Accepted)</option>
+                        <option value="partially_passed">Partially Passed (Defects Segregated)</option>
+                        <option value="failed">Inspection Failed (Entire Batch Rejected)</option>
+                        <option value="quarantined">Quarantined (Engineering Lab Hold)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-black text-zinc-700 uppercase mb-1">
+                        Inspection Remarks
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Dimensional tolerance check, visual stamp verified"
+                        value={grnForm.inspection_remarks}
+                        onChange={(e) => setGrnForm({ ...grnForm, inspection_remarks: e.target.value })}
+                        className="w-full px-2.5 py-1.5 bg-white border border-zinc-300 rounded-lg text-xs font-medium text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Rejection / Damage Reason (Mandatory if rejected > 0 or damaged > 0) */}
+                  {(grnForm.rejected_quantity > 0 || grnForm.damaged_quantity > 0) && (
+                    <div className="pt-1">
+                      <label className="block text-[10px] font-black text-red-700 uppercase mb-1">
+                        Mandatory Rejection / Defect Reason * (Min 5 chars)
+                      </label>
+                      <textarea
+                        rows={2}
+                        required
+                        placeholder="Detail the exact physical defect, dimensional failure, rust, or transit crush damage..."
+                        value={grnForm.rejection_reason}
+                        onChange={(e) => setGrnForm({ ...grnForm, rejection_reason: e.target.value })}
+                        className="w-full px-3 py-1.5 bg-red-50 border border-red-300 rounded-lg text-xs font-medium text-red-950 focus:outline-none focus:border-red-500"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Delivery Document & Shipment Verification */}
+                <div className="p-3.5 bg-zinc-50 rounded-xl border border-zinc-200 space-y-3">
+                  <div className="flex items-center gap-1.5 font-black text-zinc-900 text-xs uppercase tracking-wider">
+                    <Truck className="w-4 h-4 text-zinc-700" />
+                    <span>Inward Gate &amp; Shipment Verification</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-black text-zinc-700 uppercase mb-1">
+                        Delivery Note / DC Number *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="DC-98421"
+                        value={grnForm.delivery_note_number}
+                        onChange={(e) => setGrnForm({ ...grnForm, delivery_note_number: e.target.value })}
+                        className="w-full px-2.5 py-1.5 bg-white border border-zinc-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-zinc-700 uppercase mb-1">
+                        Invoice Number (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="INV-2026-4412"
+                        value={grnForm.invoice_number}
+                        onChange={(e) => setGrnForm({ ...grnForm, invoice_number: e.target.value })}
+                        className="w-full px-2.5 py-1.5 bg-white border border-zinc-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-black text-zinc-700 uppercase mb-1">
+                        Transporter / Carrier
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Blue Dart Express, VRL"
+                        value={grnForm.transporter_name}
+                        onChange={(e) => setGrnForm({ ...grnForm, transporter_name: e.target.value })}
+                        className="w-full px-2.5 py-1.5 bg-white border border-zinc-300 rounded-lg text-xs font-medium text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-zinc-700 uppercase mb-1">
+                        AWB / LR / Tracking No
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. BLUEDART-884912"
+                        value={grnForm.lr_tracking_number}
+                        onChange={(e) => setGrnForm({ ...grnForm, lr_tracking_number: e.target.value })}
+                        className="w-full px-2.5 py-1.5 bg-white border border-zinc-300 rounded-lg text-xs font-mono font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-black text-zinc-700 uppercase mb-1">
+                        Transportation Mode
+                      </label>
+                      <select
+                        value={grnForm.transport_mode}
+                        onChange={(e) => setGrnForm({ ...grnForm, transport_mode: e.target.value })}
+                        className="w-full px-2.5 py-1.5 bg-white border border-zinc-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                      >
+                        <option value="Road Freight">Road Freight</option>
+                        <option value="Air Freight">Air Freight</option>
+                        <option value="Rail Freight">Rail Freight</option>
+                        <option value="Sea Freight">Sea Freight</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-zinc-700 uppercase mb-1">
+                        Inward Receipt Date
+                      </label>
+                      <input
+                        type="date"
+                        value={grnForm.delivery_date}
+                        onChange={(e) => setGrnForm({ ...grnForm, delivery_date: e.target.value })}
+                        className="w-full px-2.5 py-1.5 bg-white border border-zinc-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-zinc-200 flex items-center justify-end gap-3 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPRForGRN(null)}
+                    className="px-4 py-2 border border-zinc-300 text-zinc-700 rounded-xl text-xs font-bold hover:bg-zinc-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={
+                      actionLoading ||
+                      newlyReceivedQty <= 0 ||
+                      isOverReceipt ||
+                      isDefectiveInvalid ||
+                      !grnForm.delivery_note_number.trim() ||
+                      ((grnForm.rejected_quantity > 0 || grnForm.damaged_quantity > 0) &&
+                        grnForm.rejection_reason.trim().length < 5)
                     }
-                    className="w-full px-3 py-2 bg-white border border-emerald-300 rounded-xl text-xs font-black text-emerald-950 focus:outline-none focus:border-emerald-500"
-                  />
-                  <span className="text-[10px] text-emerald-700 font-semibold block mt-0.5">
-                    Added to Store Inventory
-                  </span>
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-black px-6 py-2 rounded-xl text-xs uppercase tracking-wider transition shadow disabled:opacity-40"
+                  >
+                    {actionLoading ? 'Posting GRN...' : 'Post GRN & Update Inventory'}
+                  </button>
                 </div>
-
-                <div>
-                  <label className="block text-[11px] font-black text-red-800 uppercase mb-1">
-                    Rejected / Damaged Stock
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    required
-                    value={grnForm.rejected_quantity}
-                    onChange={(e) =>
-                      setGrnForm({
-                        ...grnForm,
-                        rejected_quantity: Math.max(0, parseInt(e.target.value, 10) || 0),
-                      })
-                    }
-                    className="w-full px-3 py-2 bg-white border border-red-300 rounded-xl text-xs font-black text-red-950 focus:outline-none focus:border-red-500"
-                  />
-                  <span className="text-[10px] text-red-700 font-semibold block mt-0.5">
-                    Quarantined / Returned
-                  </span>
-                </div>
-              </div>
-
-              {/* Total Batch Info */}
-              <div className="flex items-center justify-between text-xs px-2 text-zinc-600 font-bold">
-                <span>Total Received in Batch:</span>
-                <span className="font-mono text-zinc-950 text-sm font-black">
-                  {grnForm.accepted_quantity + grnForm.rejected_quantity} Units
-                </span>
-              </div>
-
-              {/* Quality Rejection Reason (Mandatory if rejected > 0) */}
-              {grnForm.rejected_quantity > 0 && (
-                <div>
-                  <label className="block text-[11px] font-black text-red-700 uppercase mb-1">
-                    Quality Rejection Reason * (Min 5 chars)
-                  </label>
-                  <textarea
-                    rows={2}
-                    required
-                    placeholder="Defective seal, dimensional mismatch, shipping damage..."
-                    value={grnForm.rejection_reason}
-                    onChange={(e) => setGrnForm({ ...grnForm, rejection_reason: e.target.value })}
-                    className="w-full px-3 py-2 bg-red-50 border border-red-300 rounded-xl text-xs font-medium text-red-950 focus:outline-none focus:border-red-500"
-                  />
-                </div>
-              )}
-
-              {/* Remarks */}
-              <div>
-                <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
-                  Inspection Remarks
-                </label>
-                <textarea
-                  rows={2}
-                  value={grnForm.remarks}
-                  onChange={(e) => setGrnForm({ ...grnForm, remarks: e.target.value })}
-                  className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-xl text-xs font-medium text-zinc-900 focus:outline-none focus:border-jcb-yellow"
-                />
-              </div>
-
-              <div className="pt-4 border-t border-zinc-200 flex items-center justify-end gap-3 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setSelectedPRForGRN(null)}
-                  className="px-4 py-2 border border-zinc-300 text-zinc-700 rounded-xl text-xs font-bold hover:bg-zinc-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={
-                    actionLoading ||
-                    grnForm.accepted_quantity + grnForm.rejected_quantity <= 0 ||
-                    !grnForm.delivery_note_number.trim() ||
-                    (grnForm.rejected_quantity > 0 && grnForm.rejection_reason.trim().length < 5)
-                  }
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-black px-6 py-2 rounded-xl text-xs uppercase tracking-wider transition shadow disabled:opacity-40"
-                >
-                  {actionLoading ? 'Posting GRN...' : 'Post GRN to Inventory'}
-                </button>
-              </div>
-            </form>
+              </form>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ==================================================================== */}
       {/* MODAL 7: FULL PR DETAILS & REGULATORY AUDIT LOGS                    */}
@@ -2661,10 +3212,10 @@ export const ProcurementPage: React.FC = () => {
                   </span>
                 </div>
                 <div>
-                  <span className="text-[10px] font-bold text-zinc-400 uppercase block">Quantity</span>
-                  <span className="font-mono font-black text-xs text-zinc-900">
-                    {selectedPRForDetails.received_quantity || 0} / {selectedPRForDetails.quantity_required} Units
-                  </span>
+                  <span className="text-[10px] font-bold text-zinc-400 uppercase block">Fulfillment Progress</span>
+                  <div className="font-mono font-black text-xs text-zinc-900">
+                    Req: {selectedPRForDetails.quantity_required} | Recv: <span className="text-emerald-700">{selectedPRForDetails.received_quantity || 0}</span> | Rem: <span className="text-amber-700">{Math.max(0, selectedPRForDetails.quantity_required - (selectedPRForDetails.received_quantity || 0))}</span>
+                  </div>
                 </div>
                 <div>
                   <span className="text-[10px] font-bold text-zinc-400 uppercase block">PO Number</span>
@@ -2678,8 +3229,11 @@ export const ProcurementPage: React.FC = () => {
               <div className="grid grid-cols-2 gap-4 text-xs">
                 <div>
                   <span className="text-[10px] text-zinc-400 font-bold uppercase block">Spare Part</span>
-                  <div className="font-black text-zinc-900">{selectedPRForDetails.part_number}</div>
-                  <div className="text-zinc-600 font-medium">{selectedPRForDetails.part_name}</div>
+                  <div className="font-black text-zinc-900">{selectedPRForDetails.part_name}</div>
+                  <div className="font-mono text-zinc-600 font-semibold">{selectedPRForDetails.part_number}</div>
+                  {selectedPRForDetails.sku && (
+                    <div className="text-[10px] text-zinc-400 font-mono">SKU: {selectedPRForDetails.sku}</div>
+                  )}
                 </div>
                 <div>
                   <span className="text-[10px] text-zinc-400 font-bold uppercase block">Target Machine</span>
@@ -2714,38 +3268,82 @@ export const ProcurementPage: React.FC = () => {
                 <div>
                   <h4 className="text-xs font-black text-zinc-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                     <Boxes className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Inwarded Goods Receipt Notes (GRNs)</span>
+                    <span>Inwarded Goods Receipt Notes (GRNs) &amp; QC Reports</span>
                   </h4>
-                  <div className="space-y-2">
-                    {selectedPRForDetails.grn_receipts.map((grn) => (
-                      <div
-                        key={grn.id}
-                        className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-200 text-xs space-y-1"
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-mono font-black text-emerald-900">{grn.grn_number}</span>
-                          <span className="text-[10px] text-zinc-500">
-                            {new Date(grn.created_at).toLocaleString()}
-                          </span>
+                  <div className="space-y-3">
+                    {selectedPRForDetails.grn_receipts.map((grn) => {
+                      const qcBadge = getInspectionStatusBadge(grn.inspection_status);
+                      const transportBadge = getTransportModeBadge(grn.transport_mode);
+
+                      return (
+                        <div
+                          key={grn.id}
+                          className="p-3.5 bg-emerald-50/50 rounded-xl border border-emerald-200 text-xs space-y-2"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-black text-emerald-950 text-sm">{grn.grn_number}</span>
+                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase border ${qcBadge.color}`}>
+                                {qcBadge.label}
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-zinc-500 font-mono">
+                              {new Date(grn.created_at).toLocaleString()}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 font-mono text-[11px] bg-white p-2.5 rounded-lg border border-emerald-100">
+                            <div>
+                              Batch Total: <span className="font-black text-zinc-900">{grn.received_quantity}</span>
+                            </div>
+                            <div>
+                              Accepted (Usable): <span className="font-black text-emerald-700">{grn.accepted_quantity}</span>
+                            </div>
+                            <div>
+                              Rejected: <span className="font-black text-red-700">{grn.rejected_quantity}</span>
+                            </div>
+                            <div>
+                              Damaged: <span className="font-black text-amber-700">{grn.damaged_quantity || 0}</span>
+                            </div>
+                            <div>
+                              Defective: <span className="font-black text-purple-700">{grn.defective_quantity || 0}</span>
+                            </div>
+                          </div>
+
+                          {/* Transportation Details in GRN History */}
+                          <div className="flex items-center justify-between text-[11px] text-zinc-600 flex-wrap gap-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border flex items-center gap-1 ${transportBadge.color}`}>
+                                {transportBadge.icon}
+                                <span>{transportBadge.label}</span>
+                              </span>
+                              {grn.transporter_name && (
+                                <span className="font-semibold text-zinc-800">Carrier: {grn.transporter_name}</span>
+                              )}
+                              {grn.lr_tracking_number && (
+                                <span className="font-mono text-zinc-500 text-[10px]">(LR/AWB: {grn.lr_tracking_number})</span>
+                              )}
+                            </div>
+                            <div className="font-mono text-[10px] text-zinc-500">
+                              DC: <strong className="text-zinc-800">{grn.delivery_note_number}</strong>
+                              {grn.invoice_number && <span> | Inv: <strong className="text-zinc-800">{grn.invoice_number}</strong></span>}
+                            </div>
+                          </div>
+
+                          {grn.inspection_remarks && (
+                            <div className="text-[11px] text-zinc-700 font-medium bg-zinc-100/70 p-2 rounded">
+                              <strong>Inspection Remarks:</strong> {grn.inspection_remarks}
+                            </div>
+                          )}
+
+                          {grn.rejection_reason && (
+                            <div className="text-[11px] text-red-700 font-medium bg-red-100/60 p-2 rounded border border-red-200">
+                              <strong>Rejection / Defect Reason:</strong> {grn.rejection_reason}
+                            </div>
+                          )}
                         </div>
-                        <div className="grid grid-cols-3 gap-2 pt-1 font-mono text-[11px]">
-                          <div>
-                            Accepted: <span className="font-bold text-emerald-700">{grn.accepted_quantity}</span>
-                          </div>
-                          <div>
-                            Rejected: <span className="font-bold text-red-700">{grn.rejected_quantity}</span>
-                          </div>
-                          <div>
-                            DC: <span className="font-bold text-zinc-800">{grn.delivery_note_number}</span>
-                          </div>
-                        </div>
-                        {grn.rejection_reason && (
-                          <div className="text-[10px] text-red-700 font-medium">
-                            Rejection Reason: {grn.rejection_reason}
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}

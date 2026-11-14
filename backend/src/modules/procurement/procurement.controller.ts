@@ -467,6 +467,11 @@ export const createPurchaseOrder = async (
       vehicle_number,
       lr_tracking_number,
       delivery_remarks,
+      dispatch_location,
+      destination_plant_name,
+      transport_mode,
+      freight_cost,
+      overall_shipment_cost,
     } = req.body || {};
 
     const updatedPR = await createPurchaseOrderService(
@@ -487,6 +492,11 @@ export const createPurchaseOrder = async (
         vehicle_number,
         lr_tracking_number,
         delivery_remarks,
+        dispatch_location,
+        destination_plant_name,
+        transport_mode,
+        freight_cost,
+        overall_shipment_cost,
       },
       user
     );
@@ -592,6 +602,10 @@ export const processGRNInward = async (
       received_quantity,
       accepted_quantity,
       rejected_quantity,
+      damaged_quantity,
+      defective_quantity,
+      inspection_status,
+      inspection_remarks,
       rejection_reason,
       remarks,
       delivery_note_number,
@@ -602,6 +616,12 @@ export const processGRNInward = async (
       challan_type,
       vehicle_number,
       lr_tracking_number,
+      dispatch_location,
+      destination_plant_name,
+      transport_mode,
+      transporter_name,
+      freight_cost,
+      overall_shipment_cost,
     } = req.body || {};
 
     const result = await processGRNInwardService(
@@ -610,6 +630,10 @@ export const processGRNInward = async (
         received_quantity,
         accepted_quantity,
         rejected_quantity,
+        damaged_quantity,
+        defective_quantity,
+        inspection_status,
+        inspection_remarks,
         rejection_reason,
         remarks,
         delivery_note_number,
@@ -620,6 +644,12 @@ export const processGRNInward = async (
         challan_type,
         vehicle_number,
         lr_tracking_number,
+        dispatch_location,
+        destination_plant_name,
+        transport_mode,
+        transporter_name,
+        freight_cost,
+        overall_shipment_cost,
       },
       user
     );
@@ -630,10 +660,26 @@ export const processGRNInward = async (
       data: result.pr,
       receipt_details: {
         grn_number: result.grn_number,
+        received_quantity: result.received_quantity,
         accepted_quantity: result.accepted_quantity,
         rejected_quantity: result.rejected_quantity,
+        damaged_quantity: result.damaged_quantity || 0,
+        defective_quantity: result.defective_quantity || 0,
+        inspection_status: result.inspection_status || 'passed',
+        inspection_remarks: result.inspection_remarks || null,
+        rejection_reason: result.rejection_reason || null,
+        previous_inwarded: result.previous_inwarded,
         total_inwarded: result.total_inwarded,
+        cumulative_physical_delivered: result.cumulative_physical_delivered,
         remaining_quantity: result.remaining_quantity,
+        remaining_receivable: result.remaining_receivable,
+        transport_mode: result.transport_mode || null,
+        dispatch_location: result.dispatch_location || null,
+        destination_plant_name: result.destination_plant_name || null,
+        transporter_name: result.transporter_name || null,
+        lr_tracking_number: result.lr_tracking_number || null,
+        freight_cost: result.freight_cost || 0,
+        overall_shipment_cost: result.overall_shipment_cost || 0,
       },
     });
   } catch (err) {

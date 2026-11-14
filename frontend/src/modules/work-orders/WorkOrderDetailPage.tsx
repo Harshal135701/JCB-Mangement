@@ -24,7 +24,8 @@ import {
   Zap, 
   User, 
   RefreshCw,
-  Plus 
+  Plus,
+  ShoppingCart
 } from 'lucide-react';
 import { useParams, Link } from 'react-router-dom';
 
@@ -108,6 +109,13 @@ export const WorkOrderDetailPage: React.FC = () => {
   const [reserveQuantity, setReserveQuantity] = useState(1);
   const [reserveFeedback, setReserveFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // Requisition (PR) from Work Order State
+  const [isPRModalOpen, setIsPRModalOpen] = useState(false);
+  const [prUrgency, setPrUrgency] = useState<'critical' | 'high' | 'medium' | 'low'>('high');
+  const [prJustification, setPrJustification] = useState('');
+  const [prSubmitting, setPrSubmitting] = useState(false);
+  const [prFeedback, setPrFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   const fetchCatalogForReserve = async (search = '') => {
     try {
       setCatalogLoading(true);
@@ -161,6 +169,43 @@ export const WorkOrderDetailPage: React.FC = () => {
       });
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const handleRaisePRSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!workOrder || !selectedPartId || reserveQuantity <= 0) return;
+    try {
+      setPrSubmitting(true);
+      setPrFeedback(null);
+      const res = await apiClient.post('/procurement/pr', {
+        part_id: selectedPartId,
+        quantity_required: reserveQuantity,
+        urgency: prUrgency,
+        technical_justification: prJustification.trim() || `Part unavailable in stock for Work Order ${workOrder.wo_number}`,
+        work_order_id: workOrder.id,
+        machine_id: workOrder.machine_id,
+      });
+      if (res.data?.success) {
+        setPrFeedback({
+          type: 'success',
+          text: `Requisition ${res.data.data?.pr_number || ''} submitted successfully to store manager for approval!`,
+        });
+        setTimeout(() => {
+          setIsPRModalOpen(false);
+          setIsReserveModalOpen(false);
+          setPrFeedback(null);
+          fetchPartsData();
+          fetchWorkOrderData();
+        }, 1200);
+      }
+    } catch (err: any) {
+      setPrFeedback({
+        type: 'error',
+        text: err.response?.data?.message || 'Failed to submit purchase requisition.',
+      });
+    } finally {
+      setPrSubmitting(false);
     }
   };
 
@@ -2052,8 +2097,23 @@ export const WorkOrderDetailPage: React.FC = () => {
                       <strong className="text-zinc-900">{sp.bin_location} ({sp.warehouse_zone || 'Main Store'})</strong>
                     </div>
                     {isInsufficient && (
-                      <div className="text-red-700 text-[11px] font-bold font-sans pt-1">
-                        ⚠️ Requested quantity ({reserveQuantity}) exceeds currently available stock ({sp.available_stock}).
+                      <div className="pt-2 border-t border-slate-200 mt-2 space-y-2">
+                        <div className="text-red-700 text-[11px] font-bold font-sans">
+                          ⚠️ Requested quantity ({reserveQuantity}) exceeds currently available stock ({sp.available_stock}).
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPrJustification(
+                              `Stock unavailable in warehouse (Available: ${sp.available_stock}, Needed: ${reserveQuantity}). Urgent procurement requested for Work Order ${workOrder?.wo_number} on machine ${workOrder?.machine_code || workOrder?.machine_name}.`
+                            );
+                            setIsPRModalOpen(true);
+                          }}
+                          className="w-full py-2 px-3 bg-amber-500 hover:bg-amber-600 text-black font-black text-xs uppercase tracking-wider rounded-lg shadow-sm border border-amber-600 flex items-center justify-center gap-1.5 cursor-pointer transition"
+                        >
+                          <ShoppingCart className="w-4 h-4" />
+                          <span>Raise Spare Part Requisition (PR)</span>
+                        </button>
                       </div>
                     )}
                   </div>
@@ -2089,6 +2149,122 @@ export const WorkOrderDetailPage: React.FC = () => {
                   className="px-5 py-2 bg-jcb-yellow hover:bg-jcb-yellowDark text-black rounded-xl text-xs font-black uppercase tracking-wider shadow cursor-pointer disabled:opacity-50 border border-amber-500"
                 >
                   {actionLoading ? 'Reserving...' : 'Confirm Reservation'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Technician / Maintenance PR Request Modal */}
+      {isPRModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="bg-zinc-950 p-5 flex items-center justify-between border-b border-zinc-800">
+              <div className="flex items-center gap-3">
+                <ShoppingCart className="w-5 h-5 text-jcb-yellow" />
+                <div>
+                  <h3 className="text-base font-black text-white">RAISE PURCHASE REQUISITION (PR)</h3>
+                  <p className="text-[10px] text-zinc-400 font-medium">
+                    Initiate spare part procurement workflow for Work Order
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsPRModalOpen(false)}
+                className="text-zinc-400 hover:text-white p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleRaisePRSubmit} className="p-6 space-y-4">
+              {prFeedback && (
+                <div
+                  className={`p-3 rounded-xl text-xs font-bold flex items-center gap-2 ${
+                    prFeedback.type === 'success'
+                      ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                      : 'bg-red-50 text-red-800 border border-red-200'
+                  }`}
+                >
+                  {prFeedback.type === 'success' ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                  )}
+                  <span>{prFeedback.text}</span>
+                </div>
+              )}
+
+              <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-200 text-xs space-y-1">
+                <div className="font-bold text-zinc-900">Work Order: {workOrder?.wo_number}</div>
+                <div className="text-zinc-600">Machine: {workOrder?.machine_name} ({workOrder?.machine_code})</div>
+                <div className="font-black text-amber-800 pt-1">
+                  Requested Part: {catalogParts.find((p) => p.id === selectedPartId)?.part_number} — {catalogParts.find((p) => p.id === selectedPartId)?.name}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
+                    Quantity Required *
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    value={reserveQuantity}
+                    onChange={(e) => setReserveQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                    className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-xl text-xs font-bold font-mono text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
+                    Procurement Urgency *
+                  </label>
+                  <select
+                    value={prUrgency}
+                    onChange={(e: any) => setPrUrgency(e.target.value)}
+                    className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-xl text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                  >
+                    <option value="critical">Critical (Line Stoppage)</option>
+                    <option value="high">High Urgency</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low Priority</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
+                  Technical Justification * (Min 5 chars)
+                </label>
+                <textarea
+                  rows={3}
+                  required
+                  value={prJustification}
+                  onChange={(e) => setPrJustification(e.target.value)}
+                  placeholder="Detail why this part is required and the operational impact..."
+                  className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-xl text-xs font-medium text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-zinc-200 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  disabled={prSubmitting}
+                  onClick={() => setIsPRModalOpen(false)}
+                  className="px-4 py-2 border border-zinc-300 text-zinc-700 rounded-xl text-xs font-bold hover:bg-zinc-50 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={prSubmitting || prJustification.trim().length < 5 || reserveQuantity <= 0}
+                  className="bg-jcb-yellow hover:bg-jcb-yellowDark text-black font-black px-6 py-2 rounded-xl text-xs uppercase tracking-wider transition shadow border border-amber-500 disabled:opacity-40"
+                >
+                  {prSubmitting ? 'Submitting PR...' : 'Submit Requisition to Store'}
                 </button>
               </div>
             </form>

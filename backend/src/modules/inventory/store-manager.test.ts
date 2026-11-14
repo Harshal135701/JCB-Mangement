@@ -888,7 +888,7 @@ describe('Store Manager Role & Advanced Inventory Governance (JCB CMMS)', () => 
           if (text.includes('INSERT INTO inventory_transactions')) {
             return { rows: [{ id: 'tx-005' }], rowCount: 1 };
           }
-          if (text.includes('INSERT INTO goods_receipt_notes')) {
+          if (text.includes('INSERT INTO goods_receipt_notes') || text.includes('INSERT INTO grn_receipts')) {
             return {
               rows: [
                 {
@@ -904,8 +904,17 @@ describe('Store Manager Role & Advanced Inventory Governance (JCB CMMS)', () => 
               rowCount: 1,
             };
           }
-          if (text.includes('UPDATE purchase_requisitions SET status = $1')) {
-            return { rows: [], rowCount: 1 };
+          if (text.includes('UPDATE purchase_requisitions')) {
+            return {
+              rows: [
+                {
+                  id: PR_1_ID,
+                  pr_number: 'PR-2026-00001',
+                  status: 'fully_received',
+                },
+              ],
+              rowCount: 1,
+            };
           }
           if (text.includes('SELECT pg_advisory_xact_lock')) {
             return { rows: [], rowCount: 0 };

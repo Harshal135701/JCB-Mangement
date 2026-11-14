@@ -233,6 +233,11 @@ interface MockPurchaseRequisition {
   vehicle_number?: string | null;
   lr_tracking_number?: string | null;
   delivery_remarks?: string | null;
+  dispatch_location?: string | null;
+  destination_plant_name?: string | null;
+  transport_mode?: string | null;
+  freight_cost?: number;
+  overall_shipment_cost?: number;
   created_at: Date;
   updated_at: Date;
 }
@@ -272,6 +277,37 @@ interface MockNotification {
   created_at: Date;
 }
 
+interface MockGrnReceipt {
+  id: string;
+  grn_number: string;
+  pr_id: string;
+  delivery_note_number?: string | null;
+  received_quantity: number;
+  accepted_quantity: number;
+  rejected_quantity: number;
+  damaged_quantity: number;
+  defective_quantity: number;
+  inspection_status: string;
+  inspection_remarks?: string | null;
+  rejection_reason?: string | null;
+  remarks?: string | null;
+  received_by: string;
+  vendor_challan_number?: string | null;
+  supply_method?: string | null;
+  delivery_document_type?: string | null;
+  challan_type?: string | null;
+  vehicle_number?: string | null;
+  lr_tracking_number?: string | null;
+  invoice_number?: string | null;
+  dispatch_location?: string | null;
+  destination_plant_name?: string | null;
+  transport_mode?: string | null;
+  transporter_name?: string | null;
+  freight_cost?: number;
+  overall_shipment_cost?: number;
+  created_at: Date;
+}
+
 // ---------------------------------------------------------------------------
 // Mock Procurement Database Implementation
 // ---------------------------------------------------------------------------
@@ -286,9 +322,13 @@ class MockProcurementDatabase implements DbPoolLike {
   public transactions: MockInventoryTransaction[] = [];
   public auditLogs: MockAuditLog[] = [];
   public notifications: MockNotification[] = [];
+  public grnReceipts: MockGrnReceipt[] = [];
 
   public lockManager = new AdvisoryLockManager();
   public failNextTransaction = false;
+  public shouldFailGrnInsert = false;
+  public rolledBack = false;
+  public queriedForUpdateLocks: string[] = [];
 
   constructor() {
     this.seed();
@@ -497,6 +537,10 @@ class MockProcurementDatabase implements DbPoolLike {
     this.transactions = [];
     this.auditLogs = [];
     this.notifications = [];
+    this.grnReceipts = [];
+    this.shouldFailGrnInsert = false;
+    this.rolledBack = false;
+    this.queriedForUpdateLocks = [];
   }
 
   async connect(): Promise<DbClientLike> {
@@ -512,6 +556,11 @@ class MockProcurementDatabase implements DbPoolLike {
 
   async query(text: string, params: any[] = []): Promise<{ rows: any[]; rowCount: number }> {
     const trimmed = text.trim();
+
+    if (trimmed === 'ROLLBACK') {
+      this.rolledBack = true;
+      return { rows: [], rowCount: 0 };
+    }
 
     if (this.failNextTransaction && trimmed.toUpperCase().startsWith('INSERT')) {
       this.failNextTransaction = false;
@@ -792,6 +841,9 @@ class MockProcurementDatabase implements DbPoolLike {
 
     // 15. Lock PR row FOR UPDATE (by ID)
     if (trimmed.includes('FROM purchase_requisitions pr') && trimmed.includes('WHERE pr.id = $1')) {
+      if (trimmed.includes('FOR UPDATE')) {
+        this.queriedForUpdateLocks.push(params[0]);
+      }
       const pr = this.requisitions.find((r) => r.id === params[0]);
       if (!pr) return { rows: [], rowCount: 0 };
       const machine = this.machines.find((m) => m.id === pr.machine_id);
@@ -840,6 +892,11 @@ class MockProcurementDatabase implements DbPoolLike {
           pr.vehicle_number = params[13] || null;
           pr.lr_tracking_number = params[14] || null;
           pr.delivery_remarks = params[15] || null;
+          pr.dispatch_location = params[16] || null;
+          pr.destination_plant_name = params[17] || null;
+          pr.transport_mode = params[18] || null;
+          pr.freight_cost = params[19] !== undefined ? Number(params[19]) : 0;
+          pr.overall_shipment_cost = params[20] !== undefined ? Number(params[20]) : 0;
         } else if (trimmed.includes("SET status = 'rejected'")) {
           pr.status = 'rejected';
         } else if (trimmed.includes("SET status = 'cancelled'")) {
@@ -886,9 +943,81 @@ class MockProcurementDatabase implements DbPoolLike {
       return { rows: deleted ? [{ id: deleted.id, pr_number: deleted.pr_number }] : [], rowCount: deleted ? 1 : 0 };
     }
 
-    // 17c. Check grn_receipts for PR
-    if (trimmed.includes('FROM grn_receipts WHERE pr_id = $1')) {
-      return { rows: [{ count: '0' }], rowCount: 1 };
+    // 17c. Check grn_receipts for PR (count)
+    if (trimmed.includes('FROM grn_receipts WHERE pr_id = $1') && !trimmed.includes('SUM')) {
+      const count = this.grnReceipts.filter((g) => g.pr_id === params[0]).length;
+      return { rows: [{ count: String(count) }], rowCount: 1 };
+    }
+
+    // Insert into grn_receipts
+    if (trimmed.startsWith('INSERT INTO grn_receipts')) {
+      if (this.shouldFailGrnInsert) {
+        throw new Error('Database relation "grn_receipts" insertion error (simulated schema/write failure)');
+      }
+      const grn: MockGrnReceipt = {
+        id: `b0000000-0000-0000-0000-${String(this.grnReceipts.length + 1).padStart(12, '0')}`,
+        grn_number: params[0],
+        pr_id: params[1],
+        delivery_note_number: params[2],
+        received_quantity: Number(params[3]),
+        accepted_quantity: Number(params[4]),
+        rejected_quantity: Number(params[5]),
+        damaged_quantity: Number(params[6] || 0),
+        defective_quantity: Number(params[7] || 0),
+        inspection_status: params[8] || 'passed',
+        inspection_remarks: params[9] || null,
+        rejection_reason: params[10] || null,
+        remarks: params[11] || null,
+        received_by: params[12],
+        vendor_challan_number: params[13] || null,
+        supply_method: params[14] || null,
+        delivery_document_type: params[15] || null,
+        challan_type: params[16] || null,
+        vehicle_number: params[17] || null,
+        lr_tracking_number: params[18] || null,
+        invoice_number: params[19] || null,
+        dispatch_location: params[20] || null,
+        destination_plant_name: params[21] || null,
+        transport_mode: params[22] || null,
+        transporter_name: params[23] || null,
+        freight_cost: Number(params[24] || 0),
+        overall_shipment_cost: Number(params[25] || 0),
+        created_at: new Date(),
+      };
+      this.grnReceipts.push(grn);
+      return { rows: [{ id: grn.id, grn_number: grn.grn_number }], rowCount: 1 };
+    }
+
+    // Query grn_receipts sum
+    if (trimmed.includes('FROM grn_receipts') && (trimmed.includes('SUM(received_quantity)') || trimmed.includes('SUM(accepted_quantity)'))) {
+      const prId = params[0];
+      const receipts = this.grnReceipts.filter((g) => g.pr_id === prId);
+      const totalDelivered = receipts.reduce((sum, g) => sum + g.received_quantity, 0);
+      const totalAccepted = receipts.reduce((sum, g) => sum + g.accepted_quantity, 0);
+      return {
+        rows: [
+          {
+            total_prev_delivered: totalDelivered,
+            total_prev_accepted: totalAccepted,
+          },
+        ],
+        rowCount: 1,
+      };
+    }
+
+    // Query grn_receipts list
+    if (trimmed.includes('FROM grn_receipts gr') && trimmed.includes('WHERE gr.pr_id = $1')) {
+      const prId = params[0];
+      const receipts = this.grnReceipts.filter((g) => g.pr_id === prId);
+      const rows = receipts.map((gr) => {
+        const u = this.users.find((user) => user.id === gr.received_by);
+        return {
+          ...gr,
+          received_by_name: u?.full_name,
+          received_by_code: u?.employee_code,
+        };
+      });
+      return { rows, rowCount: rows.length };
     }
 
     // 17d. Delete notifications
@@ -2043,6 +2172,224 @@ describe('Procurement & Purchase Requisition Module (CMMS Module 4)', () => {
       assert.equal(res.statusCode, 200);
       assert.equal(res.responseData.data.status, 'fully_received');
     });
+
+    it('30d. GRN insert failure forces transaction rollback: stock is NOT updated, PR status is preserved, and HTTP 500 is returned', async () => {
+      const pr = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000002')!;
+      pr.status = 'ordered';
+      pr.quantity_required = 10;
+      const part = mockDb.parts.find((p) => p.id === pr.part_id)!;
+      const initialStock = part.current_physical_stock;
+
+      // Simulate database failure during grn_receipts persistence
+      mockDb.shouldFailGrnInsert = true;
+
+      const { req, res, next } = createMockContext(
+        {
+          accepted_quantity: 4,
+          rejected_quantity: 0,
+          delivery_note_number: 'DC-FAIL-TEST',
+        },
+        { id: pr.id },
+        {},
+        {},
+        adminUser
+      );
+
+      await processGRNInward(req, res, next);
+
+      assert.equal(res.statusCode, 500);
+      assert.equal(res.responseData.success, false);
+      assert.match(res.responseData.message, /Failed to persist Goods Receipt Note/i);
+      // Verify transaction rollback occurred
+      assert.equal(mockDb.rolledBack, true);
+      // Verify physical inventory was NOT incremented
+      assert.equal(part.current_physical_stock, initialStock);
+      // Verify PR status was NOT modified
+      assert.equal(pr.status, 'ordered');
+      // Verify no GRN_PROCESSED audit log was saved
+      const grnAudit = mockDb.auditLogs.find((a) => a.action === 'GRN_PROCESSED' && a.entity_id === pr.id);
+      assert.ok(!grnAudit, 'No GRN_PROCESSED audit log should exist after transaction rollback');
+    });
+
+    it('30e. Quality Control quantity model: rejects defective quantity exceeding sum of rejected and damaged goods (HTTP 400)', async () => {
+      const pr = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000002')!;
+      pr.status = 'ordered';
+
+      const { req, res, next } = createMockContext(
+        {
+          accepted_quantity: 5,
+          rejected_quantity: 2,
+          damaged_quantity: 1,
+          defective_quantity: 4, // 4 > (2 + 1 = 3), invalid!
+          rejection_reason: 'Crushed packaging with ceramic damage',
+          delivery_note_number: 'DC-QC-TEST',
+        },
+        { id: pr.id },
+        {},
+        {},
+        adminUser
+      );
+
+      await processGRNInward(req, res, next);
+
+      assert.equal(res.statusCode, 400);
+      assert.equal(res.responseData.success, false);
+      assert.match(res.responseData.message, /Defective quantity \(4\) cannot exceed total non-conforming/i);
+    });
+
+    it('30f. Quality Control quantity model: rejects negative defective quantity (HTTP 400)', async () => {
+      const pr = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000002')!;
+      pr.status = 'ordered';
+
+      const { req, res, next } = createMockContext(
+        {
+          accepted_quantity: 5,
+          rejected_quantity: 2,
+          defective_quantity: -1,
+          rejection_reason: 'Dimensional tolerance failure',
+          delivery_note_number: 'DC-QC-NEG',
+        },
+        { id: pr.id },
+        {},
+        {},
+        adminUser
+      );
+
+      await processGRNInward(req, res, next);
+
+      assert.equal(res.statusCode, 400);
+      assert.equal(res.responseData.success, false);
+      assert.match(res.responseData.message, /Defective quantity must be a valid non-negative integer/i);
+    });
+
+    it('30g. Quality Control quantity model: rejects mismatch when received_quantity differs from accepted + rejected + damaged (HTTP 400)', async () => {
+      const pr = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000002')!;
+      pr.status = 'ordered';
+
+      const { req, res, next } = createMockContext(
+        {
+          received_quantity: 10,
+          accepted_quantity: 5,
+          rejected_quantity: 2,
+          damaged_quantity: 1, // 5 + 2 + 1 = 8 != 10
+          rejection_reason: 'Non-conforming threads',
+          delivery_note_number: 'DC-MISMATCH',
+        },
+        { id: pr.id },
+        {},
+        {},
+        adminUser
+      );
+
+      await processGRNInward(req, res, next);
+
+      assert.equal(res.statusCode, 400);
+      assert.equal(res.responseData.success, false);
+      assert.match(res.responseData.message, /Received quantity \(10\) does not match the sum/i);
+    });
+
+    it('30h. Physical delivery over-receipt prevention: total physical deliveries cannot exceed ordered PO quantity (HTTP 400)', async () => {
+      const pr = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000002')!;
+      pr.status = 'ordered';
+      pr.quantity_required = 10;
+
+      // Delivery 1: Deliver 10 units (6 accepted, 4 rejected). Total physical = 10.
+      const ctx1 = createMockContext(
+        {
+          accepted_quantity: 6,
+          rejected_quantity: 4,
+          rejection_reason: 'Hardness test failed on 4 units',
+          delivery_note_number: 'DC-BATCH-01',
+        },
+        { id: pr.id },
+        {},
+        {},
+        adminUser
+      );
+      await processGRNInward(ctx1.req, ctx1.res, ctx1.next);
+      assert.equal(ctx1.res.statusCode, 200);
+      assert.equal(ctx1.res.responseData.data.status, 'partially_received'); // Only 6 accepted, 4 still pending
+
+      // Delivery 2: Vendor attempts to deliver another 5 units (exceeding original 10 PO ordered)
+      const ctx2 = createMockContext(
+        {
+          accepted_quantity: 5,
+          rejected_quantity: 0,
+          delivery_note_number: 'DC-BATCH-02',
+        },
+        { id: pr.id },
+        {},
+        {},
+        adminUser
+      );
+      await processGRNInward(ctx2.req, ctx2.res, ctx2.next);
+      assert.equal(ctx2.res.statusCode, 400);
+      assert.equal(ctx2.res.responseData.success, false);
+      assert.match(ctx2.res.responseData.message, /Over-receipt rejected: Total physical delivery \(15\) exceeds ordered PO quantity \(10\)/i);
+    });
+
+    it('30i. Linked work order remains waiting_for_parts on partial receipt and only resumes on full fulfillment', async () => {
+      const pr = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000001')!;
+      pr.status = 'ordered';
+      pr.quantity_required = 10;
+      const wo = mockDb.workOrders.find((w) => w.id === pr.work_order_id)!;
+      wo.status = 'waiting_for_parts';
+
+      // Partial Delivery 1: 4 accepted out of 10
+      const ctx1 = createMockContext(
+        {
+          accepted_quantity: 4,
+          rejected_quantity: 0,
+          delivery_note_number: 'DC-WO-01',
+        },
+        { id: pr.id },
+        {},
+        {},
+        adminUser
+      );
+      await processGRNInward(ctx1.req, ctx1.res, ctx1.next);
+      assert.equal(ctx1.res.statusCode, 200);
+      assert.equal(wo.status, 'waiting_for_parts', 'Work order must remain waiting_for_parts during partial receipt');
+
+      // Partial Delivery 2: Remaining 6 accepted
+      const ctx2 = createMockContext(
+        {
+          accepted_quantity: 6,
+          rejected_quantity: 0,
+          delivery_note_number: 'DC-WO-02',
+        },
+        { id: pr.id },
+        {},
+        {},
+        adminUser
+      );
+      await processGRNInward(ctx2.req, ctx2.res, ctx2.next);
+      assert.equal(ctx2.res.statusCode, 200);
+      assert.equal(wo.status, 'in_progress', 'Work order must resume to in_progress upon full quantity fulfillment');
+    });
+
+    it('30j. Concurrency protection: acquires FOR UPDATE OF pr exclusive row lock during GRN inwarding', async () => {
+      const pr = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000002')!;
+      pr.status = 'ordered';
+      pr.quantity_required = 5;
+      mockDb.queriedForUpdateLocks = [];
+
+      const { req, res, next } = createMockContext(
+        {
+          accepted_quantity: 2,
+          rejected_quantity: 0,
+          delivery_note_number: 'DC-LOCK-TEST',
+        },
+        { id: pr.id },
+        {},
+        {},
+        adminUser
+      );
+
+      await processGRNInward(req, res, next);
+      assert.equal(res.statusCode, 200);
+      assert.ok(mockDb.queriedForUpdateLocks.includes(pr.id), 'Must acquire exclusive FOR UPDATE lock on the PR row');
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -2234,6 +2581,153 @@ describe('Procurement & Purchase Requisition Module (CMMS Module 4)', () => {
 
       await createPurchaseOrder(req, res, next);
       assert.ok(res.statusCode === 400 || (res.responseData && res.responseData.success === false));
+    });
+
+    it('3. Issues PO with realistic Air Freight transportation tracking and cost breakdown', async () => {
+      const pr = mockDb.requisitions[0];
+      pr.status = 'vendor_selected';
+      pr.po_number = null;
+
+      const { req, res, next } = createMockContext(
+        {
+          supplier_name: 'Honeywell Aerospace Ltd',
+          unit_price: 25000,
+          expected_delivery_date: '2026-11-25',
+          mark_as_ordered: true,
+          transport_mode: 'Air Freight',
+          dispatch_location: 'Bengaluru Airport Cargo Terminal (BLR)',
+          destination_plant_name: 'JCB India Plant 1 - Pune',
+          transporter_name: 'Blue Dart Aviation Express',
+          lr_tracking_number: 'AWB-77291044',
+          expected_dispatch_date: '2026-11-20',
+          freight_cost: 3500,
+          overall_shipment_cost: 28500,
+          delivery_remarks: 'High priority hydraulic avionics valve - fragile cargo',
+        },
+        { id: pr.id },
+        {},
+        {},
+        puneManagerUser
+      );
+
+      await createPurchaseOrder(req, res, next);
+
+      assert.equal(res.statusCode, 201);
+      assert.equal(res.responseData.success, true);
+      const data = res.responseData.data;
+      assert.equal(data.transport_mode, 'Air Freight');
+      assert.equal(data.dispatch_location, 'Bengaluru Airport Cargo Terminal (BLR)');
+      assert.equal(data.destination_plant_name, 'JCB India Plant 1 - Pune');
+      assert.equal(data.transporter_name, 'Blue Dart Aviation Express');
+      assert.equal(data.lr_tracking_number, 'AWB-77291044');
+      assert.equal(data.freight_cost, 3500);
+      assert.equal(data.overall_shipment_cost, 28500);
+    });
+
+    it('4. Processes GRN with Quality Control: records accepted, rejected, and damaged quantities', async () => {
+      const qcPrId = '70000000-0000-0000-0000-000000000099';
+      const part = mockDb.parts[0];
+      const initialStock = part.current_physical_stock;
+
+      mockDb.requisitions.push({
+        id: qcPrId,
+        pr_number: 'PR-2026-QC99',
+        work_order_id: null,
+        machine_id: '40000000-0000-0000-0000-000000000001',
+        part_id: part.id,
+        quantity_required: 4,
+        urgency: 'high',
+        technical_justification: 'QC testing requisition',
+        status: 'ordered',
+        requested_by: puneManagerUser.id,
+        approved_by: puneManagerUser.id,
+        po_number: 'PO-2026-QC99',
+        supplier_name: 'Honeywell Aerospace Ltd',
+        unit_price: 25000,
+        expected_delivery_date: '2026-11-25',
+        received_date: null,
+        plant_id: puneManagerUser.plant_id,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+
+      const { req, res, next } = createMockContext(
+        {
+          received_quantity: 4,
+          accepted_quantity: 2,
+          rejected_quantity: 1,
+          damaged_quantity: 1,
+          rejection_reason: 'Specification tolerance deviation on 1 unit',
+          inspection_remarks: '1 unit damaged in air cargo handling (cracked casing); 1 unit failed caliper check',
+          inspection_status: 'partially_passed',
+          delivery_note_number: 'DC-QC-TEST-001',
+          transport_mode: 'Air Freight',
+          transporter_name: 'Blue Dart Aviation',
+          lr_tracking_number: 'AWB-99881122',
+        },
+        { id: qcPrId },
+        {},
+        {},
+        puneManagerUser
+      );
+
+      await processGRNInward(req, res, next);
+
+      assert.equal(res.statusCode, 200);
+      assert.equal(res.responseData.success, true);
+      const details = res.responseData.receipt_details;
+      assert.equal(details.accepted_quantity, 2);
+      assert.equal(details.rejected_quantity, 1);
+      assert.equal(details.damaged_quantity, 1);
+      assert.equal(details.inspection_status, 'partially_passed');
+      assert.equal(details.total_inwarded, 2); // cumulative accepted
+      assert.equal(details.remaining_quantity, 2); // 4 - 2 = 2
+      // Physical stock only increased by ACCEPTED (2), NOT by rejected (1) or damaged (1)
+      assert.equal(part.current_physical_stock, initialStock + 2);
+    });
+
+    it('5. GRN partial delivery calculates Remaining = Ordered - Cumulative Received correctly', async () => {
+      const pr = mockDb.requisitions[0];
+      pr.status = 'ordered';
+      pr.quantity_required = 100;
+      const part = mockDb.parts.find((p) => p.id === pr.part_id)!;
+      const initialStock = part.current_physical_stock;
+
+      // Delivery 1: 40 units arrive
+      const ctx1 = createMockContext(
+        {
+          accepted_quantity: 40,
+          rejected_quantity: 0,
+          delivery_note_number: 'DC-BATCH-01',
+        },
+        { id: pr.id },
+        {},
+        {},
+        puneManagerUser
+      );
+      await processGRNInward(ctx1.req, ctx1.res, ctx1.next);
+      assert.equal(ctx1.res.statusCode, 200);
+      assert.equal(ctx1.res.responseData.receipt_details.previous_inwarded ?? 0, 0);
+      assert.equal(ctx1.res.responseData.receipt_details.total_inwarded, 40);
+      assert.equal(ctx1.res.responseData.receipt_details.remaining_quantity, 60); // 100 - 40 = 60
+
+      // Delivery 2: 30 more units arrive
+      const ctx2 = createMockContext(
+        {
+          accepted_quantity: 30,
+          rejected_quantity: 0,
+          delivery_note_number: 'DC-BATCH-02',
+        },
+        { id: pr.id },
+        {},
+        {},
+        puneManagerUser
+      );
+      await processGRNInward(ctx2.req, ctx2.res, ctx2.next);
+      assert.equal(ctx2.res.statusCode, 200);
+      assert.equal(ctx2.res.responseData.receipt_details.total_inwarded, 70); // 40 + 30 = 70
+      assert.equal(ctx2.res.responseData.receipt_details.remaining_quantity, 30); // 100 - 70 = 30
+      assert.equal(part.current_physical_stock, initialStock + 70);
     });
   });
 });

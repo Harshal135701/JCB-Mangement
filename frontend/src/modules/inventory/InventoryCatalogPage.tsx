@@ -17,7 +17,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Info,
-  Filter
+  Filter,
+  ShoppingCart
 } from 'lucide-react';
 
 interface SparePart {
@@ -366,6 +367,52 @@ export const InventoryCatalogPage: React.FC = () => {
     }
   };
 
+  // PR Creation Modal from Catalog
+  const [prPart, setPrPart] = useState<SparePart | null>(null);
+  const [prQuantity, setPrQuantity] = useState<number>(5);
+  const [prUrgency, setPrUrgency] = useState<'critical' | 'high' | 'medium' | 'low'>('high');
+  const [prJustification, setPrJustification] = useState('');
+  const [prLoading, setPrLoading] = useState(false);
+
+  const openPRModal = (p: SparePart) => {
+    setPrPart(p);
+    setPrQuantity(Math.max(1, p.min_reorder_level || 5));
+    setPrUrgency('high');
+    const avail = p.available_stock !== undefined
+      ? Number(p.available_stock)
+      : (Number(p.current_physical_stock || 0) - Number(p.reserved_stock || 0) - Number(p.quarantined_stock || 0));
+    setPrJustification(`Spare part replenishment request: Current available inventory is ${avail} ${p.uom || 'Nos'}.`);
+    setModalFeedback(null);
+  };
+
+  const handlePRSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!prPart || prQuantity <= 0) return;
+    try {
+      setPrLoading(true);
+      const res = await apiClient.post('/procurement/pr', {
+        part_id: prPart.id,
+        quantity_required: prQuantity,
+        urgency: prUrgency,
+        technical_justification: prJustification.trim() || `Replenishment request for part ${prPart.part_number}`,
+      });
+      if (res.data?.success) {
+        setPageFeedback({
+          type: 'success',
+          text: `Purchase Requisition ${res.data.data?.pr_number || ''} submitted successfully for manager approval!`,
+        });
+        setPrPart(null);
+      }
+    } catch (err: any) {
+      setModalFeedback({
+        type: 'error',
+        text: err.response?.data?.message || 'Failed to submit purchase requisition.',
+      });
+    } finally {
+      setPrLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Banner / Breadcrumb */}
@@ -508,13 +555,13 @@ export const InventoryCatalogPage: React.FC = () => {
                 <th className="px-3 py-3.5 text-right font-mono">Quarantined</th>
                 <th className="px-4 py-3.5 text-right font-mono">Available</th>
                 <th className="px-4 py-3.5 text-right font-mono">Unit Price</th>
-                {(isAdmin || canAdjust) && <th className="px-5 py-3.5 text-right">Actions</th>}
+                <th className="px-5 py-3.5 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100">
               {loading ? (
                 <tr>
-                  <td colSpan={isAdmin || canAdjust ? 9 : 8} className="text-center py-16 text-zinc-500 font-bold">
+                  <td colSpan={9} className="text-center py-16 text-zinc-500 font-bold">
                     <div className="flex flex-col items-center justify-center space-y-2">
                       <RefreshCw className="w-6 h-6 animate-spin text-jcb-yellowDark" />
                       <span>Scanning spare parts ledger...</span>
@@ -523,7 +570,7 @@ export const InventoryCatalogPage: React.FC = () => {
                 </tr>
               ) : parts.length === 0 ? (
                 <tr>
-                  <td colSpan={isAdmin || canAdjust ? 9 : 8} className="text-center py-16 text-zinc-400">
+                  <td colSpan={9} className="text-center py-16 text-zinc-400">
                     <Package className="w-10 h-10 mx-auto text-zinc-300 mb-2" />
                     <p className="font-bold text-zinc-700">No matching spare parts found</p>
                     <p className="text-xs text-zinc-400 mt-1">Try adjusting your search terms or category filter.</p>
@@ -586,39 +633,45 @@ export const InventoryCatalogPage: React.FC = () => {
                       <td className="px-4 py-3.5 font-mono text-zinc-800 font-bold text-right">
                         ₹{Number(p.unit_cost || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </td>
-                      {(canManageParts || canAdjust) && (
-                        <td className="px-5 py-3.5 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            {canAdjust && (
+                      <td className="px-5 py-3.5 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {/* Raise Purchase Requisition */}
+                          <button
+                            onClick={() => openPRModal(p)}
+                            className="p-1.5 text-amber-700 hover:text-black hover:bg-amber-100 rounded-lg transition cursor-pointer"
+                            title="Raise Purchase Requisition (PR)"
+                          >
+                            <ShoppingCart className="w-4 h-4" />
+                          </button>
+                          {canAdjust && (
+                            <button
+                              onClick={() => openAdjustModal(p)}
+                              className="p-1.5 text-zinc-600 hover:text-black hover:bg-zinc-100 rounded-lg transition cursor-pointer"
+                              title="Adjust Stock Quantity"
+                            >
+                              <SlidersHorizontal className="w-4 h-4" />
+                            </button>
+                          )}
+                          {canManageParts && (
+                            <>
                               <button
-                                onClick={() => openAdjustModal(p)}
-                                className="p-1.5 text-zinc-600 hover:text-black hover:bg-zinc-100 rounded-lg transition cursor-pointer"
-                                title="Adjust Stock Quantity"
+                                onClick={() => openEditModal(p)}
+                                className="p-1.5 text-zinc-600 hover:text-black hover:bg-amber-100 rounded-lg transition cursor-pointer"
+                                title="Edit Part Metadata"
                               >
-                                <SlidersHorizontal className="w-4 h-4" />
+                                <Edit2 className="w-4 h-4" />
                               </button>
-                            )}
-                            {canManageParts && (
-                              <>
-                                <button
-                                  onClick={() => openEditModal(p)}
-                                  className="p-1.5 text-zinc-600 hover:text-black hover:bg-amber-100 rounded-lg transition cursor-pointer"
-                                  title="Edit Part Metadata"
-                                >
-                                  <Edit2 className="w-4 h-4" />
-                                </button>
-                                <button
-                                  onClick={() => setPartToDelete(p)}
-                                  className="p-1.5 text-zinc-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition cursor-pointer"
-                                  title="Deactivate / Delete Part"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </td>
-                      )}
+                              <button
+                                onClick={() => setPartToDelete(p)}
+                                className="p-1.5 text-zinc-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition cursor-pointer"
+                                title="Deactivate / Delete Part"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   );
                 })
@@ -1082,6 +1135,119 @@ export const InventoryCatalogPage: React.FC = () => {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Raise Purchase Requisition Modal */}
+      {prPart && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="bg-zinc-950 p-5 flex items-center justify-between border-b border-zinc-800">
+              <div className="flex items-center gap-3">
+                <ShoppingCart className="w-5 h-5 text-jcb-yellow" />
+                <div>
+                  <h3 className="text-base font-black text-white">RAISE PURCHASE REQUISITION</h3>
+                  <p className="text-[10px] text-zinc-400 font-medium">
+                    Store replenishment request for manager approval
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setPrPart(null)}
+                className="text-zinc-400 hover:text-white p-1 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handlePRSubmit} className="p-6 space-y-4">
+              {modalFeedback && (
+                <div
+                  className={`p-3 rounded-xl text-xs font-bold flex items-center gap-2 ${
+                    modalFeedback.type === 'success'
+                      ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                      : 'bg-red-50 text-red-800 border border-red-200'
+                  }`}
+                >
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{modalFeedback.text}</span>
+                </div>
+              )}
+
+              <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-200 text-xs space-y-1">
+                <div className="font-mono font-black text-amber-800">{prPart.part_number}</div>
+                <div className="font-black text-zinc-900">{prPart.name}</div>
+                <div className="flex justify-between text-zinc-500 pt-1 font-mono text-[11px]">
+                  <span>Available Stock: <strong className="text-zinc-900">{prPart.available_stock ?? (Number(prPart.current_physical_stock || 0) - Number(prPart.reserved_stock || 0) - Number(prPart.quarantined_stock || 0))}</strong></span>
+                  <span>Min Reorder Level: <strong className="text-zinc-900">{prPart.min_reorder_level || 5}</strong></span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
+                    Quantity Required *
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    value={prQuantity}
+                    onChange={(e) => setPrQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                    className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-xl text-xs font-bold font-mono text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
+                    Urgency Priority *
+                  </label>
+                  <select
+                    value={prUrgency}
+                    onChange={(e: any) => setPrUrgency(e.target.value)}
+                    className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-xl text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                  >
+                    <option value="critical">Critical (Zero Stock / Line Risk)</option>
+                    <option value="high">High Urgency</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low Priority</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
+                  Technical Justification * (Min 5 chars)
+                </label>
+                <textarea
+                  rows={3}
+                  required
+                  value={prJustification}
+                  onChange={(e) => setPrJustification(e.target.value)}
+                  placeholder="Detail operational reason or maintenance demand..."
+                  className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-xl text-xs font-medium text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-zinc-200 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  disabled={prLoading}
+                  onClick={() => setPrPart(null)}
+                  className="px-4 py-2 border border-zinc-300 text-zinc-700 rounded-xl text-xs font-bold hover:bg-zinc-50 cursor-pointer disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={prLoading || prQuantity <= 0 || prJustification.trim().length < 5}
+                  className="bg-jcb-yellow hover:bg-jcb-yellowDark text-black font-black px-6 py-2 rounded-xl text-xs uppercase tracking-wider transition shadow border border-amber-500 disabled:opacity-50 cursor-pointer"
+                >
+                  {prLoading ? 'Submitting...' : 'Submit Requisition'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

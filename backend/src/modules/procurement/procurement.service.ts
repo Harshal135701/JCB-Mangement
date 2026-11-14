@@ -182,12 +182,21 @@ export interface CreatePOInput {
   vehicle_number?: string | null;
   lr_tracking_number?: string | null;
   delivery_remarks?: string | null;
+  dispatch_location?: string | null;
+  destination_plant_name?: string | null;
+  transport_mode?: string | null;
+  freight_cost?: number | null;
+  overall_shipment_cost?: number | null;
 }
 
 export interface ProcessGRNInput {
   received_quantity?: number;
   accepted_quantity?: number;
   rejected_quantity?: number;
+  damaged_quantity?: number;
+  defective_quantity?: number;
+  inspection_status?: string;
+  inspection_remarks?: string;
   rejection_reason?: string;
   remarks?: string;
   delivery_note_number?: string;
@@ -198,6 +207,12 @@ export interface ProcessGRNInput {
   challan_type?: string;
   vehicle_number?: string;
   lr_tracking_number?: string;
+  dispatch_location?: string;
+  destination_plant_name?: string;
+  transport_mode?: string;
+  transporter_name?: string;
+  freight_cost?: number;
+  overall_shipment_cost?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -747,6 +762,9 @@ export async function getPurchaseRequisitionsService(
 
   const selectCols = `
     SELECT pr.*,
+           COALESCE((SELECT SUM(gr.accepted_quantity) FROM grn_receipts gr WHERE gr.pr_id = pr.id), 0)::int as received_quantity,
+           GREATEST(0, pr.quantity_required - COALESCE((SELECT SUM(gr.accepted_quantity) FROM grn_receipts gr WHERE gr.pr_id = pr.id), 0))::int as remaining_quantity,
+           sp.part_number as sku,
            sp.part_number,
            sp.name as part_name,
            sp.category as part_category,
@@ -796,6 +814,9 @@ export async function getPurchaseRequisitionDetailsService(
 
   const detailRes = await query(
     `SELECT pr.*,
+            COALESCE((SELECT SUM(gr.accepted_quantity) FROM grn_receipts gr WHERE gr.pr_id = pr.id), 0)::int as received_quantity,
+            GREATEST(0, pr.quantity_required - COALESCE((SELECT SUM(gr.accepted_quantity) FROM grn_receipts gr WHERE gr.pr_id = pr.id), 0))::int as remaining_quantity,
+            sp.part_number as sku,
             sp.part_number,
             sp.name as part_name,
             sp.description as part_description,
@@ -1811,46 +1832,107 @@ export async function createPurchaseOrderService(
 
     const targetStatus = input.mark_as_ordered ? 'ordered' : 'po_created';
 
-    // 3. Update PR with PO details
-    const updateRes = await client.query(
-      `UPDATE purchase_requisitions
-       SET po_number = $2,
-           supplier_name = $3,
-           unit_price = $4,
-           expected_delivery_date = $5,
-           status = $6,
-           approved_by = $7,
-           supply_method = $8,
-           delivery_document_type = $9,
-           challan_type = $10,
-           vendor_challan_number = $11,
-           expected_dispatch_date = $12,
-           transporter_name = $13,
-           vehicle_number = $14,
-           lr_tracking_number = $15,
-           delivery_remarks = $16,
-           updated_at = NOW()
-       WHERE id = $1
-       RETURNING *`,
-      [
-        pr.id,
-        poNumber,
-        input.supplier_name.trim(),
-        unitPrice,
-        input.expected_delivery_date || null,
-        targetStatus,
-        user.id,
-        input.supply_method?.trim() || null,
-        input.delivery_document_type?.trim() || null,
-        input.challan_type?.trim() || null,
-        input.vendor_challan_number?.trim() || null,
-        input.expected_dispatch_date || null,
-        input.transporter_name?.trim() || null,
-        input.vehicle_number?.trim() || null,
-        input.lr_tracking_number?.trim() || null,
-        input.delivery_remarks?.trim() || null,
-      ]
-    );
+    const freightCost = input.freight_cost !== undefined && input.freight_cost !== null && !isNaN(Number(input.freight_cost))
+      ? Math.max(0, Number(input.freight_cost))
+      : 0;
+    const totalOrderValue = Number(pr.quantity_required) * unitPrice;
+    const overallShipmentCost = input.overall_shipment_cost !== undefined && input.overall_shipment_cost !== null && !isNaN(Number(input.overall_shipment_cost)) && Number(input.overall_shipment_cost) > 0
+      ? Number(input.overall_shipment_cost)
+      : totalOrderValue + freightCost;
+
+    // 3. Update PR with PO details (extended with Shipment & Transportation metadata)
+    let updateRes: any;
+    try {
+      updateRes = await client.query(
+        `UPDATE purchase_requisitions
+         SET po_number = $2,
+             supplier_name = $3,
+             unit_price = $4,
+             expected_delivery_date = $5,
+             status = $6,
+             approved_by = $7,
+             supply_method = $8,
+             delivery_document_type = $9,
+             challan_type = $10,
+             vendor_challan_number = $11,
+             expected_dispatch_date = $12,
+             transporter_name = $13,
+             vehicle_number = $14,
+             lr_tracking_number = $15,
+             delivery_remarks = $16,
+             dispatch_location = $17,
+             destination_plant_name = $18,
+             transport_mode = $19,
+             freight_cost = $20,
+             overall_shipment_cost = $21,
+             updated_at = NOW()
+         WHERE id = $1
+         RETURNING *`,
+        [
+          pr.id,
+          poNumber,
+          input.supplier_name.trim(),
+          unitPrice,
+          input.expected_delivery_date || null,
+          targetStatus,
+          user.id,
+          input.supply_method?.trim() || null,
+          input.delivery_document_type?.trim() || null,
+          input.challan_type?.trim() || null,
+          input.vendor_challan_number?.trim() || null,
+          input.expected_dispatch_date || null,
+          input.transporter_name?.trim() || null,
+          input.vehicle_number?.trim() || null,
+          input.lr_tracking_number?.trim() || null,
+          input.delivery_remarks?.trim() || null,
+          input.dispatch_location?.trim() || null,
+          input.destination_plant_name?.trim() || null,
+          input.transport_mode?.trim() || null,
+          freightCost,
+          overallShipmentCost,
+        ]
+      );
+    } catch (colErr) {
+      updateRes = await client.query(
+        `UPDATE purchase_requisitions
+         SET po_number = $2,
+             supplier_name = $3,
+             unit_price = $4,
+             expected_delivery_date = $5,
+             status = $6,
+             approved_by = $7,
+             supply_method = $8,
+             delivery_document_type = $9,
+             challan_type = $10,
+             vendor_challan_number = $11,
+             expected_dispatch_date = $12,
+             transporter_name = $13,
+             vehicle_number = $14,
+             lr_tracking_number = $15,
+             delivery_remarks = $16,
+             updated_at = NOW()
+         WHERE id = $1
+         RETURNING *`,
+        [
+          pr.id,
+          poNumber,
+          input.supplier_name.trim(),
+          unitPrice,
+          input.expected_delivery_date || null,
+          targetStatus,
+          user.id,
+          input.supply_method?.trim() || null,
+          input.delivery_document_type?.trim() || null,
+          input.challan_type?.trim() || null,
+          input.vendor_challan_number?.trim() || null,
+          input.expected_dispatch_date || null,
+          input.transporter_name?.trim() || null,
+          input.vehicle_number?.trim() || null,
+          input.lr_tracking_number?.trim() || null,
+          input.delivery_remarks?.trim() || null,
+        ]
+      );
+    }
 
     const updatedPR = updateRes.rows[0];
 
@@ -1876,6 +1958,11 @@ export async function createPurchaseOrderService(
           transporter_name: input.transporter_name || null,
           vehicle_number: input.vehicle_number || null,
           lr_tracking_number: input.lr_tracking_number || null,
+          dispatch_location: input.dispatch_location || null,
+          destination_plant_name: input.destination_plant_name || null,
+          transport_mode: input.transport_mode || null,
+          freight_cost: freightCost,
+          overall_shipment_cost: overallShipmentCost,
         }),
       ]
     );
@@ -2008,17 +2095,26 @@ export async function getPurchaseOrdersService(
            pr.vehicle_number,
            pr.lr_tracking_number,
            pr.delivery_remarks,
+           pr.dispatch_location,
+           pr.destination_plant_name,
+           pr.transport_mode,
+           COALESCE(pr.freight_cost, 0.00)::numeric as freight_cost,
+           COALESCE(pr.overall_shipment_cost, (pr.unit_price * pr.quantity_required) + COALESCE(pr.freight_cost, 0.00))::numeric as overall_shipment_cost,
            pr.po_number,
            pr.supplier_name,
            pr.unit_price,
            (pr.unit_price * pr.quantity_required) as total_order_value,
+           (pr.unit_price * pr.quantity_required) as total_order_cost,
            pr.quantity_required,
+           COALESCE((SELECT SUM(gr.accepted_quantity) FROM grn_receipts gr WHERE gr.pr_id = pr.id), 0)::int as received_quantity,
+           GREATEST(0, pr.quantity_required - COALESCE((SELECT SUM(gr.accepted_quantity) FROM grn_receipts gr WHERE gr.pr_id = pr.id), 0))::int as remaining_quantity,
            pr.expected_delivery_date,
            pr.received_date,
            pr.status,
            pr.urgency,
            pr.created_at,
            pr.updated_at,
+           sp.part_number as sku,
            sp.part_number,
            sp.name as part_name,
            sp.uom,
@@ -2066,24 +2162,67 @@ export async function processGRNInwardService(
   // Strict non-negative integer validation
   const acceptedQty = validateStrictNonNegativeInteger(input.accepted_quantity, 'Accepted quantity');
   const rejectedQty = validateStrictNonNegativeInteger(input.rejected_quantity, 'Rejected quantity');
+  const damagedQty = input.damaged_quantity !== undefined ? validateStrictNonNegativeInteger(input.damaged_quantity, 'Damaged quantity') : 0;
+  const defectiveQty = input.defective_quantity !== undefined ? validateStrictNonNegativeInteger(input.defective_quantity, 'Defective quantity') : 0;
   const legacyReceivedQty = input.received_quantity !== undefined ? validateStrictNonNegativeInteger(input.received_quantity, 'Received quantity') : 0;
 
   let finalAcceptedQty = acceptedQty;
   let finalRejectedQty = rejectedQty;
+  let finalDamagedQty = damagedQty;
+  let finalDefectiveQty = defectiveQty;
 
   // Fallback for legacy requests that only pass received_quantity
   if (input.accepted_quantity === undefined && input.rejected_quantity === undefined && legacyReceivedQty > 0) {
     finalAcceptedQty = legacyReceivedQty;
     finalRejectedQty = 0;
+    finalDamagedQty = 0;
+    finalDefectiveQty = 0;
   }
 
-  const totalDeliveredInBatch = finalAcceptedQty + finalRejectedQty;
+  // Consistent quantity model across all layers:
+  // received_quantity = accepted_quantity + rejected_quantity + damaged_quantity
+  const totalDeliveredInBatch = finalAcceptedQty + finalRejectedQty + finalDamagedQty;
   if (totalDeliveredInBatch <= 0) {
-    throw new ProcurementServiceError('At least 1 delivered unit (accepted or rejected) must be recorded for GRN.', 400);
+    throw new ProcurementServiceError('At least 1 delivered unit (accepted, rejected, or damaged) must be recorded for GRN.', 400);
+  }
+
+  // Defective quantity is a classification within non-conforming (rejected/damaged) goods
+  if (finalDefectiveQty < 0 || finalDefectiveQty > (finalRejectedQty + finalDamagedQty)) {
+    throw new ProcurementServiceError(
+      `Defective quantity (${finalDefectiveQty}) cannot exceed total non-conforming (rejected + damaged) quantity (${finalRejectedQty + finalDamagedQty}). Defective stock is a classified sub-category of non-conforming goods.`,
+      400
+    );
+  }
+
+  // If received_quantity is explicitly provided alongside sub-quantities, it must strictly match
+  if (
+    input.received_quantity !== undefined &&
+    input.received_quantity !== null &&
+    (input.accepted_quantity !== undefined || input.rejected_quantity !== undefined || input.damaged_quantity !== undefined)
+  ) {
+    if (legacyReceivedQty !== totalDeliveredInBatch) {
+      throw new ProcurementServiceError(
+        `Received quantity (${legacyReceivedQty}) does not match the sum of accepted (${finalAcceptedQty}), rejected (${finalRejectedQty}), and damaged (${finalDamagedQty}) quantities (expected ${totalDeliveredInBatch}).`,
+        400
+      );
+    }
   }
 
   if (finalRejectedQty > 0 && (!input.rejection_reason || input.rejection_reason.trim().length === 0)) {
     throw new ProcurementServiceError('Rejection reason is mandatory when items are rejected during quality inspection.', 400);
+  }
+
+  let inspectionStatus = input.inspection_status?.trim().toLowerCase();
+  if (!inspectionStatus || !['passed', 'partially_passed', 'failed', 'quarantined'].includes(inspectionStatus)) {
+    if (finalRejectedQty === 0 && finalDamagedQty === 0 && finalAcceptedQty > 0) {
+      inspectionStatus = 'passed';
+    } else if (finalAcceptedQty > 0 && (finalRejectedQty > 0 || finalDamagedQty > 0)) {
+      inspectionStatus = 'partially_passed';
+    } else if (finalAcceptedQty === 0) {
+      inspectionStatus = 'failed';
+    } else {
+      inspectionStatus = 'quarantined';
+    }
   }
 
   const { pool } = getProcurementServiceDb();
@@ -2135,19 +2274,51 @@ export async function processGRNInwardService(
       );
     }
 
-    // 2. Prevent Over-receipt: Count previously accepted usable parts from inventory transactions
+    // 2. Prevent Over-receipt & Track Partial Delivery:
+    // Track both cumulative physical deliveries and cumulative usable accepted stock
+    let prevPhysicalDelivered = 0;
+    let prevAccepted = 0;
+    try {
+      const grnPrevRes = await client.query(
+        `SELECT 
+           COALESCE(SUM(received_quantity), 0) as total_prev_delivered,
+           COALESCE(SUM(accepted_quantity), 0) as total_prev_accepted
+         FROM grn_receipts
+         WHERE pr_id = $1`,
+        [pr.id]
+      );
+      if (grnPrevRes.rows.length > 0) {
+        prevPhysicalDelivered = parseInt(grnPrevRes.rows[0].total_prev_delivered || '0', 10);
+        prevAccepted = parseInt(grnPrevRes.rows[0].total_prev_accepted || '0', 10);
+      }
+    } catch {
+      // Non-blocking fallback if grn_receipts query fails
+    }
+
     const prevTxRes = await client.query(
       `SELECT COALESCE(SUM(quantity), 0) as total_prev_inwarded
        FROM inventory_transactions
        WHERE part_id = $1 AND remarks LIKE $2 AND transaction_type = 'STOCK_IN'`,
       [pr.part_id, `%[PR:${pr.id}]%`]
     );
-    const prevAccepted = parseInt(prevTxRes.rows[0]?.total_prev_inwarded || '0', 10);
+    const txPrev = parseInt(prevTxRes.rows[0]?.total_prev_inwarded || '0', 10);
+    prevAccepted = Math.max(prevAccepted, txPrev);
+    prevPhysicalDelivered = Math.max(prevPhysicalDelivered, prevAccepted);
 
-    const remainingToReceive = pr.quantity_required - prevAccepted;
-    if (finalAcceptedQty > remainingToReceive) {
+    // Over-receipt Check A: Physical delivered quantity cannot exceed ordered PO quantity
+    const remainingReceivable = pr.quantity_required - prevPhysicalDelivered;
+    if (totalDeliveredInBatch > remainingReceivable) {
       throw new ProcurementServiceError(
-        `Over-receipt rejected: Accepted batch (${finalAcceptedQty}) exceeds remaining outstanding quantity (${remainingToReceive}). Total required: ${pr.quantity_required}, Previously accepted: ${prevAccepted}.`,
+        `Over-receipt rejected: Total physical delivery (${prevPhysicalDelivered + totalDeliveredInBatch}) exceeds ordered PO quantity (${pr.quantity_required}). Remaining receivable: ${Math.max(0, remainingReceivable)}.`,
+        400
+      );
+    }
+
+    // Over-receipt Check B: Usable accepted quantity cannot exceed remaining acceptable quantity
+    const remainingToAccept = pr.quantity_required - prevAccepted;
+    if (finalAcceptedQty > remainingToAccept) {
+      throw new ProcurementServiceError(
+        `Over-receipt rejected: Accepted batch (${finalAcceptedQty}) exceeds remaining acceptable quantity (${remainingToAccept}). Total ordered: ${pr.quantity_required}, Previously accepted: ${prevAccepted}.`,
         400
       );
     }
@@ -2165,7 +2336,92 @@ export async function processGRNInwardService(
       throw new ProcurementServiceError('Spare part not found in inventory.', 404);
     }
 
-    // 4. Update usable physical stock ONLY with ACCEPTED quantities
+    // 4. Generate GRN number & Persist GRN Record FIRST
+    // The GRN record must be successfully persisted before updating physical inventory or PR status.
+    const currentYear = new Date().getFullYear();
+    const grnNumber = await generateGRNNumberWithAdvisoryLock(client, currentYear);
+
+    const effChallanNo = input.vendor_challan_number?.trim() || input.delivery_note_number?.trim() || pr.vendor_challan_number || null;
+    const effSupplyMethod = input.supply_method?.trim() || pr.supply_method || null;
+    const effDocType = input.delivery_document_type?.trim() || pr.delivery_document_type || null;
+    const effChallanType = input.challan_type?.trim() || pr.challan_type || null;
+    const effVehicleNo = input.vehicle_number?.trim() || pr.vehicle_number || null;
+    const effTrackingNo = input.lr_tracking_number?.trim() || pr.lr_tracking_number || null;
+    const effInvoiceNo = input.invoice_number?.trim() || null;
+    const effDispatchLoc = input.dispatch_location?.trim() || pr.dispatch_location || null;
+    const effDestPlant = input.destination_plant_name?.trim() || pr.destination_plant_name || pr.plant_name || null;
+    const effTransportMode = input.transport_mode?.trim() || pr.transport_mode || 'Road Freight';
+    const effTransporter = input.transporter_name?.trim() || pr.transporter_name || null;
+    const effFreightCost = Number(input.freight_cost) >= 0 ? Number(input.freight_cost) : (Number(pr.freight_cost) || 0);
+    const effOverallShipmentCost = Number(input.overall_shipment_cost) > 0 ? Number(input.overall_shipment_cost) : (Number(pr.overall_shipment_cost) || (Number(pr.unit_price) * finalAcceptedQty + effFreightCost));
+
+    let grnInsertRes: any;
+    try {
+      grnInsertRes = await client.query(
+        `INSERT INTO grn_receipts (
+          grn_number, pr_id, delivery_note_number, received_quantity,
+          accepted_quantity, rejected_quantity, damaged_quantity, defective_quantity,
+          inspection_status, inspection_remarks, rejection_reason, remarks, received_by,
+          vendor_challan_number, supply_method, delivery_document_type, challan_type,
+          vehicle_number, lr_tracking_number, invoice_number,
+          dispatch_location, destination_plant_name, transport_mode, transporter_name,
+          freight_cost, overall_shipment_cost
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
+        RETURNING id, grn_number`,
+        [
+          grnNumber,
+          pr.id,
+          input.delivery_note_number?.trim() || effChallanNo,
+          totalDeliveredInBatch,
+          finalAcceptedQty,
+          finalRejectedQty,
+          finalDamagedQty,
+          finalDefectiveQty,
+          inspectionStatus,
+          input.inspection_remarks?.trim() || null,
+          input.rejection_reason?.trim() || null,
+          input.remarks?.trim() || null,
+          user.id,
+          effChallanNo,
+          effSupplyMethod,
+          effDocType,
+          effChallanType,
+          effVehicleNo,
+          effTrackingNo,
+          effInvoiceNo,
+          effDispatchLoc,
+          effDestPlant,
+          effTransportMode,
+          effTransporter,
+          effFreightCost,
+          effOverallShipmentCost,
+        ]
+      );
+    } catch (dbErr: any) {
+      const isMissingColOrTable =
+        dbErr.code === '42703' ||
+        dbErr.code === '42P01' ||
+        (dbErr.message && (dbErr.message.includes('column') || dbErr.message.includes('relation "grn_receipts" does not exist')));
+
+      if (isMissingColOrTable) {
+        throw new ProcurementServiceError(
+          `GRN persistence failed: Required GRN/QC schema or table is missing (${dbErr.message}). Ensure database migration 011 has been executed.`,
+          500
+        );
+      }
+      throw new ProcurementServiceError(
+        `Failed to persist Goods Receipt Note (GRN) record: ${dbErr.message}`,
+        500
+      );
+    }
+
+    if (!grnInsertRes || (grnInsertRes.rowCount === 0 && (!grnInsertRes.rows || grnInsertRes.rows.length === 0))) {
+      throw new ProcurementServiceError('Failed to persist Goods Receipt Note (GRN) record: Database returned no inserted row.', 500);
+    }
+
+    // 5. Update usable physical stock ONLY with ACCEPTED quantities
+    // Rejected, damaged, and defective quantities are strictly excluded from available inventory
     if (finalAcceptedQty > 0) {
       await client.query(
         `UPDATE spare_parts
@@ -2198,74 +2454,8 @@ export async function processGRNInwardService(
       );
     }
 
-    // 5. Generate GRN number & insert into grn_receipts
-    const currentYear = new Date().getFullYear();
-    const grnNumber = await generateGRNNumberWithAdvisoryLock(client, currentYear);
-
-    try {
-      const effChallanNo = input.vendor_challan_number?.trim() || input.delivery_note_number?.trim() || pr.vendor_challan_number || null;
-      const effSupplyMethod = input.supply_method?.trim() || pr.supply_method || null;
-      const effDocType = input.delivery_document_type?.trim() || pr.delivery_document_type || null;
-      const effChallanType = input.challan_type?.trim() || pr.challan_type || null;
-      const effVehicleNo = input.vehicle_number?.trim() || pr.vehicle_number || null;
-      const effTrackingNo = input.lr_tracking_number?.trim() || pr.lr_tracking_number || null;
-      const effInvoiceNo = input.invoice_number?.trim() || null;
-
-      try {
-        await client.query(
-          `INSERT INTO grn_receipts (
-            grn_number, pr_id, delivery_note_number, received_quantity,
-            accepted_quantity, rejected_quantity, rejection_reason, remarks, received_by,
-            vendor_challan_number, supply_method, delivery_document_type, challan_type,
-            vehicle_number, lr_tracking_number, invoice_number
-          )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
-          [
-            grnNumber,
-            pr.id,
-            input.delivery_note_number?.trim() || effChallanNo,
-            totalDeliveredInBatch,
-            finalAcceptedQty,
-            finalRejectedQty,
-            input.rejection_reason?.trim() || null,
-            input.remarks?.trim() || null,
-            user.id,
-            effChallanNo,
-            effSupplyMethod,
-            effDocType,
-            effChallanType,
-            effVehicleNo,
-            effTrackingNo,
-            effInvoiceNo,
-          ]
-        );
-      } catch (colErr) {
-        // Fallback to standard columns if extended columns do not exist yet
-        await client.query(
-          `INSERT INTO grn_receipts (
-            grn_number, pr_id, delivery_note_number, received_quantity,
-            accepted_quantity, rejected_quantity, rejection_reason, remarks, received_by
-          )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-          [
-            grnNumber,
-            pr.id,
-            input.delivery_note_number?.trim() || effChallanNo,
-            totalDeliveredInBatch,
-            finalAcceptedQty,
-            finalRejectedQty,
-            input.rejection_reason?.trim() || null,
-            input.remarks?.trim() || null,
-            user.id,
-          ]
-        );
-      }
-    } catch (e: any) {
-      // Non-blocking in mock environments where grn_receipts table is not simulated
-    }
-
-    // 6. Record inspection rejection remarks in audit log if finalRejectedQty > 0
-    if (finalRejectedQty > 0) {
+    // 6. Record inspection rejection/damage remarks in audit log if rejected or damaged
+    if (finalRejectedQty > 0 || finalDamagedQty > 0) {
       await client.query(
         `INSERT INTO audit_logs (entity_name, entity_id, action, performed_by, new_values)
          VALUES ('purchase_requisitions', $1, 'GRN_INSPECTION_REJECT', $2, $3)`,
@@ -2275,7 +2465,11 @@ export async function processGRNInwardService(
           JSON.stringify({
             grn_number: grnNumber,
             rejected_quantity: finalRejectedQty,
-            rejection_reason: input.rejection_reason,
+            damaged_quantity: finalDamagedQty,
+            defective_quantity: finalDefectiveQty,
+            inspection_status: inspectionStatus,
+            rejection_reason: input.rejection_reason || input.inspection_remarks || null,
+            inspection_remarks: input.inspection_remarks || null,
             pr_number: pr.pr_number,
             po_number: pr.po_number,
             delivery_note_number: input.delivery_note_number || null,
@@ -2286,6 +2480,7 @@ export async function processGRNInwardService(
 
     // 7. Update PR status: fulfilled only when cumulative accepted meets required
     const cumulativeAccepted = prevAccepted + finalAcceptedQty;
+    const cumulativePhysicalDelivered = prevPhysicalDelivered + totalDeliveredInBatch;
     const isFullyReceived = cumulativeAccepted >= pr.quantity_required;
     const nextStatus = isFullyReceived ? 'fully_received' : 'partially_received';
 
@@ -2322,8 +2517,11 @@ export async function processGRNInwardService(
           grn_number: grnNumber,
           pr_number: pr.pr_number,
           po_number: pr.po_number,
+          received_quantity: totalDeliveredInBatch,
           accepted_quantity: finalAcceptedQty,
           rejected_quantity: finalRejectedQty,
+          damaged_quantity: finalDamagedQty,
+          defective_quantity: finalDefectiveQty,
           status: nextStatus,
           delivery_note_number: input.delivery_note_number || null,
         }),
@@ -2352,8 +2550,11 @@ export async function processGRNInwardService(
       const payload = {
         grn_number: grnNumber,
         pr: updatedPR,
+        received_quantity: totalDeliveredInBatch,
         accepted_quantity: finalAcceptedQty,
         rejected_quantity: finalRejectedQty,
+        damaged_quantity: finalDamagedQty,
+        defective_quantity: finalDefectiveQty,
         message: `GRN ${grnNumber} posted for ${pr.part_number}. ${finalAcceptedQty} units added to physical stock ledger.`,
       };
       if (effectivePlantId) {
@@ -2373,11 +2574,26 @@ export async function processGRNInwardService(
     return {
       grn_number: grnNumber,
       pr: updatedPR,
+      received_quantity: totalDeliveredInBatch,
       accepted_quantity: finalAcceptedQty,
       rejected_quantity: finalRejectedQty,
+      damaged_quantity: finalDamagedQty,
+      defective_quantity: finalDefectiveQty,
+      inspection_status: inspectionStatus,
+      inspection_remarks: input.inspection_remarks || null,
+      rejection_reason: input.rejection_reason || null,
       previous_inwarded: prevAccepted,
       total_inwarded: cumulativeAccepted,
+      cumulative_physical_delivered: cumulativePhysicalDelivered,
       remaining_quantity: Math.max(0, pr.quantity_required - cumulativeAccepted),
+      remaining_receivable: Math.max(0, pr.quantity_required - cumulativePhysicalDelivered),
+      transport_mode: effTransportMode,
+      dispatch_location: effDispatchLoc,
+      destination_plant_name: effDestPlant,
+      transporter_name: effTransporter,
+      lr_tracking_number: effTrackingNo,
+      freight_cost: effFreightCost,
+      overall_shipment_cost: effOverallShipmentCost,
     };
   } catch (err) {
     try {
