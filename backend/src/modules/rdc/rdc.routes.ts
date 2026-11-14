@@ -15,6 +15,7 @@ import {
   recordRDCWriteOff,
   cancelRDC,
   closeRDC,
+  deleteRDC,
   getRDCHistory,
   getRdcDashboard,
   getOverdueRDCs,
@@ -129,11 +130,18 @@ router.post(
   recordRDCWriteOff
 );
 
-// Cancellation (Creator technician or Manager/Admin)
+// Cancellation (Creator technician, Store Manager, or Manager/Admin)
 router.post(
   '/:id/cancel',
-  requireRoles('admin', 'manager', 'technician'),
+  requireRoles('admin', 'manager', 'store_manager', 'technician'),
   cancelRDC
+);
+
+// Delete Delivery Challan (draft, rejected, or cancelled)
+router.delete(
+  '/:id',
+  requireRoles('admin', 'manager', 'store_manager', 'technician'),
+  deleteRDC
 );
 
 // Close Reconciled Challan (Managers, Store Managers, Admins)

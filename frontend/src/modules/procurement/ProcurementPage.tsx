@@ -1894,23 +1894,23 @@ export const ProcurementPage: React.FC = () => {
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] flex flex-col">
-            <div className="bg-zinc-950 p-5 flex items-center justify-between border-b border-zinc-800 shrink-0">
+            <div className="bg-white p-5 flex items-center justify-between border-b-2 border-zinc-200 shrink-0">
               <div className="flex items-center gap-3">
-                <div className="bg-jcb-yellow text-black font-black text-xl px-2.5 py-0.5 rounded shadow">
+                <div className="bg-jcb-yellow text-zinc-950 font-black text-xl px-2.5 py-0.5 rounded shadow-sm border border-amber-400">
                   PR
                 </div>
                 <div>
-                  <h3 className="text-base font-black text-white tracking-wide">
+                  <h3 className="text-base font-black text-zinc-950 tracking-wide uppercase">
                     RAISE PURCHASE REQUISITION
                   </h3>
-                  <p className="text-[10px] text-zinc-400 font-medium">
+                  <p className="text-[11px] text-zinc-500 font-medium">
                     Submit spare part procurement request to plant maintenance authority.
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setIsCreateModalOpen(false)}
-                className="text-zinc-400 hover:text-white p-1"
+                className="text-zinc-400 hover:text-zinc-900 p-1 rounded-lg hover:bg-zinc-100 transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -2087,14 +2087,16 @@ export const ProcurementPage: React.FC = () => {
       {selectedPRForApprove && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="bg-zinc-950 p-5 flex items-center justify-between border-b border-zinc-800">
+            <div className="bg-white p-5 flex items-center justify-between border-b-2 border-zinc-200">
               <div className="flex items-center gap-3">
-                <CheckCircle2 className="w-5 h-5 text-jcb-yellow" />
-                <h3 className="text-base font-black text-white">APPROVE REQUISITION</h3>
+                <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center font-black">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                </div>
+                <h3 className="text-base font-black text-zinc-950 uppercase">APPROVE REQUISITION</h3>
               </div>
               <button
                 onClick={() => setSelectedPRForApprove(null)}
-                className="text-zinc-400 hover:text-white p-1"
+                className="text-zinc-400 hover:text-zinc-900 p-1 rounded-lg hover:bg-zinc-100 transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -2235,14 +2237,16 @@ export const ProcurementPage: React.FC = () => {
       {selectedPRForCancel && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border-2 border-zinc-300 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="bg-zinc-900 p-5 flex items-center justify-between border-b border-zinc-800">
+            <div className="bg-white p-5 flex items-center justify-between border-b-2 border-zinc-200">
               <div className="flex items-center gap-3">
-                <Ban className="w-5 h-5 text-amber-400" />
-                <h3 className="text-base font-black text-white">CANCEL REQUISITION</h3>
+                <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center font-black">
+                  <Ban className="w-5 h-5 text-amber-600" />
+                </div>
+                <h3 className="text-base font-black text-zinc-950 uppercase">CANCEL REQUISITION</h3>
               </div>
               <button
                 onClick={() => setSelectedPRForCancel(null)}
-                className="text-zinc-400 hover:text-white p-1"
+                className="text-zinc-400 hover:text-zinc-900 p-1 rounded-lg hover:bg-zinc-100 transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -2295,14 +2299,16 @@ export const ProcurementPage: React.FC = () => {
       {selectedPRForPO && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="bg-zinc-950 p-5 flex items-center justify-between border-b border-zinc-800">
+            <div className="bg-white p-5 flex items-center justify-between border-b-2 border-zinc-200">
               <div className="flex items-center gap-3">
-                <Truck className="w-5 h-5 text-jcb-yellow" />
-                <h3 className="text-base font-black text-white">ISSUE PURCHASE ORDER</h3>
+                <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-800 flex items-center justify-center font-black">
+                  <Truck className="w-5 h-5 text-blue-600" />
+                </div>
+                <h3 className="text-base font-black text-zinc-950 uppercase">ISSUE PURCHASE ORDER</h3>
               </div>
               <button
                 onClick={() => setSelectedPRForPO(null)}
-                className="text-zinc-400 hover:text-white p-1"
+                className="text-zinc-400 hover:text-zinc-900 p-1 rounded-lg hover:bg-zinc-100 transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -2430,19 +2436,21 @@ export const ProcurementPage: React.FC = () => {
       {selectedPRForGRN && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] flex flex-col">
-            <div className="bg-zinc-950 p-5 flex items-center justify-between border-b border-zinc-800 shrink-0">
+            <div className="bg-white p-5 flex items-center justify-between border-b-2 border-zinc-200 shrink-0">
               <div className="flex items-center gap-3">
-                <Boxes className="w-5 h-5 text-emerald-400" />
+                <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center font-black">
+                  <Boxes className="w-5 h-5 text-emerald-600" />
+                </div>
                 <div>
-                  <h3 className="text-base font-black text-white">GOODS RECEIPT NOTE (GRN) &amp; QC</h3>
-                  <p className="text-[10px] text-zinc-400 font-medium">
+                  <h3 className="text-base font-black text-zinc-950 uppercase">GOODS RECEIPT NOTE (GRN) &amp; QC</h3>
+                  <p className="text-[11px] text-zinc-500 font-medium">
                     Store gate receipt inspection &amp; inventory update
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setSelectedPRForGRN(null)}
-                className="text-zinc-400 hover:text-white p-1"
+                className="text-zinc-400 hover:text-zinc-900 p-1 rounded-lg hover:bg-zinc-100 transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -2615,23 +2623,23 @@ export const ProcurementPage: React.FC = () => {
       {selectedPRForDetails && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] flex flex-col">
-            <div className="bg-zinc-950 p-5 flex items-center justify-between border-b border-zinc-800 shrink-0">
+            <div className="bg-white p-5 flex items-center justify-between border-b-2 border-zinc-200 shrink-0">
               <div className="flex items-center gap-3">
-                <div className="bg-jcb-yellow text-black font-black text-xl px-2.5 py-0.5 rounded shadow">
+                <div className="bg-jcb-yellow text-zinc-950 font-black text-xl px-2.5 py-0.5 rounded shadow-sm border border-amber-400">
                   PR
                 </div>
                 <div>
-                  <h3 className="text-base font-black text-white font-mono">
+                  <h3 className="text-base font-black text-zinc-950 font-mono">
                     {selectedPRForDetails.pr_number}
                   </h3>
-                  <div className="text-[10px] text-zinc-400">
+                  <div className="text-[11px] text-zinc-500 font-medium">
                     Requisition Specifications &amp; Regulatory Audit Trail
                   </div>
                 </div>
               </div>
               <button
                 onClick={() => setSelectedPRForDetails(null)}
-                className="text-zinc-400 hover:text-white p-1"
+                className="text-zinc-400 hover:text-zinc-900 p-1 rounded-lg hover:bg-zinc-100 transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>

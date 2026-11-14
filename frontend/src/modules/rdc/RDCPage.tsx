@@ -43,6 +43,7 @@ import {
   ExternalLink,
   Trash2,
   RotateCcw,
+  Edit2,
 } from 'lucide-react';
 
 // ============================================================================
@@ -195,8 +196,9 @@ export const RDCPage: React.FC = () => {
   const [challanHistory, setChallanHistory] = useState<RdcAuditLog[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
-  // Create Modal State
+  // Create & Edit Modal State
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [editingChallanId, setEditingChallanId] = useState<string | null>(null);
   const [createSubmitting, setCreateSubmitting] = useState(false);
 
   // Initial Multi-Item Creation Form
@@ -478,6 +480,103 @@ export const RDCPage: React.FC = () => {
     );
   }, [createForm.items]);
 
+  const openCreateModal = () => {
+    setEditingChallanId(null);
+    setCreateForm({
+      rdc_type: 'RDC',
+      priority: 'medium',
+      vendor_party_name: '',
+      vendor_gstin: '',
+      vendor_address: '',
+      contact_person: '',
+      contact_phone: '',
+      contact_email: '',
+      purpose: '',
+      machine_id: '',
+      document_reference: '',
+      expected_return_date: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+      submission_notes: '',
+      save_as_draft: false,
+      items: [
+        {
+          part_id: '',
+          item_description: '',
+          serial_number: '',
+          quantity_dispatched: 1,
+          unit_cost: 0,
+          remarks: '',
+        },
+      ],
+    });
+    setIsCreateModalOpen(true);
+  };
+
+  const openEditModal = (rdc: RdcChallan) => {
+    setEditingChallanId(rdc.id);
+    setCreateForm({
+      rdc_type: rdc.rdc_type,
+      priority: rdc.priority,
+      vendor_party_name: rdc.vendor_party_name,
+      vendor_gstin: rdc.vendor_gstin || '',
+      vendor_address: rdc.vendor_address || '',
+      contact_person: rdc.contact_person || '',
+      contact_phone: rdc.contact_phone || '',
+      contact_email: rdc.contact_email || '',
+      purpose: rdc.purpose || '',
+      machine_id: rdc.machine_id || '',
+      document_reference: rdc.document_reference || '',
+      expected_return_date: rdc.expected_return_date ? rdc.expected_return_date.split('T')[0] : '',
+      submission_notes: '',
+      save_as_draft: rdc.status === 'draft',
+      items: rdc.items && rdc.items.length > 0
+        ? rdc.items.map((it) => ({
+            part_id: it.part_id || '',
+            item_description: it.item_description,
+            serial_number: it.serial_number || '',
+            quantity_dispatched: it.quantity_dispatched,
+            unit_cost: Number(it.unit_cost) || 0,
+            remarks: it.remarks || '',
+          }))
+        : [
+            {
+              part_id: '',
+              item_description: '',
+              serial_number: '',
+              quantity_dispatched: 1,
+              unit_cost: 0,
+              remarks: '',
+            },
+          ],
+    });
+    setIsCreateModalOpen(true);
+  };
+
+  const handleDeleteChallan = async (challan: RdcChallan) => {
+    if (!window.confirm(`Are you sure you want to delete delivery challan ${challan.challan_number}? This action cannot be undone.`)) {
+      return;
+    }
+    try {
+      setActionSubmitting(true);
+      const res = await apiClient.delete(`/rdc/${challan.id}`);
+      if (res.data?.success) {
+        setFeedback({
+          type: 'success',
+          message: res.data.message || `Delivery challan ${challan.challan_number} deleted successfully.`,
+        });
+        setSelectedChallan(null);
+        fetchChallans();
+        fetchMetrics();
+      }
+    } catch (err: any) {
+      setFeedback({
+        type: 'error',
+        message: err.response?.data?.message || 'Failed to delete delivery challan.',
+      });
+    } finally {
+      setActionSubmitting(false);
+    }
+  };
+
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -544,47 +643,61 @@ export const RDCPage: React.FC = () => {
         })),
       };
 
-      const res = await apiClient.post('/rdc', payload);
-      if (res.data?.success) {
-        setFeedback({
-          type: 'success',
-          message: `Delivery Challan ${res.data.data?.challan_number || ''} created successfully!`,
-        });
-        setIsCreateModalOpen(false);
-        // Reset form
-        setCreateForm({
-          rdc_type: 'RDC',
-          priority: 'medium',
-          vendor_party_name: '',
-          vendor_gstin: '',
-          vendor_address: '',
-          contact_person: '',
-          contact_phone: '',
-          contact_email: '',
-          purpose: '',
-          machine_id: '',
-          document_reference: '',
-          expected_return_date: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
-          submission_notes: '',
-          save_as_draft: false,
-          items: [
-            {
-              part_id: '',
-              item_description: '',
-              serial_number: '',
-              quantity_dispatched: 1,
-              unit_cost: 0,
-              remarks: '',
-            },
-          ],
-        });
-        fetchChallans();
-        fetchMetrics();
+      if (editingChallanId) {
+        const res = await apiClient.patch(`/rdc/${editingChallanId}`, payload);
+        if (res.data?.success) {
+          setFeedback({
+            type: 'success',
+            message: `Delivery Challan ${res.data.data?.challan_number || ''} updated successfully.`,
+          });
+          setIsCreateModalOpen(false);
+          setEditingChallanId(null);
+          fetchChallans();
+          fetchMetrics();
+        }
+      } else {
+        const res = await apiClient.post('/rdc', payload);
+        if (res.data?.success) {
+          setFeedback({
+            type: 'success',
+            message: `Delivery Challan ${res.data.data?.challan_number || ''} created successfully!`,
+          });
+          setIsCreateModalOpen(false);
+          // Reset form
+          setCreateForm({
+            rdc_type: 'RDC',
+            priority: 'medium',
+            vendor_party_name: '',
+            vendor_gstin: '',
+            vendor_address: '',
+            contact_person: '',
+            contact_phone: '',
+            contact_email: '',
+            purpose: '',
+            machine_id: '',
+            document_reference: '',
+            expected_return_date: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+            submission_notes: '',
+            save_as_draft: false,
+            items: [
+              {
+                part_id: '',
+                item_description: '',
+                serial_number: '',
+                quantity_dispatched: 1,
+                unit_cost: 0,
+                remarks: '',
+              },
+            ],
+          });
+          fetchChallans();
+          fetchMetrics();
+        }
       }
     } catch (err: any) {
       setFeedback({
         type: 'error',
-        message: err.response?.data?.message || 'Failed to create Delivery Challan.',
+        message: err.response?.data?.message || 'Failed to save Delivery Challan.',
       });
     } finally {
       setCreateSubmitting(false);
@@ -999,7 +1112,7 @@ export const RDCPage: React.FC = () => {
           {/* Technicians, Store Managers, Managers & Admins can issue Delivery Challans */}
           {(isTechnician || isStoreManager) && (
             <button
-              onClick={() => setIsCreateModalOpen(true)}
+              onClick={openCreateModal}
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-jcb-yellow hover:bg-jcb-yellowDark text-black font-black text-xs uppercase tracking-wider transition shadow-sm border border-amber-500 cursor-pointer"
             >
               <Plus className="w-4 h-4 stroke-[3]" />
@@ -1427,18 +1540,34 @@ export const RDCPage: React.FC = () => {
                                 <Eye className="w-3.5 h-3.5" />
                               </button>
 
-                              {/* Quick Submit for Draft */}
+                              {/* Quick Edit & Delete for Draft */}
                               {(rdc.status === 'draft' || rdc.status === 'rejected') && (
-                                <button
-                                  onClick={() => {
-                                    setSelectedChallan(rdc);
-                                    setActiveActionModal('submit');
-                                  }}
-                                  className="px-2.5 py-1 rounded-lg bg-amber-100 hover:bg-jcb-yellow text-amber-950 hover:text-black font-extrabold text-[10px] transition border border-amber-300 cursor-pointer uppercase"
-                                  title="Submit for Approval"
-                                >
-                                  Submit
-                                </button>
+                                <>
+                                  <button
+                                    onClick={() => openEditModal(rdc)}
+                                    className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 hover:text-blue-900 transition cursor-pointer border border-blue-200"
+                                    title="Edit Draft Challan & Items"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteChallan(rdc)}
+                                    className="p-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 hover:text-red-900 transition cursor-pointer border border-red-200"
+                                    title="Delete Draft Challan"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setSelectedChallan(rdc);
+                                      setActiveActionModal('submit');
+                                    }}
+                                    className="px-2.5 py-1 rounded-lg bg-amber-100 hover:bg-jcb-yellow text-amber-950 hover:text-black font-extrabold text-[10px] transition border border-amber-300 cursor-pointer uppercase"
+                                    title="Submit for Approval"
+                                  >
+                                    Submit
+                                  </button>
+                                </>
                               )}
 
                               {/* Quick Approve for Manager */}
@@ -2048,15 +2177,31 @@ export const RDCPage: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-2 flex-wrap">
-                {/* 1. Submit for Approval (Draft or Rejected) */}
+                {/* 1. Edit, Delete & Submit for Approval (Draft or Rejected) */}
                 {(selectedChallan.status === 'draft' || selectedChallan.status === 'rejected') && (
-                  <button
-                    onClick={() => setActiveActionModal('submit')}
-                    className="px-4 py-2 rounded-xl bg-jcb-yellow hover:bg-jcb-yellowDark text-black font-black text-xs uppercase tracking-wider transition shadow-sm border border-amber-500 flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Send className="w-4 h-4" />
-                    Submit for Approval
-                  </button>
+                  <>
+                    <button
+                      onClick={() => openEditModal(selectedChallan)}
+                      className="px-3.5 py-2 rounded-xl bg-blue-100 hover:bg-blue-200 text-blue-900 border border-blue-300 font-black text-xs uppercase transition flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                      Edit Draft
+                    </button>
+                    <button
+                      onClick={() => handleDeleteChallan(selectedChallan)}
+                      className="px-3.5 py-2 rounded-xl bg-red-100 hover:bg-red-200 text-red-900 border border-red-300 font-black text-xs uppercase transition flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Delete Draft
+                    </button>
+                    <button
+                      onClick={() => setActiveActionModal('submit')}
+                      className="px-4 py-2 rounded-xl bg-jcb-yellow hover:bg-jcb-yellowDark text-black font-black text-xs uppercase tracking-wider transition shadow-sm border border-amber-500 flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Send className="w-4 h-4" />
+                      Submit for Approval
+                    </button>
+                  </>
                 )}
 
                 {/* 2. Approve & Reject (Pending Approval, Manager/Admin only) */}
@@ -2222,14 +2367,19 @@ export const RDCPage: React.FC = () => {
               <div>
                 <h2 className="text-lg font-black uppercase tracking-wider text-zinc-950 flex items-center gap-2">
                   <FileText className="w-5 h-5 text-amber-600" />
-                  Issue Delivery Challan
+                  {editingChallanId ? 'Edit Delivery Challan Draft' : 'Issue Delivery Challan'}
                 </h2>
                 <p className="text-xs text-zinc-500 font-medium">
-                  Generate authorized material movement gate pass with real-time stock allocation
+                  {editingChallanId
+                    ? 'Modify draft challan specifications, return target, and line items'
+                    : 'Generate authorized material movement gate pass with real-time stock allocation'}
                 </p>
               </div>
               <button
-                onClick={() => setIsCreateModalOpen(false)}
+                onClick={() => {
+                  setIsCreateModalOpen(false);
+                  setEditingChallanId(null);
+                }}
                 className="p-1.5 rounded-xl bg-white border border-zinc-300 hover:bg-zinc-100 text-zinc-500 hover:text-black transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
@@ -2629,7 +2779,10 @@ export const RDCPage: React.FC = () => {
 
                   <button
                     type="button"
-                    onClick={() => setIsCreateModalOpen(false)}
+                    onClick={() => {
+                      setIsCreateModalOpen(false);
+                      setEditingChallanId(null);
+                    }}
                     className="px-4 py-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold text-xs uppercase cursor-pointer border border-zinc-300 transition"
                   >
                     Cancel
@@ -2641,7 +2794,9 @@ export const RDCPage: React.FC = () => {
                     className="px-5 py-2 rounded-xl bg-jcb-yellow hover:bg-jcb-yellowDark text-black font-black text-xs uppercase tracking-wider transition shadow-sm border border-amber-500 cursor-pointer"
                   >
                     {createSubmitting
-                      ? 'Creating...'
+                      ? 'Saving...'
+                      : editingChallanId
+                      ? 'Save Changes'
                       : createForm.save_as_draft
                       ? 'Save as Draft'
                       : 'Submit Challan'}
