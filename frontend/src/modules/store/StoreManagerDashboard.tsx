@@ -808,6 +808,24 @@ export const StoreManagerDashboard: React.FC = () => {
 
         {/* Global Action Buttons */}
         <div className="flex items-center gap-2 flex-wrap">
+          <Link
+            to="/inventory"
+            className="bg-white hover:bg-slate-50 text-zinc-800 text-xs font-bold px-3.5 py-2.5 rounded-xl border border-zinc-300 shadow-2xs transition flex items-center gap-1.5"
+            title="Open Master Spare Parts Catalog"
+          >
+            <Package className="w-4 h-4 text-amber-600" />
+            <span>Master Catalog</span>
+          </Link>
+
+          <Link
+            to="/procurement"
+            className="bg-white hover:bg-slate-50 text-zinc-800 text-xs font-bold px-3.5 py-2.5 rounded-xl border border-zinc-300 shadow-2xs transition flex items-center gap-1.5"
+            title="Open Procurement & Purchase Requisitions"
+          >
+            <ShoppingCart className="w-4 h-4 text-blue-600" />
+            <span>Procurement PRs</span>
+          </Link>
+
           <button
             onClick={() => {
               setAdjustPart(null);

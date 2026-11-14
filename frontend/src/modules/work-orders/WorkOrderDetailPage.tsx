@@ -1119,6 +1119,22 @@ export const WorkOrderDetailPage: React.FC = () => {
                     <span>Warehouse Catalog</span>
                     <ExternalLink className="w-3.5 h-3.5" />
                   </Link>
+                  <Link
+                    to={`/procurement?work_order_id=${workOrder.id}`}
+                    className="text-xs font-bold text-blue-700 hover:text-black flex items-center gap-1 uppercase"
+                    title="Raise Purchase Requisition for this Work Order"
+                  >
+                    <span>Request PR</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </Link>
+                  <Link
+                    to={`/rdc?work_order_id=${workOrder.id}`}
+                    className="text-xs font-bold text-purple-700 hover:text-black flex items-center gap-1 uppercase"
+                    title="Issue Gate Pass for external repairs / vendor dispatch"
+                  >
+                    <span>RDC Pass</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </Link>
                 </div>
               </div>
 

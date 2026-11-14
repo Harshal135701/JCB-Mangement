@@ -18,6 +18,7 @@ import {
   getInventoryLevelsService,
 } from './inventory.service';
 import { AuthenticatedUser } from '../../middlewares/auth.middleware';
+import { getIo } from '../../config/socket';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -217,6 +218,16 @@ export const reservePartForWorkOrder = async (req: Request, res: Response, next:
         user
       );
 
+      const io = getIo();
+      if (io) {
+        io.emit('inventory:stock_adjusted', {
+          partId: result.spare_part.id,
+          part_number: result.spare_part.part_number,
+          reserved_stock: result.spare_part.reserved_stock,
+          available_stock: result.spare_part.available_stock,
+        });
+      }
+
       res.status(200).json({
         success: true,
         message: `Part ${result.spare_part.part_number} reserved successfully for Work Order.`,
@@ -356,6 +367,12 @@ export const createSparePart = async (req: Request, res: Response, next: NextFun
       }
     }
 
+    const io = getIo();
+    if (io) {
+      io.emit('inventory:part_created', { part: newPart });
+      io.emit('inventory:stock_adjusted', { partId: newPart.id });
+    }
+
     res.status(201).json({
       success: true,
       message: `Spare Part ${trimmedPartNo} added to catalog successfully.`,
@@ -468,6 +485,12 @@ export const updateSparePart = async (req: Request, res: Response, next: NextFun
       return;
     }
 
+    const io = getIo();
+    if (io) {
+      io.emit('inventory:part_updated', { part: result.rows[0] });
+      io.emit('inventory:stock_adjusted', { partId: id });
+    }
+
     res.json({
       success: true,
       message: 'Spare part updated successfully.',
@@ -530,6 +553,11 @@ export const deleteSparePart = async (req: Request, res: Response, next: NextFun
         `UPDATE spare_parts SET status = 'inactive', updated_at = NOW() WHERE id = $1 RETURNING *`,
         [id]
       );
+      const io = getIo();
+      if (io) {
+        io.emit('inventory:part_deleted', { partId: id });
+        io.emit('inventory:stock_adjusted', { partId: id });
+      }
       res.json({
         success: true,
         message: 'Part has historical ledger transactions or active stock. Marked inactive rather than hard deleted.',
@@ -540,6 +568,11 @@ export const deleteSparePart = async (req: Request, res: Response, next: NextFun
 
     try {
       const delRes = await query('DELETE FROM spare_parts WHERE id = $1 RETURNING id, part_number', [id]);
+      const io = getIo();
+      if (io) {
+        io.emit('inventory:part_deleted', { partId: id });
+        io.emit('inventory:stock_adjusted', { partId: id });
+      }
       res.json({
         success: true,
         message: `Part ${delRes.rows[0].part_number} deleted successfully from master catalog.`,
@@ -551,6 +584,11 @@ export const deleteSparePart = async (req: Request, res: Response, next: NextFun
           `UPDATE spare_parts SET status = 'inactive', updated_at = NOW() WHERE id = $1 RETURNING *`,
           [id]
         );
+        const io = getIo();
+        if (io) {
+          io.emit('inventory:part_deleted', { partId: id });
+          io.emit('inventory:stock_adjusted', { partId: id });
+        }
         res.json({
           success: true,
           message: 'Part has foreign key relationships. Marked inactive rather than hard deleted.',
@@ -610,6 +648,16 @@ export const adjustStock = async (req: Request, res: Response, next: NextFunctio
         },
         user
       );
+
+      const io = getIo();
+      if (io) {
+        io.emit('inventory:stock_adjusted', {
+          partId: result.spare_part.id,
+          part_number: result.spare_part.part_number,
+          reserved_stock: result.spare_part.reserved_stock,
+          available_stock: result.spare_part.available_stock,
+        });
+      }
 
       res.status(200).json({
         success: true,
@@ -711,6 +759,11 @@ export const createStockTransfer = async (req: Request, res: Response, next: Nex
       remarks: req.body.remarks || req.body.reason,
     };
     const result = await createStockTransferService(payload, req.user as AuthenticatedUser);
+    const io = getIo();
+    if (io) {
+      io.emit('inventory:transfer_created', { transfer: result });
+      io.emit('inventory:stock_adjusted', { partId: result.part_id });
+    }
     res.status(201).json({
       success: true,
       message: `Stock transfer ${result.transfer_number} processed successfully.`,
@@ -770,6 +823,11 @@ export const reportDamagedStock = async (req: Request, res: Response, next: Next
       quarantined_bin: req.body.quarantined_bin || 'QUAR-BIN-01',
     };
     const result = await reportDamagedStockService(payload, req.user as AuthenticatedUser);
+    const io = getIo();
+    if (io) {
+      io.emit('inventory:damaged_reported', { damaged: result });
+      io.emit('inventory:stock_adjusted', { partId: result.part_id });
+    }
     res.status(201).json({
       success: true,
       message: `Damaged stock report ${result.report_number} created and parts moved to quarantine.`,
@@ -806,6 +864,11 @@ export const getDamagedStock = async (req: Request, res: Response, next: NextFun
 export const updateDamagedStockDisposition = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const result = await updateDamagedStockDispositionService(req.params.id, req.body, req.user as AuthenticatedUser);
+    const io = getIo();
+    if (io) {
+      io.emit('inventory:disposition_updated', { disposition: result });
+      io.emit('inventory:stock_adjusted', { partId: result.part_id });
+    }
     res.json({
       success: true,
       message: `Damaged stock disposition updated to '${result.disposition}'.`,

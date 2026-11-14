@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import apiClient from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
+import { useSocket } from '../../context/SocketContext';
 import { 
   Search, 
   Package, 
@@ -18,7 +20,9 @@ import {
   ChevronRight,
   Info,
   Filter,
-  ShoppingCart
+  Boxes,
+  ShoppingCart,
+  ArrowRight
 } from 'lucide-react';
 
 interface SparePart {
@@ -96,10 +100,13 @@ export const InventoryCatalogPage: React.FC = () => {
   // Delete Confirmation Modal
   const [partToDelete, setPartToDelete] = useState<SparePart | null>(null);
 
+  const { socket } = useSocket();
+  const navigate = useNavigate();
+
   // Form & Action states
   const [actionLoading, setActionLoading] = useState(false);
   const [modalFeedback, setModalFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [pageFeedback, setPageFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [pageFeedback, setPageFeedback] = useState<{ type: 'success' | 'error'; text: string; redirectLabel?: string; redirectUrl?: string } | null>(null);
 
   // Create / Edit Form State (Clean defaults - no fabricated sample values)
   const [formData, setFormData] = useState({
@@ -166,6 +173,34 @@ export const InventoryCatalogPage: React.FC = () => {
 
     return () => clearTimeout(timer);
   }, [searchInput, selectedCategory]);
+
+  // Real-time synchronization: listen to stock adjustments, CRUD, transfers and GRN receipts
+  useEffect(() => {
+    if (!socket) return;
+    const handleRemoteUpdate = () => {
+      fetchParts(searchInput, selectedCategory, page);
+    };
+
+    socket.on('inventory:stock_adjusted', handleRemoteUpdate);
+    socket.on('inventory:part_created', handleRemoteUpdate);
+    socket.on('inventory:part_updated', handleRemoteUpdate);
+    socket.on('inventory:part_deleted', handleRemoteUpdate);
+    socket.on('inventory:transfer_created', handleRemoteUpdate);
+    socket.on('inventory:damaged_reported', handleRemoteUpdate);
+    socket.on('inventory:disposition_updated', handleRemoteUpdate);
+    socket.on('procurement:grn_received', handleRemoteUpdate);
+
+    return () => {
+      socket.off('inventory:stock_adjusted', handleRemoteUpdate);
+      socket.off('inventory:part_created', handleRemoteUpdate);
+      socket.off('inventory:part_updated', handleRemoteUpdate);
+      socket.off('inventory:part_deleted', handleRemoteUpdate);
+      socket.off('inventory:transfer_created', handleRemoteUpdate);
+      socket.off('inventory:damaged_reported', handleRemoteUpdate);
+      socket.off('inventory:disposition_updated', handleRemoteUpdate);
+      socket.off('procurement:grn_received', handleRemoteUpdate);
+    };
+  }, [socket, searchInput, selectedCategory, page, fetchParts]);
 
   const handleManualSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -245,7 +280,12 @@ export const InventoryCatalogPage: React.FC = () => {
         const res = await apiClient.put(`/inventory/${editingPart.id}`, formData);
         if (res.data.success) {
           setModalFeedback({ type: 'success', text: `Part ${formData.part_number} updated successfully.` });
-          setPageFeedback({ type: 'success', text: `Part ${formData.part_number} metadata updated.` });
+          setPageFeedback({
+            type: 'success',
+            text: `Part ${formData.part_number} metadata updated in master catalog.`,
+            redirectLabel: 'View in Store Dashboard',
+            redirectUrl: '/store/dashboard',
+          });
           setTimeout(() => {
             setIsModalOpen(false);
             fetchParts(searchInput, selectedCategory, page);
@@ -255,7 +295,12 @@ export const InventoryCatalogPage: React.FC = () => {
         const res = await apiClient.post('/inventory', formData);
         if (res.data.success) {
           setModalFeedback({ type: 'success', text: `Part ${formData.part_number} added to master catalog.` });
-          setPageFeedback({ type: 'success', text: `Part ${formData.part_number} registered successfully.` });
+          setPageFeedback({
+            type: 'success',
+            text: `Part ${formData.part_number} registered in master catalog.`,
+            redirectLabel: 'View in Store Dashboard',
+            redirectUrl: '/store/dashboard',
+          });
           setTimeout(() => {
             setIsModalOpen(false);
             fetchParts(searchInput, selectedCategory, 1);
@@ -329,7 +374,12 @@ export const InventoryCatalogPage: React.FC = () => {
 
       if (res.data.success) {
         setModalFeedback({ type: 'success', text: res.data.message });
-        setPageFeedback({ type: 'success', text: res.data.message });
+        setPageFeedback({
+          type: 'success',
+          text: res.data.message,
+          redirectLabel: 'View in Store Dashboard',
+          redirectUrl: '/store/dashboard',
+        });
         setTimeout(() => {
           setIsAdjustModalOpen(false);
           fetchParts(searchInput, selectedCategory, page);
@@ -352,7 +402,12 @@ export const InventoryCatalogPage: React.FC = () => {
       setActionLoading(true);
       const res = await apiClient.delete(`/inventory/${partToDelete.id}`);
       if (res.data.success) {
-        setPageFeedback({ type: 'success', text: res.data.message });
+        setPageFeedback({
+          type: 'success',
+          text: res.data.message,
+          redirectLabel: 'View in Store Dashboard',
+          redirectUrl: '/store/dashboard',
+        });
         setPartToDelete(null);
         fetchParts(searchInput, selectedCategory, page);
       }
@@ -439,7 +494,23 @@ export const InventoryCatalogPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {(isAdmin || user?.role === 'store_manager') && (
+            <Link
+              to="/store/dashboard"
+              className="px-3.5 py-2 bg-white hover:bg-slate-50 text-zinc-800 rounded-xl text-xs font-bold transition border border-zinc-300 shadow-2xs flex items-center gap-1.5"
+            >
+              <Boxes className="w-4 h-4 text-amber-600" />
+              <span>Store Dashboard</span>
+            </Link>
+          )}
+          <Link
+            to="/procurement"
+            className="px-3.5 py-2 bg-white hover:bg-slate-50 text-zinc-800 rounded-xl text-xs font-bold transition border border-zinc-300 shadow-2xs flex items-center gap-1.5"
+          >
+            <ShoppingCart className="w-4 h-4 text-blue-600" />
+            <span>Procurement PRs</span>
+          </Link>
           <button
             onClick={() => fetchParts(searchInput, selectedCategory, page)}
             disabled={loading}
@@ -462,16 +533,27 @@ export const InventoryCatalogPage: React.FC = () => {
 
       {/* Global Feedback Alert */}
       {pageFeedback && (
-        <div className={`p-4 rounded-xl text-xs font-bold flex items-center justify-between border ${
+        <div className={`p-4 rounded-xl text-xs font-bold flex flex-wrap items-center justify-between gap-3 border ${
           pageFeedback.type === 'success' ? 'bg-emerald-50 text-emerald-900 border-emerald-300' : 'bg-red-50 text-red-900 border-red-300'
         }`}>
           <div className="flex items-center gap-2">
-            {pageFeedback.type === 'success' ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <AlertTriangle className="w-4 h-4 text-red-600" />}
+            {pageFeedback.type === 'success' ? <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" /> : <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />}
             <span>{pageFeedback.text}</span>
           </div>
-          <button onClick={() => setPageFeedback(null)} className="text-zinc-500 hover:text-black p-1">
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-3">
+            {pageFeedback.redirectUrl && (isAdmin || user?.role === 'store_manager') && (
+              <Link
+                to={pageFeedback.redirectUrl}
+                className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-bold flex items-center gap-1.5 shadow-xs transition"
+              >
+                <span>{pageFeedback.redirectLabel || 'View in Store Dashboard'}</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            )}
+            <button onClick={() => setPageFeedback(null)} className="text-zinc-500 hover:text-black p-1 cursor-pointer">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       )}
 
