@@ -1,6 +1,8 @@
 import { query as defaultQuery, pool as defaultPool } from '../../config/db';
 import { getIo, emitToUser } from '../../config/socket';
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export type DbQueryFunction = (
   text: string,
   params?: any[]
@@ -142,20 +144,10 @@ export async function createAndSendNotification(
     );
   }
 
-  const notif = insertRes.rows[0] || {
-    id: `notif-${Date.now()}`,
-    recipient_id: recipientId,
-    title,
-    message,
-    type,
-    link_url: linkUrl,
-    entity_type: entityType,
-    entity_id: entityId,
-    plant_id: plantId,
-    shop_id: shopId,
-    is_read: false,
-    created_at: new Date(),
-  };
+  const notif = insertRes?.rows?.[0];
+  if (!notif || !notif.id) {
+    throw new NotificationServiceError('Failed to persist notification record to database.', 500);
+  }
 
   // 2. Real-time Socket.IO dispatch
   const activeIo = getActiveIo(ioInstance);
@@ -288,8 +280,8 @@ export async function markAsReadService(
 ): Promise<NotificationRecord> {
   const queryFn = dbClient ? dbClient.query.bind(dbClient) : activeQuery;
 
-  if (!notificationId) {
-    throw new NotificationServiceError('Notification ID is required.', 400);
+  if (!notificationId || !UUID_REGEX.test(notificationId.trim())) {
+    throw new NotificationServiceError('Invalid notification ID format. A valid UUID is required.', 400);
   }
 
   // Attempt update with recipient ownership check

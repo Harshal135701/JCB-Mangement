@@ -194,18 +194,24 @@ export async function verifyApprovalAuthority(
   totalValue: number,
   plantId?: string | null
 ): Promise<{ level: number; requiredRole: string }> {
-  if (user.role === 'admin') {
-    return { level: 2, requiredRole: 'admin' };
-  }
-
-  if (user.role !== 'manager') {
+  // Only Managers and Administrators are authorized to approve delivery challans
+  if (!['admin', 'manager'].includes(user.role)) {
     throw new RdcServiceError(
       'Forbidden: Only Managers or Administrators are authorized to approve delivery challans.',
       403
     );
   }
 
+  // Administrators have global executive sign-off authority across all values and priorities
+  if (user.role === 'admin') {
+    return { level: 2, requiredRole: 'admin' };
+  }
+
   // Query configurable approval rules from database
+  // Order priority:
+  // 1. Exact priority match before 'ALL' (e.g. 'emergency' before 'ALL')
+  // 2. Specific plant before global default (plant_id match before NULL)
+  // 3. Higher approval level first
   let configRes = await client.query(
     `SELECT * FROM rdc_approval_configs
      WHERE is_active = TRUE
@@ -213,7 +219,10 @@ export async function verifyApprovalAuthority(
        AND (priority = $2 OR priority = 'ALL')
        AND min_value <= $3
        AND (max_value IS NULL OR max_value >= $3)
-     ORDER BY approval_level DESC, plant_id NULLS LAST
+     ORDER BY 
+       CASE WHEN priority = $2 THEN 0 ELSE 1 END,
+       CASE WHEN plant_id = $1 THEN 0 ELSE 1 END,
+       approval_level DESC
      LIMIT 1`,
     [plantId || null, priority, totalValue]
   );
@@ -223,17 +232,26 @@ export async function verifyApprovalAuthority(
     configRes = await client.query(
       `SELECT * FROM rdc_approval_configs
        WHERE is_active = TRUE
-         AND min_value <= $1
-         AND (max_value IS NULL OR max_value >= $1)
-       ORDER BY approval_level DESC
+         AND (plant_id IS NULL OR plant_id = $1)
+         AND min_value <= $2
+         AND (max_value IS NULL OR max_value >= $2)
+       ORDER BY 
+         CASE WHEN plant_id = $1 THEN 0 ELSE 1 END,
+         approval_level DESC
        LIMIT 1`,
-      [totalValue]
+      [plantId || null, totalValue]
     );
   }
 
   const rule = configRes.rows[0];
   if (rule) {
-    if (rule.required_role === 'admin') {
+    const allowedRoles = String(rule.required_role || '')
+      .split(/[,|]/)
+      .map((r: string) => r.trim().toLowerCase())
+      .filter(Boolean);
+
+    // If the rule strictly requires 'admin' (and does not include 'manager')
+    if (allowedRoles.includes('admin') && !allowedRoles.includes('manager')) {
       throw new RdcServiceError(
         `Approval requires Administrator authorization. Configured policy requires '${rule.required_role}' for material value ₹${totalValue} or priority '${priority}'.`,
         403
@@ -242,8 +260,8 @@ export async function verifyApprovalAuthority(
     return { level: rule.approval_level, requiredRole: rule.required_role };
   }
 
-  // Safe fallback default: up to 50k for manager
-  if (totalValue > 50000 || priority === 'emergency') {
+  // Safe fallback default: Emergency priority strictly requires Administrator authorization
+  if (priority === 'emergency') {
     throw new RdcServiceError(
       'Approval requires Administrator authorization. Material value exceeds standard manager limit or has emergency priority.',
       403

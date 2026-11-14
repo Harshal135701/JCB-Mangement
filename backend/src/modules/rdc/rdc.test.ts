@@ -258,8 +258,8 @@ class MockDatabaseState {
         min_value: 50000.01,
         max_value: null,
         priority: 'ALL',
-        required_role: 'admin',
-        approval_level: 2,
+        required_role: 'manager',
+        approval_level: 1,
         is_active: true,
       },
       {
@@ -665,7 +665,15 @@ class MockDbClient {
             const valMatch = val >= cfg.min_value && (cfg.max_value === null || val <= cfg.max_value);
             return pMatch && prioMatch && valMatch;
           })
-          .sort((a, b) => b.approval_level - a.approval_level);
+          .sort((a, b) => {
+            const prioA = a.priority === prio ? 0 : 1;
+            const prioB = b.priority === prio ? 0 : 1;
+            if (prioA !== prioB) return prioA - prioB;
+            const plantA = pId && a.plant_id === pId ? 0 : 1;
+            const plantB = pId && b.plant_id === pId ? 0 : 1;
+            if (plantA !== plantB) return plantA - plantB;
+            return b.approval_level - a.approval_level;
+          });
       }
       return { rows: matched, rowCount: matched.length };
     }
@@ -1017,7 +1025,7 @@ describe('JCB Smart CMMS — Enterprise RDC Module', () => {
   });
 
   // 7. Approval & Self-Approval Prevention
-  describe('7. Approval & Self-Approval Rejection', () => {
+  describe('7. Approval & Self-Approval Governance (Manager & Admin)', () => {
     it('7.1. Prevents a manager from approving their own challan (Self-Approval Prohibited)', async () => {
       const challanId = '10000000-0000-0000-0000-000000000010';
       mockState.rdcChallans.set(challanId, {
@@ -1038,7 +1046,7 @@ describe('JCB Smart CMMS — Enterprise RDC Module', () => {
       assert.match(ctx.res.responseData.message, /Self-approval not permitted/i);
     });
 
-    it('7.2. Independent manager can successfully approve a pending challan within their limit', async () => {
+    it('7.2. Independent manager can successfully approve a pending challan below ₹50,000', async () => {
       const challanId = '10000000-0000-0000-0000-000000000011';
       mockState.rdcChallans.set(challanId, {
         id: challanId,
@@ -1059,7 +1067,7 @@ describe('JCB Smart CMMS — Enterprise RDC Module', () => {
       assert.equal(ctx.res.responseData.data.approved_by, managerUser1.id);
     });
 
-    it('7.3. Requires Admin approval when material value exceeds manager threshold (> 50,000 INR)', async () => {
+    it('7.3. Admin can approve a pending challan below ₹50,000 created by another user', async () => {
       const challanId = '10000000-0000-0000-0000-000000000012';
       mockState.rdcChallans.set(challanId, {
         id: challanId,
@@ -1069,27 +1077,157 @@ describe('JCB Smart CMMS — Enterprise RDC Module', () => {
         created_by: technicianUser1.id,
         status: 'pending_approval',
         priority: 'medium',
-        approximate_value: 75000,
+        approximate_value: 25000,
       });
 
-      // Manager tries to approve high-value challan -> rejected
-      const mgrCtx = createMockContext({ remarks: 'Manager attempt' }, managerUser1, { id: challanId });
+      const ctx = createMockContext({ remarks: 'Admin approved small value' }, adminUser, { id: challanId });
+      await approveRDC(ctx.req, ctx.res, ctx.next);
+
+      assert.equal(ctx.res.statusCode, 200);
+      assert.equal(ctx.res.responseData.data.status, 'approved');
+      assert.equal(ctx.res.responseData.data.approved_by, adminUser.id);
+    });
+
+    it('7.4. Both Manager and Admin can approve high-value challans above ₹50,000', async () => {
+      const challanId = '10000000-0000-0000-0000-000000000013';
+      mockState.rdcChallans.set(challanId, {
+        id: challanId,
+        challan_number: 'RDC-2026-00013',
+        rdc_type: 'RDC',
+        plant_id: PLANT_1_ID,
+        created_by: adminUser.id, // Created by Admin
+        status: 'pending_approval',
+        priority: 'low',
+        approximate_value: 284000, // High-value challan (e.g. ₹2.84 Lakh)
+      });
+
+      // Manager can approve high-value challan created by Admin
+      const mgrCtx = createMockContext({ remarks: 'Manager approval of high-value part' }, managerUser1, { id: challanId });
+      await approveRDC(mgrCtx.req, mgrCtx.res, mgrCtx.next);
+      assert.equal(mgrCtx.res.statusCode, 200);
+      assert.equal(mgrCtx.res.responseData.data.status, 'approved');
+      assert.equal(mgrCtx.res.responseData.data.approved_by, managerUser1.id);
+
+      // Reset to pending_approval created by manager
+      mockState.rdcChallans.set(challanId, {
+        id: challanId,
+        challan_number: 'RDC-2026-00013',
+        rdc_type: 'RDC',
+        plant_id: PLANT_1_ID,
+        created_by: managerUser1.id, // Created by Manager
+        status: 'pending_approval',
+        priority: 'low',
+        approximate_value: 284000,
+      });
+
+      // Admin can approve high-value challan created by Manager
+      const adminCtx = createMockContext({ remarks: 'Admin approval of high-value part' }, adminUser, { id: challanId });
+      await approveRDC(adminCtx.req, adminCtx.res, adminCtx.next);
+      assert.equal(adminCtx.res.statusCode, 200);
+      assert.equal(adminCtx.res.responseData.data.status, 'approved');
+      assert.equal(adminCtx.res.responseData.data.approved_by, adminUser.id);
+    });
+
+    it('7.5. Admin cannot self-approve their own created challan (Strict SoD enforced)', async () => {
+      const challanId = '10000000-0000-0000-0000-000000000014';
+      mockState.rdcChallans.set(challanId, {
+        id: challanId,
+        challan_number: 'RDC-2026-00014',
+        rdc_type: 'RDC',
+        plant_id: PLANT_1_ID,
+        created_by: adminUser.id,
+        status: 'pending_approval',
+        priority: 'low',
+        approximate_value: 10000,
+      });
+
+      const adminCtx = createMockContext({ remarks: 'Admin self-approval attempt' }, adminUser, { id: challanId });
+      await approveRDC(adminCtx.req, adminCtx.res, adminCtx.next);
+
+      assert.equal(adminCtx.res.statusCode, 403);
+      assert.match(adminCtx.res.responseData.message, /Self-approval not permitted/i);
+    });
+
+    it('7.6. Emergency priority strictly requires Administrator authorization', async () => {
+      const challanId = '10000000-0000-0000-0000-000000000015';
+      mockState.rdcChallans.set(challanId, {
+        id: challanId,
+        challan_number: 'RDC-2026-00015',
+        rdc_type: 'RDC',
+        plant_id: PLANT_1_ID,
+        created_by: technicianUser1.id,
+        status: 'pending_approval',
+        priority: 'emergency', // Emergency policy requires Admin
+        approximate_value: 10000,
+      });
+
+      // Manager attempt on emergency challan -> rejected
+      const mgrCtx = createMockContext({ remarks: 'Manager emergency attempt' }, managerUser1, { id: challanId });
       await approveRDC(mgrCtx.req, mgrCtx.res, mgrCtx.next);
       assert.equal(mgrCtx.res.statusCode, 403);
       assert.match(mgrCtx.res.responseData.message, /requires Administrator authorization/i);
 
-      // Admin approves -> succeeds
-      const adminCtx = createMockContext({ remarks: 'Admin override approval' }, adminUser, { id: challanId });
+      // Admin approves emergency challan -> succeeds
+      const adminCtx = createMockContext({ remarks: 'Admin approves emergency dispatch' }, adminUser, { id: challanId });
       await approveRDC(adminCtx.req, adminCtx.res, adminCtx.next);
       assert.equal(adminCtx.res.statusCode, 200);
       assert.equal(adminCtx.res.responseData.data.status, 'approved');
     });
 
-    it('7.4. Legacy PUT /:id/approve strictly performs approval only and does not bypass dispatch authorization', async () => {
-      const challanId = '10000000-0000-0000-0000-000000000013';
+    it('7.7. Manager from another plant cannot approve challan (Plant Isolation enforced)', async () => {
+      const challanId = '10000000-0000-0000-0000-000000000016';
       mockState.rdcChallans.set(challanId, {
         id: challanId,
-        challan_number: 'RDC-2026-00013',
+        challan_number: 'RDC-2026-00016',
+        rdc_type: 'RDC',
+        plant_id: PLANT_2_ID, // Plant 2 challan
+        created_by: technicianUser1.id,
+        status: 'pending_approval',
+        priority: 'medium',
+        approximate_value: 15000,
+      });
+
+      // Manager from Plant 1 tries to approve Plant 2 challan
+      const ctx = createMockContext({ remarks: 'Cross plant approval' }, managerUser1, { id: challanId });
+      await approveRDC(ctx.req, ctx.res, ctx.next);
+
+      assert.equal(ctx.res.statusCode, 403);
+      assert.match(ctx.res.responseData.message, /outside your assigned plant/i);
+    });
+
+    it('7.8. Cannot approve an already-approved challan', async () => {
+      const challanId = '10000000-0000-0000-0000-000000000017';
+      mockState.rdcChallans.set(challanId, {
+        id: challanId,
+        challan_number: 'RDC-2026-00017',
+        rdc_type: 'RDC',
+        plant_id: PLANT_1_ID,
+        created_by: technicianUser1.id,
+        status: 'approved',
+        priority: 'medium',
+        approximate_value: 15000,
+      });
+
+      const ctx = createMockContext({ remarks: 'Duplicate approval attempt' }, managerUser1, { id: challanId });
+      await approveRDC(ctx.req, ctx.res, ctx.next);
+
+      assert.equal(ctx.res.statusCode, 400);
+      assert.match(ctx.res.responseData.message, /Cannot approve challan in 'approved' status/i);
+    });
+
+    it('7.9. Rejects invalid challan UUID format with HTTP 400', async () => {
+      const ctx = createMockContext({ remarks: 'Bad ID' }, managerUser1, { id: 'invalid-uuid-format' });
+      await approveRDC(ctx.req, ctx.res, ctx.next);
+
+      assert.equal(ctx.res.statusCode, 400);
+      assert.match(ctx.res.responseData.message, /Invalid challan ID format/i);
+    });
+
+    it('7.10. Legacy PUT /:id/approve strictly performs approval only and does not bypass dispatch authorization', async () => {
+      const challanId = '10000000-0000-0000-0000-000000000018';
+      mockState.rdcChallans.set(challanId, {
+        id: challanId,
+        challan_number: 'RDC-2026-00018',
         rdc_type: 'RDC',
         plant_id: PLANT_1_ID,
         created_by: technicianUser1.id,

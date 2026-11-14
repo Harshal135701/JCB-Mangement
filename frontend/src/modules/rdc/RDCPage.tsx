@@ -771,11 +771,15 @@ export const RDCPage: React.FC = () => {
     }
   };
 
-  // Approve Challan
-  const handleApprove = async () => {
-    if (!selectedChallan) return;
+  // Approve Challan (supports direct target from table or currently selected in drawer)
+  const handleApprove = async (targetChallan?: RdcChallan) => {
+    const challan = targetChallan || selectedChallan;
+    if (!challan) return;
+
+    if (actionSubmitting) return;
+
     // Check self-approval guard
-    if (selectedChallan.created_by === user?.id) {
+    if (challan.created_by === user?.id) {
       setFeedback({
         type: 'error',
         message: 'Self-Approval Prohibited: You cannot approve a challan you created.',
@@ -785,13 +789,17 @@ export const RDCPage: React.FC = () => {
 
     try {
       setActionSubmitting(true);
-      const res = await apiClient.post(`/rdc/${selectedChallan.id}/approve`, {});
+      const res = await apiClient.post(`/rdc/${challan.id}/approve`, {});
       if (res.data?.success) {
         setFeedback({
           type: 'success',
-          message: `Challan ${selectedChallan.challan_number} approved! Ready for physical dispatch.`,
+          message: `Challan ${challan.challan_number} approved! Ready for physical dispatch.`,
         });
-        refreshCurrentChallan();
+        fetchChallans();
+        fetchMetrics();
+        if (selectedChallan?.id === challan.id) {
+          refreshCurrentChallan();
+        }
       }
     } catch (err: any) {
       setFeedback({
@@ -1609,10 +1617,10 @@ export const RDCPage: React.FC = () => {
                               {/* Quick Approve for Manager */}
                               {rdc.status === 'pending_approval' && isManager && (
                                 <button
-                                  disabled={rdc.created_by === user?.id}
+                                  disabled={rdc.created_by === user?.id || actionSubmitting}
                                   onClick={() => {
                                     setSelectedChallan(rdc);
-                                    handleApprove();
+                                    handleApprove(rdc);
                                   }}
                                   className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold transition border uppercase cursor-pointer ${
                                     rdc.created_by === user?.id
@@ -1625,7 +1633,7 @@ export const RDCPage: React.FC = () => {
                                       : 'Approve Challan'
                                   }
                                 >
-                                  Approve
+                                  {actionSubmitting ? '...' : 'Approve'}
                                 </button>
                               )}
 
@@ -2253,7 +2261,7 @@ export const RDCPage: React.FC = () => {
 
                     <button
                       disabled={selectedChallan.created_by === user?.id || actionSubmitting}
-                      onClick={handleApprove}
+                      onClick={() => handleApprove()}
                       className={`px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition flex items-center gap-1.5 shadow-sm border ${
                         selectedChallan.created_by === user?.id
                           ? 'bg-zinc-100 text-zinc-400 border-zinc-300 cursor-not-allowed'

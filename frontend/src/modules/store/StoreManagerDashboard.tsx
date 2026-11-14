@@ -7,6 +7,7 @@ import { TopKPICard } from '../../components/dashboard/TopKPICard';
 import {
   Boxes,
   Package,
+  ShoppingCart,
   AlertTriangle,
   ArrowRightLeft,
   ShieldAlert,

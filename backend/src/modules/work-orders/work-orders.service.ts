@@ -237,14 +237,15 @@ async function sendNotificationAndEmit(
 ): Promise<void> {
   const insertRes = await client.query(
     `INSERT INTO notifications (recipient_id, title, message, type, link_url, created_at)
-     VALUES ($1, $2, $3, $4, $5, NOW())`,
+     VALUES ($1, $2, $3, $4, $5, NOW())
+     RETURNING id, created_at`,
     [recipientId, title, message, type, linkUrl]
   );
 
   const activeIo = ioInstance || getActiveIo();
-  if (activeIo) {
+  if (activeIo && insertRes.rows?.[0]?.id) {
     const notifItem = {
-      id: insertRes.rows?.[0]?.id || `notif-${Date.now()}`,
+      id: insertRes.rows[0].id,
       recipient_id: recipientId,
       title,
       message,
@@ -252,7 +253,7 @@ async function sendNotificationAndEmit(
       link_url: linkUrl,
       action_url: linkUrl,
       is_read: false,
-      created_at: new Date(),
+      created_at: insertRes.rows[0].created_at || new Date(),
     };
 
     if (typeof activeIo.to === 'function') {

@@ -79,6 +79,13 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // Mark single notification as read
   const markAsRead = useCallback(async (id: string) => {
+    if (!id || id.startsWith('notif-')) {
+      setNotifications((prev) =>
+        prev.map((item) => (item.id === id ? { ...item, is_read: true } : item))
+      );
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+      return;
+    }
     try {
       await apiClient.put(`/notifications/${id}/read`);
       setNotifications((prev) =>

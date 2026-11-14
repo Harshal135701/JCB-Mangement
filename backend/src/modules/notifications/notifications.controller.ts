@@ -13,6 +13,8 @@ import {
   DbPoolLike,
 } from './notifications.service';
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export const setNotificationsDb = (
   customQuery?: DbQueryFunction,
   customPool?: DbPoolLike
@@ -128,7 +130,12 @@ export const markAsRead = async (
     }
 
     const { id } = req.params;
-    const updated = await markAsReadService(id, userId);
+    if (!id || !UUID_REGEX.test(id.trim())) {
+      res.status(400).json({ success: false, message: 'Invalid notification ID format. A valid UUID is required.' });
+      return;
+    }
+
+    const updated = await markAsReadService(id.trim(), userId);
 
     res.json({
       success: true,

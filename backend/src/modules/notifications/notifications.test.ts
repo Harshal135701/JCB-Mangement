@@ -753,6 +753,22 @@ describe('JCB Real-Time Notification & Socket.IO Architecture Test Suite', () =>
       assert.equal(res.responseData.data.length, 2);
       assert.equal(res.responseData.pagination.total, 2);
     });
+
+    it('2.7. Mark as read rejects non-UUID synthetic notification ID with HTTP 400', async () => {
+      const techId = 'f0000000-0000-0000-0000-000000000003';
+      const { req, res, next } = createMockContext(
+        {},
+        { id: 'notif-1794653552288' }, // synthetic non-UUID ID
+        {},
+        {},
+        { id: techId, role: 'technician', email: 'tech1@jcb.com', employee_code: 'EMP-TCH-001' }
+      );
+      await markAsRead(req, res, next);
+
+      assert.equal(res.statusCode, 400);
+      assert.equal(res.responseData.success, false);
+      assert.match(res.responseData.message, /Invalid notification ID format/i);
+    });
   });
 
   // =========================================================================
