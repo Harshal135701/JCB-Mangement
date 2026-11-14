@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import apiClient from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
@@ -47,10 +47,9 @@ import {
   Users,
   Send,
   Sparkles,
-  Info
+  Info,
+  ArrowRight
 } from 'lucide-react';
-
-import { Link } from 'react-router-dom';
 
 interface TechnicianUser {
   id: string;
@@ -152,10 +151,12 @@ export const TriageQueuePage: React.FC = () => {
     totalPages: 1,
   });
 
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [redirectWorkOrder, setRedirectWorkOrder] = useState<{ id: string; number: string } | null>(null);
 
   // Dropdown Reference Data
   const [machines, setMachines] = useState<MachineOption[]>([]);
@@ -637,7 +638,11 @@ export const TriageQueuePage: React.FC = () => {
 
       if (res.data?.success) {
         const woNumber = res.data.data?.workOrder?.wo_number || 'WO-CREATED';
+        const woId = res.data.data?.workOrder?.id;
         setSuccessMsg(`Work Order ${woNumber} generated and dispatched! Technician notified.`);
+        if (woId) {
+          setRedirectWorkOrder({ id: woId, number: woNumber });
+        }
         setAssignComplaint(null);
         fetchBreakdowns();
       }
@@ -766,14 +771,31 @@ export const TriageQueuePage: React.FC = () => {
 
       {/* Notifications / Alerts */}
       {successMsg && (
-        <div className="p-4 bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-xl text-xs font-bold flex items-center justify-between shadow-xs">
+        <div className="p-4 bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-xl text-xs font-bold flex flex-wrap items-center justify-between gap-3 shadow-xs">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
             <span>{successMsg}</span>
           </div>
-          <button onClick={() => setSuccessMsg('')} className="text-emerald-800 hover:text-black">
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-3">
+            {redirectWorkOrder && (
+              <Link
+                to={`/work-orders/${redirectWorkOrder.id}`}
+                className="px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-bold flex items-center gap-1.5 shadow-xs transition"
+              >
+                <span>Open Work Order {redirectWorkOrder.number}</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            )}
+            <button
+              onClick={() => {
+                setSuccessMsg('');
+                setRedirectWorkOrder(null);
+              }}
+              className="text-emerald-800 hover:text-black cursor-pointer p-1"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       )}
 

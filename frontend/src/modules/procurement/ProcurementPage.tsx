@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useSearchParams, useParams } from 'react-router-dom';
+import { useSearchParams, useParams, Link } from 'react-router-dom';
 import apiClient from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -469,7 +469,7 @@ export const ProcurementPage: React.FC = () => {
 
   // Action Loading & Notifications
   const [actionLoading, setActionLoading] = useState(false);
-  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string; redirectLabel?: string; redirectUrl?: string } | null>(null);
 
   // Modal States
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -1096,6 +1096,8 @@ export const ProcurementPage: React.FC = () => {
         setFeedback({
           type: 'success',
           message: `GRN ${grnNum || ''} posted successfully! Usable stock increased by ${accepted} units. (Rejected/Damaged: ${rejected + damaged} segregated).`,
+          redirectLabel: 'View in Store Dashboard',
+          redirectUrl: '/store/dashboard',
         });
         setSelectedPRForGRN(null);
         setGrnForm(INITIAL_GRN_FORM);
@@ -1193,6 +1195,15 @@ export const ProcurementPage: React.FC = () => {
             <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
           )}
           <span className="leading-snug">{feedback.message}</span>
+          {feedback.redirectUrl && (
+            <Link
+              to={feedback.redirectUrl}
+              className="ml-2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold flex items-center gap-1.5 transition text-xs shrink-0 shadow-xs"
+            >
+              <span>{feedback.redirectLabel || 'View in Store Dashboard'}</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          )}
           <button
             onClick={() => setFeedback(null)}
             className="ml-2 text-zinc-400 hover:text-white p-1 transition"
@@ -1222,6 +1233,22 @@ export const ProcurementPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">
+          <Link
+            to="/inventory"
+            className="px-3.5 py-2 bg-white hover:bg-slate-50 text-zinc-800 rounded-xl text-xs font-bold transition border border-zinc-300 shadow-2xs flex items-center gap-1.5"
+          >
+            <Package className="w-4 h-4 text-amber-600" />
+            <span>Spare Parts Catalog</span>
+          </Link>
+          {(isManager || user?.role === 'store_manager') && (
+            <Link
+              to="/store/dashboard"
+              className="px-3.5 py-2 bg-white hover:bg-slate-50 text-zinc-800 rounded-xl text-xs font-bold transition border border-zinc-300 shadow-2xs flex items-center gap-1.5"
+            >
+              <Truck className="w-4 h-4 text-emerald-600" />
+              <span>Store Dashboard</span>
+            </Link>
+          )}
           <button
             onClick={() => {
               fetchPRs();
@@ -1231,7 +1258,7 @@ export const ProcurementPage: React.FC = () => {
                 fetchVendors();
               }
             }}
-            className="p-2.5 text-zinc-600 hover:text-black hover:bg-zinc-100 rounded-xl border border-zinc-200 transition"
+            className="p-2.5 text-zinc-600 hover:text-black hover:bg-zinc-100 rounded-xl border border-zinc-200 transition cursor-pointer"
             title="Refresh Requisition Data"
           >
             <RefreshCw className="w-4 h-4" />
@@ -1239,7 +1266,7 @@ export const ProcurementPage: React.FC = () => {
 
           <button
             onClick={() => setIsCreateModalOpen(true)}
-            className="bg-jcb-yellow hover:bg-jcb-yellowDark text-black text-xs font-black px-4 py-2.5 rounded-xl shadow transition-all flex items-center gap-2 border border-amber-500 hover:shadow-md"
+            className="bg-jcb-yellow hover:bg-jcb-yellowDark text-black text-xs font-black px-4 py-2.5 rounded-xl shadow transition-all flex items-center gap-2 border border-amber-500 hover:shadow-md cursor-pointer"
           >
             <Plus className="w-4 h-4 stroke-[3]" />
             <span>RAISE PURCHASE REQUISITION</span>
