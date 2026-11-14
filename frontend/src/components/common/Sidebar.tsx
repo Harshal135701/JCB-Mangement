@@ -169,7 +169,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
 
       {/* Sidebar Aside: Full-height JCB Excavator Background properly adjusted from very top to bottom */}
       <aside
-        className={`fixed lg:static inset-y-0 left-0 z-50 w-64 h-screen text-white flex flex-col justify-between shrink-0 border-r border-zinc-800 transition-transform duration-200 ease-in-out select-none shadow-2xl overflow-hidden relative ${
+        className={`fixed lg:static inset-y-0 left-0 z-50 w-64 lg:w-[268px] h-screen text-white flex flex-col justify-between shrink-0 border-r border-zinc-800 transition-transform duration-200 ease-in-out select-none shadow-2xl overflow-hidden relative ${
           isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
         style={{
@@ -193,8 +193,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
                 JCB
               </div>
               <div className="min-w-0">
-                <h1 className="font-black text-xs tracking-wider text-white">SMART CMMS</h1>
-                <p className="text-[10px] text-zinc-300 font-semibold truncate max-w-[130px]">
+                <h1 className="font-black text-sm tracking-wider text-white">SMART CMMS</h1>
+                <p className="text-xs text-zinc-300 font-semibold truncate max-w-[150px]">
                   {user?.plantName || 'Plant 1: Ballabgarh'}
                 </p>
               </div>
@@ -220,18 +220,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
                   key={item.path + item.name}
                   to={item.path}
                   onClick={onMobileClose}
-                  className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all relative shrink-0 group ${
+                  className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-bold transition-all relative shrink-0 group ${
                     isActive
                       ? 'bg-jcb-yellow text-zinc-950 font-black shadow-md'
                       : 'text-zinc-200 hover:bg-white/15 hover:text-white'
                   }`}
                 >
-                  <Icon className={`w-4 h-4 shrink-0 transition-colors ${isActive ? 'text-zinc-950 font-bold' : 'text-zinc-300 group-hover:text-white'}`} />
+                  <Icon className={`w-[18px] h-[18px] shrink-0 transition-colors ${isActive ? 'text-zinc-950 font-bold' : 'text-zinc-300 group-hover:text-white'}`} />
                   <span className="truncate flex-1 tracking-tight">{item.name}</span>
 
                   {/* Badge if present (Red badge matching reference) */}
                   {item.badge && !isActive && (
-                    <span className="text-[10px] px-1.5 py-0.2 rounded-full font-bold shrink-0 bg-red-500 text-white">
+                    <span className="text-[11px] px-2 py-0.5 rounded-full font-bold shrink-0 bg-red-500 text-white">
                       {item.badge}
                     </span>
                   )}
@@ -247,7 +247,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
 
           {/* Subtle Bottom Slogan: Building a Smarter Tomorrow */}
           <div className="px-4 pb-3 pt-1 shrink-0 pointer-events-none select-none">
-            <span className="text-[11px] font-black uppercase tracking-tight text-white block drop-shadow-md">
+            <span className="text-xs font-black uppercase tracking-tight text-white block drop-shadow-md">
               Building a <span className="text-jcb-yellow">Smarter Tomorrow</span>
             </span>
             <div className="w-8 h-0.5 bg-jcb-yellow mt-1 rounded-full shadow-sm" />
