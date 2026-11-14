@@ -234,11 +234,11 @@ export default function App() {
                 }
               />
 
-              {/* Admin-Only Governance Modules */}
+              {/* Personnel & Governance Modules */}
               <Route
                 path="/users"
                 element={
-                  <RoleGuard allowedRoles={['admin']}>
+                  <RoleGuard allowedRoles={['admin', 'manager']}>
                     <UserManagementPage />
                   </RoleGuard>
                 }

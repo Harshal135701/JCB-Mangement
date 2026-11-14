@@ -18,17 +18,26 @@ import {
   Mail,
   Clock,
   Boxes,
-  Package
+  Package,
+  Building2,
+  Factory
 } from 'lucide-react';
 
 export const UserManagementPage: React.FC = () => {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
+  const isManager = user?.role === 'manager';
+  const canCreate = isAdmin || isManager;
 
   const [usersList, setUsersList] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [selectedRole, setSelectedRole] = useState('all');
+
+  // Plants and Shops
+  const [plants, setPlants] = useState<any[]>([]);
+  const [shops, setShops] = useState<any[]>([]);
+  const [loadingShops, setLoadingShops] = useState(false);
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -43,10 +52,12 @@ export const UserManagementPage: React.FC = () => {
     email: '',
     phone: '',
     role: 'technician',
+    plant_id: '',
+    shop_id: '',
     department: 'Mechanical Maintenance',
     designation: 'Senior Maintenance Technician',
     shift: 'Shift A',
-    password: 'password123',
+    password: 'Jcb@Secure2026',
     is_active: true,
   });
 
@@ -64,25 +75,76 @@ export const UserManagementPage: React.FC = () => {
     }
   };
 
+  const fetchPlants = async () => {
+    try {
+      const res = await apiClient.get('/org/plants');
+      if (res.data.success && Array.isArray(res.data.data)) {
+        setPlants(res.data.data);
+      }
+    } catch (e) {
+      console.error('Failed to load plants:', e);
+    }
+  };
+
+  const fetchShopsForPlant = async (plantId: string) => {
+    if (!plantId) {
+      setShops([]);
+      return;
+    }
+    try {
+      setLoadingShops(true);
+      const res = await apiClient.get(`/org/plants/${plantId}/shops`);
+      if (res.data.success && Array.isArray(res.data.data)) {
+        setShops(res.data.data);
+      } else {
+        setShops([]);
+      }
+    } catch (e) {
+      console.error('Failed to load shops:', e);
+      setShops([]);
+    } finally {
+      setLoadingShops(false);
+    }
+  };
+
   useEffect(() => {
     fetchUsers();
+    fetchPlants();
   }, []);
 
   const openCreateModal = (presetRole: string = 'technician') => {
     setEditingUser(null);
-    const prefix = presetRole === 'technician' ? 'TCH' : presetRole === 'operator' ? 'OPR' : presetRole === 'manager' ? 'MGR' : presetRole === 'store_manager' ? 'STR' : 'ADM';
+    // If manager, enforce either technician or operator
+    let safeRole = presetRole;
+    if (isManager && safeRole !== 'technician' && safeRole !== 'operator') {
+      safeRole = 'technician';
+    }
+
+    const prefix = safeRole === 'technician' ? 'TCH' : safeRole === 'operator' ? 'OPR' : safeRole === 'manager' ? 'MGR' : safeRole === 'store_manager' ? 'STR' : 'ADM';
+    const managerPlantId = user?.plantId || (user as any)?.plant_id || '';
+    const initialPlantId = isManager ? managerPlantId : (plants[0]?.id || '');
+
     setFormData({
       employee_code: `JCB-${prefix}-${Math.floor(100 + Math.random() * 900)}`,
       full_name: '',
       email: '',
       phone: '',
-      role: presetRole,
-      department: presetRole === 'operator' ? 'Production Operations' : presetRole === 'store_manager' ? 'Central Stores & Inventory' : 'Mechanical Maintenance',
-      designation: presetRole === 'technician' ? 'Maintenance Technician' : presetRole === 'operator' ? 'CNC Line Operator' : presetRole === 'store_manager' ? 'Store Manager' : 'Maintenance Engineer',
+      role: safeRole,
+      plant_id: initialPlantId,
+      shop_id: '',
+      department: safeRole === 'operator' ? 'Production Operations' : safeRole === 'store_manager' ? 'Central Stores & Inventory' : 'Mechanical Maintenance',
+      designation: safeRole === 'technician' ? 'Maintenance Technician' : safeRole === 'operator' ? 'CNC Line Operator' : safeRole === 'store_manager' ? 'Store Manager' : 'Maintenance Engineer',
       shift: 'Shift A',
-      password: 'password123',
+      password: 'Jcb@Secure2026',
       is_active: true,
     });
+
+    if (initialPlantId) {
+      fetchShopsForPlant(initialPlantId);
+    } else {
+      setShops([]);
+    }
+
     setFeedback(null);
     setIsModalOpen(true);
   };
@@ -95,12 +157,21 @@ export const UserManagementPage: React.FC = () => {
       email: u.email,
       phone: u.phone || '',
       role: u.role,
+      plant_id: u.plant_id || '',
+      shop_id: u.shop_id || '',
       department: u.department || 'Mechanical Maintenance',
       designation: u.designation || 'Technician',
       shift: u.shift || 'Shift A',
       password: '',
       is_active: u.is_active !== false,
     });
+
+    if (u.plant_id) {
+      fetchShopsForPlant(u.plant_id);
+    } else {
+      setShops([]);
+    }
+
     setFeedback(null);
     setIsModalOpen(true);
   };
@@ -111,8 +182,22 @@ export const UserManagementPage: React.FC = () => {
     setFeedback(null);
 
     try {
+      const payload: any = {
+        employee_code: formData.employee_code,
+        full_name: formData.full_name,
+        email: formData.email,
+        phone: formData.phone?.trim() ? formData.phone.trim() : null,
+        role: formData.role,
+        department: formData.department,
+        designation: formData.designation,
+        shift: formData.shift,
+        plant_id: formData.plant_id || null,
+        shop_id: formData.shop_id || null,
+        is_active: formData.is_active,
+      };
+
       if (editingUser) {
-        const res = await apiClient.put(`/auth/users/${editingUser.id}`, formData);
+        const res = await apiClient.put(`/auth/users/${editingUser.id}`, payload);
         if (res.data.success) {
           setFeedback({ type: 'success', text: `Personnel ${formData.full_name} updated successfully.` });
           setTimeout(() => {
@@ -121,7 +206,8 @@ export const UserManagementPage: React.FC = () => {
           }, 800);
         }
       } else {
-        const res = await apiClient.post('/auth/users', formData);
+        payload.password = formData.password;
+        const res = await apiClient.post('/auth/users', payload);
         if (res.data.success) {
           setFeedback({ type: 'success', text: `Personnel ${formData.full_name} (${formData.employee_code}) enrolled successfully.` });
           setTimeout(() => {
@@ -179,15 +265,17 @@ export const UserManagementPage: React.FC = () => {
           <div className="flex items-center gap-3">
             <h2 className="text-xl font-black text-zinc-950 tracking-tight">PLANT PERSONNEL & TECHNICIAN DIRECTORY</h2>
             <span className="bg-jcb-yellow text-black text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-amber-500 shadow-sm">
-              Admin Governance
+              {isAdmin ? 'Admin Governance' : 'Plant Governance'}
             </span>
           </div>
           <p className="text-xs text-zinc-500 font-medium mt-1">
-            Manage field maintenance technicians, machine operators, shift supervisors, store managers, and engineering staff across JCB manufacturing facilities.
+            {isManager 
+              ? 'Manage field maintenance technicians and machine operators within your assigned plant facility.' 
+              : 'Manage field maintenance technicians, machine operators, shift supervisors, store managers, and engineering staff across JCB manufacturing facilities.'}
           </p>
         </div>
 
-        {isAdmin && (
+        {canCreate && (
           <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={() => openCreateModal('technician')}
@@ -203,13 +291,15 @@ export const UserManagementPage: React.FC = () => {
               <HardHat className="w-4 h-4" />
               <span>ENROLL OPERATOR</span>
             </button>
-            <button
-              onClick={() => openCreateModal('store_manager')}
-              className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-black px-3.5 py-2.5 rounded-xl shadow transition-all flex items-center gap-1.5"
-            >
-              <Boxes className="w-4 h-4" />
-              <span>ENROLL STORE MGR</span>
-            </button>
+            {isAdmin && (
+              <button
+                onClick={() => openCreateModal('store_manager')}
+                className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-black px-3.5 py-2.5 rounded-xl shadow transition-all flex items-center gap-1.5"
+              >
+                <Boxes className="w-4 h-4" />
+                <span>ENROLL STORE MGR</span>
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -477,6 +567,75 @@ export const UserManagementPage: React.FC = () => {
                 </div>
               </div>
 
+              {/* Plant & Shop Selection */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
+                    Assigned Plant Facility {isManager ? '(Locked)' : '*'}
+                  </label>
+                  {isManager ? (
+                    <div>
+                      <input
+                        type="text"
+                        readOnly
+                        disabled
+                        value={
+                          plants.find((p) => p.id === formData.plant_id)?.plant_name ||
+                          user?.plantName ||
+                          (user as any)?.plant_name ||
+                          'Assigned Plant Facility'
+                        }
+                        className="w-full px-3 py-2 bg-zinc-100 border border-zinc-300 rounded-lg text-xs font-bold text-zinc-700 cursor-not-allowed"
+                      />
+                      <span className="text-[10px] text-zinc-500 font-medium">Locked to your plant governance jurisdiction.</span>
+                    </div>
+                  ) : (
+                    <div>
+                      <select
+                        value={formData.plant_id}
+                        onChange={(e) => {
+                          const pId = e.target.value;
+                          setFormData({ ...formData, plant_id: pId, shop_id: '' });
+                          fetchShopsForPlant(pId);
+                        }}
+                        className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                      >
+                        <option value="">-- No Plant Assigned --</option>
+                        {plants.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.plant_name || p.name || p.plant_code}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="text-[10px] text-zinc-500 font-medium">Select enterprise plant facility.</span>
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
+                    Assigned Shop / Line
+                  </label>
+                  <select
+                    value={formData.shop_id}
+                    onChange={(e) => setFormData({ ...formData, shop_id: e.target.value })}
+                    disabled={!formData.plant_id || loadingShops}
+                    className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow disabled:opacity-50"
+                  >
+                    <option value="">-- Select Shop (Optional) --</option>
+                    {shops.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.shop_name || s.name || s.shop_code}
+                      </option>
+                    ))}
+                  </select>
+                  {loadingShops ? (
+                    <span className="text-[10px] text-zinc-500 font-medium">Loading shops...</span>
+                  ) : (
+                    <span className="text-[10px] text-zinc-500 font-medium">Optional shop assignment.</span>
+                  )}
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
@@ -487,11 +646,20 @@ export const UserManagementPage: React.FC = () => {
                     onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                     className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
                   >
-                    <option value="technician">Field Maintenance Technician</option>
-                    <option value="operator">Machine Operator</option>
-                    <option value="manager">Maintenance Manager / In-Charge</option>
-                    <option value="store_manager">Store Manager / Inventory In-Charge</option>
-                    <option value="admin">Enterprise Administrator</option>
+                    {isManager ? (
+                      <>
+                        <option value="technician">Field Maintenance Technician</option>
+                        <option value="operator">Machine Operator</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="technician">Field Maintenance Technician</option>
+                        <option value="operator">Machine Operator</option>
+                        <option value="manager">Maintenance Manager / In-Charge</option>
+                        <option value="store_manager">Store Manager / Inventory In-Charge</option>
+                        <option value="admin">Enterprise Administrator</option>
+                      </>
+                    )}
                   </select>
                 </div>
                 <div>
@@ -547,16 +715,18 @@ export const UserManagementPage: React.FC = () => {
               {!editingUser && (
                 <div>
                   <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
-                    Initial Password
+                    Initial Password * (Minimum 12 Characters)
                   </label>
                   <input
                     type="text"
+                    required
+                    minLength={12}
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    placeholder="password123"
+                    placeholder="Jcb@Secure2026"
                     className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-medium text-zinc-900 focus:outline-none focus:border-jcb-yellow"
                   />
-                  <span className="text-[10px] text-zinc-500 font-medium">Default initial password for first login.</span>
+                  <span className="text-[10px] text-zinc-500 font-medium">Default initial password for first login (must be at least 12 characters).</span>
                 </div>
               )}
 

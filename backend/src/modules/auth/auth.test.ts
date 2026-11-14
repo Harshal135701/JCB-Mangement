@@ -386,6 +386,10 @@ class MockAuthDatabase {
         const activeVal = Boolean(params[paramIdx++]);
         filtered = filtered.filter((u) => u.is_active === activeVal);
       }
+      if (trimmed.includes('plant_id = $')) {
+        const plantVal = String(params[paramIdx++] || '');
+        filtered = filtered.filter((u) => u.plant_id === plantVal);
+      }
 
       return {
         rows: [{ total: filtered.length }],
@@ -418,6 +422,10 @@ class MockAuthDatabase {
       if (trimmed.includes('is_active = $')) {
         const activeVal = Boolean(params[paramIdx++]);
         filtered = filtered.filter((u) => u.is_active === activeVal);
+      }
+      if (trimmed.includes('plant_id = $')) {
+        const plantVal = String(params[paramIdx++] || '');
+        filtered = filtered.filter((u) => u.plant_id === plantVal);
       }
 
       const limit = params[params.length - 2] || 50;
@@ -1094,6 +1102,367 @@ describe('Authentication & User Governance Module (CMMS Module 0)', () => {
       assert.equal(ctx.res.responseData.success, true);
       const created = ctx.res.responseData.data;
       assert.equal(created.shift, null);
+    });
+
+    it('19a. Admin can create all supported roles (technician, operator, manager, admin, store_manager)', async () => {
+      const adminCaller: AuthenticatedUser = {
+        id: 'f0000000-0000-0000-0000-000000000001',
+        employee_code: 'EMP-ADM-001',
+        email: 'admin@jcb.com',
+        role: 'admin',
+        plant_id: 'b0000000-0000-0000-0000-000000000001',
+      };
+
+      const rolesToTest = ['technician', 'operator', 'manager', 'admin', 'store_manager'];
+      for (const targetRole of rolesToTest) {
+        const payload = {
+          employee_code: `EMP-CR-${targetRole.slice(0, 3).toUpperCase()}-99`,
+          full_name: `Created ${targetRole}`,
+          email: `created.${targetRole}@jcb.com`,
+          role: targetRole,
+          password: 'ValidPassword123!',
+          plant_id: 'b0000000-0000-0000-0000-000000000001',
+        };
+
+        const ctx = createMockContext(payload, {}, {}, {}, adminCaller);
+        await createUser(ctx.req, ctx.res, ctx.next);
+
+        assert.equal(ctx.res.statusCode, 201, `Admin should be able to create ${targetRole}`);
+        assert.equal(ctx.res.responseData.success, true);
+        assert.equal(ctx.res.responseData.data.role, targetRole);
+      }
+    });
+
+    it('19b. Manager can create Technician in own assigned plant', async () => {
+      const managerCaller: AuthenticatedUser = {
+        id: 'f0000000-0000-0000-0000-000000000002',
+        employee_code: 'EMP-MGR-001',
+        email: 'manager@jcb.com',
+        role: 'manager',
+        plant_id: 'b0000000-0000-0000-0000-000000000001',
+        shop_id: 'c0000000-0000-0000-0000-000000000001',
+      };
+
+      const payload = {
+        employee_code: 'EMP-MGR-TECH-01',
+        full_name: 'Manager Created Tech',
+        email: 'mgr.tech@jcb.com',
+        role: 'technician',
+        plant_id: 'b0000000-0000-0000-0000-000000000001',
+        shop_id: 'c0000000-0000-0000-0000-000000000001',
+        password: 'ValidPassword123!',
+      };
+
+      const ctx = createMockContext(payload, {}, {}, {}, managerCaller);
+      await createUser(ctx.req, ctx.res, ctx.next);
+
+      assert.equal(ctx.res.statusCode, 201);
+      assert.equal(ctx.res.responseData.success, true);
+      assert.equal(ctx.res.responseData.data.role, 'technician');
+      assert.equal(ctx.res.responseData.data.plant_id, managerCaller.plant_id);
+    });
+
+    it('19c. Manager can create Operator in own assigned plant', async () => {
+      const managerCaller: AuthenticatedUser = {
+        id: 'f0000000-0000-0000-0000-000000000002',
+        employee_code: 'EMP-MGR-001',
+        email: 'manager@jcb.com',
+        role: 'manager',
+        plant_id: 'b0000000-0000-0000-0000-000000000001',
+      };
+
+      const payload = {
+        employee_code: 'EMP-MGR-OPR-01',
+        full_name: 'Manager Created Operator',
+        email: 'mgr.operator@jcb.com',
+        role: 'operator',
+        password: 'ValidPassword123!',
+      };
+
+      const ctx = createMockContext(payload, {}, {}, {}, managerCaller);
+      await createUser(ctx.req, ctx.res, ctx.next);
+
+      assert.equal(ctx.res.statusCode, 201);
+      assert.equal(ctx.res.responseData.success, true);
+      assert.equal(ctx.res.responseData.data.role, 'operator');
+      assert.equal(ctx.res.responseData.data.plant_id, managerCaller.plant_id);
+    });
+
+    it('19d. Manager cannot create Admin (HTTP 403 Forbidden)', async () => {
+      const managerCaller: AuthenticatedUser = {
+        id: 'f0000000-0000-0000-0000-000000000002',
+        employee_code: 'EMP-MGR-001',
+        email: 'manager@jcb.com',
+        role: 'manager',
+        plant_id: 'b0000000-0000-0000-0000-000000000001',
+      };
+
+      const payload = {
+        employee_code: 'EMP-ILLEGAL-ADM',
+        full_name: 'Illegal Admin',
+        email: 'illegal.admin@jcb.com',
+        role: 'admin',
+        password: 'ValidPassword123!',
+      };
+
+      const ctx = createMockContext(payload, {}, {}, {}, managerCaller);
+      await createUser(ctx.req, ctx.res, ctx.next);
+
+      assert.equal(ctx.res.statusCode, 403);
+      assert.equal(
+        ctx.res.responseData.message,
+        'Forbidden: Managers are only permitted to create technician and operator accounts.'
+      );
+    });
+
+    it('19e. Manager cannot create Manager (HTTP 403 Forbidden)', async () => {
+      const managerCaller: AuthenticatedUser = {
+        id: 'f0000000-0000-0000-0000-000000000002',
+        employee_code: 'EMP-MGR-001',
+        email: 'manager@jcb.com',
+        role: 'manager',
+        plant_id: 'b0000000-0000-0000-0000-000000000001',
+      };
+
+      const payload = {
+        employee_code: 'EMP-ILLEGAL-MGR',
+        full_name: 'Illegal Manager',
+        email: 'illegal.manager@jcb.com',
+        role: 'manager',
+        password: 'ValidPassword123!',
+      };
+
+      const ctx = createMockContext(payload, {}, {}, {}, managerCaller);
+      await createUser(ctx.req, ctx.res, ctx.next);
+
+      assert.equal(ctx.res.statusCode, 403);
+      assert.equal(
+        ctx.res.responseData.message,
+        'Forbidden: Managers are only permitted to create technician and operator accounts.'
+      );
+    });
+
+    it('19f. Manager cannot create Store Manager (HTTP 403 Forbidden)', async () => {
+      const managerCaller: AuthenticatedUser = {
+        id: 'f0000000-0000-0000-0000-000000000002',
+        employee_code: 'EMP-MGR-001',
+        email: 'manager@jcb.com',
+        role: 'manager',
+        plant_id: 'b0000000-0000-0000-0000-000000000001',
+      };
+
+      const payload = {
+        employee_code: 'EMP-ILLEGAL-SM',
+        full_name: 'Illegal Store Manager',
+        email: 'illegal.sm@jcb.com',
+        role: 'store_manager',
+        password: 'ValidPassword123!',
+      };
+
+      const ctx = createMockContext(payload, {}, {}, {}, managerCaller);
+      await createUser(ctx.req, ctx.res, ctx.next);
+
+      assert.equal(ctx.res.statusCode, 403);
+      assert.equal(
+        ctx.res.responseData.message,
+        'Forbidden: Managers are only permitted to create technician and operator accounts.'
+      );
+    });
+
+    it('19g. Manager cannot create users in another plant by manipulating plant_id (HTTP 403 Forbidden)', async () => {
+      const managerCaller: AuthenticatedUser = {
+        id: 'f0000000-0000-0000-0000-000000000002',
+        employee_code: 'EMP-MGR-001',
+        email: 'manager@jcb.com',
+        role: 'manager',
+        plant_id: 'b0000000-0000-0000-0000-000000000001', // Plant 1
+      };
+
+      const payload = {
+        employee_code: 'EMP-MGR-ROGUE-01',
+        full_name: 'Rogue Plant Tech',
+        email: 'rogue.tech@jcb.com',
+        role: 'technician',
+        plant_id: 'b0000000-0000-0000-0000-000000000002', // Plant 2 (different)
+        password: 'ValidPassword123!',
+      };
+
+      const ctx = createMockContext(payload, {}, {}, {}, managerCaller);
+      await createUser(ctx.req, ctx.res, ctx.next);
+
+      assert.equal(ctx.res.statusCode, 403);
+      assert.equal(
+        ctx.res.responseData.message,
+        'Forbidden: Managers cannot create users for another plant.'
+      );
+    });
+
+    it('19h. Manager cannot create users if unassigned to a plant (HTTP 400 Bad Request)', async () => {
+      const unassignedManager: AuthenticatedUser = {
+        id: 'f0000000-0000-0000-0000-000000000098',
+        employee_code: 'EMP-MGR-NOPLANT',
+        email: 'noplant.mgr@jcb.com',
+        role: 'manager',
+      };
+
+      const payload = {
+        employee_code: 'EMP-MGR-TECH-NOPLANT',
+        full_name: 'No Plant Tech',
+        email: 'noplant.tech@jcb.com',
+        role: 'technician',
+        password: 'ValidPassword123!',
+      };
+
+      const ctx = createMockContext(payload, {}, {}, {}, unassignedManager);
+      await createUser(ctx.req, ctx.res, ctx.next);
+
+      assert.equal(ctx.res.statusCode, 400);
+      assert.equal(
+        ctx.res.responseData.message,
+        'Manager account is not assigned to a plant. Cannot create users.'
+      );
+    });
+
+    it('19i. Manager cannot assign a shop belonging to another plant (HTTP 400 Bad Request)', async () => {
+      const managerCaller: AuthenticatedUser = {
+        id: 'f0000000-0000-0000-0000-000000000002',
+        employee_code: 'EMP-MGR-001',
+        email: 'manager@jcb.com',
+        role: 'manager',
+        plant_id: 'b0000000-0000-0000-0000-000000000001', // Plant 1
+      };
+
+      const payload = {
+        employee_code: 'EMP-MGR-WRONGSHOP',
+        full_name: 'Wrong Shop Tech',
+        email: 'wrongshop.tech@jcb.com',
+        role: 'technician',
+        shop_id: 'c0000000-0000-0000-0000-000000000002', // shop2 belongs to Plant 2
+        password: 'ValidPassword123!',
+      };
+
+      const ctx = createMockContext(payload, {}, {}, {}, managerCaller);
+      await createUser(ctx.req, ctx.res, ctx.next);
+
+      assert.equal(ctx.res.statusCode, 400);
+      assert.equal(
+        ctx.res.responseData.message,
+        "Selected shop does not belong to the manager's assigned plant."
+      );
+    });
+
+    it('19j. Manager can view only users belonging to their own assigned plant (GET /auth/users)', async () => {
+      // Add a user in plant 2
+      const plant2User: MockUser = {
+        id: 'f0000000-0000-0000-0000-000000000050',
+        employee_code: 'EMP-PUNE-01',
+        full_name: 'Pune Operator',
+        email: 'pune.op@jcb.com',
+        phone: null,
+        role: 'operator',
+        plant_id: 'b0000000-0000-0000-0000-000000000002', // Plant 2
+        shop_id: 'c0000000-0000-0000-0000-000000000002',
+        department: 'Assembly',
+        designation: 'Operator',
+        shift: 'Shift A',
+        password_hash: 'hash',
+        is_active: true,
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+      mockDb.users.set(plant2User.id, plant2User);
+
+      const managerCaller: AuthenticatedUser = {
+        id: 'f0000000-0000-0000-0000-000000000002',
+        employee_code: 'EMP-MGR-001',
+        email: 'manager@jcb.com',
+        role: 'manager',
+        plant_id: 'b0000000-0000-0000-0000-000000000001', // Plant 1
+      };
+
+      const ctx = createMockContext({}, {}, {}, {}, managerCaller);
+      await getUsers(ctx.req, ctx.res, ctx.next);
+
+      assert.equal(ctx.res.statusCode, 200);
+      assert.equal(ctx.res.responseData.success, true);
+      const users = ctx.res.responseData.data;
+      assert.ok(users.length > 0);
+      for (const u of users) {
+        assert.equal(u.plant_id, 'b0000000-0000-0000-0000-000000000001');
+      }
+      assert.equal(users.some((u: any) => u.employee_code === 'EMP-PUNE-01'), false);
+    });
+
+    it('19k. Admin can view users across all plants (GET /auth/users)', async () => {
+      // Seed a user in plant 2
+      const plant2User: MockUser = {
+        id: 'f0000000-0000-0000-0000-000000000050',
+        employee_code: 'EMP-PUNE-01',
+        full_name: 'Pune Operator',
+        email: 'pune.op@jcb.com',
+        phone: null,
+        role: 'operator',
+        plant_id: 'b0000000-0000-0000-0000-000000000002', // Plant 2
+        shop_id: 'c0000000-0000-0000-0000-000000000002',
+        department: 'Assembly',
+        designation: 'Operator',
+        shift: 'Shift A',
+        password_hash: 'hash',
+        is_active: true,
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+      mockDb.users.set(plant2User.id, plant2User);
+
+      const adminCaller: AuthenticatedUser = {
+        id: 'f0000000-0000-0000-0000-000000000001',
+        employee_code: 'EMP-ADM-001',
+        email: 'admin@jcb.com',
+        role: 'admin',
+        plant_id: 'b0000000-0000-0000-0000-000000000001',
+      };
+
+      const ctx = createMockContext({}, {}, {}, {}, adminCaller);
+      await getUsers(ctx.req, ctx.res, ctx.next);
+
+      assert.equal(ctx.res.statusCode, 200);
+      assert.equal(ctx.res.responseData.success, true);
+      const users = ctx.res.responseData.data;
+      // Admin sees users across plants including the Pune user
+      assert.ok(users.some((u: any) => u.plant_id === 'b0000000-0000-0000-0000-000000000001'));
+      assert.ok(users.some((u: any) => u.plant_id === 'b0000000-0000-0000-0000-000000000002'));
+    });
+
+    it('19l. Manager cannot edit or deactivate users through direct API calls (HTTP 403 Forbidden)', async () => {
+      const managerCaller: AuthenticatedUser = {
+        id: 'f0000000-0000-0000-0000-000000000002',
+        employee_code: 'EMP-MGR-001',
+        email: 'manager@jcb.com',
+        role: 'manager',
+        plant_id: 'b0000000-0000-0000-0000-000000000001',
+      };
+
+      const targetUserId = 'f0000000-0000-0000-0000-000000000003'; // existing technician
+
+      // Direct edit attempt
+      const editCtx = createMockContext({ full_name: 'Hacked Name' }, { id: targetUserId }, {}, {}, managerCaller);
+      await updateUser(editCtx.req, editCtx.res, editCtx.next);
+
+      assert.equal(editCtx.res.statusCode, 403);
+      assert.equal(
+        editCtx.res.responseData.message,
+        'Forbidden: Only administrators are permitted to edit users.'
+      );
+
+      // Direct deactivation attempt
+      const deleteCtx = createMockContext({}, { id: targetUserId }, {}, {}, managerCaller);
+      await deleteUser(deleteCtx.req, deleteCtx.res, deleteCtx.next);
+
+      assert.equal(deleteCtx.res.statusCode, 403);
+      assert.equal(
+        deleteCtx.res.responseData.message,
+        'Forbidden: Only administrators are permitted to deactivate users.'
+      );
     });
   });
 

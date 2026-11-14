@@ -445,6 +445,34 @@ export const getUsers = async (
       whereClauses.push(`is_active = $${params.length}`);
     }
 
+    // Plant filtering:
+    // Managers must only see users belonging to their own assigned plant.
+    // Admins can see all plants, or optionally filter by plant_id query parameter.
+    const callerRole = req.user?.role?.trim().toLowerCase();
+    const isManager = callerRole === 'manager';
+
+    if (isManager) {
+      if (!req.user?.plant_id) {
+        // Manager with no assigned plant sees empty directory
+        res.json({
+          success: true,
+          data: [],
+          pagination: {
+            page,
+            limit,
+            total: 0,
+            totalPages: 1,
+          },
+        });
+        return;
+      }
+      params.push(req.user.plant_id);
+      whereClauses.push(`plant_id = $${params.length}`);
+    } else if (req.query.plant_id && isUUID(req.query.plant_id as string)) {
+      params.push(req.query.plant_id);
+      whereClauses.push(`plant_id = $${params.length}`);
+    }
+
     const whereSql =
       whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
@@ -557,18 +585,21 @@ export const createUser = async (
     }
     const cleanRole = role.trim().toLowerCase();
 
-    if (plant_id != null && !isUUID(plant_id)) {
-      res.status(400).json({
+    // Role-based authorization & permission enforcement
+    const callerRole = req.user?.role ? req.user.role.trim().toLowerCase() : 'admin';
+    if (callerRole === 'manager') {
+      const allowedManagerRoles = ['technician', 'operator'];
+      if (!allowedManagerRoles.includes(cleanRole)) {
+        res.status(403).json({
+          success: false,
+          message: 'Forbidden: Managers are only permitted to create technician and operator accounts.',
+        });
+        return;
+      }
+    } else if (callerRole !== 'admin') {
+      res.status(403).json({
         success: false,
-        message: 'Invalid plant ID.',
-      });
-      return;
-    }
-
-    if (shop_id != null && !isUUID(shop_id)) {
-      res.status(400).json({
-        success: false,
-        message: 'Invalid shop ID.',
+        message: 'Forbidden: You do not have permission to create user accounts.',
       });
       return;
     }
@@ -608,43 +639,119 @@ export const createUser = async (
       return;
     }
 
-    // Verify plant exists if plant_id is provided
-    if (plant_id != null) {
-      const plantResult = await activeQuery(
-        `SELECT id FROM plants WHERE id = $1`,
-        [plant_id]
-      );
-      if (plantResult.rows.length === 0) {
+    // Plant & Shop Resolution and Verification:
+    let targetPlantId: string | null = null;
+    let targetShopId: string | null = shop_id || null;
+
+    if (callerRole === 'manager') {
+      // 1. Manager must have an assigned plant
+      if (!req.user?.plant_id || !isUUID(req.user.plant_id)) {
         res.status(400).json({
           success: false,
-          message: 'Selected plant does not exist.',
-        });
-        return;
-      }
-    }
-
-    // Verify shop exists and belongs to the selected plant
-    if (shop_id != null) {
-      const shopResult = await activeQuery(
-        `SELECT id, plant_id FROM shops WHERE id = $1`,
-        [shop_id]
-      );
-
-      if (shopResult.rows.length === 0) {
-        res.status(400).json({
-          success: false,
-          message: 'Selected shop does not exist.',
+          message: 'Manager account is not assigned to a plant. Cannot create users.',
         });
         return;
       }
 
-      const dbShop = shopResult.rows[0];
-      if (!plant_id || dbShop.plant_id !== plant_id) {
-        res.status(400).json({
+      // 2. Reject if manager attempts to manipulate plant_id to another plant
+      if (plant_id != null && plant_id !== req.user.plant_id) {
+        res.status(403).json({
           success: false,
-          message: 'Selected shop does not belong to the selected plant.',
+          message: 'Forbidden: Managers cannot create users for another plant.',
         });
         return;
+      }
+
+      // Always enforce the manager's assigned plant ID from trusted server-side user context
+      targetPlantId = req.user.plant_id;
+
+      // 3. If shop_id is provided, validate it belongs to the manager's plant
+      if (targetShopId != null) {
+        if (!isUUID(targetShopId)) {
+          res.status(400).json({
+            success: false,
+            message: 'Invalid shop ID.',
+          });
+          return;
+        }
+
+        const shopResult = await activeQuery(
+          `SELECT id, plant_id FROM shops WHERE id = $1`,
+          [targetShopId]
+        );
+
+        if (shopResult.rows.length === 0) {
+          res.status(400).json({
+            success: false,
+            message: 'Selected shop does not exist.',
+          });
+          return;
+        }
+
+        const dbShop = shopResult.rows[0];
+        if (dbShop.plant_id !== targetPlantId) {
+          res.status(400).json({
+            success: false,
+            message: 'Selected shop does not belong to the manager\'s assigned plant.',
+          });
+          return;
+        }
+      }
+    } else {
+      // Admin: retains existing plant and shop assignment capabilities
+      if (plant_id != null) {
+        if (!isUUID(plant_id)) {
+          res.status(400).json({
+            success: false,
+            message: 'Invalid plant ID.',
+          });
+          return;
+        }
+
+        const plantResult = await activeQuery(
+          `SELECT id FROM plants WHERE id = $1`,
+          [plant_id]
+        );
+        if (plantResult.rows.length === 0) {
+          res.status(400).json({
+            success: false,
+            message: 'Selected plant does not exist.',
+          });
+          return;
+        }
+        targetPlantId = plant_id;
+      }
+
+      if (targetShopId != null) {
+        if (!isUUID(targetShopId)) {
+          res.status(400).json({
+            success: false,
+            message: 'Invalid shop ID.',
+          });
+          return;
+        }
+
+        const shopResult = await activeQuery(
+          `SELECT id, plant_id FROM shops WHERE id = $1`,
+          [targetShopId]
+        );
+
+        if (shopResult.rows.length === 0) {
+          res.status(400).json({
+            success: false,
+            message: 'Selected shop does not exist.',
+          });
+          return;
+        }
+
+        const dbShop = shopResult.rows[0];
+        if (!targetPlantId || dbShop.plant_id !== targetPlantId) {
+          res.status(400).json({
+            success: false,
+            message: 'Selected shop does not belong to the selected plant.',
+          });
+          return;
+        }
       }
     }
 
@@ -671,8 +778,8 @@ export const createUser = async (
         cleanEmail,
         phone != null && typeof phone === 'string' ? phone.trim() || null : null,
         cleanRole,
-        plant_id || null,
-        shop_id || null,
+        targetPlantId,
+        targetShopId,
         department != null && typeof department === 'string' ? department.trim() || null : null,
         designation != null && typeof designation === 'string' ? designation.trim() || null : null,
         cleanShift,
@@ -719,6 +826,15 @@ export const updateUser = async (
   next: NextFunction
 ): Promise<void> => {
   try {
+    const callerRole = req.user?.role ? req.user.role.trim().toLowerCase() : 'admin';
+    if (callerRole !== 'admin') {
+      res.status(403).json({
+        success: false,
+        message: 'Forbidden: Only administrators are permitted to edit users.',
+      });
+      return;
+    }
+
     const { id } = req.params;
 
     if (!isUUID(id)) {
@@ -1070,6 +1186,15 @@ export const deleteUser = async (
   next: NextFunction
 ): Promise<void> => {
   try {
+    const callerRole = req.user?.role ? req.user.role.trim().toLowerCase() : 'admin';
+    if (callerRole !== 'admin') {
+      res.status(403).json({
+        success: false,
+        message: 'Forbidden: Only administrators are permitted to deactivate users.',
+      });
+      return;
+    }
+
     const { id } = req.params;
 
     if (!isUUID(id)) {
