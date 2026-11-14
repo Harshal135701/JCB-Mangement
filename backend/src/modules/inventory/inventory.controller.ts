@@ -67,6 +67,18 @@ export const searchParts = async (req: Request, res: Response, next: NextFunctio
       sql += ` AND category = $${params.length}`;
     }
 
+    // Multi-Plant Isolation
+    const callerRole = req.user?.role?.trim().toLowerCase();
+    const callerPlantId = req.user?.plant_id;
+
+    if (callerRole !== 'admin' && callerPlantId) {
+      params.push(callerPlantId);
+      sql += ` AND (plant_id = $${params.length} OR plant_id IS NULL)`;
+    } else if (req.query.plant_id && typeof req.query.plant_id === 'string' && UUID_REGEX.test(req.query.plant_id)) {
+      params.push(req.query.plant_id);
+      sql += ` AND plant_id = $${params.length}`;
+    }
+
     sql += ` ORDER BY ${sortCol} ${sortDir} LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
     params.push(limitNum, offset);
 
@@ -84,6 +96,14 @@ export const searchParts = async (req: Request, res: Response, next: NextFunctio
     if (category && String(category).trim() && String(category).trim().toLowerCase() !== 'all') {
       countParams.push(String(category).trim());
       countSql += ` AND category = $${countParams.length}`;
+    }
+
+    if (callerRole !== 'admin' && callerPlantId) {
+      countParams.push(callerPlantId);
+      countSql += ` AND (plant_id = $${countParams.length} OR plant_id IS NULL)`;
+    } else if (req.query.plant_id && typeof req.query.plant_id === 'string' && UUID_REGEX.test(req.query.plant_id)) {
+      countParams.push(req.query.plant_id);
+      countSql += ` AND plant_id = $${countParams.length}`;
     }
 
     const countRes = await query(countSql, countParams);
@@ -298,6 +318,11 @@ export const createSparePart = async (req: Request, res: Response, next: NextFun
 
     if (!bin_location || typeof bin_location !== 'string' || !bin_location.trim()) {
       res.status(400).json({ success: false, message: 'bin_location is required.' });
+      return;
+    }
+
+    if (user.role !== 'admin' && plant_id && user.plant_id && plant_id !== user.plant_id) {
+      res.status(403).json({ success: false, message: 'Forbidden: Cannot create spare parts for another plant.' });
       return;
     }
 

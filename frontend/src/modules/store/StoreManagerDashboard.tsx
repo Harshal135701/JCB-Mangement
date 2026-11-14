@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import apiClient from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
@@ -14,33 +14,28 @@ import {
   RefreshCw,
   Plus,
   Search,
-  Filter,
   CheckCircle2,
   X,
   FileText,
-  DollarSign,
-  TrendingUp,
-  TrendingDown,
+  IndianRupee,
+  Coins,
   Warehouse,
   MapPin,
   Clock,
   Send,
   AlertCircle,
-  ExternalLink,
   ChevronLeft,
   ChevronRight,
   ClipboardList,
   RotateCcw,
-  Trash2,
   Truck,
-  ArrowDownToLine,
-  ArrowUpFromLine,
-  ShoppingCart,
-  Layers,
   Archive,
   BarChart3,
   Flame,
-  FileCheck
+  FileCheck,
+  Eye,
+  Check,
+  Info
 } from 'lucide-react';
 
 // ============================================================================
@@ -83,6 +78,7 @@ interface StoreDashboardData {
     quantity: number;
     source_location: string;
     destination_location?: string;
+    reference_work_order_id?: string;
     performed_by_name?: string;
     performed_by_role?: string;
     remarks: string;
@@ -108,7 +104,11 @@ interface LowStockAlertItem {
   stock_deficit: number;
   has_open_pr: boolean;
   open_pr_number?: string | null;
+  open_pr_id?: string | null;
   recommended_reorder_qty: number;
+  supplier_name?: string | null;
+  description?: string | null;
+  uom?: string | null;
 }
 
 interface StockTransferItem {
@@ -216,9 +216,21 @@ const CATEGORIES = [
   'Consumables',
 ];
 
+const LEDGER_TYPES = [
+  { label: 'All Transactions', value: 'ALL' },
+  { label: 'Goods Receipt (STOCK_IN)', value: 'STOCK_IN' },
+  { label: 'Work Order Issue (ISSUE)', value: 'ISSUE' },
+  { label: 'Stock Adjustment (ADJUSTMENT)', value: 'ADJUSTMENT' },
+  { label: 'Stock Transfer (STOCK_TRANSFER)', value: 'STOCK_TRANSFER' },
+  { label: 'Defect Quarantine (QUARANTINE_HOLD)', value: 'QUARANTINE_HOLD' },
+  { label: 'Scrap Write-Off (SCRAP)', value: 'SCRAP' },
+  { label: 'Technician Reservation (RESERVATION)', value: 'RESERVATION' },
+];
+
 export const StoreManagerDashboard: React.FC = () => {
   const { user } = useAuth();
   const { socket } = useSocket();
+  const navigate = useNavigate();
 
   // Active Tab
   const [activeTab, setActiveTab] = useState<'low_stock' | 'transfers' | 'damaged' | 'reports' | 'transactions'>('low_stock');
@@ -227,7 +239,7 @@ export const StoreManagerDashboard: React.FC = () => {
   const [dashboard, setDashboard] = useState<StoreDashboardData | null>(null);
   const [loadingDashboard, setLoadingDashboard] = useState(true);
 
-  // Procurement KPI State (Live Real-Time)
+  // Procurement KPI State (Real-Time)
   const [procurementSummary, setProcurementSummary] = useState<ProcurementDashboardData | null>(null);
 
   // Low Stock Alerts State
@@ -235,6 +247,7 @@ export const StoreManagerDashboard: React.FC = () => {
   const [loadingAlerts, setLoadingAlerts] = useState(false);
   const [alertsSearch, setAlertsSearch] = useState('');
   const [alertsCategory, setAlertsCategory] = useState('ALL');
+  const [alertsZeroOnly, setAlertsZeroOnly] = useState(false);
   const [alertsPage, setAlertsPage] = useState(1);
   const [alertsTotal, setAlertsTotal] = useState(0);
   const [alertsTotalPages, setAlertsTotalPages] = useState(1);
@@ -256,8 +269,16 @@ export const StoreManagerDashboard: React.FC = () => {
   const [topMovedParts, setTopMovedParts] = useState<TopMovedPartItem[]>([]);
   const [loadingReports, setLoadingReports] = useState(false);
 
+  // Paginated Audit Ledger State (Tab 5)
+  const [ledgerTransactions, setLedgerTransactions] = useState<any[]>([]);
+  const [loadingLedger, setLoadingLedger] = useState(false);
+  const [ledgerPage, setLedgerPage] = useState(1);
+  const [ledgerTotal, setLedgerTotal] = useState(0);
+  const [ledgerTotalPages, setLedgerTotalPages] = useState(1);
+  const [ledgerTypeFilter, setLedgerTypeFilter] = useState('ALL');
+
   // General Parts Catalog cache (for select dropdowns in modals)
-  const [catalogParts, setCatalogParts] = useState<Array<{ id: string; part_number: string; name: string; bin_location: string; available_stock: number; current_physical_stock: number; reserved_stock: number; quarantined_stock: number; warehouse_zone?: string }>>([]);
+  const [catalogParts, setCatalogParts] = useState<Array<{ id: string; part_number: string; name: string; bin_location: string; available_stock: number; current_physical_stock: number; reserved_stock: number; quarantined_stock: number; warehouse_zone?: string; unit_cost?: number; uom?: string; category?: string; supplier_name?: string }>>([]);
 
   // Notifications / Feedback Banner
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -310,6 +331,27 @@ export const StoreManagerDashboard: React.FC = () => {
     technical_justification: '',
   });
 
+  // 6. Register New Spare Part Modal (Master Creation)
+  const [isCreatePartModalOpen, setIsCreatePartModalOpen] = useState(false);
+  const [createPartForm, setCreatePartForm] = useState({
+    part_number: '',
+    oem_part_number: '',
+    name: '',
+    description: '',
+    category: 'Mechanical',
+    subcategory: '',
+    uom: 'Nos',
+    warehouse_zone: 'Main Store',
+    bin_location: '',
+    min_reorder_level: 5,
+    max_stock_level: 100,
+    unit_cost: 0,
+    supplier_name: '',
+  });
+
+  // 7. Spare Part Details Drawer / Modal
+  const [selectedPartForDetails, setSelectedPartForDetails] = useState<any | null>(null);
+
   // ============================================================================
   // DATA FETCHING FUNCTIONS
   // ============================================================================
@@ -346,12 +388,13 @@ export const StoreManagerDashboard: React.FC = () => {
 
       const res = await apiClient.get(`/inventory/alerts/low-stock?${params.toString()}`);
       if (res.data?.success) {
-        setLowStockItems(res.data.data || []);
+        let items: LowStockAlertItem[] = res.data.data || [];
+        setLowStockItems(items);
         if (res.data.pagination) {
           setAlertsTotal(res.data.pagination.total);
           setAlertsTotalPages(res.data.pagination.totalPages || 1);
         } else {
-          setAlertsTotal(res.data.data?.length || 0);
+          setAlertsTotal(items.length);
         }
       }
     } catch (err: any) {
@@ -433,6 +476,30 @@ export const StoreManagerDashboard: React.FC = () => {
     }
   }, []);
 
+  const fetchLedgerTransactions = useCallback(async (p = ledgerPage, typeFilter = ledgerTypeFilter) => {
+    try {
+      setLoadingLedger(true);
+      const params = new URLSearchParams();
+      params.append('page', String(p));
+      params.append('limit', '15');
+      if (typeFilter && typeFilter !== 'ALL') {
+        params.append('transaction_type', typeFilter);
+      }
+      const res = await apiClient.get(`/inventory/transactions?${params.toString()}`);
+      if (res.data?.success && res.data?.data) {
+        setLedgerTransactions(res.data.data);
+        if (res.data.pagination) {
+          setLedgerTotal(res.data.pagination.total);
+          setLedgerTotalPages(res.data.pagination.totalPages || 1);
+        }
+      }
+    } catch (err: any) {
+      console.error('Failed to load ledger transactions:', err);
+    } finally {
+      setLoadingLedger(false);
+    }
+  }, [ledgerPage, ledgerTypeFilter]);
+
   const fetchCatalogParts = useCallback(async () => {
     try {
       const res = await apiClient.get('/inventory?limit=200');
@@ -461,8 +528,10 @@ export const StoreManagerDashboard: React.FC = () => {
       fetchDamagedStock(damagedFilter);
     } else if (activeTab === 'reports') {
       fetchReports();
+    } else if (activeTab === 'transactions') {
+      fetchLedgerTransactions(ledgerPage, ledgerTypeFilter);
     }
-  }, [activeTab, alertsCategory, alertsSearch, alertsPage, transfersPage, damagedFilter, fetchLowStockAlerts, fetchTransfers, fetchDamagedStock, fetchReports]);
+  }, [activeTab, alertsCategory, alertsSearch, alertsPage, transfersPage, damagedFilter, ledgerPage, ledgerTypeFilter, fetchLowStockAlerts, fetchTransfers, fetchDamagedStock, fetchReports, fetchLedgerTransactions]);
 
   // Real-time Socket.IO subscriptions for Store operations
   useEffect(() => {
@@ -473,6 +542,7 @@ export const StoreManagerDashboard: React.FC = () => {
       if (activeTab === 'low_stock') fetchLowStockAlerts(alertsCategory, alertsSearch, alertsPage);
       if (activeTab === 'transfers') fetchTransfers(transfersPage);
       if (activeTab === 'damaged') fetchDamagedStock(damagedFilter);
+      if (activeTab === 'transactions') fetchLedgerTransactions(ledgerPage, ledgerTypeFilter);
     };
 
     socket.on('inventory:stock_adjusted', handleAutoRefresh);
@@ -490,7 +560,7 @@ export const StoreManagerDashboard: React.FC = () => {
       socket.off('procurement:pr_created', handleAutoRefresh);
       socket.off('procurement:grn_received', handleAutoRefresh);
     };
-  }, [socket, activeTab, alertsCategory, alertsSearch, alertsPage, transfersPage, damagedFilter, fetchDashboardSummary, fetchLowStockAlerts, fetchTransfers, fetchDamagedStock]);
+  }, [socket, activeTab, alertsCategory, alertsSearch, alertsPage, transfersPage, damagedFilter, ledgerPage, ledgerTypeFilter, fetchDashboardSummary, fetchLowStockAlerts, fetchTransfers, fetchDamagedStock, fetchLedgerTransactions]);
 
   // ============================================================================
   // ACTION HANDLERS
@@ -553,6 +623,7 @@ export const StoreManagerDashboard: React.FC = () => {
         fetchDashboardSummary();
         fetchCatalogParts();
         if (activeTab === 'low_stock') fetchLowStockAlerts();
+        if (activeTab === 'transactions') fetchLedgerTransactions();
       }
     } catch (err: any) {
       setFeedback({
@@ -614,6 +685,7 @@ export const StoreManagerDashboard: React.FC = () => {
         fetchDashboardSummary();
         fetchCatalogParts();
         if (activeTab === 'transfers') fetchTransfers();
+        if (activeTab === 'transactions') fetchLedgerTransactions();
       }
     } catch (err: any) {
       setFeedback({
@@ -665,6 +737,7 @@ export const StoreManagerDashboard: React.FC = () => {
         fetchDashboardSummary();
         fetchCatalogParts();
         if (activeTab === 'damaged') fetchDamagedStock();
+        if (activeTab === 'transactions') fetchLedgerTransactions();
       }
     } catch (err: any) {
       setFeedback({
@@ -702,6 +775,7 @@ export const StoreManagerDashboard: React.FC = () => {
         fetchDashboardSummary();
         fetchCatalogParts();
         if (activeTab === 'damaged') fetchDamagedStock();
+        if (activeTab === 'transactions') fetchLedgerTransactions();
       }
     } catch (err: any) {
       setFeedback({
@@ -749,29 +823,129 @@ export const StoreManagerDashboard: React.FC = () => {
     }
   };
 
-  // Open Quick PR Modal helper
+  // 6. Register New Spare Part Master Submit
+  const handleCreatePartSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!createPartForm.part_number.trim()) {
+      setFeedback({ type: 'error', message: 'Part Number is mandatory.' });
+      return;
+    }
+    if (!createPartForm.name.trim()) {
+      setFeedback({ type: 'error', message: 'Part Name is mandatory.' });
+      return;
+    }
+    if (!createPartForm.bin_location.trim()) {
+      setFeedback({ type: 'error', message: 'Storage Bin Location is mandatory.' });
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      const payload: any = {
+        part_number: createPartForm.part_number.trim(),
+        oem_part_number: createPartForm.oem_part_number.trim() || undefined,
+        name: createPartForm.name.trim(),
+        description: createPartForm.description.trim() || undefined,
+        category: createPartForm.category,
+        subcategory: createPartForm.subcategory.trim() || undefined,
+        uom: createPartForm.uom.trim() || 'Nos',
+        warehouse_zone: createPartForm.warehouse_zone.trim() || 'Main Store',
+        bin_location: createPartForm.bin_location.trim(),
+        min_reorder_level: Number(createPartForm.min_reorder_level) || 5,
+        max_stock_level: Number(createPartForm.max_stock_level) || 100,
+        unit_cost: Number(createPartForm.unit_cost) || 0,
+        supplier_name: createPartForm.supplier_name.trim() || undefined,
+        current_physical_stock: 0, // Starts at 0 per strict requirement
+        plant_id: user?.plantId || (user as any)?.plant_id || undefined,
+      };
+
+      const res = await apiClient.post('/inventory', payload);
+      if (res.data?.success) {
+        setFeedback({
+          type: 'success',
+          message: `Spare part ${createPartForm.part_number} registered successfully in plant catalog!`,
+        });
+        setIsCreatePartModalOpen(false);
+        setCreatePartForm({
+          part_number: '',
+          oem_part_number: '',
+          name: '',
+          description: '',
+          category: 'Mechanical',
+          subcategory: '',
+          uom: 'Nos',
+          warehouse_zone: 'Main Store',
+          bin_location: '',
+          min_reorder_level: 5,
+          max_stock_level: 100,
+          unit_cost: 0,
+          supplier_name: '',
+        });
+        fetchDashboardSummary();
+        fetchCatalogParts();
+      }
+    } catch (err: any) {
+      setFeedback({
+        type: 'error',
+        message: err.response?.data?.message || 'Failed to register spare part.',
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const openAdjustForPart = (item: any) => {
+    setAdjustPart(item);
+    setAdjustQuantity(0);
+    setAdjustReason('');
+    setIsAdjustModalOpen(true);
+  };
+
   const openQuickPRModal = (item: LowStockAlertItem) => {
-    const recQty = Math.max(item.recommended_reorder_qty || 1, item.stock_deficit || 1);
+    const recommendedQty = item.recommended_reorder_qty > 0
+      ? item.recommended_reorder_qty
+      : Math.max(1, (item.min_reorder_level * 2) - item.available_stock);
+
     setPrForm({
       part_id: item.id,
       part_number: item.part_number,
       part_name: item.name,
-      quantity_required: recQty,
+      quantity_required: recommendedQty,
       urgency: item.available_stock <= 0 ? 'critical' : 'high',
       technical_justification: `Store reorder trigger: Current available stock is ${item.available_stock} (Min Reorder Level: ${item.min_reorder_level}, Deficit: ${item.stock_deficit}).`,
     });
     setIsPRModalOpen(true);
   };
 
-  // Open Adjust Modal prefilled for a part
-  const openAdjustForPart = (p: any) => {
-    setAdjustPart(p);
-    setAdjustQuantity(0);
-    setAdjustReason('');
-    setIsAdjustModalOpen(true);
+  const openPartDetails = async (partIdOrSku: string) => {
+    // Check if we have it in catalogParts or lowStockItems
+    let match = catalogParts.find((p) => p.id === partIdOrSku || p.part_number === partIdOrSku);
+    if (!match) {
+      match = lowStockItems.find((p) => p.id === partIdOrSku || p.part_number === partIdOrSku) as any;
+    }
+    if (match) {
+      setSelectedPartForDetails(match);
+      return;
+    }
+    // Otherwise fetch by ID
+    try {
+      const res = await apiClient.get(`/inventory/${partIdOrSku}`);
+      if (res.data?.success && res.data?.data) {
+        setSelectedPartForDetails(res.data.data);
+      }
+    } catch {
+      // Fallback
+    }
   };
 
-  // Summary shortcuts
+  // Filtered Low Stock Items (supporting zero-stock toggle)
+  const displayLowStockItems = useMemo(() => {
+    if (alertsZeroOnly) {
+      return lowStockItems.filter((i) => Number(i.current_physical_stock) === 0);
+    }
+    return lowStockItems;
+  }, [lowStockItems, alertsZeroOnly]);
+
   const summary = dashboard?.summary || {
     total_parts: 0,
     total_physical_stock: 0,
@@ -784,19 +958,19 @@ export const StoreManagerDashboard: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 pb-12 font-sans selection:bg-amber-400 selection:text-black">
+    <div className="space-y-6 bg-white min-h-full">
       {/* =========================================================================
-          TOP COMMAND BANNER / STORE OPERATIONS HEADER
+          PAGE HEADER
           ========================================================================= */}
-      <div className="bg-white rounded-2xl border-2 border-zinc-200 p-6 shadow-xs flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 bg-white rounded-2xl border-2 border-zinc-200 shadow-sm">
         <div>
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="bg-jcb-yellow text-black font-black text-xs px-2.5 py-1 rounded-md border border-amber-500 shadow-xs tracking-wider">
-              JCB STORES
-            </div>
-            <h1 className="text-xl sm:text-2xl font-black text-zinc-950 tracking-tight">
-              CENTRAL STORE & INVENTORY HUB
-            </h1>
+          <div className="flex items-center gap-3">
+            <h2 className="text-xl font-black text-zinc-950 tracking-tight">
+              PLANT STORE OPERATIONS COMMAND CENTER
+            </h2>
+            <span className="bg-jcb-yellow text-black text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-amber-500 shadow-xs">
+              Store Governance
+            </span>
             <span className="bg-zinc-100 text-zinc-700 font-bold text-[10px] px-2.5 py-1 rounded-full uppercase tracking-wider border border-zinc-300">
               {user?.plantName || (user as any)?.plant_name || 'Central Store Hub'}
             </span>
@@ -808,6 +982,24 @@ export const StoreManagerDashboard: React.FC = () => {
 
         {/* Global Action Buttons */}
         <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => setIsCreatePartModalOpen(true)}
+            className="bg-jcb-yellow hover:bg-jcb-yellowDark text-black text-xs font-black px-3.5 py-2.5 rounded-xl border border-amber-500 shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+            title="Register a new spare part master catalog record"
+          >
+            <Plus className="w-4 h-4 text-black" />
+            <span>REGISTER PART</span>
+          </button>
+
+          <button
+            onClick={() => navigate('/procurement?tab=pos')}
+            className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-black px-3.5 py-2.5 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+            title="Open Goods Receipt (GRN) inwarding workflow"
+          >
+            <Truck className="w-4 h-4 text-white" />
+            <span>INWARD GOODS (GRN)</span>
+          </button>
+
           <button
             onClick={() => {
               setAdjustPart(null);
@@ -834,7 +1026,7 @@ export const StoreManagerDashboard: React.FC = () => {
             className="bg-red-50 hover:bg-red-100 text-red-800 text-xs font-black px-3.5 py-2.5 rounded-xl border border-red-300 transition flex items-center gap-1.5 cursor-pointer"
           >
             <ShieldAlert className="w-4 h-4 text-red-600" />
-            <span>QUARANTINE STOCK</span>
+            <span>QUARANTINE DEFECT</span>
           </button>
 
           <button
@@ -844,6 +1036,7 @@ export const StoreManagerDashboard: React.FC = () => {
               if (activeTab === 'transfers') fetchTransfers();
               if (activeTab === 'damaged') fetchDamagedStock();
               if (activeTab === 'reports') fetchReports();
+              if (activeTab === 'transactions') fetchLedgerTransactions();
             }}
             className="p-2.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-xl transition border border-zinc-300 cursor-pointer"
             title="Refresh All Store Data"
@@ -896,18 +1089,18 @@ export const StoreManagerDashboard: React.FC = () => {
             <span>Spare Parts Catalog</span>
           </Link>
           <Link
-            to="/procurement"
+            to="/procurement?tab=prs"
             className="px-3 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold transition flex items-center gap-1.5 border border-zinc-200"
           >
             <FileText className="w-3.5 h-3.5 text-blue-600" />
             <span>Requisitions & POs</span>
           </Link>
           <Link
-            to="/procurement"
-            className="px-3 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold transition flex items-center gap-1.5 border border-zinc-200"
+            to="/procurement?tab=pos"
+            className="px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-900 font-bold transition flex items-center gap-1.5 border border-emerald-300"
           >
             <Truck className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Goods Receipt (GRN)</span>
+            <span>Goods Receipt Note (GRN)</span>
           </Link>
           <Link
             to="/rdc"
@@ -934,141 +1127,120 @@ export const StoreManagerDashboard: React.FC = () => {
       </div>
 
       {/* =========================================================================
-          KEY INVENTORY METRICS & TELEMETRY CARDS (11 REAL-TIME DB KPIS)
+          KEY INVENTORY METRICS & TELEMETRY CARDS (CONSOLIDATED 7 INTERACTIVE KPIS)
           ========================================================================= */}
-      <div className="space-y-3">
-        {/* Row 1: Stock Inventory Balance & Valuation (6 KPIs) */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          {/* 1. Total Active SKUs */}
-          <TopKPICard
-            icon={Package}
-            label="Active SKUs"
-            value={summary.total_parts.toLocaleString('en-IN')}
-            subtitle="Catalog master parts"
-            accentColor="border-l-4 border-l-zinc-900"
-          />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
+        {/* 1. Warehouse Stock Balance */}
+        <TopKPICard
+          icon={Boxes}
+          iconBgColor="bg-blue-100"
+          iconColor="text-blue-800"
+          label="Warehouse Stock Balance"
+          value={summary.total_available_stock.toLocaleString('en-IN')}
+          subtitle={`Physical: ${summary.total_physical_stock.toLocaleString('en-IN')} | Reserved: ${summary.total_reserved_stock} | Hold: ${summary.total_quarantined_stock}`}
+          trend={`${summary.total_parts} Active SKUs`}
+          trendColor="bg-blue-50 text-blue-800 font-bold border border-blue-200"
+          accentColor="border-l-4 border-l-blue-600"
+          onClick={() => navigate('/inventory')}
+        />
 
-          {/* 2. Total Physical Stock */}
-          <TopKPICard
-            icon={Boxes}
-            iconBgColor="bg-blue-100"
-            iconColor="text-blue-800"
-            label="Physical Stock"
-            value={summary.total_physical_stock.toLocaleString('en-IN')}
-            subtitle="Total units in warehouse"
-            accentColor="border-l-4 border-l-blue-600"
-          />
+        {/* 2. Low Stock Alerts */}
+        <TopKPICard
+          icon={AlertTriangle}
+          iconBgColor={summary.low_stock_items_count > 0 ? "bg-amber-100" : "bg-emerald-100"}
+          iconColor={summary.low_stock_items_count > 0 ? "text-amber-800" : "text-emerald-800"}
+          label="Low Stock Alerts"
+          value={summary.low_stock_items_count}
+          subtitle={summary.low_stock_items_count > 0 ? `${summary.low_stock_items_count} SKUs below safety reorder level` : 'All inventory above minimum threshold'}
+          trend={summary.low_stock_items_count > 0 ? 'Safety Breached' : 'Optimal'}
+          trendColor={
+            summary.low_stock_items_count > 0
+              ? 'bg-amber-100 text-amber-900 border border-amber-300 font-black'
+              : 'bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold'
+          }
+          accentColor={summary.low_stock_items_count > 0 ? 'border-l-4 border-l-amber-500' : 'border-l-4 border-l-emerald-500'}
+          onClick={() => {
+            setActiveTab('low_stock');
+            setAlertsZeroOnly(false);
+          }}
+        />
 
-          {/* 3. Reserved Stock */}
-          <TopKPICard
-            icon={Layers}
-            iconBgColor="bg-amber-100"
-            iconColor="text-amber-800"
-            label="Reserved Stock"
-            value={summary.total_reserved_stock.toLocaleString('en-IN')}
-            subtitle="Allocated to work orders"
-            accentColor="border-l-4 border-l-amber-500"
-          />
+        {/* 3. Critical Stockouts */}
+        <TopKPICard
+          icon={Archive}
+          iconBgColor={summary.out_of_stock_count > 0 ? "bg-red-100" : "bg-emerald-100"}
+          iconColor={summary.out_of_stock_count > 0 ? "text-red-700" : "text-emerald-700"}
+          label="Critical Stockouts"
+          value={summary.out_of_stock_count}
+          subtitle="SKUs with zero physical warehouse stock"
+          trend={summary.out_of_stock_count > 0 ? `${summary.out_of_stock_count} Depleted (0 Stock)` : 'No Stockouts'}
+          trendColor={
+            summary.out_of_stock_count > 0
+              ? 'bg-red-100 text-red-800 border border-red-300 font-black'
+              : 'bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold'
+          }
+          accentColor="border-l-4 border-l-red-600"
+          onClick={() => {
+            setActiveTab('low_stock');
+            setAlertsZeroOnly(true);
+          }}
+        />
 
-          {/* 4. Available Usable Stock */}
-          <TopKPICard
-            icon={CheckCircle2}
-            iconBgColor="bg-emerald-100"
-            iconColor="text-emerald-800"
-            label="Available Stock"
-            value={summary.total_available_stock.toLocaleString('en-IN')}
-            subtitle="Physical - Reserved - Quarantined"
-            accentColor="border-l-4 border-l-emerald-600"
-          />
+        {/* 4. Total Inventory Asset Valuation (INR) */}
+        <TopKPICard
+          icon={Coins}
+          iconBgColor="bg-amber-100"
+          iconColor="text-amber-900"
+          label="Total Inventory Valuation"
+          value={`₹${(Number(summary.total_inventory_valuation || 0) / 100000).toFixed(2)}L`}
+          subtitle={`₹${Number(summary.total_inventory_valuation || 0).toLocaleString('en-IN')} Current Asset Value`}
+          trend="Plant Assets"
+          trendColor="bg-amber-50 text-amber-900 border border-amber-200 font-bold"
+          accentColor="border-l-4 border-l-jcb-yellow"
+          onClick={() => setActiveTab('reports')}
+        />
 
-          {/* 5. Out of Stock SKUs */}
-          <TopKPICard
-            icon={Archive}
-            iconBgColor="bg-rose-100"
-            iconColor="text-rose-800"
-            label="Out of Stock"
-            value={summary.out_of_stock_count}
-            trend={summary.out_of_stock_count > 0 ? `${summary.out_of_stock_count} Depleted` : 'Nominal'}
-            trendColor={summary.out_of_stock_count > 0 ? 'bg-rose-100 text-rose-800 border border-rose-300 font-bold' : undefined}
-            subtitle="Zero physical balance"
-            accentColor="border-l-4 border-l-rose-600"
-          />
+        {/* 5. Goods Inwarding & Pipeline */}
+        <TopKPICard
+          icon={Truck}
+          iconBgColor="bg-emerald-100"
+          iconColor="text-emerald-800"
+          label="Goods Inwarding Pipeline"
+          value={procurementSummary?.kpi?.active_purchase_orders ?? procurementSummary?.summary?.active_pos ?? 0}
+          subtitle={`${procurementSummary?.kpi?.pending_requisitions ?? procurementSummary?.summary?.total_pending_prs ?? 0} Requisitions Pending Review`}
+          trend="Open POs / GRN"
+          trendColor="bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold"
+          accentColor="border-l-4 border-l-emerald-600"
+          onClick={() => navigate('/procurement?tab=pos')}
+        />
 
-          {/* 6. Total Inventory Valuation */}
-          <TopKPICard
-            icon={DollarSign}
-            iconBgColor="bg-amber-100"
-            iconColor="text-amber-900"
-            label="Total Valuation"
-            value={`₹${(Number(summary.total_inventory_valuation || 0) / 100000).toFixed(2)}L`}
-            subtitle={`₹${Number(summary.total_inventory_valuation || 0).toLocaleString('en-IN')}`}
-            accentColor="border-l-4 border-l-jcb-yellow"
-          />
-        </div>
+        {/* 6. Defect Quarantine & Hold */}
+        <TopKPICard
+          icon={ShieldAlert}
+          iconBgColor="bg-purple-100"
+          iconColor="text-purple-800"
+          label="Quarantine / Defect Hold"
+          value={summary.total_quarantined_stock}
+          subtitle={`${dashboard?.damaged_stock?.total_damaged_reports ?? 0} reports (${dashboard?.damaged_stock?.quarantined_units ?? 0} units active hold)`}
+          trend={summary.total_quarantined_stock > 0 ? 'Quality Isolation' : 'No Defects'}
+          trendColor="bg-purple-50 text-purple-800 border border-purple-200 font-bold"
+          accentColor="border-l-4 border-l-purple-600"
+          onClick={() => setActiveTab('damaged')}
+        />
 
-        {/* Row 2: Procurement Pipeline & Operations (5 KPIs) */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          {/* 7. Low-Stock Alerts */}
-          <TopKPICard
-            icon={AlertTriangle}
-            iconBgColor={summary.low_stock_items_count > 0 ? "bg-red-100" : "bg-emerald-100"}
-            iconColor={summary.low_stock_items_count > 0 ? "text-red-700" : "text-emerald-700"}
-            label="Low Stock Alert"
-            value={summary.low_stock_items_count}
-            trend={summary.low_stock_items_count > 0 ? `${summary.low_stock_items_count} Below Min` : 'Nominal'}
-            trendColor={
-              summary.low_stock_items_count > 0
-                ? 'bg-red-100 text-red-800 font-black border border-red-300'
-                : 'bg-emerald-50 text-emerald-800 font-bold border border-emerald-300'
-            }
-            subtitle={summary.low_stock_items_count > 0 ? 'Safety threshold breached' : 'All stock above safety minimum'}
-            accentColor={summary.low_stock_items_count > 0 ? 'border-l-4 border-l-red-600' : 'border-l-4 border-l-emerald-500'}
-          />
-
-          {/* 8. Pending Purchase Requisitions */}
-          <TopKPICard
-            icon={FileText}
-            iconBgColor="bg-orange-100"
-            iconColor="text-orange-800"
-            label="Pending PRs"
-            value={procurementSummary?.kpi?.pending_requisitions ?? procurementSummary?.summary?.total_pending_prs ?? 0}
-            subtitle="Requisitions awaiting approval"
-            accentColor="border-l-4 border-l-orange-500"
-          />
-
-          {/* 9. Pending / Active Purchase Orders */}
-          <TopKPICard
-            icon={ShoppingCart}
-            iconBgColor="bg-indigo-100"
-            iconColor="text-indigo-800"
-            label="Active Orders (PO)"
-            value={procurementSummary?.kpi?.active_purchase_orders ?? procurementSummary?.summary?.active_pos ?? 0}
-            subtitle="Open vendor purchase orders"
-            accentColor="border-l-4 border-l-indigo-600"
-          />
-
-          {/* 10. Quarantined Damaged Stock */}
-          <TopKPICard
-            icon={ShieldAlert}
-            iconBgColor="bg-purple-100"
-            iconColor="text-purple-800"
-            label="Quarantined Units"
-            value={summary.total_quarantined_stock}
-            subtitle="Defective / hold stock"
-            accentColor="border-l-4 border-l-purple-600"
-          />
-
-          {/* 11. Transfers In-Transit */}
-          <TopKPICard
-            icon={ArrowRightLeft}
-            iconBgColor="bg-cyan-100"
-            iconColor="text-cyan-800"
-            label="Transfers In-Transit"
-            value={dashboard?.transfers?.active_transfers_count ?? 0}
-            subtitle="Sub-store replenishment"
-            accentColor="border-l-4 border-l-cyan-600"
-          />
-        </div>
+        {/* 7. Store Transfers & Relocation */}
+        <TopKPICard
+          icon={ArrowRightLeft}
+          iconBgColor="bg-cyan-100"
+          iconColor="text-cyan-800"
+          label="Store Transfers Ledger"
+          value={dashboard?.transfers?.active_transfers_count ?? 0}
+          subtitle={`${dashboard?.transfers?.total_transfers_count ?? 0} total bin & sub-store relocations`}
+          trend="Internal Flow"
+          trendColor="bg-cyan-50 text-cyan-800 border border-cyan-200 font-bold"
+          accentColor="border-l-4 border-l-cyan-600"
+          onClick={() => setActiveTab('transfers')}
+        />
       </div>
 
       {/* =========================================================================
@@ -1079,14 +1251,14 @@ export const StoreManagerDashboard: React.FC = () => {
           onClick={() => setActiveTab('low_stock')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer ${
             activeTab === 'low_stock'
-              ? 'bg-zinc-950 text-white shadow-sm'
+              ? 'bg-zinc-950 text-white shadow-xs'
               : 'text-zinc-600 hover:text-black hover:bg-zinc-100'
           }`}
         >
-          <AlertTriangle className="w-4 h-4 text-amber-500" />
-          <span>Low-Stock Alerts & Auto-Reorder</span>
+          <AlertTriangle className={`w-4 h-4 ${summary.low_stock_items_count > 0 ? 'text-amber-400' : ''}`} />
+          <span>Low Stock & Reorders</span>
           {summary.low_stock_items_count > 0 && (
-            <span className="bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full">
+            <span className="bg-red-600 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold">
               {summary.low_stock_items_count}
             </span>
           )}
@@ -1096,30 +1268,32 @@ export const StoreManagerDashboard: React.FC = () => {
           onClick={() => setActiveTab('transfers')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer ${
             activeTab === 'transfers'
-              ? 'bg-zinc-950 text-white shadow-sm'
+              ? 'bg-zinc-950 text-white shadow-xs'
               : 'text-zinc-600 hover:text-black hover:bg-zinc-100'
           }`}
         >
-          <ArrowRightLeft className="w-4 h-4" />
+          <ArrowRightLeft className="w-4 h-4 text-cyan-400" />
           <span>Stock Transfers</span>
-          <span className="bg-zinc-200 text-zinc-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
-            {dashboard?.transfers?.total_transfers_count ?? transfers.length}
-          </span>
+          {(dashboard?.transfers?.active_transfers_count ?? 0) > 0 && (
+            <span className="bg-cyan-600 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold">
+              {dashboard?.transfers?.active_transfers_count}
+            </span>
+          )}
         </button>
 
         <button
           onClick={() => setActiveTab('damaged')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer ${
             activeTab === 'damaged'
-              ? 'bg-zinc-950 text-white shadow-sm'
+              ? 'bg-zinc-950 text-white shadow-xs'
               : 'text-zinc-600 hover:text-black hover:bg-zinc-100'
           }`}
         >
-          <ShieldAlert className="w-4 h-4" />
-          <span>Damaged & Quarantine Ledger</span>
-          {(dashboard?.damaged_stock?.total_damaged_reports ?? damagedItems.length) > 0 && (
-            <span className="bg-purple-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full">
-              {dashboard?.damaged_stock?.total_damaged_reports ?? damagedItems.length}
+          <ShieldAlert className="w-4 h-4 text-purple-400" />
+          <span>Quarantine & Scrap</span>
+          {summary.total_quarantined_stock > 0 && (
+            <span className="bg-purple-600 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold">
+              {summary.total_quarantined_stock}
             </span>
           )}
         </button>
@@ -1128,51 +1302,69 @@ export const StoreManagerDashboard: React.FC = () => {
           onClick={() => setActiveTab('reports')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer ${
             activeTab === 'reports'
-              ? 'bg-zinc-950 text-white shadow-sm'
+              ? 'bg-zinc-950 text-white shadow-xs'
               : 'text-zinc-600 hover:text-black hover:bg-zinc-100'
           }`}
         >
-          <DollarSign className="w-4 h-4" />
-          <span>Category Valuation & Movement</span>
+          <IndianRupee className="w-4 h-4 text-amber-400" />
+          <span>Valuation & Analytics</span>
         </button>
 
         <button
           onClick={() => setActiveTab('transactions')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer ${
             activeTab === 'transactions'
-              ? 'bg-zinc-950 text-white shadow-sm'
+              ? 'bg-zinc-950 text-white shadow-xs'
               : 'text-zinc-600 hover:text-black hover:bg-zinc-100'
           }`}
         >
-          <Clock className="w-4 h-4" />
-          <span>Audit Ledger (Recent 10)</span>
+          <Clock className="w-4 h-4 text-emerald-400" />
+          <span>Live Audit Ledger</span>
         </button>
       </div>
 
       {/* =========================================================================
-          TAB 1: LOW-STOCK ALERTS & REORDER QUEUE
+          TAB 1: LOW STOCK ALERTS & REORDERS
           ========================================================================= */}
       {activeTab === 'low_stock' && (
         <div className="space-y-4">
-          {/* Search & Category Filter */}
-          <div className="bg-white p-4 rounded-2xl border-2 border-zinc-200 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-            <div className="relative flex-1">
-              <Search className="w-4 h-4 absolute left-3.5 top-3 text-zinc-400" />
+          {/* Filters & Zero-Stock Toggle */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-4 rounded-2xl border-2 border-zinc-200 shadow-xs">
+            {/* Search */}
+            <div className="relative flex-1 max-w-md">
+              <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-3" />
               <input
                 type="text"
-                placeholder="Search low-stock SKU, part name, or OEM code..."
                 value={alertsSearch}
-                onChange={(e) => setAlertsSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-zinc-50 border border-zinc-300 rounded-xl text-xs font-medium text-zinc-900 focus:outline-none focus:border-jcb-yellow shadow-2xs"
+                onChange={(e) => {
+                  setAlertsSearch(e.target.value);
+                  setAlertsPage(1);
+                }}
+                placeholder="Search SKU code, OEM number, part name..."
+                className="w-full pl-10 pr-4 py-2 bg-zinc-50 border border-zinc-300 rounded-xl text-xs font-medium text-zinc-900 focus:outline-none focus:border-jcb-yellow"
               />
               {alertsSearch && (
                 <button
                   onClick={() => setAlertsSearch('')}
-                  className="absolute right-3 top-2.5 text-zinc-400 hover:text-zinc-600 p-0.5"
+                  className="absolute right-3 top-2.5 text-zinc-400 hover:text-zinc-600 p-0.5 cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
               )}
+            </div>
+
+            {/* Zero Stock Only Filter Toggle */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setAlertsZeroOnly(!alertsZeroOnly)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition shrink-0 cursor-pointer border ${
+                  alertsZeroOnly
+                    ? 'bg-red-600 text-white border-red-700 shadow-xs'
+                    : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 border-zinc-300'
+                }`}
+              >
+                {alertsZeroOnly ? 'Show All Low Stock' : 'Zero Stock Only (Depleted)'}
+              </button>
             </div>
 
             {/* Category Filter Pills */}
@@ -1222,7 +1414,7 @@ export const StoreManagerDashboard: React.FC = () => {
                         Scanning inventory database for low-stock thresholds...
                       </td>
                     </tr>
-                  ) : lowStockItems.length === 0 ? (
+                  ) : displayLowStockItems.length === 0 ? (
                     <tr>
                       <td colSpan={10} className="px-6 py-12 text-center text-emerald-800 font-bold bg-emerald-50/40">
                         <CheckCircle2 className="w-8 h-8 text-emerald-600 mx-auto mb-2" />
@@ -1230,15 +1422,23 @@ export const StoreManagerDashboard: React.FC = () => {
                       </td>
                     </tr>
                   ) : (
-                    lowStockItems.map((item) => (
+                    displayLowStockItems.map((item) => (
                       <tr key={item.id} className="hover:bg-amber-50/30 transition">
-                        {/* Part Info */}
+                        {/* Part Info (Clickable) */}
                         <td className="px-5 py-3.5">
-                          <div className="font-black text-sm text-zinc-950 font-mono">{item.part_number}</div>
-                          <div className="font-semibold text-zinc-700 line-clamp-1">{item.name}</div>
-                          {item.oem_part_number && (
-                            <div className="text-[10px] text-zinc-400 font-mono">OEM: {item.oem_part_number}</div>
-                          )}
+                          <button
+                            onClick={() => openPartDetails(item.id)}
+                            className="text-left group cursor-pointer"
+                            title="Click to view detailed part specification and balance"
+                          >
+                            <div className="font-black text-sm text-zinc-950 font-mono group-hover:text-amber-700 underline decoration-dotted">
+                              {item.part_number}
+                            </div>
+                            <div className="font-semibold text-zinc-700 line-clamp-1">{item.name}</div>
+                            {item.oem_part_number && (
+                              <div className="text-[10px] text-zinc-400 font-mono">OEM: {item.oem_part_number}</div>
+                            )}
+                          </button>
                         </td>
 
                         {/* Category & Location */}
@@ -1280,17 +1480,21 @@ export const StoreManagerDashboard: React.FC = () => {
                           </span>
                         </td>
 
-                        {/* PR Status */}
+                        {/* PR Status (Clickable) */}
                         <td className="px-4 py-3.5 text-center">
                           {item.has_open_pr ? (
-                            <div className="inline-flex flex-col items-center">
+                            <Link
+                              to="/procurement?tab=prs"
+                              className="inline-flex flex-col items-center hover:opacity-80 transition cursor-pointer"
+                              title="Click to view purchase requisition details in Procurement"
+                            >
                               <span className="bg-blue-50 text-blue-800 text-[10px] font-black px-2 py-0.5 rounded border border-blue-200">
                                 Open PR
                               </span>
-                              <span className="font-mono text-[9px] text-blue-600 font-bold mt-0.5">
-                                {item.open_pr_number}
+                              <span className="font-mono text-[9px] text-blue-600 font-bold mt-0.5 underline">
+                                {item.open_pr_number || 'View PR'}
                               </span>
-                            </div>
+                            </Link>
                           ) : (
                             <span className="bg-red-50 text-red-700 text-[10px] font-black px-2 py-0.5 rounded border border-red-200">
                               No PR Active
@@ -1329,7 +1533,7 @@ export const StoreManagerDashboard: React.FC = () => {
             {/* Pagination Footer */}
             <div className="bg-zinc-50 px-6 py-3.5 border-t border-zinc-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
               <div className="text-zinc-500 font-medium">
-                Showing <strong className="text-zinc-900">{lowStockItems.length}</strong> alerts of{' '}
+                Showing <strong className="text-zinc-900">{displayLowStockItems.length}</strong> alerts of{' '}
                 <strong className="text-zinc-900">{alertsTotal}</strong> breached items
               </div>
 
@@ -1417,8 +1621,13 @@ export const StoreManagerDashboard: React.FC = () => {
                           {tx.transfer_number}
                         </td>
                         <td className="px-5 py-3.5">
-                          <div className="font-black text-zinc-950 font-mono">{tx.part_number}</div>
-                          <div className="text-[11px] text-zinc-600 font-medium line-clamp-1">{tx.part_name}</div>
+                          <button
+                            onClick={() => openPartDetails(tx.part_id)}
+                            className="text-left group cursor-pointer"
+                          >
+                            <div className="font-black text-zinc-950 font-mono group-hover:text-amber-700 underline decoration-dotted">{tx.part_number}</div>
+                            <div className="text-[11px] text-zinc-600 font-medium line-clamp-1">{tx.part_name}</div>
+                          </button>
                         </td>
                         <td className="px-4 py-3.5 font-mono font-black text-zinc-900 text-right">
                           {tx.quantity}
@@ -1528,23 +1737,22 @@ export const StoreManagerDashboard: React.FC = () => {
                     <th className="px-5 py-3.5">Part SKU & Name</th>
                     <th className="px-4 py-3.5 text-right">Units</th>
                     <th className="px-5 py-3.5">Damage Reason</th>
-                    <th className="px-4 py-3.5">Quarantine Bin</th>
+                    <th className="px-5 py-3.5">Location</th>
                     <th className="px-4 py-3.5">Disposition Status</th>
-                    <th className="px-4 py-3.5">Reported By</th>
                     <th className="px-5 py-3.5 text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100">
                   {loadingDamaged ? (
                     <tr>
-                      <td colSpan={8} className="px-6 py-10 text-center text-zinc-400 font-bold">
-                        Loading damaged stock ledger...
+                      <td colSpan={7} className="px-6 py-10 text-center text-zinc-400 font-bold">
+                        Loading damaged stock records...
                       </td>
                     </tr>
                   ) : damagedItems.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-6 py-10 text-center text-zinc-400 font-bold">
-                        No damaged stock reported in this category.
+                      <td colSpan={7} className="px-6 py-10 text-center text-zinc-400 font-bold">
+                        No damaged or quarantined items found.
                       </td>
                     </tr>
                   ) : (
@@ -1554,16 +1762,21 @@ export const StoreManagerDashboard: React.FC = () => {
                           {item.report_number}
                         </td>
                         <td className="px-5 py-3.5">
-                          <div className="font-black text-zinc-950 font-mono">{item.part_number}</div>
-                          <div className="text-[11px] text-zinc-600 font-medium line-clamp-1">{item.part_name}</div>
+                          <button
+                            onClick={() => openPartDetails(item.part_id)}
+                            className="text-left group cursor-pointer"
+                          >
+                            <div className="font-black text-zinc-950 font-mono group-hover:text-amber-700 underline decoration-dotted">{item.part_number}</div>
+                            <div className="text-[11px] text-zinc-600 font-medium line-clamp-1">{item.part_name}</div>
+                          </button>
                         </td>
                         <td className="px-4 py-3.5 font-mono font-black text-red-700 text-right">
                           {item.quantity}
                         </td>
                         <td className="px-5 py-3.5 font-medium text-zinc-800 max-w-xs truncate" title={item.damage_reason || item.reason || 'Unspecified'}>
-                          {item.damage_reason || item.reason || 'Unspecified'}
+                          {item.damage_reason || item.reason || 'Defective on arrival'}
                         </td>
-                        <td className="px-4 py-3.5 font-mono font-bold text-purple-800">
+                        <td className="px-5 py-3.5 font-mono text-zinc-700">
                           {item.quarantined_bin || item.location || 'QUAR-BIN-01'}
                         </td>
                         <td className="px-4 py-3.5">
@@ -1573,16 +1786,11 @@ export const StoreManagerDashboard: React.FC = () => {
                                 ? 'bg-purple-100 text-purple-900 border-purple-300'
                                 : item.disposition === 'scrapped'
                                 ? 'bg-red-100 text-red-900 border-red-300'
-                                : item.disposition === 'returned_to_vendor'
-                                ? 'bg-amber-100 text-amber-900 border-amber-300'
                                 : 'bg-emerald-100 text-emerald-900 border-emerald-300'
                             }`}
                           >
                             {item.disposition.replace('_', ' ')}
                           </span>
-                        </td>
-                        <td className="px-4 py-3.5 font-medium text-zinc-700">
-                          {item.reported_by_name || 'QC Inspector'}
                         </td>
                         <td className="px-5 py-3.5 text-right">
                           {item.disposition === 'quarantined' ? (
@@ -1592,12 +1800,13 @@ export const StoreManagerDashboard: React.FC = () => {
                                 setDispositionChoice('scrapped');
                                 setDispositionRemarks('');
                               }}
-                              className="bg-zinc-900 hover:bg-zinc-800 text-white text-[10px] font-black px-2.5 py-1.5 rounded-lg transition uppercase cursor-pointer"
+                              className="bg-zinc-900 hover:bg-zinc-800 text-white text-[10px] font-black px-2.5 py-1.5 rounded-lg transition uppercase flex items-center gap-1 ml-auto cursor-pointer"
                             >
-                              Resolve
+                              <RotateCcw className="w-3 h-3 text-jcb-yellow" />
+                              <span>Resolve</span>
                             </button>
                           ) : (
-                            <span className="text-[10px] text-zinc-400 font-bold">Resolved</span>
+                            <span className="text-[11px] text-zinc-400 font-bold uppercase">Resolved</span>
                           )}
                         </td>
                       </tr>
@@ -1611,11 +1820,11 @@ export const StoreManagerDashboard: React.FC = () => {
       )}
 
       {/* =========================================================================
-          TAB 4: CATEGORY VALUATION & MOVEMENT REPORTS
+          TAB 4: VALUATION & REPORTS
           ========================================================================= */}
       {activeTab === 'reports' && (
         <div className="space-y-6">
-          {/* Category Valuation Grid */}
+          {/* Inventory Valuation by Category */}
           <div className="bg-white p-6 rounded-2xl border-2 border-zinc-200 shadow-xs space-y-4">
             <div className="flex items-center justify-between border-b border-zinc-200 pb-3">
               <div>
@@ -1683,14 +1892,14 @@ export const StoreManagerDashboard: React.FC = () => {
             <div>
               <h3 className="text-sm font-black text-zinc-950 uppercase tracking-wider flex items-center gap-2">
                 <BarChart3 className="w-4 h-4 text-zinc-700" />
-                <span>30-Day Inventory Movement Summary</span>
+                <span>30-Day Inventory Movement Velocity</span>
               </h3>
               <p className="text-xs text-zinc-500 font-medium">
                 Aggregated ledger velocity covering goods receipt, technician consumption, scrap write-offs, and adjustments.
               </p>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
               {movementReport.map((m) => (
                 <div key={m.transaction_type} className="p-4 bg-zinc-50 rounded-xl border border-zinc-200 text-center">
                   <div className="text-[11px] font-black text-zinc-600 uppercase tracking-wider">
@@ -1781,8 +1990,13 @@ export const StoreManagerDashboard: React.FC = () => {
                           #{idx + 1}
                         </td>
                         <td className="px-5 py-3.5">
-                          <div className="font-black text-zinc-950 font-mono">{part.part_number}</div>
-                          <div className="text-[11px] text-zinc-600 font-medium">{part.part_name}</div>
+                          <button
+                            onClick={() => openPartDetails(part.id)}
+                            className="text-left group cursor-pointer"
+                          >
+                            <div className="font-black text-zinc-950 font-mono group-hover:text-amber-700 underline decoration-dotted">{part.part_number}</div>
+                            <div className="text-[11px] text-zinc-600 font-medium">{part.part_name}</div>
+                          </button>
                         </td>
                         <td className="px-4 py-3.5 font-bold text-zinc-800">
                           {part.category}
@@ -1804,73 +2018,180 @@ export const StoreManagerDashboard: React.FC = () => {
       )}
 
       {/* =========================================================================
-          TAB 5: RECENT TRANSACTIONS LEDGER (LAST 10)
+          TAB 5: LIVE AUDIT LEDGER (FULL PAGINATED & FILTERABLE)
           ========================================================================= */}
       {activeTab === 'transactions' && (
-        <div className="bg-white rounded-2xl border-2 border-zinc-200 shadow-xs overflow-hidden">
-          <div className="p-4 bg-zinc-50 border-b border-zinc-200 flex items-center justify-between">
-            <h3 className="text-sm font-black text-zinc-950 uppercase tracking-wider">
-              Recent Inventory Ledger Transactions
-            </h3>
-            <span className="text-xs text-zinc-500 font-semibold">
-              Live tamper-evident PostgreSQL audit trail
-            </span>
+        <div className="space-y-4">
+          {/* Filter Bar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border-2 border-zinc-200 shadow-xs">
+            <div>
+              <h3 className="text-sm font-black text-zinc-950 uppercase tracking-wider">
+                Immutable Stock Transaction Ledger
+              </h3>
+              <p className="text-xs text-zinc-500 font-medium">
+                Live tamper-evident PostgreSQL audit trail tracking every physical stock change.
+              </p>
+            </div>
+
+            {/* Transaction Type Filter Dropdown */}
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-black text-zinc-600 uppercase">Filter Type:</label>
+              <select
+                value={ledgerTypeFilter}
+                onChange={(e) => {
+                  setLedgerTypeFilter(e.target.value);
+                  setLedgerPage(1);
+                }}
+                className="px-3 py-1.5 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+              >
+                {LEDGER_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-zinc-100/70 border-b border-zinc-200 text-zinc-600 font-black uppercase tracking-wider">
-                <tr>
-                  <th className="px-5 py-3.5">Timestamp</th>
-                  <th className="px-5 py-3.5">Transaction Type</th>
-                  <th className="px-5 py-3.5">Spare Part</th>
-                  <th className="px-4 py-3.5 text-right">Quantity</th>
-                  <th className="px-5 py-3.5">Location / Bin</th>
-                  <th className="px-4 py-3.5">Authorized By</th>
-                  <th className="px-5 py-3.5">Audit Remarks</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100">
-                {dashboard?.recent_transactions?.map((tx) => {
-                  const isPositive = Number(tx.quantity) > 0;
-                  return (
-                    <tr key={tx.id} className="hover:bg-zinc-50/70 transition">
-                      <td className="px-5 py-3.5 font-mono text-zinc-600 font-semibold text-[11px]">
-                        {new Date(tx.created_at).toLocaleString('en-IN', {
-                          day: '2-digit',
-                          month: 'short',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <span className="px-2.5 py-1 rounded text-[10px] font-black uppercase bg-zinc-100 text-zinc-900 border border-zinc-300">
-                          {tx.transaction_type.replace('_', ' ')}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <div className="font-black text-zinc-950 font-mono">{tx.part_number}</div>
-                        <div className="text-[11px] text-zinc-600 font-medium line-clamp-1">{tx.part_name}</div>
-                      </td>
-                      <td className="px-4 py-3.5 text-right font-mono font-black text-sm">
-                        <span className={isPositive ? 'text-emerald-700' : 'text-red-700'}>
-                          {isPositive ? `+${tx.quantity}` : tx.quantity}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3.5 font-bold text-zinc-800">
-                        {tx.source_location}
-                      </td>
-                      <td className="px-4 py-3.5 font-medium text-zinc-800">
-                        {tx.performed_by_name || 'System Operator'}
-                      </td>
-                      <td className="px-5 py-3.5 text-zinc-600 font-medium max-w-xs truncate" title={tx.remarks}>
-                        {tx.remarks}
+          <div className="bg-white rounded-2xl border-2 border-zinc-200 shadow-xs overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-zinc-100/70 border-b border-zinc-200 text-zinc-600 font-black uppercase tracking-wider">
+                  <tr>
+                    <th className="px-5 py-3.5">Timestamp</th>
+                    <th className="px-5 py-3.5">Transaction Type</th>
+                    <th className="px-5 py-3.5">Spare Part SKU</th>
+                    <th className="px-4 py-3.5 text-right">Quantity</th>
+                    <th className="px-5 py-3.5">Location / Bin</th>
+                    <th className="px-4 py-3.5">Authorized By</th>
+                    <th className="px-4 py-3.5">Reference Link</th>
+                    <th className="px-5 py-3.5">Audit Remarks</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-100">
+                  {loadingLedger ? (
+                    <tr>
+                      <td colSpan={8} className="px-6 py-10 text-center text-zinc-400 font-bold">
+                        <RefreshCw className="w-5 h-5 animate-spin mx-auto text-jcb-yellowDark mb-2" />
+                        Loading transaction ledger records...
                       </td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                  ) : ledgerTransactions.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="px-6 py-10 text-center text-zinc-400 font-bold">
+                        No transactions found for the selected filter.
+                      </td>
+                    </tr>
+                  ) : (
+                    ledgerTransactions.map((tx) => {
+                      const isPositive = Number(tx.quantity) > 0;
+                      return (
+                        <tr key={tx.id} className="hover:bg-zinc-50/70 transition">
+                          <td className="px-5 py-3.5 font-mono text-zinc-600 font-semibold text-[11px]">
+                            {new Date(tx.created_at).toLocaleString('en-IN', {
+                              day: '2-digit',
+                              month: 'short',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <span
+                              className={`px-2.5 py-1 rounded text-[10px] font-black uppercase border ${
+                                tx.transaction_type === 'STOCK_IN'
+                                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                                  : tx.transaction_type === 'ISSUE'
+                                  ? 'bg-blue-50 text-blue-800 border-blue-300'
+                                  : tx.transaction_type === 'ADJUSTMENT'
+                                  ? 'bg-amber-50 text-amber-800 border-amber-300'
+                                  : tx.transaction_type === 'STOCK_TRANSFER'
+                                  ? 'bg-cyan-50 text-cyan-800 border-cyan-300'
+                                  : tx.transaction_type === 'QUARANTINE_HOLD'
+                                  ? 'bg-purple-50 text-purple-800 border-purple-300'
+                                  : 'bg-zinc-100 text-zinc-900 border-zinc-300'
+                              }`}
+                            >
+                              {tx.transaction_type.replace('_', ' ')}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <button
+                              onClick={() => openPartDetails(tx.part_id)}
+                              className="text-left group cursor-pointer"
+                            >
+                              <div className="font-black text-zinc-950 font-mono group-hover:text-amber-700 underline decoration-dotted">
+                                {tx.part_number}
+                              </div>
+                              <div className="text-[11px] text-zinc-600 font-medium line-clamp-1">{tx.part_name}</div>
+                            </button>
+                          </td>
+                          <td className="px-4 py-3.5 text-right font-mono font-black text-sm">
+                            <span className={isPositive ? 'text-emerald-700' : 'text-red-700'}>
+                              {isPositive ? `+${tx.quantity}` : tx.quantity}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3.5 font-bold text-zinc-800">
+                            {tx.source_location || 'Main Store'}
+                          </td>
+                          <td className="px-4 py-3.5 font-medium text-zinc-800">
+                            <div>{tx.performed_by_name || 'System Operator'}</div>
+                            {tx.performed_by_role && (
+                              <div className="text-[10px] text-zinc-400 capitalize">{tx.performed_by_role.replace('_', ' ')}</div>
+                            )}
+                          </td>
+                          <td className="px-4 py-3.5 font-mono text-[11px]">
+                            {tx.reference_work_order_id ? (
+                              <Link
+                                to={`/work-orders/${tx.reference_work_order_id}`}
+                                className="text-blue-600 font-bold hover:underline"
+                                title="Open referenced work order"
+                              >
+                                WO Ref
+                              </Link>
+                            ) : (
+                              <span className="text-zinc-400">—</span>
+                            )}
+                          </td>
+                          <td className="px-5 py-3.5 text-zinc-600 font-medium max-w-xs truncate" title={tx.remarks}>
+                            {tx.remarks || 'Standard store operation'}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination Footer */}
+            <div className="bg-zinc-50 px-6 py-3.5 border-t border-zinc-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+              <div className="text-zinc-500 font-medium">
+                Showing <strong className="text-zinc-900">{ledgerTransactions.length}</strong> of{' '}
+                <strong className="text-zinc-900">{ledgerTotal}</strong> audited events
+              </div>
+
+              {ledgerTotalPages > 1 && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setLedgerPage((p) => Math.max(1, p - 1))}
+                    disabled={ledgerPage <= 1}
+                    className="p-1.5 rounded-lg border border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-100 disabled:opacity-40 transition cursor-pointer"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <span className="font-bold text-zinc-800 px-2">
+                    Page {ledgerPage} of {ledgerTotalPages}
+                  </span>
+                  <button
+                    onClick={() => setLedgerPage((p) => Math.min(ledgerTotalPages, p + 1))}
+                    disabled={ledgerPage >= ledgerTotalPages}
+                    className="p-1.5 rounded-lg border border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-100 disabled:opacity-40 transition cursor-pointer"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -1880,7 +2201,7 @@ export const StoreManagerDashboard: React.FC = () => {
           ========================================================================= */}
       {isAdjustModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-xs">
-          <div className="bg-white w-full max-w-lg rounded-2xl border-2 border-zinc-300 shadow-2xl p-6 space-y-4">
+          <div className="bg-white w-full max-w-lg rounded-2xl border-2 border-zinc-300 shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-zinc-200 pb-3">
               <div className="flex items-center gap-2">
                 <SlidersHorizontal className="w-5 h-5 text-jcb-yellowDark" />
@@ -1897,108 +2218,149 @@ export const StoreManagerDashboard: React.FC = () => {
             </div>
 
             <form onSubmit={handleAdjustSubmit} className="space-y-4">
-              {/* Part Selection */}
+              {/* Part Selector */}
               <div>
-                <label className="block text-xs font-black text-zinc-700 uppercase mb-1">
-                  Select Spare Part *
+                <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
+                  Target Spare Part SKU *
                 </label>
-                <select
-                  required
-                  value={adjustPart?.id || ''}
-                  onChange={(e) => {
-                    const sel = catalogParts.find((p) => p.id === e.target.value);
-                    setAdjustPart(sel || null);
-                  }}
-                  className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
-                >
-                  <option value="">-- Choose Spare Part from Catalog --</option>
-                  {catalogParts.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.part_number} — {p.name} (Physical: {p.current_physical_stock}, Avail: {p.available_stock})
-                    </option>
-                  ))}
-                </select>
+                {adjustPart ? (
+                  <div className="p-3 bg-zinc-50 border border-zinc-300 rounded-xl flex items-center justify-between">
+                    <div>
+                      <div className="font-mono font-black text-sm text-zinc-950">{adjustPart.part_number}</div>
+                      <div className="text-xs text-zinc-600 font-medium">{adjustPart.name}</div>
+                      <div className="text-[10px] text-zinc-400 font-mono mt-0.5">Bin: {adjustPart.bin_location}</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAdjustPart(null)}
+                      className="text-xs text-amber-700 font-bold hover:underline cursor-pointer"
+                    >
+                      Change
+                    </button>
+                  </div>
+                ) : (
+                  <select
+                    required
+                    onChange={(e) => {
+                      const selected = catalogParts.find((p) => p.id === e.target.value);
+                      if (selected) setAdjustPart(selected);
+                    }}
+                    className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                  >
+                    <option value="">-- Select Spare Part to Adjust --</option>
+                    {catalogParts.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.part_number} — {p.name} (Physical: {p.current_physical_stock}, Avail: {p.available_stock})
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
 
-              {/* Current Metrics Card */}
               {adjustPart && (
-                <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200 grid grid-cols-4 gap-2 text-center text-xs">
+                <div className="grid grid-cols-4 gap-2 p-3 bg-zinc-100 rounded-xl text-center text-xs">
                   <div>
-                    <div className="text-[10px] text-zinc-500 font-bold uppercase">Physical</div>
-                    <div className="font-mono font-black text-zinc-900 text-sm mt-0.5">
-                      {adjustPart.current_physical_stock}
-                    </div>
+                    <div className="text-[10px] font-bold text-zinc-500 uppercase">Physical</div>
+                    <div className="font-mono font-black text-sm text-zinc-950">{adjustPart.current_physical_stock}</div>
                   </div>
                   <div>
-                    <div className="text-[10px] text-amber-700 font-bold uppercase">Reserved</div>
-                    <div className="font-mono font-bold text-amber-800 text-sm mt-0.5">
-                      {adjustPart.reserved_stock}
-                    </div>
+                    <div className="text-[10px] font-bold text-amber-800 uppercase">Reserved</div>
+                    <div className="font-mono font-black text-sm text-amber-800">{adjustPart.reserved_stock || 0}</div>
                   </div>
                   <div>
-                    <div className="text-[10px] text-purple-700 font-bold uppercase">Quarantine</div>
-                    <div className="font-mono font-bold text-purple-800 text-sm mt-0.5">
-                      {adjustPart.quarantined_stock}
-                    </div>
+                    <div className="text-[10px] font-bold text-purple-800 uppercase">Quarantine</div>
+                    <div className="font-mono font-black text-sm text-purple-800">{adjustPart.quarantined_stock || 0}</div>
                   </div>
                   <div>
-                    <div className="text-[10px] text-emerald-700 font-bold uppercase">Available</div>
-                    <div className="font-mono font-black text-emerald-800 text-sm mt-0.5">
-                      {adjustPart.available_stock}
-                    </div>
+                    <div className="text-[10px] font-bold text-emerald-800 uppercase">Available</div>
+                    <div className="font-mono font-black text-sm text-emerald-800">{adjustPart.available_stock}</div>
                   </div>
                 </div>
               )}
 
-              {/* Adjustment Quantity */}
+              {/* Delta Quantity */}
               <div>
-                <label className="block text-xs font-black text-zinc-700 uppercase mb-1">
-                  Adjustment Delta Quantity (+ to Add, - to Deduct) *
+                <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
+                  Adjustment Delta Quantity (+ Add, - Deduct) *
                 </label>
-                <input
-                  type="number"
-                  required
-                  value={adjustQuantity}
-                  onChange={(e) => setAdjustQuantity(parseInt(e.target.value, 10) || 0)}
-                  placeholder="e.g. +10 or -5"
-                  className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-sm font-mono font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
-                />
-                {adjustPart && adjustQuantity !== 0 && (
-                  <p className="text-[11px] text-zinc-500 font-medium mt-1">
-                    Projected Physical Stock: <strong className="text-zinc-950 font-mono">{Number(adjustPart.current_physical_stock || 0) + adjustQuantity}</strong> units.
-                  </p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    step="1"
+                    required
+                    value={adjustQuantity === 0 ? '' : adjustQuantity}
+                    onChange={(e) => setAdjustQuantity(parseInt(e.target.value, 10) || 0)}
+                    placeholder="+5 or -3"
+                    className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-mono font-black text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                  />
+                  <div className="flex gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setAdjustQuantity((q) => q + 1)}
+                      className="px-2.5 py-2 bg-emerald-100 text-emerald-900 rounded-lg font-bold text-xs hover:bg-emerald-200"
+                    >
+                      +1
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAdjustQuantity((q) => q - 1)}
+                      className="px-2.5 py-2 bg-red-100 text-red-900 rounded-lg font-bold text-xs hover:bg-red-200"
+                    >
+                      -1
+                    </button>
+                  </div>
+                </div>
+                {adjustPart && (
+                  <div className="mt-1 text-[11px] font-bold text-zinc-600">
+                    Calculated New Physical Stock:{' '}
+                    <span className={Number(adjustPart.current_physical_stock) + adjustQuantity < 0 ? 'text-red-700' : 'text-emerald-700'}>
+                      {Number(adjustPart.current_physical_stock) + adjustQuantity}
+                    </span>
+                  </div>
                 )}
               </div>
 
-              {/* Mandatory Reason */}
+              {/* Reason */}
               <div>
-                <label className="block text-xs font-black text-zinc-700 uppercase mb-1">
-                  Mandatory Audit Reason *
+                <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
+                  Audit Reason for Adjustment *
                 </label>
-                <textarea
+                <select
                   required
-                  rows={2}
                   value={adjustReason}
                   onChange={(e) => setAdjustReason(e.target.value)}
-                  placeholder="e.g. Physical cycle count discrepancy reconciliation, damaged during shelf transport..."
+                  className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow mb-2"
+                >
+                  <option value="">-- Select Compliance Reason --</option>
+                  <option value="Cycle Count Physical Discrepancy">Cycle Count Physical Discrepancy</option>
+                  <option value="Vendor Short Shipment (Unpacked Variance)">Vendor Short Shipment (Unpacked Variance)</option>
+                  <option value="Store Handling Damage Write-Off">Store Handling Damage Write-Off</option>
+                  <option value="Found Unregistered Physical Units">Found Unregistered Physical Units</option>
+                  <option value="Year-End Stocktake Reconciliation">Year-End Stocktake Reconciliation</option>
+                </select>
+                <input
+                  type="text"
+                  value={adjustReason}
+                  onChange={(e) => setAdjustReason(e.target.value)}
+                  placeholder="Or enter custom reason..."
                   className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-medium text-zinc-900 focus:outline-none focus:border-jcb-yellow"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-200">
+              <div className="pt-3 border-t border-zinc-200 flex items-center justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setIsAdjustModalOpen(false)}
-                  className="px-4 py-2 border border-zinc-300 text-zinc-700 font-bold rounded-lg text-xs hover:bg-zinc-50 transition cursor-pointer"
+                  className="px-4 py-2 border border-zinc-300 text-zinc-700 font-bold rounded-xl text-xs hover:bg-zinc-100 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={actionLoading}
-                  className="bg-jcb-yellow hover:bg-jcb-yellowDark text-black font-black px-5 py-2 rounded-lg text-xs border border-amber-500 shadow-sm transition uppercase disabled:opacity-50 cursor-pointer"
+                  disabled={actionLoading || adjustQuantity === 0 || !adjustPart}
+                  className="bg-jcb-yellow hover:bg-jcb-yellowDark text-black font-black px-5 py-2 rounded-xl text-xs uppercase tracking-wider border border-amber-500 shadow-xs transition disabled:opacity-50 cursor-pointer"
                 >
-                  {actionLoading ? 'Posting...' : 'Commit Adjustment'}
+                  {actionLoading ? 'Saving...' : 'Commit Adjustment'}
                 </button>
               </div>
             </form>
@@ -2011,12 +2373,12 @@ export const StoreManagerDashboard: React.FC = () => {
           ========================================================================= */}
       {isTransferModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-xs">
-          <div className="bg-white w-full max-w-lg rounded-2xl border-2 border-zinc-300 shadow-2xl p-6 space-y-4">
+          <div className="bg-white w-full max-w-lg rounded-2xl border-2 border-zinc-300 shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-zinc-200 pb-3">
               <div className="flex items-center gap-2">
                 <ArrowRightLeft className="w-5 h-5 text-cyan-600" />
                 <h3 className="text-base font-black text-zinc-950 uppercase tracking-tight">
-                  Initiate Stock Transfer
+                  Stock Transfer / Bin Relocation
                 </h3>
               </div>
               <button
@@ -2029,8 +2391,8 @@ export const StoreManagerDashboard: React.FC = () => {
 
             <form onSubmit={handleTransferSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-black text-zinc-700 uppercase mb-1">
-                  Spare Part *
+                <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
+                  Select Spare Part *
                 </label>
                 <select
                   required
@@ -2046,10 +2408,10 @@ export const StoreManagerDashboard: React.FC = () => {
                   }}
                   className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
                 >
-                  <option value="">-- Choose Spare Part --</option>
+                  <option value="">-- Choose Part to Relocate --</option>
                   {catalogParts.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.part_number} — {p.name} (Bin: {p.bin_location}, Available: {p.available_stock})
+                      {p.part_number} — {p.name} (Avail: {p.available_stock}, Bin: {p.bin_location})
                     </option>
                   ))}
                 </select>
@@ -2057,22 +2419,7 @@ export const StoreManagerDashboard: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-black text-zinc-700 uppercase mb-1">
-                    Transfer Quantity *
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    required
-                    value={transferForm.quantity}
-                    onChange={(e) =>
-                      setTransferForm({ ...transferForm, quantity: parseInt(e.target.value, 10) || 1 })
-                    }
-                    className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-mono font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-black text-zinc-700 uppercase mb-1">
+                  <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
                     Source Bin *
                   </label>
                   <input
@@ -2080,15 +2427,12 @@ export const StoreManagerDashboard: React.FC = () => {
                     required
                     value={transferForm.source_bin}
                     onChange={(e) => setTransferForm({ ...transferForm, source_bin: e.target.value })}
-                    placeholder="e.g. A1-R02-B05"
-                    className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                    placeholder="e.g. A-01-05"
+                    className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-mono font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
                   />
                 </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-black text-zinc-700 uppercase mb-1">
+                  <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
                     Destination Bin *
                   </label>
                   <input
@@ -2096,51 +2440,67 @@ export const StoreManagerDashboard: React.FC = () => {
                     required
                     value={transferForm.destination_bin}
                     onChange={(e) => setTransferForm({ ...transferForm, destination_bin: e.target.value })}
-                    placeholder="e.g. SHOP-CNC-LINE1"
-                    className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                    placeholder="e.g. B-04-12"
+                    className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-mono font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
+                    Transfer Quantity *
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    value={transferForm.quantity}
+                    onChange={(e) => setTransferForm({ ...transferForm, quantity: Math.max(1, parseInt(e.target.value, 10) || 1) })}
+                    className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-mono font-black text-zinc-900 focus:outline-none focus:border-jcb-yellow"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-black text-zinc-700 uppercase mb-1">
+                  <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
                     Destination Zone
                   </label>
                   <input
                     type="text"
                     value={transferForm.destination_zone}
                     onChange={(e) => setTransferForm({ ...transferForm, destination_zone: e.target.value })}
-                    placeholder="e.g. Sub-Store Bay 2"
+                    placeholder="e.g. Assembly Shop Sub-Store"
                     className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-medium text-zinc-900 focus:outline-none focus:border-jcb-yellow"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-black text-zinc-700 uppercase mb-1">
-                  Transfer Reason / Authorization
+                <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
+                  Reason for Transfer
                 </label>
                 <input
                   type="text"
                   value={transferForm.reason}
                   onChange={(e) => setTransferForm({ ...transferForm, reason: e.target.value })}
-                  placeholder="e.g. Pre-positioning for scheduled line maintenance shift"
+                  placeholder="e.g. Line side bin replenishment for Shift B"
                   className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-medium text-zinc-900 focus:outline-none focus:border-jcb-yellow"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-200">
+              <div className="pt-3 border-t border-zinc-200 flex items-center justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setIsTransferModalOpen(false)}
-                  className="px-4 py-2 border border-zinc-300 text-zinc-700 font-bold rounded-lg text-xs hover:bg-zinc-50 transition cursor-pointer"
+                  className="px-4 py-2 border border-zinc-300 text-zinc-700 font-bold rounded-xl text-xs hover:bg-zinc-100 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={actionLoading}
-                  className="bg-cyan-700 hover:bg-cyan-800 text-white font-black px-5 py-2 rounded-lg text-xs shadow-sm transition uppercase disabled:opacity-50 cursor-pointer"
+                  className="bg-cyan-600 hover:bg-cyan-700 text-white font-black px-5 py-2 rounded-xl text-xs uppercase tracking-wider shadow-xs transition disabled:opacity-50 cursor-pointer"
                 >
-                  {actionLoading ? 'Processing...' : 'Execute Transfer'}
+                  {actionLoading ? 'Executing...' : 'Execute Transfer'}
                 </button>
               </div>
             </form>
@@ -2153,12 +2513,12 @@ export const StoreManagerDashboard: React.FC = () => {
           ========================================================================= */}
       {isDamagedModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-xs">
-          <div className="bg-white w-full max-w-lg rounded-2xl border-2 border-zinc-300 shadow-2xl p-6 space-y-4">
+          <div className="bg-white w-full max-w-lg rounded-2xl border-2 border-zinc-300 shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-zinc-200 pb-3">
               <div className="flex items-center gap-2">
                 <ShieldAlert className="w-5 h-5 text-red-600" />
                 <h3 className="text-base font-black text-zinc-950 uppercase tracking-tight">
-                  Quarantine Damaged / Expired Stock
+                  Quarantine Defective Stock
                 </h3>
               </div>
               <button
@@ -2171,8 +2531,8 @@ export const StoreManagerDashboard: React.FC = () => {
 
             <form onSubmit={handleDamagedSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-black text-zinc-700 uppercase mb-1">
-                  Spare Part *
+                <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
+                  Select Defective Spare Part *
                 </label>
                 <select
                   required
@@ -2183,7 +2543,7 @@ export const StoreManagerDashboard: React.FC = () => {
                   <option value="">-- Choose Spare Part --</option>
                   {catalogParts.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.part_number} — {p.name} (Available: {p.available_stock})
+                      {p.part_number} — {p.name} (Physical: {p.current_physical_stock}, Avail: {p.available_stock})
                     </option>
                   ))}
                 </select>
@@ -2191,61 +2551,58 @@ export const StoreManagerDashboard: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-black text-zinc-700 uppercase mb-1">
-                    Damaged Units *
+                  <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
+                    Defective Quantity (Units) *
                   </label>
                   <input
                     type="number"
-                    min={1}
+                    min="1"
                     required
                     value={damagedForm.quantity}
-                    onChange={(e) =>
-                      setDamagedForm({ ...damagedForm, quantity: parseInt(e.target.value, 10) || 1 })
-                    }
-                    className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-mono font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                    onChange={(e) => setDamagedForm({ ...damagedForm, quantity: Math.max(1, parseInt(e.target.value, 10) || 1) })}
+                    className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-mono font-black text-zinc-900 focus:outline-none focus:border-jcb-yellow"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-black text-zinc-700 uppercase mb-1">
-                    Quarantine Bin Location *
+                  <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
+                    Quarantine Bin Location
                   </label>
                   <input
                     type="text"
-                    required
                     value={damagedForm.quarantined_bin}
                     onChange={(e) => setDamagedForm({ ...damagedForm, quarantined_bin: e.target.value })}
-                    placeholder="e.g. QUAR-A1-BIN4"
-                    className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                    placeholder="QUAR-BIN-01"
+                    className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-mono font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-black text-zinc-700 uppercase mb-1">
-                  Detailed Damage Reason *
+                <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
+                  Defect Description & Root Cause *
                 </label>
                 <textarea
                   required
-                  rows={2}
+                  rows={3}
                   value={damagedForm.damage_reason}
                   onChange={(e) => setDamagedForm({ ...damagedForm, damage_reason: e.target.value })}
-                  placeholder="e.g. Moisture ingress, cracked casing during forklift transit, expired seal shelf-life..."
+                  placeholder="Detail visible defects, physical impact, rust, transit deformation, or functional test failure..."
                   className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-medium text-zinc-900 focus:outline-none focus:border-jcb-yellow"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-200">
+              <div className="pt-3 border-t border-zinc-200 flex items-center justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setIsDamagedModalOpen(false)}
-                  className="px-4 py-2 border border-zinc-300 text-zinc-700 font-bold rounded-lg text-xs hover:bg-zinc-50 transition cursor-pointer"
+                  className="px-4 py-2 border border-zinc-300 text-zinc-700 font-bold rounded-xl text-xs hover:bg-zinc-100 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={actionLoading}
-                  className="bg-red-600 hover:bg-red-700 text-white font-black px-5 py-2 rounded-lg text-xs shadow-sm transition uppercase disabled:opacity-50 cursor-pointer"
+                  className="bg-red-600 hover:bg-red-700 text-white font-black px-5 py-2 rounded-xl text-xs uppercase tracking-wider shadow-xs transition disabled:opacity-50 cursor-pointer"
                 >
                   {actionLoading ? 'Recording...' : 'Quarantine Units'}
                 </button>
@@ -2260,12 +2617,12 @@ export const StoreManagerDashboard: React.FC = () => {
           ========================================================================= */}
       {selectedDamagedForDisposition && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-xs">
-          <div className="bg-white w-full max-w-md rounded-2xl border-2 border-zinc-300 shadow-2xl p-6 space-y-4">
+          <div className="bg-white w-full max-w-lg rounded-2xl border-2 border-zinc-300 shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-zinc-200 pb-3">
               <div className="flex items-center gap-2">
-                <ShieldAlert className="w-5 h-5 text-purple-600" />
+                <RotateCcw className="w-5 h-5 text-purple-600" />
                 <h3 className="text-base font-black text-zinc-950 uppercase tracking-tight">
-                  Quarantine Disposition Resolution
+                  Resolve Quarantine Disposition
                 </h3>
               </div>
               <button
@@ -2276,65 +2633,65 @@ export const StoreManagerDashboard: React.FC = () => {
               </button>
             </div>
 
-            <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200 text-xs space-y-1">
-              <div className="flex justify-between">
-                <span className="text-zinc-500 font-medium">Report #:</span>
-                <strong className="font-mono text-zinc-900">{selectedDamagedForDisposition.report_number}</strong>
+            <div className="p-3 bg-zinc-50 border border-zinc-200 rounded-xl space-y-1 text-xs">
+              <div className="flex justify-between font-bold text-zinc-800">
+                <span>Report ID:</span>
+                <span className="font-mono text-red-800">{selectedDamagedForDisposition.report_number}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-zinc-500 font-medium">Spare Part:</span>
-                <strong className="text-zinc-900">{selectedDamagedForDisposition.part_number}</strong>
+                <span>Part:</span>
+                <span className="font-bold text-zinc-950">{selectedDamagedForDisposition.part_number} — {selectedDamagedForDisposition.part_name}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-zinc-500 font-medium">Quarantined Quantity:</span>
-                <strong className="text-purple-700 font-mono">{selectedDamagedForDisposition.quantity} units</strong>
+                <span>Quarantined Units:</span>
+                <span className="font-mono font-black text-red-700">{selectedDamagedForDisposition.quantity} units</span>
               </div>
             </div>
 
             <form onSubmit={handleDispositionSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-black text-zinc-700 uppercase mb-1">
-                  Target Disposition *
+                <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
+                  Final Disposition Action *
                 </label>
                 <select
                   value={dispositionChoice}
-                  onChange={(e) => setDispositionChoice(e.target.value as any)}
+                  onChange={(e: any) => setDispositionChoice(e.target.value)}
                   className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
                 >
-                  <option value="scrapped">Scrap Write-Off (Deduct permanently from physical stock)</option>
-                  <option value="returned_to_vendor">Return to OEM Vendor (RDC Gate Pass warranty claim)</option>
-                  <option value="repaired_restocked">Repaired & Restocked (Restore to available stock)</option>
+                  <option value="scrapped">Scrap & Write-Off (Deduct from physical inventory)</option>
+                  <option value="returned_to_vendor">Return to Vendor (Warranty RTV Claim)</option>
+                  <option value="repaired_restocked">Repaired / Recertified (Restore to Available)</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-xs font-black text-zinc-700 uppercase mb-1">
-                  Mandatory Disposition Remarks *
+                <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
+                  Disposition Audit Remarks *
                 </label>
                 <textarea
                   required
-                  rows={2}
+                  rows={3}
                   value={dispositionRemarks}
                   onChange={(e) => setDispositionRemarks(e.target.value)}
-                  placeholder="e.g. Scrapped per Plant Quality Engineer survey certificate #QC-881..."
+                  placeholder="Record scrap approval reference, vendor RMA number, or quality re-inspection pass certificate..."
                   className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-medium text-zinc-900 focus:outline-none focus:border-jcb-yellow"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-200">
+              <div className="pt-3 border-t border-zinc-200 flex items-center justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setSelectedDamagedForDisposition(null)}
-                  className="px-4 py-2 border border-zinc-300 text-zinc-700 font-bold rounded-lg text-xs hover:bg-zinc-50 transition cursor-pointer"
+                  className="px-4 py-2 border border-zinc-300 text-zinc-700 font-bold rounded-xl text-xs hover:bg-zinc-100 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={actionLoading}
-                  className="bg-purple-700 hover:bg-purple-800 text-white font-black px-5 py-2 rounded-lg text-xs shadow-sm transition uppercase disabled:opacity-50 cursor-pointer"
+                  className="bg-purple-600 hover:bg-purple-700 text-white font-black px-5 py-2 rounded-xl text-xs uppercase tracking-wider shadow-xs transition disabled:opacity-50 cursor-pointer"
                 >
-                  {actionLoading ? 'Updating...' : 'Commit Disposition'}
+                  {actionLoading ? 'Saving...' : 'Finalize Disposition'}
                 </button>
               </div>
             </form>
@@ -2347,7 +2704,7 @@ export const StoreManagerDashboard: React.FC = () => {
           ========================================================================= */}
       {isPRModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-xs">
-          <div className="bg-white w-full max-w-lg rounded-2xl border-2 border-zinc-300 shadow-2xl p-6 space-y-4">
+          <div className="bg-white w-full max-w-lg rounded-2xl border-2 border-zinc-300 shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-zinc-200 pb-3">
               <div className="flex items-center gap-2">
                 <Send className="w-5 h-5 text-amber-600" />
@@ -2363,76 +2720,384 @@ export const StoreManagerDashboard: React.FC = () => {
               </button>
             </div>
 
-            <div className="p-3 bg-amber-50/60 rounded-xl border border-amber-200 text-xs">
-              <div className="font-mono font-black text-amber-900 text-sm">{prForm.part_number}</div>
-              <div className="font-semibold text-zinc-700">{prForm.part_name}</div>
+            <div className="p-3 bg-amber-50/50 border border-amber-200 rounded-xl space-y-1 text-xs">
+              <div className="font-mono font-black text-zinc-950">{prForm.part_number}</div>
+              <div className="text-zinc-700 font-medium">{prForm.part_name}</div>
             </div>
 
             <form onSubmit={handlePRSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-black text-zinc-700 uppercase mb-1">
-                    Requisition Quantity *
+                  <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
+                    Reorder Quantity Required *
                   </label>
                   <input
                     type="number"
-                    min={1}
+                    min="1"
                     required
                     value={prForm.quantity_required}
-                    onChange={(e) =>
-                      setPrForm({ ...prForm, quantity_required: parseInt(e.target.value, 10) || 1 })
-                    }
-                    className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-mono font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                    onChange={(e) => setPrForm({ ...prForm, quantity_required: Math.max(1, parseInt(e.target.value, 10) || 1) })}
+                    className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-mono font-black text-zinc-900 focus:outline-none focus:border-jcb-yellow"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-black text-zinc-700 uppercase mb-1">
-                    Urgency Priority *
+                  <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
+                    Procurement Urgency
                   </label>
                   <select
                     value={prForm.urgency}
-                    onChange={(e) => setPrForm({ ...prForm, urgency: e.target.value as any })}
+                    onChange={(e: any) => setPrForm({ ...prForm, urgency: e.target.value })}
                     className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
                   >
-                    <option value="critical">Critical (Plant Line Down)</option>
-                    <option value="high">High (Breached Min Safety Level)</option>
-                    <option value="medium">Medium (Standard Replenishment)</option>
-                    <option value="low">Low (Buffer Reorder)</option>
+                    <option value="critical">Critical (Line Stoppage Risk)</option>
+                    <option value="high">High Urgency</option>
+                    <option value="medium">Medium Urgency</option>
+                    <option value="low">Standard Restock</option>
                   </select>
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-black text-zinc-700 uppercase mb-1">
-                  Technical Justification *
+                <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
+                  Technical Justification & Purpose
                 </label>
                 <textarea
-                  required
-                  rows={2}
+                  rows={3}
                   value={prForm.technical_justification}
                   onChange={(e) => setPrForm({ ...prForm, technical_justification: e.target.value })}
-                  placeholder="Justification for procurement approval..."
                   className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-medium text-zinc-900 focus:outline-none focus:border-jcb-yellow"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-200">
+              <div className="pt-3 border-t border-zinc-200 flex items-center justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setIsPRModalOpen(false)}
-                  className="px-4 py-2 border border-zinc-300 text-zinc-700 font-bold rounded-lg text-xs hover:bg-zinc-50 transition cursor-pointer"
+                  className="px-4 py-2 border border-zinc-300 text-zinc-700 font-bold rounded-xl text-xs hover:bg-zinc-100 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={actionLoading}
-                  className="bg-jcb-yellow hover:bg-jcb-yellowDark text-black font-black px-5 py-2 rounded-lg text-xs border border-amber-500 shadow-sm transition uppercase disabled:opacity-50 cursor-pointer"
+                  className="bg-jcb-yellow hover:bg-jcb-yellowDark text-black font-black px-5 py-2 rounded-xl text-xs uppercase tracking-wider border border-amber-500 shadow-xs transition disabled:opacity-50 cursor-pointer"
                 >
-                  {actionLoading ? 'Submitting...' : 'Dispatch Requisition'}
+                  {actionLoading ? 'Routing...' : 'Route to Approval'}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          MODAL 6: REGISTER NEW SPARE PART MODAL (MASTER CATALOG CREATION)
+          ========================================================================= */}
+      {isCreatePartModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-xs">
+          <div className="bg-white w-full max-w-xl rounded-2xl border-2 border-zinc-300 shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-zinc-200 pb-3">
+              <div className="flex items-center gap-2">
+                <Plus className="w-5 h-5 text-amber-600" />
+                <h3 className="text-base font-black text-zinc-950 uppercase tracking-tight">
+                  Register New Spare Part Master
+                </h3>
+              </div>
+              <button
+                onClick={() => setIsCreatePartModalOpen(false)}
+                className="text-zinc-400 hover:text-black p-1 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreatePartSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
+                    JCB Part SKU / Number *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={createPartForm.part_number}
+                    onChange={(e) => setCreatePartForm({ ...createPartForm, part_number: e.target.value })}
+                    placeholder="e.g. JCB-HYD-5020"
+                    className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-mono font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
+                    OEM Part Number (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={createPartForm.oem_part_number}
+                    onChange={(e) => setCreatePartForm({ ...createPartForm, oem_part_number: e.target.value })}
+                    placeholder="e.g. 332/Y2415"
+                    className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-mono font-medium text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
+                  Spare Part Name / Title *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={createPartForm.name}
+                  onChange={(e) => setCreatePartForm({ ...createPartForm, name: e.target.value })}
+                  placeholder="e.g. Main Boom Hydraulic Cylinder Seal Kit"
+                  className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
+                    Category *
+                  </label>
+                  <select
+                    value={createPartForm.category}
+                    onChange={(e) => setCreatePartForm({ ...createPartForm, category: e.target.value })}
+                    className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                  >
+                    {CATEGORIES.filter((c) => c !== 'ALL').map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
+                    Unit of Measure
+                  </label>
+                  <select
+                    value={createPartForm.uom}
+                    onChange={(e) => setCreatePartForm({ ...createPartForm, uom: e.target.value })}
+                    className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                  >
+                    <option value="Nos">Nos</option>
+                    <option value="Mtr">Mtr</option>
+                    <option value="Ltr">Ltr</option>
+                    <option value="Kg">Kg</option>
+                    <option value="Set">Set</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
+                    Warehouse Zone
+                  </label>
+                  <input
+                    type="text"
+                    value={createPartForm.warehouse_zone}
+                    onChange={(e) => setCreatePartForm({ ...createPartForm, warehouse_zone: e.target.value })}
+                    placeholder="Main Store"
+                    className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-medium text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
+                    Storage Bin Location *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={createPartForm.bin_location}
+                    onChange={(e) => setCreatePartForm({ ...createPartForm, bin_location: e.target.value })}
+                    placeholder="e.g. A-02-14"
+                    className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-mono font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
+                    Min Reorder Level
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={createPartForm.min_reorder_level}
+                    onChange={(e) => setCreatePartForm({ ...createPartForm, min_reorder_level: parseInt(e.target.value, 10) || 0 })}
+                    className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-mono font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
+                    Unit Cost (₹)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={createPartForm.unit_cost}
+                    onChange={(e) => setCreatePartForm({ ...createPartForm, unit_cost: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-mono font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
+                  Default Vendor / Supplier
+                </label>
+                <input
+                  type="text"
+                  value={createPartForm.supplier_name}
+                  onChange={(e) => setCreatePartForm({ ...createPartForm, supplier_name: e.target.value })}
+                  placeholder="e.g. Parker Hannifin India"
+                  className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-medium text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
+                  Part Description & Technical Specifications
+                </label>
+                <textarea
+                  rows={2}
+                  value={createPartForm.description}
+                  onChange={(e) => setCreatePartForm({ ...createPartForm, description: e.target.value })}
+                  placeholder="Dimensions, operating pressure range, fluid compatibility..."
+                  className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-medium text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                />
+              </div>
+
+              <div className="p-3 bg-zinc-50 border border-zinc-200 rounded-xl text-[11px] text-zinc-600 font-medium">
+                <Info className="w-4 h-4 inline mr-1 text-amber-600" />
+                Physical stock initializes at 0. Initial stock receipt must be recorded through authorized Goods Inwarding (GRN) or compliance Stock Adjustment.
+              </div>
+
+              <div className="pt-3 border-t border-zinc-200 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsCreatePartModalOpen(false)}
+                  className="px-4 py-2 border border-zinc-300 text-zinc-700 font-bold rounded-xl text-xs hover:bg-zinc-100 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={actionLoading}
+                  className="bg-jcb-yellow hover:bg-jcb-yellowDark text-black font-black px-6 py-2 rounded-xl text-xs uppercase tracking-wider border border-amber-500 shadow-xs transition disabled:opacity-50 cursor-pointer"
+                >
+                  {actionLoading ? 'Registering...' : 'Register Spare Part'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          MODAL 7: SPARE PART DETAILS DRAWER / MODAL
+          ========================================================================= */}
+      {selectedPartForDetails && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-xs">
+          <div className="bg-white w-full max-w-lg rounded-2xl border-2 border-zinc-300 shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-zinc-200 pb-3">
+              <div>
+                <div className="text-[10px] font-mono font-bold text-amber-700 uppercase">Part Master Specification</div>
+                <h3 className="text-base font-black text-zinc-950 font-mono tracking-tight">
+                  {selectedPartForDetails.part_number}
+                </h3>
+              </div>
+              <button
+                onClick={() => setSelectedPartForDetails(null)}
+                className="text-zinc-400 hover:text-black p-1 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <div className="text-sm font-black text-zinc-950">{selectedPartForDetails.name}</div>
+                {selectedPartForDetails.description && (
+                  <p className="text-zinc-600 mt-1 text-[11px]">{selectedPartForDetails.description}</p>
+                )}
+              </div>
+
+              {/* Stock Balance Quad */}
+              <div className="grid grid-cols-4 gap-2 p-3 bg-zinc-100 rounded-xl text-center">
+                <div>
+                  <div className="text-[10px] font-bold text-zinc-500 uppercase">Physical</div>
+                  <div className="font-mono font-black text-base text-zinc-950">{selectedPartForDetails.current_physical_stock ?? 0}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] font-bold text-amber-800 uppercase">Reserved</div>
+                  <div className="font-mono font-black text-base text-amber-800">{selectedPartForDetails.reserved_stock ?? 0}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] font-bold text-purple-800 uppercase">Quarantine</div>
+                  <div className="font-mono font-black text-base text-purple-800">{selectedPartForDetails.quarantined_stock ?? 0}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] font-bold text-emerald-800 uppercase">Available</div>
+                  <div className="font-mono font-black text-base text-emerald-800">{selectedPartForDetails.available_stock ?? 0}</div>
+                </div>
+              </div>
+
+              {/* Metadata Details Grid */}
+              <div className="grid grid-cols-2 gap-2 p-3 bg-zinc-50 rounded-xl border border-zinc-200">
+                <div>
+                  <span className="text-zinc-500 font-bold">Category:</span>{' '}
+                  <strong className="text-zinc-900">{selectedPartForDetails.category}</strong>
+                </div>
+                <div>
+                  <span className="text-zinc-500 font-bold">Bin Location:</span>{' '}
+                  <strong className="text-amber-800 font-mono">{selectedPartForDetails.bin_location}</strong>
+                </div>
+                <div>
+                  <span className="text-zinc-500 font-bold">Warehouse Zone:</span>{' '}
+                  <strong className="text-zinc-900">{selectedPartForDetails.warehouse_zone || 'Main Store'}</strong>
+                </div>
+                <div>
+                  <span className="text-zinc-500 font-bold">Reorder Minimum:</span>{' '}
+                  <strong className="text-zinc-900 font-mono">{selectedPartForDetails.min_reorder_level ?? 5} units</strong>
+                </div>
+                <div>
+                  <span className="text-zinc-500 font-bold">Unit Cost:</span>{' '}
+                  <strong className="text-zinc-900 font-mono">₹{Number(selectedPartForDetails.unit_cost || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
+                </div>
+                <div>
+                  <span className="text-zinc-500 font-bold">Default Supplier:</span>{' '}
+                  <strong className="text-zinc-900">{selectedPartForDetails.supplier_name || 'JCB Genuine Parts'}</strong>
+                </div>
+              </div>
+
+              {/* Quick Actions from Detail View */}
+              <div className="pt-2 flex items-center justify-between gap-2 border-t border-zinc-200">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const p = selectedPartForDetails;
+                    setSelectedPartForDetails(null);
+                    openAdjustForPart(p);
+                  }}
+                  className="px-3 py-2 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 cursor-pointer"
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-jcb-yellow" />
+                  <span>Adjust Stock</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const p = selectedPartForDetails;
+                    setSelectedPartForDetails(null);
+                    openQuickPRModal(p);
+                  }}
+                  className="px-3 py-2 bg-jcb-yellow hover:bg-jcb-yellowDark text-black font-black rounded-xl text-xs border border-amber-500 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Create Reorder PR</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

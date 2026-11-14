@@ -734,6 +734,20 @@ export const ProcurementPage: React.FC = () => {
   const { id: routePrId } = useParams<{ id?: string }>();
   const targetPrId = searchParams.get('prId') || searchParams.get('id') || routePrId;
 
+  // Auto-switch tab based on ?tab= query parameter (e.g. ?tab=pos, ?tab=grn, ?tab=vendors)
+  useEffect(() => {
+    const requestedTab = searchParams.get('tab')?.toLowerCase();
+    if (requestedTab === 'pos' || requestedTab === 'grn' || requestedTab === 'po') {
+      setActiveTab('pos');
+    } else if (requestedTab === 'prs' || requestedTab === 'pr') {
+      setActiveTab('prs');
+    } else if (requestedTab === 'vendors') {
+      setActiveTab('vendors');
+    } else if (requestedTab === 'analytics') {
+      setActiveTab('analytics');
+    }
+  }, [searchParams]);
+
   useEffect(() => {
     if (targetPrId) {
       handleOpenDetails(targetPrId);

@@ -14,6 +14,7 @@ import { VALID_ROLES } from '../auth/auth.controller';
 import { requireRoles } from '../../middlewares/rbac.middleware';
 import { AuthenticatedUser } from '../../middlewares/auth.middleware';
 import {
+  searchParts,
   createSparePart,
   updateSparePart,
   deleteSparePart,
@@ -51,6 +52,13 @@ const PR_1_ID = 'd0000000-0000-0000-0000-000000000001';
 const DMG_1_ID = 'a0000000-0000-0000-0000-000000000001';
 
 // Test Users
+const adminUser: AuthenticatedUser = {
+  id: 'f0000000-0000-0000-0000-000000000001',
+  employee_code: 'EMP-ADM-001',
+  email: 'admin@jcb.com',
+  role: 'admin',
+};
+
 const storeManagerUser: AuthenticatedUser = {
   id: STORE_MGR_ID,
   employee_code: 'EMP-STM-001',
@@ -299,6 +307,91 @@ describe('Store Manager Role & Advanced Inventory Governance (JCB CMMS)', () => 
       await deleteSparePart(ctx.req, ctx.res, ctx.next);
       assert.strictEqual(ctx.res.statusCode, 403);
       assert.match(ctx.res.responseData.message, /another plant/i);
+    });
+
+    it('2.6. Store Manager searchParts enforces plant isolation', async () => {
+      let querySql = '';
+      let queryParams: any[] = [];
+      let countSql = '';
+      let countParams: any[] = [];
+
+      mockDb.query = async (text: string, params?: any[]) => {
+        if (text.includes('FROM spare_parts') && text.includes('SELECT id, part_number')) {
+          querySql = text;
+          queryParams = params || [];
+          return {
+            rows: [
+              {
+                id: PART_1_ID,
+                part_number: 'JCB-HYD-5001',
+                name: 'Main Hydraulic Pump',
+                plant_id: PLANT_1_ID,
+                status: 'active',
+              },
+            ],
+            rowCount: 1,
+          };
+        }
+        if (text.includes('SELECT COUNT(*) FROM spare_parts')) {
+          countSql = text;
+          countParams = params || [];
+          return {
+            rows: [{ count: '1' }],
+            rowCount: 1,
+          };
+        }
+        return { rows: [], rowCount: 0 };
+      };
+
+      const ctx = createMockContext({}, storeManagerUser, {}, { page: '1', limit: '10' });
+      await searchParts(ctx.req, ctx.res, ctx.next);
+
+      assert.strictEqual(ctx.res.statusCode, 200);
+      assert.strictEqual(ctx.res.responseData.success, true);
+      assert.strictEqual(ctx.res.responseData.data.length, 1);
+      assert.ok(querySql.includes('plant_id = $') && querySql.includes('OR plant_id IS NULL'), 'Query must enforce plant isolation');
+      assert.ok(countSql.includes('plant_id = $') && countSql.includes('OR plant_id IS NULL'), 'Count query must synchronize plant isolation');
+      assert.strictEqual(queryParams[0], PLANT_1_ID);
+      assert.strictEqual(countParams[0], PLANT_1_ID);
+    });
+
+    it('2.7. Admin searchParts can retrieve catalog across all plants without automatic plant filter', async () => {
+      let querySql = '';
+      mockDb.query = async (text: string, params?: any[]) => {
+        if (text.includes('SELECT id, part_number')) {
+          querySql = text;
+          return { rows: [{ id: PART_1_ID }, { id: PART_2_ID }], rowCount: 2 };
+        }
+        if (text.includes('SELECT COUNT(*) FROM spare_parts')) {
+          return { rows: [{ count: '2' }], rowCount: 1 };
+        }
+        return { rows: [], rowCount: 0 };
+      };
+
+      const ctx = createMockContext({}, adminUser, {}, {});
+      await searchParts(ctx.req, ctx.res, ctx.next);
+
+      assert.strictEqual(ctx.res.statusCode, 200);
+      assert.strictEqual(ctx.res.responseData.success, true);
+      assert.strictEqual(ctx.res.responseData.data.length, 2);
+      assert.ok(!querySql.includes('plant_id = $'), 'Admin query without plant_id filter must not be scoped');
+    });
+
+    it('2.8. Store Manager cannot create spare parts for another plant (HTTP 403 Forbidden)', async () => {
+      const ctx = createMockContext(
+        {
+          part_number: 'JCB-ROGUE-001',
+          name: 'Unauthorized Part',
+          bin_location: 'BIN-01',
+          plant_id: PLANT_2_ID,
+        },
+        storeManagerUser
+      );
+
+      await createSparePart(ctx.req, ctx.res, ctx.next);
+      assert.strictEqual(ctx.res.statusCode, 403);
+      assert.strictEqual(ctx.res.responseData.success, false);
+      assert.match(ctx.res.responseData.message, /Cannot create spare parts for another plant/i);
     });
   });
 

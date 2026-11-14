@@ -12,6 +12,8 @@ interface TopKPICardProps {
   trendColor?: string;
   accentColor?: string;
   subtitle?: string;
+  onClick?: () => void;
+  className?: string;
 }
 
 export const TopKPICard: React.FC<TopKPICardProps> = ({
@@ -24,10 +26,31 @@ export const TopKPICard: React.FC<TopKPICardProps> = ({
   trendColor,
   accentColor = 'border-l-4 border-l-jcb-yellow',
   subtitle,
+  onClick,
+  className = '',
 }) => {
+  const isClickable = Boolean(onClick);
+
   return (
     <div
-      className={`bg-white rounded-xl sm:rounded-2xl border border-slate-200/90 ${accentColor} p-4 sm:p-5 shadow-xs hover:shadow-md transition-all duration-200 relative overflow-hidden flex flex-col justify-between h-full min-h-[115px]`}
+      onClick={onClick}
+      role={isClickable ? 'button' : undefined}
+      tabIndex={isClickable ? 0 : undefined}
+      onKeyDown={
+        isClickable
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onClick?.();
+              }
+            }
+          : undefined
+      }
+      className={`bg-white rounded-xl sm:rounded-2xl border border-slate-200/90 ${accentColor} p-4 sm:p-5 shadow-xs transition-all duration-200 relative overflow-hidden flex flex-col justify-between h-full min-h-[115px] ${
+        isClickable
+          ? 'cursor-pointer hover:shadow-md hover:border-amber-400 hover:-translate-y-0.5 active:translate-y-0 focus:outline-none focus:ring-2 focus:ring-jcb-yellow'
+          : 'hover:shadow-md'
+      } ${className}`}
     >
       {/* Top Row: Circular Icon on Left & Trend Pill on Right */}
       <div className="flex items-center justify-between gap-2">
