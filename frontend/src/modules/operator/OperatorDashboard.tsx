@@ -216,12 +216,12 @@ export const OperatorDashboard: React.FC = () => {
   return (
     <div className="space-y-6 min-h-full pb-8">
       {/* =========================================================================
-          TOP HEADER: Operator Shop Floor Console
+          TOP HEADER: Operator Dashboard
           ========================================================================= */}
       <DashboardHeader
-        title="Operator Shop Floor Console"
-        subtitle={`Shift telemetry, pre-shift safety verifications & instant stoppage dispatch • ${user?.fullName || 'Operator'}`}
-        badge="LINE OPERATOR"
+        title="Operator Dashboard"
+        subtitle={`Machine status, daily safety checks & problem reporting • ${user?.fullName || 'Operator'}`}
+        badge="Operator"
         plantOptions={plantOptions}
         selectedPlant={plant}
         onPlantChange={setPlant}
@@ -238,7 +238,7 @@ export const OperatorDashboard: React.FC = () => {
               className="flex items-center gap-1.5 px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold shadow-2xs transition cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>Report Breakdown</span>
+              <span>+ Report a Problem</span>
             </button>
             <button
               onClick={fetchData}
@@ -251,6 +251,42 @@ export const OperatorDashboard: React.FC = () => {
           </div>
         }
       />
+
+      {/* Safety Sign-Off Banner */}
+      {latestInspection && (
+        <div
+          className={`p-3.5 rounded-xl border flex items-center justify-between text-xs font-bold shadow-xs ${
+            inspectionStatus === 'FAIL'
+              ? 'bg-red-50 border-red-300 text-red-900'
+              : isInspectionPassed
+              ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
+              : 'bg-amber-50 border-amber-300 text-amber-900'
+          }`}
+        >
+          <div className="flex items-center gap-2.5">
+            {inspectionStatus === 'FAIL' ? (
+              <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+            ) : isInspectionPassed ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            ) : (
+              <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+            )}
+            <span>
+              {inspectionStatus === 'FAIL'
+                ? 'Danger: Machine failed the safety check. Do not run.'
+                : isInspectionPassed
+                ? 'Machine passed the safety check. Ready to run.'
+                : 'Notice: Daily safety check pending for this shift.'}
+            </span>
+          </div>
+          <Link
+            to="/inspections/run"
+            className="text-xs underline font-extrabold hover:opacity-80"
+          >
+            {inspectionStatus === 'PENDING' ? 'Start Check' : 'View Check'}
+          </Link>
+        </div>
+      )}
 
       {reportSuccess && (
         <div className="p-3.5 bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-xl text-xs font-bold flex items-center justify-between shadow-xs">
@@ -283,15 +319,15 @@ export const OperatorDashboard: React.FC = () => {
       )}
 
       {/* =========================================================================
-          ROW 1: 5 TOP KPI METRIC CARDS (Real Database Values)
+          ROW 1: 4 TOP KPI METRIC CARDS (Essential & Simplified)
           ========================================================================= */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
         {/* Card 1: Assigned Machine */}
         <TopKPICard
           icon={HardHat}
           iconBgColor="bg-amber-100"
           iconColor="text-amber-800"
-          label="Assigned Asset"
+          label="My Machine"
           value={assignedAssetCode}
           subtitle={assignedMachine?.name || 'Assigned in Shop'}
           trend={assignedAssetStatus}
@@ -309,9 +345,9 @@ export const OperatorDashboard: React.FC = () => {
           icon={CheckCircle2}
           iconBgColor="bg-emerald-100"
           iconColor="text-emerald-800"
-          label="Pre-Shift Inspection"
+          label="Daily Safety Check"
           value={inspectionStatus}
-          subtitle={latestInspection ? `Recorded (${latestInspection.shift || 'Shift'})` : 'Awaiting Sign-Off'}
+          subtitle={latestInspection ? `Recorded (${latestInspection.shift || 'Shift'})` : 'Waiting for Check'}
           trend={isInspectionPassed ? 'Verified' : inspectionStatus === 'PENDING' ? 'Action Due' : 'Issues Found'}
           trendColor={
             isInspectionPassed
@@ -325,9 +361,9 @@ export const OperatorDashboard: React.FC = () => {
           icon={Clock}
           iconBgColor="bg-blue-100"
           iconColor="text-blue-800"
-          label="Meter Run Hours"
+          label="Machine Hours"
           value={machineRunHours}
-          subtitle={assignedMachine ? 'Meter Reading' : 'No Asset Assigned'}
+          subtitle={assignedMachine ? 'Meter Reading' : 'No Machine Assigned'}
         />
 
         {/* Card 4: Open Stoppages */}
@@ -335,9 +371,9 @@ export const OperatorDashboard: React.FC = () => {
           icon={AlertTriangle}
           iconBgColor="bg-amber-100"
           iconColor="text-amber-800"
-          label="Open Stoppages"
+          label="Reported Problems"
           value={openStoppagesCount}
-          subtitle={openStoppagesCount === 0 ? 'Line Clear' : `${openStoppagesCount} Active Incident(s)`}
+          subtitle={openStoppagesCount === 0 ? 'No open problems' : `${openStoppagesCount} active problem(s)`}
           trend={openStoppagesCount === 0 ? 'Clear' : 'Active'}
           trendColor={
             openStoppagesCount === 0
@@ -345,106 +381,75 @@ export const OperatorDashboard: React.FC = () => {
               : 'bg-red-50 text-red-600 border border-red-200'
           }
         />
-
-        {/* Card 5: Operational Status */}
-        <TopKPICard
-          icon={Activity}
-          iconBgColor="bg-emerald-100"
-          iconColor="text-emerald-800"
-          label="Asset State"
-          value={assignedAssetStatus}
-          subtitle={assignedMachine?.bay_line_location || 'Shop Floor'}
-        />
       </div>
 
       {/* =========================================================================
-          ROW 2: 3 MIDDLE ANALYTICS CARDS (Real Operational Data)
+          ROW 2: SENSOR TELEMETRY (Only Relevant Real Machine Readings)
           ========================================================================= */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {/* Card 1: Inspection Compliance Donut */}
-        <MachineStatusDonut
-          title="Inspection Checklist Status"
-          totalLabel="Checks"
-          totalCount={inspectionSummary.total}
-          segments={inspectionSegments}
-          emptyMessage="No pre-shift inspection completed for this shift"
-          loading={loading}
-        />
-
-        {/* Card 2: Reported Stoppage Velocity Spline */}
-        <MaintenanceTrendChart
-          title="Stoppage & Ticket Trend"
-          series1Name="Critical"
-          series2Name="Standard"
-          series1Color="#EF4444"
-          series2Color="#EAB308"
-          data={stoppageTrend}
-          loading={loading}
-          emptyMessage="No stoppage events recorded for this operator shift"
-        />
-
-        {/* Card 3: Recorded Machine Telemetry (Real Sensor Readings) */}
-        <DowntimeAnalysisCard
-          title="Recorded Sensor Telemetry"
-          rateValue={hasTelemetry ? 'ONLINE' : 'N/A'}
-          rateLabel={hasTelemetry ? 'Sensors Monitored' : 'No Telemetry'}
-          percentage={hasTelemetry ? 100 : 0}
-          gaugeColor="#10B981"
-          loading={loading}
-          emptyMessage="No sensor readings logged for this shift"
-          metrics={
-            hasTelemetry
-              ? [
-                  ...(recordedTemp
-                    ? [
-                        {
-                          icon: Activity,
-                          label: 'Recorded Temperature',
-                          value: recordedTemp,
-                          change: 'Verified',
-                          isPositiveChange: true,
-                        },
-                      ]
-                    : []),
-                  ...(recordedPressure
-                    ? [
-                        {
-                          icon: Activity,
-                          label: 'Recorded Pressure',
-                          value: recordedPressure,
-                          change: 'Verified',
-                          isPositiveChange: true,
-                        },
-                      ]
-                    : []),
-                  ...(recordedVibration
-                    ? [
-                        {
-                          icon: Activity,
-                          label: 'Vibration Level',
-                          value: recordedVibration,
-                          change: 'Verified',
-                          isPositiveChange: true,
-                        },
-                      ]
-                    : []),
-                ]
-              : []
-          }
-        />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <div className="lg:col-span-3">
+          <DowntimeAnalysisCard
+            title="Machine Sensor Telemetry"
+            rateValue={hasTelemetry ? 'ONLINE' : 'N/A'}
+            rateLabel={hasTelemetry ? 'Live Sensors Monitored' : 'No Sensor Data'}
+            percentage={hasTelemetry ? 100 : 0}
+            gaugeColor="#10B981"
+            loading={loading}
+            emptyMessage="No sensor readings logged for this shift"
+            metrics={
+              hasTelemetry
+                ? [
+                    ...(recordedTemp
+                      ? [
+                          {
+                            icon: Activity,
+                            label: 'Temperature',
+                            value: recordedTemp,
+                            change: 'Normal',
+                            isPositiveChange: true,
+                          },
+                        ]
+                      : []),
+                    ...(recordedPressure
+                      ? [
+                          {
+                            icon: Activity,
+                            label: 'Pressure',
+                            value: recordedPressure,
+                            change: 'Normal',
+                            isPositiveChange: true,
+                          },
+                        ]
+                      : []),
+                    ...(recordedVibration
+                      ? [
+                          {
+                            icon: Activity,
+                            label: 'Vibration Level',
+                            value: recordedVibration,
+                            change: 'Normal',
+                            isPositiveChange: true,
+                          },
+                        ]
+                      : []),
+                  ]
+                : []
+            }
+          />
+        </div>
       </div>
 
       {/* =========================================================================
           ROW 3: BOTTOM ROW 2-COLUMN SPLIT (~60% Left, ~40% Right)
           ========================================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-        {/* Left Column (~60%): My Breakdown Tickets & Stoppages */}
+        {/* Left Column (~60%): Problems You Reported */}
         <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between pb-4 border-b border-slate-100">
             <div className="flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-amber-500" />
               <h3 className="text-xs sm:text-sm font-bold text-zinc-900 tracking-tight">
-                Reported Stoppages & Tickets
+                Problems You Reported
               </h3>
             </div>
             <button
@@ -454,7 +459,7 @@ export const OperatorDashboard: React.FC = () => {
               }}
               className="text-xs font-bold text-amber-600 hover:text-amber-700 flex items-center gap-1 transition cursor-pointer"
             >
-              <span>+ New Report</span>
+              <span>+ Report a Problem</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -463,32 +468,32 @@ export const OperatorDashboard: React.FC = () => {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-100 text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
-                  <th className="py-2.5 px-3">Ticket ID</th>
+                  <th className="py-2.5 px-3">Report #</th>
                   <th className="py-2.5 px-3">Machine</th>
-                  <th className="py-2.5 px-3">Symptom</th>
-                  <th className="py-2.5 px-3">Severity</th>
+                  <th className="py-2.5 px-3">Problem</th>
+                  <th className="py-2.5 px-3">Urgency</th>
                   <th className="py-2.5 px-3">Status</th>
-                  <th className="py-2.5 px-3">Reported</th>
+                  <th className="py-2.5 px-3">Report Time</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs text-zinc-800">
                 {loading ? (
                   <tr>
                     <td colSpan={6} className="py-8 text-center text-xs text-zinc-400 font-medium">
-                      Loading stoppage tickets...
+                      Loading problem reports...
                     </td>
                   </tr>
                 ) : myComplaints.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="py-8 text-center text-xs text-zinc-400 font-medium">
-                      No breakdown stoppages reported by this operator or shop.
+                      No problems reported by you yet.
                     </td>
                   </tr>
                 ) : (
                   myComplaints.map((item: any) => {
                     const ticketId = item.complaint_number || (typeof item.id === 'string' ? item.id.slice(0, 8) : `CMP-${item.id}`);
                     const machineCode = item.machine_code || item.machine?.code || item.machine?.name || 'Asset';
-                    const titleStr = item.problem_title || item.description || 'Stoppage Alert';
+                    const titleStr = item.problem_title || item.description || 'Problem Alert';
                     const priority = item.priority || 'medium';
                     const statusStr = item.status || 'new';
                     const timeStr = item.created_at
@@ -564,20 +569,20 @@ export const OperatorDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Right Column (~40%): Recent Pre-Shift Inspection Records from Database */}
+        {/* Right Column (~40%): Recent Daily Safety Checks */}
         <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between pb-4 border-b border-slate-100">
             <div className="flex items-center gap-2">
               <ClipboardCheck className="w-4 h-4 text-amber-500" />
               <h3 className="text-xs sm:text-sm font-bold text-zinc-900 tracking-tight">
-                Pre-Shift Safety Sign-Offs
+                Recent Safety Checks
               </h3>
             </div>
             <Link
               to="/inspections/run"
               className="text-xs font-bold text-amber-600 hover:text-amber-700 flex items-center gap-1 transition"
             >
-              <span>Start Inspection</span>
+              <span>Start Daily Check</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </Link>
           </div>
@@ -596,13 +601,13 @@ export const OperatorDashboard: React.FC = () => {
                 {loading ? (
                   <tr>
                     <td colSpan={4} className="py-8 text-center text-xs text-zinc-400 font-medium">
-                      Loading inspection sign-offs...
+                      Loading safety check records...
                     </td>
                   </tr>
                 ) : recentInspections.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="py-8 text-center text-xs text-zinc-400 font-medium">
-                      No inspection logs found for this shop shift.
+                      No safety checks recorded for this shift yet.
                     </td>
                   </tr>
                 ) : (

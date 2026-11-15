@@ -204,15 +204,15 @@ export const MachineMasterPage: React.FC = () => {
           <div className="flex flex-wrap items-center gap-3">
             <h2 className="text-xl font-black text-zinc-950 tracking-tight flex items-center gap-2">
               <Cpu className="w-5 h-5 text-amber-500" />
-              <span>INDUSTRIAL MACHINE ASSET DIRECTORY</span>
+              <span>Machines &amp; Equipment Catalog</span>
             </h2>
             {isAdmin ? (
               <span className="bg-jcb-yellow text-black text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-amber-500 shadow-sm">
-                Admin Full Access (CRUD)
+                Admin
               </span>
             ) : isManager ? (
               <span className="bg-blue-50 text-blue-700 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-blue-200">
-                Manager Operational Access (Edit Specs)
+                Manager
               </span>
             ) : (
               <span className="bg-zinc-100 text-zinc-600 text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-zinc-200">
@@ -221,16 +221,7 @@ export const MachineMasterPage: React.FC = () => {
             )}
           </div>
           <p className="text-xs text-zinc-500 font-medium mt-1">
-            {user?.plantName || user?.shopName ? (
-              <span>
-                Scoped Facility Context:{' '}
-                <strong className="text-zinc-800">
-                  {user.plantName || 'Assigned Plant'}{user.shopName ? ` • ${user.shopName}` : ''}
-                </strong>
-              </span>
-            ) : (
-              'Enterprise Multi-Shop Plant Asset Governance, QR UIDs, and Lifecycle Maintenance History'
-            )}
+            Manage plant machines, locations, QR codes, and maintenance records.
           </p>
         </div>
 
@@ -242,7 +233,7 @@ export const MachineMasterPage: React.FC = () => {
             title="Scan or Lookup QR Code"
           >
             <QrCode className="w-4 h-4 text-amber-400" />
-            <span>QR Asset Lookup</span>
+            <span>Scan / Find QR</span>
           </button>
 
           <button
@@ -261,7 +252,7 @@ export const MachineMasterPage: React.FC = () => {
               className="bg-jcb-yellow hover:bg-jcb-yellowDark text-black text-xs font-black px-4 py-2.5 rounded-xl shadow transition-all flex items-center gap-2 border border-amber-500"
             >
               <Plus className="w-4 h-4" />
-              <span>REGISTER MACHINE</span>
+              <span>+ Add Machine</span>
             </button>
           )}
         </div>
@@ -305,17 +296,17 @@ export const MachineMasterPage: React.FC = () => {
               <option value="">All Statuses</option>
               <option value="running">Running</option>
               <option value="idle">Idle</option>
-              <option value="breakdown">Breakdown</option>
-              <option value="under_maintenance">Under Maintenance</option>
-              <option value="awaiting_parts">Awaiting Parts</option>
+              <option value="breakdown">Machine Stopped</option>
+              <option value="under_maintenance">Under Repair</option>
+              <option value="awaiting_parts">Waiting for Parts</option>
               <option value="inactive">Inactive</option>
-              <option value="decommissioned">Decommissioned</option>
+              <option value="decommissioned">Retired</option>
             </select>
           </div>
 
           {/* Criticality Filter */}
           <div>
-            <label className="block text-[10px] font-black text-zinc-400 uppercase mb-1">Criticality</label>
+            <label className="block text-[10px] font-black text-zinc-400 uppercase mb-1">Line Urgency</label>
             <select
               value={criticalityFilter}
               onChange={(e) => {
@@ -324,10 +315,10 @@ export const MachineMasterPage: React.FC = () => {
               }}
               className="w-full px-2.5 py-1.5 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-medium text-zinc-800 focus:outline-none focus:border-jcb-yellow"
             >
-              <option value="">All Criticalities</option>
-              <option value="class_a">Class A (Bottleneck)</option>
-              <option value="class_b">Class B (Medium)</option>
-              <option value="class_c">Class C (Standby)</option>
+              <option value="">All Urgencies</option>
+              <option value="class_a">Critical Machine (Stops Line)</option>
+              <option value="class_b">Medium Priority</option>
+              <option value="class_c">Backup Machine</option>
             </select>
           </div>
 
@@ -439,14 +430,14 @@ export const MachineMasterPage: React.FC = () => {
           <table className="w-full text-left text-xs">
             <thead className="bg-zinc-50 border-b border-zinc-200 text-zinc-600 font-black uppercase tracking-wider">
               <tr>
-                <th className="px-5 py-3.5">Machine Code & QR UID</th>
-                <th className="px-5 py-3.5">Asset Technical Name</th>
-                <th className="px-5 py-3.5">OEM & Model</th>
-                <th className="px-5 py-3.5">Plant & Shop Location</th>
-                <th className="px-5 py-3.5">Criticality</th>
+                <th className="px-5 py-3.5">Machine Code / QR</th>
+                <th className="px-5 py-3.5">Machine Name</th>
+                <th className="px-5 py-3.5">Make &amp; Model</th>
+                <th className="px-5 py-3.5">Location</th>
+                <th className="px-5 py-3.5">Line Urgency</th>
                 <th className="px-5 py-3.5">Status</th>
                 <th className="px-5 py-3.5">Run Hours</th>
-                <th className="px-5 py-3.5 text-right">Actions</th>
+                <th className="px-5 py-3.5 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100">

@@ -219,8 +219,8 @@ export const BreakdownReportModal: React.FC<BreakdownReportModalProps> = ({
               <AlertTriangle className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-sm font-black tracking-wide uppercase">Report Machine Breakdown</h3>
-              <p className="text-[10px] text-zinc-400 font-semibold">Immediate line stoppage notification to maintenance crew</p>
+              <h3 className="text-sm font-black tracking-wide uppercase">Report Machine Problem</h3>
+              <p className="text-[10px] text-zinc-400 font-semibold">Notify maintenance crew about a machine problem</p>
             </div>
           </div>
           <button
@@ -241,10 +241,10 @@ export const BreakdownReportModal: React.FC<BreakdownReportModalProps> = ({
                 <CheckCircle2 className="w-7 h-7" />
               </div>
               <h3 className="text-base font-black text-zinc-900 uppercase">
-                Breakdown Complaint Registered
+                Problem Report Submitted
               </h3>
               <p className="text-xs text-zinc-500 font-mono">
-                Complaint #: <span className="font-bold text-zinc-900">{successComplaint.complaint_number}</span>
+                Report #: <span className="font-bold text-zinc-900">{successComplaint.complaint_number}</span>
               </p>
             </div>
 
@@ -342,11 +342,11 @@ export const BreakdownReportModal: React.FC<BreakdownReportModalProps> = ({
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider">
-                Machine Asset *
+                Affected Machine *
               </label>
               {loadingMachines && (
                 <span className="text-[10px] text-zinc-400 font-medium flex items-center gap-1">
-                  <RefreshCw className="w-3 h-3 animate-spin" /> Loading assets...
+                  <RefreshCw className="w-3 h-3 animate-spin" /> Loading machines...
                 </span>
               )}
             </div>
@@ -357,7 +357,7 @@ export const BreakdownReportModal: React.FC<BreakdownReportModalProps> = ({
               onChange={(e) => setForm({ ...form, machine_id: e.target.value })}
               className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow disabled:opacity-50"
             >
-              <option value="">-- Select Affected Equipment --</option>
+              <option value="">-- Select Affected Machine --</option>
               {machines.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.machine_code} - {m.name} ({m.bay_line_location || m.shop_name || 'Bay 1'}) [Status: {m.status || 'running'}]
@@ -370,7 +370,7 @@ export const BreakdownReportModal: React.FC<BreakdownReportModalProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1">
-                Fault Category *
+                Problem Category *
               </label>
               <select
                 disabled={submitting || !!successComplaint}
@@ -389,7 +389,7 @@ export const BreakdownReportModal: React.FC<BreakdownReportModalProps> = ({
 
             <div>
               <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1">
-                Priority Level *
+                Urgency *
               </label>
               <select
                 disabled={submitting || !!successComplaint}
@@ -397,10 +397,10 @@ export const BreakdownReportModal: React.FC<BreakdownReportModalProps> = ({
                 onChange={(e) => setForm({ ...form, priority: e.target.value })}
                 className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow disabled:opacity-50"
               >
-                <option value="critical">Critical (Line Stoppage - Immediate SLA)</option>
+                <option value="critical">Critical (Line Stopped - Urgent)</option>
                 <option value="high">High (Production Impaired)</option>
                 <option value="medium">Medium (Degraded Performance)</option>
-                <option value="low">Low (Minor Noise / Routine)</option>
+                <option value="low">Low (Minor Issue / Routine)</option>
               </select>
             </div>
           </div>
@@ -408,7 +408,7 @@ export const BreakdownReportModal: React.FC<BreakdownReportModalProps> = ({
           {/* Problem Title */}
           <div>
             <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1">
-              Symptom / Problem Title *
+              Problem Title *
             </label>
             <input
               type="text"
@@ -425,7 +425,7 @@ export const BreakdownReportModal: React.FC<BreakdownReportModalProps> = ({
           {/* Detailed Description */}
           <div>
             <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1">
-              Detailed Observation Remarks *
+              Problem Description *
             </label>
             <textarea
               rows={3}

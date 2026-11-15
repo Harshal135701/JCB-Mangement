@@ -961,53 +961,35 @@ export const StoreManagerDashboard: React.FC = () => {
   return (
     <div className="space-y-6 bg-white min-h-full">
       {/* =========================================================================
-          PAGE HEADER
+          PAGE HEADER: Store & Spare Parts Dashboard
           ========================================================================= */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 bg-white rounded-2xl border-2 border-zinc-200 shadow-sm">
         <div>
           <div className="flex items-center gap-3">
             <h2 className="text-xl font-black text-zinc-950 tracking-tight">
-              PLANT STORE OPERATIONS COMMAND CENTER
+              Store & Spare Parts Dashboard
             </h2>
             <span className="bg-jcb-yellow text-black text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-amber-500 shadow-xs">
-              Store Governance
+              Store Manager
             </span>
             <span className="bg-zinc-100 text-zinc-700 font-bold text-[10px] px-2.5 py-1 rounded-full uppercase tracking-wider border border-zinc-300">
               {user?.plantName || (user as any)?.plant_name || 'Central Store Hub'}
             </span>
           </div>
           <p className="text-xs text-zinc-500 font-medium mt-1.5">
-            Real-time material inwarding, stock adjustments, low-stock reorder triggers, quarantine isolation, and bin transfers.
+            Manage spare parts inventory, stock receiving, bin transfers and job parts issues.
           </p>
         </div>
 
         {/* Global Action Buttons */}
         <div className="flex items-center gap-2 flex-wrap">
-          <Link
-            to="/inventory"
-            className="bg-white hover:bg-slate-50 text-zinc-800 text-xs font-bold px-3.5 py-2.5 rounded-xl border border-zinc-300 shadow-2xs transition flex items-center gap-1.5"
-            title="Open Master Spare Parts Catalog"
-          >
-            <Package className="w-4 h-4 text-amber-600" />
-            <span>Master Catalog</span>
-          </Link>
-
-          <Link
-            to="/procurement"
-            className="bg-white hover:bg-slate-50 text-zinc-800 text-xs font-bold px-3.5 py-2.5 rounded-xl border border-zinc-300 shadow-2xs transition flex items-center gap-1.5"
-            title="Open Procurement & Purchase Requisitions"
-          >
-            <ShoppingCart className="w-4 h-4 text-blue-600" />
-            <span>Procurement PRs</span>
-          </Link>
-
           <button
             onClick={() => setIsCreatePartModalOpen(true)}
             className="bg-jcb-yellow hover:bg-jcb-yellowDark text-black text-xs font-black px-3.5 py-2.5 rounded-xl border border-amber-500 shadow-xs transition flex items-center gap-1.5 cursor-pointer"
             title="Register a new spare part master catalog record"
           >
             <Plus className="w-4 h-4 text-black" />
-            <span>REGISTER PART</span>
+            <span>+ Add New Part</span>
           </button>
 
           <button
@@ -1016,36 +998,7 @@ export const StoreManagerDashboard: React.FC = () => {
             title="Open Goods Receipt (GRN) inwarding workflow"
           >
             <Truck className="w-4 h-4 text-white" />
-            <span>INWARD GOODS (GRN)</span>
-          </button>
-
-          <button
-            onClick={() => {
-              setAdjustPart(null);
-              setAdjustQuantity(0);
-              setAdjustReason('');
-              setIsAdjustModalOpen(true);
-            }}
-            className="bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-black px-3.5 py-2.5 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
-          >
-            <SlidersHorizontal className="w-4 h-4 text-jcb-yellow" />
-            <span>ADJUST STOCK</span>
-          </button>
-
-          <button
-            onClick={() => setIsTransferModalOpen(true)}
-            className="bg-zinc-100 hover:bg-zinc-200 text-zinc-900 text-xs font-black px-3.5 py-2.5 rounded-xl border border-zinc-300 transition flex items-center gap-1.5 cursor-pointer"
-          >
-            <ArrowRightLeft className="w-4 h-4 text-zinc-700" />
-            <span>NEW TRANSFER</span>
-          </button>
-
-          <button
-            onClick={() => setIsDamagedModalOpen(true)}
-            className="bg-red-50 hover:bg-red-100 text-red-800 text-xs font-black px-3.5 py-2.5 rounded-xl border border-red-300 transition flex items-center gap-1.5 cursor-pointer"
-          >
-            <ShieldAlert className="w-4 h-4 text-red-600" />
-            <span>QUARANTINE DEFECT</span>
+            <span>+ Receive Material (GRN)</span>
           </button>
 
           <button
@@ -1092,86 +1045,46 @@ export const StoreManagerDashboard: React.FC = () => {
       )}
 
       {/* =========================================================================
-          STORE MANAGER MODULE QUICK NAVIGATION
+          KEY INVENTORY METRICS CARDS (5 CLEAR ESSENTIAL KPIS)
           ========================================================================= */}
-      <div className="bg-white rounded-2xl p-3 border-2 border-zinc-200 flex items-center justify-between gap-2 overflow-x-auto text-xs shadow-sm">
-        <span className="text-[10px] font-black uppercase text-amber-600 tracking-wider px-3 shrink-0 flex items-center gap-1.5">
-          <Warehouse className="w-3.5 h-3.5" />
-          <span>STORE MODULES:</span>
-        </span>
-        <div className="flex items-center gap-2 shrink-0">
-          <Link
-            to="/inventory"
-            className="px-3 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold transition flex items-center gap-1.5 border border-zinc-200"
-          >
-            <Package className="w-3.5 h-3.5 text-amber-600" />
-            <span>Spare Parts Catalog</span>
-          </Link>
-          <Link
-            to="/procurement?tab=prs"
-            className="px-3 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold transition flex items-center gap-1.5 border border-zinc-200"
-          >
-            <FileText className="w-3.5 h-3.5 text-blue-600" />
-            <span>Requisitions & POs</span>
-          </Link>
-          <Link
-            to="/procurement?tab=pos"
-            className="px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-900 font-bold transition flex items-center gap-1.5 border border-emerald-300"
-          >
-            <Truck className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Goods Receipt Note (GRN)</span>
-          </Link>
-          <Link
-            to="/rdc"
-            className="px-3 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold transition flex items-center gap-1.5 border border-zinc-200"
-          >
-            <FileCheck className="w-3.5 h-3.5 text-purple-600" />
-            <span>RDC Gate Passes</span>
-          </Link>
-          <Link
-            to="/audit"
-            className="px-3 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold transition flex items-center gap-1.5 border border-zinc-200"
-          >
-            <Clock className="w-3.5 h-3.5 text-cyan-600" />
-            <span>Audit Ledger</span>
-          </Link>
-          <Link
-            to="/work-orders"
-            className="px-3 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold transition flex items-center gap-1.5 border border-zinc-200"
-          >
-            <ClipboardList className="w-3.5 h-3.5 text-zinc-500" />
-            <span>Work Orders (Parts)</span>
-          </Link>
-        </div>
-      </div>
-
-      {/* =========================================================================
-          KEY INVENTORY METRICS & TELEMETRY CARDS (CONSOLIDATED 7 INTERACTIVE KPIS)
-          ========================================================================= */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
-        {/* 1. Warehouse Stock Balance */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3.5">
+        {/* 1. Available Stock */}
         <TopKPICard
           icon={Boxes}
           iconBgColor="bg-blue-100"
           iconColor="text-blue-800"
-          label="Warehouse Stock Balance"
+          label="Available Stock"
           value={summary.total_available_stock.toLocaleString('en-IN')}
           subtitle={`Physical: ${summary.total_physical_stock.toLocaleString('en-IN')} | Reserved: ${summary.total_reserved_stock} | Hold: ${summary.total_quarantined_stock}`}
-          trend={`${summary.total_parts} Active SKUs`}
+          trend={`${summary.total_parts} Spare Parts`}
           trendColor="bg-blue-50 text-blue-800 font-bold border border-blue-200"
           accentColor="border-l-4 border-l-blue-600"
           onClick={() => navigate('/inventory')}
         />
 
-        {/* 2. Low Stock Alerts */}
+        {/* 2. Total Stock Value */}
+        <TopKPICard
+          icon={Coins}
+          iconBgColor="bg-amber-100"
+          iconColor="text-amber-900"
+          label="Total Stock Value"
+          value={`₹${(Number(summary.total_inventory_valuation || 0) / 100000).toFixed(2)}L`}
+          subtitle={`₹${Number(summary.total_inventory_valuation || 0).toLocaleString('en-IN')} Total Value`}
+          trend="Plant Assets"
+          trendColor="bg-amber-50 text-amber-900 border border-amber-200 font-bold"
+          accentColor="border-l-4 border-l-jcb-yellow"
+          onClick={() => setActiveTab('reports')}
+        />
+
+        {/* 3. Items to Reorder (Combining Low Stock + Stockouts) */}
         <TopKPICard
           icon={AlertTriangle}
           iconBgColor={summary.low_stock_items_count > 0 ? "bg-amber-100" : "bg-emerald-100"}
           iconColor={summary.low_stock_items_count > 0 ? "text-amber-800" : "text-emerald-800"}
-          label="Low Stock Alerts"
+          label="Items to Reorder"
           value={summary.low_stock_items_count}
-          subtitle={summary.low_stock_items_count > 0 ? `${summary.low_stock_items_count} SKUs below safety reorder level` : 'All inventory above minimum threshold'}
-          trend={summary.low_stock_items_count > 0 ? 'Safety Breached' : 'Optimal'}
+          subtitle={summary.out_of_stock_count > 0 ? `${summary.out_of_stock_count} parts completely out of stock` : 'Items at or below reorder level'}
+          trend={summary.low_stock_items_count > 0 ? 'Reorder Needed' : 'Normal'}
           trendColor={
             summary.low_stock_items_count > 0
               ? 'bg-amber-100 text-amber-900 border border-amber-300 font-black'
@@ -1184,81 +1097,32 @@ export const StoreManagerDashboard: React.FC = () => {
           }}
         />
 
-        {/* 3. Critical Stockouts */}
-        <TopKPICard
-          icon={Archive}
-          iconBgColor={summary.out_of_stock_count > 0 ? "bg-red-100" : "bg-emerald-100"}
-          iconColor={summary.out_of_stock_count > 0 ? "text-red-700" : "text-emerald-700"}
-          label="Critical Stockouts"
-          value={summary.out_of_stock_count}
-          subtitle="SKUs with zero physical warehouse stock"
-          trend={summary.out_of_stock_count > 0 ? `${summary.out_of_stock_count} Depleted (0 Stock)` : 'No Stockouts'}
-          trendColor={
-            summary.out_of_stock_count > 0
-              ? 'bg-red-100 text-red-800 border border-red-300 font-black'
-              : 'bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold'
-          }
-          accentColor="border-l-4 border-l-red-600"
-          onClick={() => {
-            setActiveTab('low_stock');
-            setAlertsZeroOnly(true);
-          }}
-        />
-
-        {/* 4. Total Inventory Asset Valuation (INR) */}
-        <TopKPICard
-          icon={Coins}
-          iconBgColor="bg-amber-100"
-          iconColor="text-amber-900"
-          label="Total Inventory Valuation"
-          value={`₹${(Number(summary.total_inventory_valuation || 0) / 100000).toFixed(2)}L`}
-          subtitle={`₹${Number(summary.total_inventory_valuation || 0).toLocaleString('en-IN')} Current Asset Value`}
-          trend="Plant Assets"
-          trendColor="bg-amber-50 text-amber-900 border border-amber-200 font-bold"
-          accentColor="border-l-4 border-l-jcb-yellow"
-          onClick={() => setActiveTab('reports')}
-        />
-
-        {/* 5. Goods Inwarding & Pipeline */}
+        {/* 4. Orders Arriving */}
         <TopKPICard
           icon={Truck}
           iconBgColor="bg-emerald-100"
           iconColor="text-emerald-800"
-          label="Goods Inwarding Pipeline"
+          label="Orders Arriving"
           value={procurementSummary?.kpi?.active_purchase_orders ?? procurementSummary?.summary?.active_pos ?? 0}
-          subtitle={`${procurementSummary?.kpi?.pending_requisitions ?? procurementSummary?.summary?.total_pending_prs ?? 0} Requisitions Pending Review`}
+          subtitle={`${procurementSummary?.kpi?.pending_requisitions ?? procurementSummary?.summary?.total_pending_prs ?? 0} Purchase Requests Pending`}
           trend="Open POs / GRN"
           trendColor="bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold"
           accentColor="border-l-4 border-l-emerald-600"
           onClick={() => navigate('/procurement?tab=pos')}
         />
 
-        {/* 6. Defect Quarantine & Hold */}
+        {/* 5. Damaged / On Hold */}
         <TopKPICard
           icon={ShieldAlert}
           iconBgColor="bg-purple-100"
           iconColor="text-purple-800"
-          label="Quarantine / Defect Hold"
+          label="Damaged / On Hold"
           value={summary.total_quarantined_stock}
-          subtitle={`${dashboard?.damaged_stock?.total_damaged_reports ?? 0} reports (${dashboard?.damaged_stock?.quarantined_units ?? 0} units active hold)`}
-          trend={summary.total_quarantined_stock > 0 ? 'Quality Isolation' : 'No Defects'}
+          subtitle={`${dashboard?.damaged_stock?.total_damaged_reports ?? 0} defect reports (${dashboard?.damaged_stock?.quarantined_units ?? 0} units)`}
+          trend={summary.total_quarantined_stock > 0 ? 'In Quarantine' : 'No Defects'}
           trendColor="bg-purple-50 text-purple-800 border border-purple-200 font-bold"
           accentColor="border-l-4 border-l-purple-600"
           onClick={() => setActiveTab('damaged')}
-        />
-
-        {/* 7. Store Transfers & Relocation */}
-        <TopKPICard
-          icon={ArrowRightLeft}
-          iconBgColor="bg-cyan-100"
-          iconColor="text-cyan-800"
-          label="Store Transfers Ledger"
-          value={dashboard?.transfers?.active_transfers_count ?? 0}
-          subtitle={`${dashboard?.transfers?.total_transfers_count ?? 0} total bin & sub-store relocations`}
-          trend="Internal Flow"
-          trendColor="bg-cyan-50 text-cyan-800 border border-cyan-200 font-bold"
-          accentColor="border-l-4 border-l-cyan-600"
-          onClick={() => setActiveTab('transfers')}
         />
       </div>
 
@@ -1275,7 +1139,7 @@ export const StoreManagerDashboard: React.FC = () => {
           }`}
         >
           <AlertTriangle className={`w-4 h-4 ${summary.low_stock_items_count > 0 ? 'text-amber-400' : ''}`} />
-          <span>Low Stock & Reorders</span>
+          <span>Items to Reorder</span>
           {summary.low_stock_items_count > 0 && (
             <span className="bg-red-600 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold">
               {summary.low_stock_items_count}
@@ -1292,7 +1156,7 @@ export const StoreManagerDashboard: React.FC = () => {
           }`}
         >
           <ArrowRightLeft className="w-4 h-4 text-cyan-400" />
-          <span>Stock Transfers</span>
+          <span>Move Stock (Bins)</span>
           {(dashboard?.transfers?.active_transfers_count ?? 0) > 0 && (
             <span className="bg-cyan-600 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold">
               {dashboard?.transfers?.active_transfers_count}
@@ -1309,7 +1173,7 @@ export const StoreManagerDashboard: React.FC = () => {
           }`}
         >
           <ShieldAlert className="w-4 h-4 text-purple-400" />
-          <span>Quarantine & Scrap</span>
+          <span>Damaged Stock</span>
           {summary.total_quarantined_stock > 0 && (
             <span className="bg-purple-600 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold">
               {summary.total_quarantined_stock}
@@ -1326,7 +1190,7 @@ export const StoreManagerDashboard: React.FC = () => {
           }`}
         >
           <IndianRupee className="w-4 h-4 text-amber-400" />
-          <span>Valuation & Analytics</span>
+          <span>Stock Reports & Value</span>
         </button>
 
         <button
@@ -1338,7 +1202,7 @@ export const StoreManagerDashboard: React.FC = () => {
           }`}
         >
           <Clock className="w-4 h-4 text-emerald-400" />
-          <span>Live Audit Ledger</span>
+          <span>Stock History</span>
         </button>
       </div>
 
@@ -1372,7 +1236,7 @@ export const StoreManagerDashboard: React.FC = () => {
               )}
             </div>
 
-            {/* Zero Stock Only Filter Toggle */}
+            {/* Zero Stock Only Filter Toggle & Adjust Stock Action */}
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setAlertsZeroOnly(!alertsZeroOnly)}
@@ -1383,6 +1247,20 @@ export const StoreManagerDashboard: React.FC = () => {
                 }`}
               >
                 {alertsZeroOnly ? 'Show All Low Stock' : 'Zero Stock Only (Depleted)'}
+              </button>
+
+              <button
+                onClick={() => {
+                  setAdjustPart(null);
+                  setAdjustQuantity(0);
+                  setAdjustReason('');
+                  setIsAdjustModalOpen(true);
+                }}
+                className="bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 cursor-pointer shrink-0"
+                title="Manually correct physical stock count"
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5 text-jcb-yellow" />
+                <span>Correct Stock Count</span>
               </button>
             </div>
 
@@ -1601,7 +1479,7 @@ export const StoreManagerDashboard: React.FC = () => {
               className="bg-jcb-yellow hover:bg-jcb-yellowDark text-black text-xs font-black px-4 py-2.5 rounded-xl border border-amber-500 shadow-xs transition flex items-center gap-2 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
-              <span>NEW TRANSFER</span>
+              <span>+ Move Stock</span>
             </button>
           </div>
 
@@ -1742,7 +1620,7 @@ export const StoreManagerDashboard: React.FC = () => {
                 className="bg-red-600 hover:bg-red-700 text-white text-xs font-black px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer ml-2"
               >
                 <Plus className="w-4 h-4" />
-                <span>REPORT DEFECT</span>
+                <span>+ Mark Damaged / Hold</span>
               </button>
             </div>
           </div>

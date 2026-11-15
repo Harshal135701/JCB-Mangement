@@ -72,7 +72,48 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, label, size = 
     dotColor = 'bg-zinc-400';
   }
 
-  const displayText = label || norm.replace(/_/g, ' ').toUpperCase();
+  // Friendly plain-English labels mapping
+  const friendlyLabelMap: Record<string, string> = {
+    running: 'Running',
+    operational: 'Working',
+    breakdown: 'Machine Stopped',
+    under_maintenance: 'Under Repair',
+    awaiting_parts: 'Waiting for Parts',
+    waiting_for_parts: 'Waiting for Parts',
+    waiting_for_approval: 'Waiting for Approval',
+    pending_review: 'Waiting for Review',
+    submitted_verification: 'Waiting for Check',
+    verification_pending: 'Waiting for Check',
+    verified_closed: 'Finished & Checked',
+    completed: 'Finished',
+    rework_required: 'Needs Re-check',
+    on_hold: 'On Hold',
+    reopened: 'Reopened',
+    assigned: 'Assigned',
+    accepted: 'Accepted',
+    scheduled: 'Scheduled',
+    under_diagnosis: 'Checking Problem',
+    in_progress: 'In Progress',
+    work_order_created: 'Repair Scheduled',
+    acknowledged: 'Approved',
+    pass: 'Passed',
+    flagged: 'Needs Attention',
+    fail: 'Failed',
+    critical: 'Urgent',
+    high: 'High',
+    medium: 'Medium',
+    low: 'Low',
+    closed: 'Closed',
+    cancelled: 'Cancelled',
+    approved: 'Approved',
+    rejected: 'Rejected',
+    active: 'Active',
+    inactive: 'Inactive',
+    decommissioned: 'Retired',
+    new: 'New',
+  };
+
+  const displayText = label || friendlyLabelMap[norm] || norm.replace(/_/g, ' ').toUpperCase();
   const sizeClasses = size === 'sm' ? 'px-2 py-0.5 text-[10px]' : 'px-2.5 py-1 text-xs';
 
   return (

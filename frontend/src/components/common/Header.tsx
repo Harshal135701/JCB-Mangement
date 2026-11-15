@@ -135,7 +135,7 @@ export const Header: React.FC<HeaderProps> = ({ onMobileMenuToggle }) => {
           <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-2.5" />
           <input
             type="text"
-            placeholder="Search machines, work orders..."
+            placeholder="Search machines, repair jobs..."
             className="w-full pl-9 pr-4 py-1.5 bg-slate-100 hover:bg-slate-200/80 focus:bg-white border border-slate-200 focus:border-amber-500 rounded-xl text-xs font-medium text-zinc-900 placeholder-zinc-400 transition focus:outline-none focus:ring-1 focus:ring-amber-500 shadow-2xs"
           />
         </div>
@@ -206,8 +206,8 @@ export const Header: React.FC<HeaderProps> = ({ onMobileMenuToggle }) => {
               <div className="max-h-80 overflow-y-auto divide-y divide-zinc-100">
                 {notifications.length === 0 ? (
                   <div className="p-8 text-center text-xs text-zinc-500 font-medium">
-                    <p>No notifications for your account.</p>
-                    <p className="text-[11px] text-zinc-400 mt-1">Real-time alerts will appear here automatically.</p>
+                    <p>No notifications yet.</p>
+                    <p className="text-[11px] text-zinc-400 mt-1">New alerts will appear here automatically.</p>
                   </div>
                 ) : (
                   notifications.map((item) => (
@@ -310,7 +310,7 @@ export const Header: React.FC<HeaderProps> = ({ onMobileMenuToggle }) => {
                   className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-zinc-700 hover:bg-zinc-100 font-bold transition"
                 >
                   <Shield className="w-4 h-4 text-zinc-500" />
-                  <span>My Operational Dashboard</span>
+                  <span>My Dashboard</span>
                 </Link>
               </div>
 
@@ -323,7 +323,7 @@ export const Header: React.FC<HeaderProps> = ({ onMobileMenuToggle }) => {
                   className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-red-600 hover:bg-red-50 font-bold transition text-xs cursor-pointer"
                 >
                   <LogOut className="w-4 h-4" />
-                  <span>Sign Out of Portal</span>
+                  <span>Log Out</span>
                 </button>
               </div>
             </div>

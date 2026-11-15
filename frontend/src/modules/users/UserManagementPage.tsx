@@ -263,15 +263,13 @@ export const UserManagementPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 bg-white rounded-2xl border-2 border-zinc-200 shadow-sm">
         <div>
           <div className="flex items-center gap-3">
-            <h2 className="text-xl font-black text-zinc-950 tracking-tight">PLANT PERSONNEL & TECHNICIAN DIRECTORY</h2>
+            <h2 className="text-xl font-black text-zinc-950 tracking-tight">USERS &amp; PERSONNEL</h2>
             <span className="bg-jcb-yellow text-black text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-amber-500 shadow-sm">
               {isAdmin ? 'Admin Governance' : 'Plant Governance'}
             </span>
           </div>
           <p className="text-xs text-zinc-500 font-medium mt-1">
-            {isManager 
-              ? 'Manage field maintenance technicians and machine operators within your assigned plant facility.' 
-              : 'Manage field maintenance technicians, machine operators, shift supervisors, store managers, and engineering staff across JCB manufacturing facilities.'}
+            Manage technicians, operators, managers, and store personnel.
           </p>
         </div>
 
@@ -282,14 +280,14 @@ export const UserManagementPage: React.FC = () => {
               className="bg-jcb-yellow hover:bg-jcb-yellowDark text-black text-xs font-black px-3.5 py-2.5 rounded-xl shadow transition-all flex items-center gap-1.5 border border-amber-500"
             >
               <UserPlus className="w-4 h-4" />
-              <span>ENROLL TECHNICIAN</span>
+              <span>+ Add Technician</span>
             </button>
             <button
               onClick={() => openCreateModal('operator')}
               className="bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-black px-3.5 py-2.5 rounded-xl shadow transition-all flex items-center gap-1.5"
             >
               <HardHat className="w-4 h-4" />
-              <span>ENROLL OPERATOR</span>
+              <span>+ Add Operator</span>
             </button>
             {isAdmin && (
               <button
@@ -297,7 +295,7 @@ export const UserManagementPage: React.FC = () => {
                 className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-black px-3.5 py-2.5 rounded-xl shadow transition-all flex items-center gap-1.5"
               >
                 <Boxes className="w-4 h-4" />
-                <span>ENROLL STORE MGR</span>
+                <span>+ Add Store Manager</span>
               </button>
             )}
           </div>
@@ -307,19 +305,19 @@ export const UserManagementPage: React.FC = () => {
       {/* Metrics Bar */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <div className="p-4 bg-white rounded-xl border-2 border-zinc-200 shadow-sm">
-          <div className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Total Personnel</div>
+          <div className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Total Users</div>
           <div className="text-2xl font-black text-zinc-950 mt-1">{usersList.length}</div>
         </div>
         <div className="p-4 bg-white rounded-xl border-2 border-amber-300 bg-amber-50/20 shadow-sm">
-          <div className="text-xs font-bold text-amber-800 uppercase tracking-wider">Field Technicians</div>
+          <div className="text-xs font-bold text-amber-800 uppercase tracking-wider">Technicians</div>
           <div className="text-2xl font-black text-black mt-1">{techCount}</div>
         </div>
         <div className="p-4 bg-white rounded-xl border-2 border-blue-200 bg-blue-50/20 shadow-sm">
-          <div className="text-xs font-bold text-blue-700 uppercase tracking-wider">Machine Operators</div>
+          <div className="text-xs font-bold text-blue-700 uppercase tracking-wider">Operators</div>
           <div className="text-2xl font-black text-zinc-950 mt-1">{oprCount}</div>
         </div>
         <div className="p-4 bg-white rounded-xl border-2 border-purple-200 bg-purple-50/20 shadow-sm">
-          <div className="text-xs font-bold text-purple-800 uppercase tracking-wider">Maintenance Managers</div>
+          <div className="text-xs font-bold text-purple-800 uppercase tracking-wider">Managers</div>
           <div className="text-2xl font-black text-zinc-950 mt-1">{mgrCount}</div>
         </div>
         <div className="p-4 bg-white rounded-xl border-2 border-emerald-300 bg-emerald-50/20 shadow-sm">

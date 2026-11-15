@@ -151,12 +151,12 @@ export const AdminDashboard: React.FC = () => {
   return (
     <div className="space-y-6 min-h-full pb-8">
       {/* =========================================================================
-          TOP HEADER: Admin Governance Dashboard
+          TOP HEADER: Admin Dashboard
           ========================================================================= */}
       <DashboardHeader
-        title="Admin Governance Dashboard"
-        subtitle="Enterprise platform infrastructure, multi-plant security & user access governance"
-        badge="ROOT AUTHORITY"
+        title="Admin Dashboard"
+        subtitle="Manage users, plants, machines, and activity across JCB plants"
+        badge="Admin"
         plantOptions={plantOptions}
         selectedPlant={plant}
         onPlantChange={setPlant}
@@ -169,7 +169,7 @@ export const AdminDashboard: React.FC = () => {
               className="flex items-center gap-1.5 px-3 py-2 bg-jcb-yellow hover:bg-amber-400 text-black rounded-xl text-xs font-bold border border-amber-500 shadow-2xs transition"
             >
               <Users className="w-3.5 h-3.5" />
-              <span>Manage Users</span>
+              <span>Users & Personnel</span>
             </Link>
             <button
               onClick={fetchData}
@@ -200,111 +200,74 @@ export const AdminDashboard: React.FC = () => {
       )}
 
       {/* =========================================================================
-          ROW 1: 5 TOP KPI METRIC CARDS (Real DB Values)
+          ROW 1: 4 TOP KPI METRIC CARDS (Real DB Values)
           ========================================================================= */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-5">
-        {/* Card 1: Enrolled Personnel */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+        {/* Card 1: Total Users */}
         <TopKPICard
           icon={Users}
           iconBgColor="bg-amber-100"
           iconColor="text-amber-800"
-          label="Enrolled Personnel"
+          label="Total Users"
           value={totalUsers}
-          subtitle={`${techCount} Techs • ${operatorCount} Operators`}
+          subtitle={`${techCount} Techs • ${operatorCount} Operators • ${managerCount} Mgrs`}
         />
 
-        {/* Card 2: Operating Plants */}
+        {/* Card 2: Active Plants */}
         <TopKPICard
           icon={Building2}
           iconBgColor="bg-blue-100"
           iconColor="text-blue-800"
-          label="Operating Plants"
+          label="Active Plants"
           value={plantsCount}
           subtitle={`${kpiStats?.total_shops ?? hierarchy?.shops?.length ?? 0} Active Shops`}
         />
 
-        {/* Card 3: Monitored Machines */}
+        {/* Card 3: Total Machines */}
         <TopKPICard
           icon={Cpu}
           iconBgColor="bg-zinc-100"
           iconColor="text-zinc-800"
-          label="Monitored Machines"
+          label="Total Machines"
           value={totalAssets}
-          subtitle={`${kpiStats?.running_machines ?? 0} Running • ${kpiStats?.breakdown_machines ?? 0} Breakdown`}
+          subtitle={`${kpiStats?.running_machines ?? 0} Running • ${kpiStats?.breakdown_machines ?? 0} Stopped`}
         />
 
-        {/* Card 4: Audit Security Logs */}
+        {/* Card 4: Activity Records */}
         <TopKPICard
           icon={ShieldCheck}
           iconBgColor="bg-emerald-100"
           iconColor="text-emerald-800"
-          label="Audit Security Logs"
+          label="Activity Records"
           value={totalAuditCount}
-          subtitle="Regulatory Ledger"
-        />
-
-        {/* Card 5: Fleet Availability */}
-        <TopKPICard
-          icon={Activity}
-          iconBgColor="bg-amber-100"
-          iconColor="text-amber-800"
-          label="Fleet Availability"
-          value={totalAssets > 0 ? `${availabilityPercent}%` : 'N/A'}
-          subtitle={totalAssets > 0 ? 'Operational Ratio' : 'No Assets Monitored'}
+          subtitle="System Audit Trail"
         />
       </div>
 
       {/* =========================================================================
-          ROW 2: 3 MIDDLE ANALYTICS CARDS (Real Backend Metrics)
+          ROW 2: 2 ANALYTICS CARDS (User Distribution & Activity Trend)
           ========================================================================= */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Card 1: User Distribution by Role Donut */}
         <MachineStatusDonut
           title="User Role Distribution"
           totalLabel="Users"
           totalCount={totalUsers}
           segments={userSegments}
-          emptyMessage="No enrolled personnel registered in system"
+          emptyMessage="No personnel registered in system"
           loading={loading}
         />
 
-        {/* Card 2: Security & Audit Trend Spline */}
+        {/* Card 2: Security & Activity Trend */}
         <MaintenanceTrendChart
-          title="Security & Governance Trend"
-          series1Name="Auth Events"
-          series2Name="Audit Logs"
+          title="System Activity Trend"
+          series1Name="User Actions"
+          series2Name="System Logs"
           series1Color="#18181B"
           series2Color="#EAB308"
           data={govTrend}
           loading={loading}
-          emptyMessage="No audit log events recorded for this period"
-        />
-
-        {/* Card 3: Real Operational Downtime & MTTR Gauge */}
-        <DowntimeAnalysisCard
-          title="Downtime & Repair Reliability"
-          rateValue={`${downtimeRatePercent}%`}
-          rateLabel="Breakdown Rate"
-          percentage={downtimeRatePercent}
-          gaugeColor="#F59E0B"
-          loading={loading}
-          emptyMessage="Zero downtime recorded"
-          metrics={[
-            {
-              icon: Activity,
-              label: 'Total Downtime',
-              value: `${totalDowntimeHours} Hrs`,
-              change: totalDowntimeHours > 0 ? 'Logged' : 'Zero Halts',
-              isPositiveChange: totalDowntimeHours === 0,
-            },
-            {
-              icon: Activity,
-              label: 'Avg. MTTR',
-              value: `${avgMTTRMinutes} Mins`,
-              change: avgMTTRMinutes > 0 ? 'Mean Repair' : 'No Outages',
-              isPositiveChange: true,
-            },
-          ]}
+          emptyMessage="No activity events recorded for this period"
         />
       </div>
 
@@ -312,20 +275,20 @@ export const AdminDashboard: React.FC = () => {
           ROW 3: BOTTOM ROW 2-COLUMN SPLIT (~60% Left, ~40% Right)
           ========================================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-        {/* Left Column (~60%): Recent Security & Audit Logs from Database */}
+        {/* Left Column (~60%): Recent Activity Records from Database */}
         <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between pb-4 border-b border-slate-100">
             <div className="flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-amber-500" />
               <h3 className="text-xs sm:text-sm font-bold text-zinc-900 tracking-tight">
-                Recent Security & Governance Audit Logs
+                Recent Activity Records
               </h3>
             </div>
             <Link
               to="/audit"
               className="text-xs font-bold text-amber-600 hover:text-amber-700 flex items-center gap-1 transition"
             >
-              <span>View Audit Trail</span>
+              <span>View Activity Log</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </Link>
           </div>
@@ -335,10 +298,10 @@ export const AdminDashboard: React.FC = () => {
               <thead>
                 <tr className="border-b border-slate-100 text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
                   <th className="py-2.5 px-3">Log ID</th>
-                  <th className="py-2.5 px-3">Actor</th>
+                  <th className="py-2.5 px-3">User</th>
                   <th className="py-2.5 px-3">Action</th>
-                  <th className="py-2.5 px-3">Entity</th>
-                  <th className="py-2.5 px-3">Timestamp</th>
+                  <th className="py-2.5 px-3">Changed Item</th>
+                  <th className="py-2.5 px-3">Date & Time</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs text-zinc-800">
@@ -393,20 +356,20 @@ export const AdminDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Right Column (~40%): Manufacturing Plant Hierarchy from Database */}
+        {/* Right Column (~40%): Active Plants & Shops from Database */}
         <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between pb-4 border-b border-slate-100">
             <div className="flex items-center gap-2">
               <Building2 className="w-4 h-4 text-amber-500" />
               <h3 className="text-xs sm:text-sm font-bold text-zinc-900 tracking-tight">
-                Manufacturing Plant Network
+                Active Plants & Shops
               </h3>
             </div>
             <Link
               to="/machines"
               className="text-xs font-bold text-amber-600 hover:text-amber-700 flex items-center gap-1 transition"
             >
-              <span>View Assets</span>
+              <span>View Machines</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </Link>
           </div>
@@ -415,7 +378,7 @@ export const AdminDashboard: React.FC = () => {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-100 text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
-                  <th className="py-2.5 px-3">Plant Facility</th>
+                  <th className="py-2.5 px-3">Plant Location</th>
                   <th className="py-2.5 px-3">Shops</th>
                   <th className="py-2.5 px-3">Machines</th>
                   <th className="py-2.5 px-3">Status</th>

@@ -723,7 +723,7 @@ export const TriageQueuePage: React.FC = () => {
           <div className="flex flex-wrap items-center gap-3">
             <h2 className="text-xl font-black text-zinc-950 tracking-tight uppercase flex items-center gap-2">
               <ShieldAlert className="w-5 h-5 text-red-600" />
-              <span>Breakdown Triage & Dispatch Console</span>
+              <span>Problem Reports & Job Assignment</span>
             </h2>
             {isManagerOrAdmin ? (
               <span className="bg-jcb-yellow text-black text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-amber-500 shadow-xs">
@@ -736,7 +736,7 @@ export const TriageQueuePage: React.FC = () => {
             )}
           </div>
           <p className="text-xs text-zinc-500 font-medium mt-1">
-            Review shop floor stoppage complaints, acknowledge alerts, update priority, and convert to allocated Work Orders.
+            Review reported machine problems, assign repair jobs to technicians, and track active repairs.
           </p>
         </div>
 
@@ -754,7 +754,7 @@ export const TriageQueuePage: React.FC = () => {
             className="flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-black transition shadow-xs uppercase tracking-wider cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>Report Fault</span>
+            <span>Report a Problem</span>
           </button>
 
           <button
@@ -811,54 +811,54 @@ export const TriageQueuePage: React.FC = () => {
         </div>
       )}
 
-      {/* KPI Cards Row (Clearly labeled as Current Page Summary) */}
+      {/* KPI Cards Row (Clearly labeled summary) */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-2xl border-2 border-slate-200 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between text-zinc-500 text-[11px] font-black uppercase tracking-wider">
-            <span>New Unread</span>
+            <span>New Reports</span>
             <AlertCircle className="w-4 h-4 text-blue-600" />
           </div>
           <div className="mt-2">
             <span className="text-3xl font-black text-blue-800">{pageNewCount}</span>
-            <span className="text-xs text-zinc-500 ml-1 font-bold">tickets</span>
+            <span className="text-xs text-zinc-500 ml-1 font-bold">reports</span>
           </div>
-          <div className="text-[10px] text-blue-700 font-bold mt-1">On Current Page ({pagination.total} total)</div>
+          <div className="text-[10px] text-blue-700 font-bold mt-1">Waiting for Review</div>
         </div>
 
         <div className="bg-white p-5 rounded-2xl border-2 border-slate-200 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between text-zinc-500 text-[11px] font-black uppercase tracking-wider">
-            <span>In Triage / Review</span>
+            <span>In Review</span>
             <Clock className="w-4 h-4 text-amber-600" />
           </div>
           <div className="mt-2">
             <span className="text-3xl font-black text-amber-700">{pagePendingCount}</span>
-            <span className="text-xs text-zinc-500 ml-1 font-bold">tickets</span>
+            <span className="text-xs text-zinc-500 ml-1 font-bold">reports</span>
           </div>
-          <div className="text-[10px] text-amber-700 font-bold mt-1">Ready for Tech Dispatch</div>
+          <div className="text-[10px] text-amber-700 font-bold mt-1">Ready to Assign</div>
         </div>
 
         <div className="bg-white p-5 rounded-2xl border-2 border-slate-200 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between text-zinc-500 text-[11px] font-black uppercase tracking-wider">
-            <span>Converted to WO</span>
+            <span>Repair Jobs Created</span>
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
           </div>
           <div className="mt-2">
             <span className="text-3xl font-black text-emerald-700">{pageConvertedCount}</span>
-            <span className="text-xs text-zinc-500 ml-1 font-bold">orders</span>
+            <span className="text-xs text-zinc-500 ml-1 font-bold">jobs</span>
           </div>
-          <div className="text-[10px] text-emerald-700 font-bold mt-1">Active Maintenance WOs</div>
+          <div className="text-[10px] text-emerald-700 font-bold mt-1">Active Repairs</div>
         </div>
 
         <div className="bg-white p-5 rounded-2xl border-2 border-slate-200 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between text-zinc-500 text-[11px] font-black uppercase tracking-wider">
-            <span>Critical P0 Stoppages</span>
+            <span>Urgent Stoppages</span>
             <ShieldAlert className="w-4 h-4 text-red-600" />
           </div>
           <div className="mt-2">
             <span className="text-3xl font-black text-red-700">{pageCriticalCount}</span>
             <span className="text-xs text-zinc-500 ml-1 font-bold">critical</span>
           </div>
-          <div className="text-[10px] text-red-700 font-bold mt-1">Immediate SLA Clock Active</div>
+          <div className="text-[10px] text-red-700 font-bold mt-1">Immediate Action Needed</div>
         </div>
       </div>
 
@@ -1055,14 +1055,14 @@ export const TriageQueuePage: React.FC = () => {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-[10px] uppercase font-black text-zinc-500 tracking-wider">
-                  <th className="py-3.5 px-4">Ticket #</th>
-                  <th className="py-3.5 px-4">Machine Asset</th>
-                  <th className="py-3.5 px-4">Problem / Symptoms</th>
-                  <th className="py-3.5 px-4">Priority</th>
-                  <th className="py-3.5 px-4">Technician Assignment</th>
-                  <th className="py-3.5 px-4">Reported By / Shift</th>
+                  <th className="py-3.5 px-4">Report #</th>
+                  <th className="py-3.5 px-4">Machine</th>
+                  <th className="py-3.5 px-4">Problem Description</th>
+                  <th className="py-3.5 px-4">Urgency</th>
+                  <th className="py-3.5 px-4">Assigned Technician</th>
+                  <th className="py-3.5 px-4">Reported By</th>
                   <th className="py-3.5 px-4">Status</th>
-                  <th className="py-3.5 px-4 text-right">Triage Actions</th>
+                  <th className="py-3.5 px-4 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs">
@@ -1625,7 +1625,7 @@ export const TriageQueuePage: React.FC = () => {
               <div className="flex items-center gap-2">
                 <UserCheck className="w-5 h-5 text-jcb-yellow" />
                 <h3 className="text-sm font-black uppercase tracking-wider">
-                  Convert Complaint & Dispatch Work Order
+                  Assign Repair Job to Technician
                 </h3>
               </div>
               <button onClick={() => setAssignComplaint(null)} className="text-zinc-400 hover:text-white">
@@ -1642,14 +1642,14 @@ export const TriageQueuePage: React.FC = () => {
               )}
 
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-0.5">
-                <span className="font-mono font-bold text-zinc-400 text-[10px]">CMP: {assignComplaint.complaint_number}</span>
+                <span className="font-mono font-bold text-zinc-400 text-[10px]">Problem Report: {assignComplaint.complaint_number}</span>
                 <p className="font-black text-zinc-900">{assignComplaint.problem_title}</p>
                 <p className="text-zinc-500 font-medium">Machine: {assignComplaint.machine_code} ({assignComplaint.machine_name})</p>
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1">
-                  Assign Maintenance Technician *
+                  Assign Technician *
                 </label>
                 {technicians.length === 0 ? (
                   <div className="p-2.5 bg-red-50 text-red-800 rounded-lg text-xs font-bold border border-red-200">
@@ -1673,15 +1673,15 @@ export const TriageQueuePage: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1">
-                  Target Resolution SLA Duration *
+                  Estimated Fix Time *
                 </label>
                 <select
                   value={assignForm.sla_hours}
                   onChange={(e) => setAssignForm({ ...assignForm, sla_hours: Number(e.target.value) })}
                   className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
                 >
-                  <option value={1}>1 Hour (Critical Line Stop SLA)</option>
-                  <option value={2}>2 Hours (Standard Breakdown SLA)</option>
+                  <option value={1}>1 Hour (Critical Line Stop)</option>
+                  <option value={2}>2 Hours (Standard Problem)</option>
                   <option value={4}>4 Hours (Complex Electrical / Hydraulic Repair)</option>
                   <option value={8}>8 Hours (Full Shift Diagnostic)</option>
                   <option value={24}>24 Hours (Major Overhaul)</option>
@@ -1690,7 +1690,7 @@ export const TriageQueuePage: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1">
-                  Work Instructions & Safety SOP
+                  Repair Instructions
                 </label>
                 <textarea
                   rows={2}
@@ -1709,7 +1709,7 @@ export const TriageQueuePage: React.FC = () => {
                   className="w-4 h-4 text-jcb-yellow rounded border-slate-300 focus:ring-amber-400"
                 />
                 <label htmlFor="majorBreakdown" className="text-xs font-bold text-amber-950">
-                  Tag as Major Breakdown (Line Stoppage / Bottleneck)
+                  Major Breakdown (Entire Line Stopped)
                 </label>
               </div>
 
@@ -1727,7 +1727,7 @@ export const TriageQueuePage: React.FC = () => {
                   disabled={actionLoading || technicians.length === 0 || !assignForm.technician_id}
                   className="px-5 py-2 bg-jcb-yellow hover:bg-jcb-yellowDark text-black rounded-xl text-xs font-black uppercase tracking-wider shadow disabled:opacity-50"
                 >
-                  {actionLoading ? 'Allocating...' : 'Authorize & Dispatch WO'}
+                  {actionLoading ? 'Assigning...' : 'Create Repair Job & Assign'}
                 </button>
               </div>
             </form>

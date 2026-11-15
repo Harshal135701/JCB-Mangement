@@ -1221,14 +1221,14 @@ export const ProcurementPage: React.FC = () => {
               JCB
             </div>
             <h1 className="text-xl sm:text-2xl font-black text-zinc-950 tracking-tight">
-              PROCUREMENT &amp; GOODS RECEIPT (GRN) CENTER
+              BUYING &amp; RECEIVING (PR / PO / GRN)
             </h1>
             <span className="bg-zinc-900 text-jcb-yellow text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-              CMMS MODULE 4
+              Buying Hub
             </span>
           </div>
           <p className="text-xs text-zinc-500 font-medium mt-1">
-            End-to-end industrial spare parts requisitioning, PO generation, and Goods Receipt Note (GRN) quality inspection.
+            Manage requests to buy spare parts, purchase orders, and receive materials (GRN).
           </p>
         </div>
 
@@ -1269,7 +1269,7 @@ export const ProcurementPage: React.FC = () => {
             className="bg-jcb-yellow hover:bg-jcb-yellowDark text-black text-xs font-black px-4 py-2.5 rounded-xl shadow transition-all flex items-center gap-2 border border-amber-500 hover:shadow-md cursor-pointer"
           >
             <Plus className="w-4 h-4 stroke-[3]" />
-            <span>RAISE PURCHASE REQUISITION</span>
+            <span>+ Request to Buy Parts</span>
           </button>
         </div>
       </div>
@@ -1344,7 +1344,7 @@ export const ProcurementPage: React.FC = () => {
             }`}
         >
           <ShoppingCart className="w-4 h-4" />
-          <span>Requisition Queue</span>
+          <span>Part Requests (PRs)</span>
           {totalPRCount > 0 && (
             <span
               className={`px-2 py-0.5 rounded-full text-[10px] ${activeTab === 'prs' ? 'bg-jcb-yellow text-black' : 'bg-zinc-200 text-zinc-700'
@@ -1365,7 +1365,7 @@ export const ProcurementPage: React.FC = () => {
                 }`}
             >
               <FileText className="w-4 h-4" />
-              <span>Purchase Orders (POs)</span>
+              <span>Orders to Suppliers (POs)</span>
               <span
                 className={`px-2 py-0.5 rounded-full text-[10px] ${activeTab === 'pos' ? 'bg-blue-400 text-black' : 'bg-zinc-200 text-zinc-700'
                   }`}
@@ -1382,7 +1382,7 @@ export const ProcurementPage: React.FC = () => {
                 }`}
             >
               <Building className="w-4 h-4" />
-              <span>Vendor Directory</span>
+              <span>Suppliers List</span>
             </button>
 
             {(dashboardData?.summary?.overdue_pos ?? 0) > 0 && (

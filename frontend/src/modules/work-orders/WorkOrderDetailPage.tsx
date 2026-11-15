@@ -487,10 +487,10 @@ export const WorkOrderDetailPage: React.FC = () => {
   const milestoneSteps = [
     { key: 'assigned', label: '1. Assigned', icon: UserCheck },
     { key: 'accepted', label: '2. Accepted', icon: Check },
-    { key: 'diagnosis', label: '3. Arrival & Diagnosis', icon: Activity },
+    { key: 'diagnosis', label: '3. Arrival & Check', icon: Activity },
     { key: 'in_progress', label: '4. Repair In Progress', icon: Wrench },
-    { key: 'verification', label: '5. Quality Verification', icon: ShieldCheck },
-    { key: 'closed', label: '6. Restored & Closed', icon: CheckCircle2 },
+    { key: 'verification', label: '5. Quality Check', icon: ShieldCheck },
+    { key: 'closed', label: '6. Finished & Closed', icon: CheckCircle2 },
   ];
 
   const getStepState = (stepKey: string) => {
@@ -763,7 +763,7 @@ export const WorkOrderDetailPage: React.FC = () => {
                       disabled={actionLoading}
                       className="px-4 py-2 bg-jcb-yellow hover:bg-jcb-yellowDark text-black font-black text-xs uppercase tracking-wider rounded-xl transition shadow border border-amber-500 cursor-pointer disabled:opacity-50"
                     >
-                      Accept Job (Acknowledge)
+                      Accept Job
                     </button>
                     <button
                       type="button"
@@ -779,7 +779,7 @@ export const WorkOrderDetailPage: React.FC = () => {
                       disabled={actionLoading}
                       className="px-3.5 py-2 bg-red-100 hover:bg-red-200 text-red-800 font-bold text-xs uppercase tracking-wider rounded-xl transition border border-red-300 cursor-pointer disabled:opacity-50"
                     >
-                      Decline
+                      Cannot Take Job
                     </button>
                   </>
                 )}
@@ -793,7 +793,7 @@ export const WorkOrderDetailPage: React.FC = () => {
                       disabled={actionLoading}
                       className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition shadow cursor-pointer disabled:opacity-50"
                     >
-                      Mark Arrived on Site
+                      Arrived at Machine
                     </button>
                     <button
                       type="button"
@@ -801,7 +801,7 @@ export const WorkOrderDetailPage: React.FC = () => {
                       disabled={actionLoading}
                       className="px-4 py-2 bg-jcb-yellow hover:bg-jcb-yellowDark text-black font-black text-xs uppercase tracking-wider rounded-xl transition shadow border border-amber-500 cursor-pointer disabled:opacity-50"
                     >
-                      Start Work
+                      Start Repair
                     </button>
                   </>
                 )}
@@ -815,7 +815,7 @@ export const WorkOrderDetailPage: React.FC = () => {
                       disabled={actionLoading}
                       className="px-4 py-2 bg-jcb-yellow hover:bg-jcb-yellowDark text-black font-black text-xs uppercase tracking-wider rounded-xl transition shadow border border-amber-500 cursor-pointer disabled:opacity-50"
                     >
-                      Start Active Repair
+                      Start Repair
                     </button>
                     <button
                       type="button"
@@ -823,7 +823,7 @@ export const WorkOrderDetailPage: React.FC = () => {
                       disabled={actionLoading}
                       className="px-3.5 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold text-xs uppercase rounded-xl border border-zinc-300 cursor-pointer disabled:opacity-50"
                     >
-                      Log Intermediate Findings
+                      Notes / Findings
                     </button>
                   </>
                 )}
@@ -838,7 +838,7 @@ export const WorkOrderDetailPage: React.FC = () => {
                       className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs uppercase rounded-xl transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
                     >
                       <Pause className="w-3.5 h-3.5" />
-                      <span>Pause (Waiting Spares)</span>
+                      <span>Pause (Waiting for Parts)</span>
                     </button>
                     <button
                       type="button"
@@ -846,7 +846,7 @@ export const WorkOrderDetailPage: React.FC = () => {
                       disabled={actionLoading}
                       className="px-3.5 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold text-xs uppercase rounded-xl border border-zinc-300 cursor-pointer disabled:opacity-50"
                     >
-                      Progress Notes
+                      Notes
                     </button>
                     <button
                       type="button"
@@ -855,7 +855,7 @@ export const WorkOrderDetailPage: React.FC = () => {
                       className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition shadow cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
                     >
                       <CheckCircle2 className="w-4 h-4" />
-                      <span>Complete Repair & Submit</span>
+                      <span>Finish Job & Submit</span>
                     </button>
                   </>
                 )}
@@ -869,7 +869,7 @@ export const WorkOrderDetailPage: React.FC = () => {
                     className="px-5 py-2 bg-jcb-yellow hover:bg-jcb-yellowDark text-black font-black text-xs uppercase tracking-wider rounded-xl transition shadow border border-amber-500 cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
                   >
                     <Play className="w-4 h-4" />
-                    <span>Resume Work</span>
+                    <span>Resume Repair</span>
                   </button>
                 )}
 
@@ -882,7 +882,7 @@ export const WorkOrderDetailPage: React.FC = () => {
                     className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-black font-black text-xs uppercase tracking-wider rounded-xl transition shadow border border-amber-600 cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
                   >
                     <RotateCcw className="w-4 h-4" />
-                    <span>Start Work</span>
+                    <span>Start Repair</span>
                   </button>
                 )}
               </>

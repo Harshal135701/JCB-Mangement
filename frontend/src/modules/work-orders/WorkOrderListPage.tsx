@@ -162,14 +162,14 @@ export const WorkOrderListPage: React.FC = () => {
         <div>
           <div className="flex items-center gap-3">
             <h2 className="text-xl font-black text-zinc-950 tracking-tight uppercase">
-              Maintenance Work Orders Master
+              Repair Jobs Master
             </h2>
             <span className="bg-jcb-yellow text-black text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-amber-500 shadow-xs">
               {user?.role === 'technician' ? 'Technician Queue' : 'Plant Operations'}
             </span>
           </div>
           <p className="text-xs text-zinc-500 font-medium mt-1">
-            Track end-to-end execution of corrective breakdown jobs and scheduled maintenance orders across shop bays.
+            Track repair jobs and regular maintenance orders across machines and shops.
           </p>
         </div>
 
@@ -180,7 +180,7 @@ export const WorkOrderListPage: React.FC = () => {
               className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-black transition shadow-xs uppercase tracking-wider"
             >
               <AlertTriangle className="w-3.5 h-3.5" />
-              <span>Breakdown Triage</span>
+              <span>Problem Reports</span>
             </Link>
           )}
 
@@ -233,15 +233,15 @@ export const WorkOrderListPage: React.FC = () => {
               <option value="assigned">Assigned</option>
               <option value="accepted">Accepted</option>
               <option value="scheduled">Scheduled</option>
-              <option value="under_diagnosis">Under Diagnosis</option>
+              <option value="under_diagnosis">Checking Problem</option>
               <option value="in_progress">In Progress</option>
               <option value="waiting_for_parts">Waiting for Parts</option>
               <option value="waiting_for_approval">Waiting for Approval</option>
               <option value="on_hold">On Hold</option>
-              <option value="submitted_verification">Submitted for Verification</option>
+              <option value="submitted_verification">Waiting for Check</option>
               <option value="rework_required">Rework Required</option>
-              <option value="completed">Completed</option>
-              <option value="verified_closed">Verified & Closed</option>
+              <option value="completed">Finished</option>
+              <option value="verified_closed">Finished & Checked</option>
               <option value="reopened">Reopened</option>
             </select>
 
@@ -251,7 +251,7 @@ export const WorkOrderListPage: React.FC = () => {
               onChange={(e) => handlePriorityChange(e.target.value)}
               className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-zinc-800 focus:outline-none focus:border-jcb-yellow"
             >
-              <option value="">All Priorities</option>
+              <option value="">All Urgencies</option>
               <option value="critical">Critical (Line Stop)</option>
               <option value="high">High</option>
               <option value="medium">Medium</option>
@@ -265,10 +265,10 @@ export const WorkOrderListPage: React.FC = () => {
               className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-zinc-800 focus:outline-none focus:border-jcb-yellow"
             >
               <option value="created_at">Sort: Created Date</option>
-              <option value="wo_number">Sort: WO Number</option>
-              <option value="priority">Sort: Priority</option>
+              <option value="wo_number">Sort: Job #</option>
+              <option value="priority">Sort: Urgency</option>
               <option value="status">Sort: Status</option>
-              <option value="sla_deadline">Sort: SLA Deadline</option>
+              <option value="sla_deadline">Sort: Due Date</option>
             </select>
 
             {/* Sort Order Toggle */}
@@ -333,14 +333,14 @@ export const WorkOrderListPage: React.FC = () => {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-[10px] uppercase font-black text-zinc-500 tracking-wider">
-                  <th className="py-3.5 px-4">WO Number</th>
-                  <th className="py-3.5 px-4">Machine Asset</th>
-                  <th className="py-3.5 px-4">Problem / Instructions</th>
-                  <th className="py-3.5 px-4">Technician</th>
-                  <th className="py-3.5 px-4">Priority</th>
+                  <th className="py-3.5 px-4">Job #</th>
+                  <th className="py-3.5 px-4">Machine</th>
+                  <th className="py-3.5 px-4">Problem / Task</th>
+                  <th className="py-3.5 px-4">Assigned Technician</th>
+                  <th className="py-3.5 px-4">Urgency</th>
                   <th className="py-3.5 px-4">Status</th>
-                  <th className="py-3.5 px-4">SLA Deadline</th>
-                  <th className="py-3.5 px-4 text-right">Actions</th>
+                  <th className="py-3.5 px-4">Due Date</th>
+                  <th className="py-3.5 px-4 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs">

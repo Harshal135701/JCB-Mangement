@@ -313,25 +313,25 @@ export const DowntimeAnalyticsPage: React.FC = () => {
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-xl font-black text-zinc-950 tracking-tight uppercase">
-              Downtime, MTTR & Pareto Analytics
+              Machine Stopped Time &amp; Repair Analytics
             </h1>
             <span className="bg-jcb-yellow text-black text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-amber-500 shadow-sm">
-              Reliability Engineering
+              Machine Reliability
             </span>
             {activeStoppages.length > 0 ? (
               <span className="flex items-center gap-1.5 bg-red-100 text-red-800 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-red-300 animate-pulse">
                 <span className="w-2 h-2 rounded-full bg-red-600 animate-ping" />
-                {activeStoppages.length} Active Breakdown{activeStoppages.length > 1 ? 's' : ''}
+                {activeStoppages.length} Machine Stopped Now
               </span>
             ) : (
               <span className="flex items-center gap-1.5 bg-emerald-100 text-emerald-800 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-emerald-300">
                 <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                All Lines Nominal
+                All Machines Running
               </span>
             )}
           </div>
           <p className="text-xs text-zinc-500 font-medium mt-1">
-            Plant-wide machine stoppage analysis, Mean Time To Repair (MTTR), maintenance response delay, and 80/20 Pareto distribution.
+            Machine stoppage analysis, Average Repair Time (MTTR), response time, and most affected machines.
           </p>
         </div>
 
@@ -454,7 +454,7 @@ export const DowntimeAnalyticsPage: React.FC = () => {
           <div>
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-black uppercase text-zinc-500 tracking-wider">
-                Total Downtime
+                Total Stopped Time
               </span>
               <Clock className="w-4 h-4 text-red-600" />
             </div>
@@ -472,7 +472,7 @@ export const DowntimeAnalyticsPage: React.FC = () => {
           <div>
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-black uppercase text-zinc-500 tracking-wider">
-                Stoppage Events
+                Problem Events
               </span>
               <AlertTriangle className="w-4 h-4 text-amber-600" />
             </div>
@@ -490,7 +490,7 @@ export const DowntimeAnalyticsPage: React.FC = () => {
           <div>
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-black uppercase text-zinc-500 tracking-wider">
-                MTTR (Active Wrench)
+                Average Fix Time (Wrench Time)
               </span>
               <Wrench className="w-4 h-4 text-blue-600" />
             </div>
@@ -508,7 +508,7 @@ export const DowntimeAnalyticsPage: React.FC = () => {
           <div>
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-black uppercase text-zinc-500 tracking-wider">
-                Response Delay
+                Average Arrival Delay
               </span>
               <Activity className="w-4 h-4 text-amber-600" />
             </div>
@@ -517,7 +517,7 @@ export const DowntimeAnalyticsPage: React.FC = () => {
             </div>
           </div>
           <div className="text-[10px] text-zinc-500 font-medium mt-2 pt-2 border-t border-zinc-100">
-            Complaint to technician arrival
+            Problem report to technician arrival
           </div>
         </div>
 
@@ -526,7 +526,7 @@ export const DowntimeAnalyticsPage: React.FC = () => {
           <div>
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-black uppercase text-zinc-500 tracking-wider">
-                Longest Stoppage
+                Longest Machine Stop
               </span>
               <TrendingDown className="w-4 h-4 text-purple-600" />
             </div>
@@ -544,7 +544,7 @@ export const DowntimeAnalyticsPage: React.FC = () => {
           <div>
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-black uppercase text-zinc-500 tracking-wider">
-                Active Outages
+                Machines Stopped Now
               </span>
               <Zap className="w-4 h-4 text-red-500" />
             </div>

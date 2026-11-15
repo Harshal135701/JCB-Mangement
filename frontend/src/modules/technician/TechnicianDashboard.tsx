@@ -369,12 +369,12 @@ export const TechnicianDashboard: React.FC = () => {
   return (
     <div className="space-y-6 min-h-full pb-8">
       {/* =========================================================================
-          TOP HEADER: Technician Field Workbench
+          TOP HEADER: Technician Workbench
           ========================================================================= */}
       <DashboardHeader
-        title="Technician Field Workbench"
-        subtitle={`Dispatched maintenance work orders, SLA timers & parts reservation tracking • ${user?.fullName || 'Technician'}`}
-        badge="EXECUTION QUEUE"
+        title="Technician Workbench"
+        subtitle={`Assigned repair jobs, urgent problem alerts & spare parts tracking • ${user?.fullName || 'Technician'}`}
+        badge="My Work"
         plantOptions={plantOptions}
         selectedPlant={plant}
         onPlantChange={setPlant}
@@ -387,7 +387,7 @@ export const TechnicianDashboard: React.FC = () => {
               className="flex items-center gap-1.5 px-3 py-2 bg-jcb-yellow hover:bg-amber-400 text-black rounded-xl text-xs font-bold border border-amber-500 shadow-2xs transition"
             >
               <Wrench className="w-3.5 h-3.5" />
-              <span>All Work Orders</span>
+              <span>All Repair Jobs</span>
             </Link>
             <button
               onClick={fetchWorkOrders}
@@ -432,10 +432,10 @@ export const TechnicianDashboard: React.FC = () => {
             </div>
             <div>
               <span className="font-black text-sm block uppercase tracking-wide text-zinc-950">
-                {pendingAssignments.length} Breakdown Assignment(s) Awaiting Your Response
+                {pendingAssignments.length} New Repair Job(s) Waiting for Your Response
               </span>
               <span className="text-[11px] text-amber-900 font-medium">
-                You have been selected by CMMS automatic technician assignment. Review machine breakdown symptoms and accept or decline.
+                Review machine problem symptoms below and choose to accept the job or report that you cannot take it.
               </span>
             </div>
           </div>
@@ -448,45 +448,45 @@ export const TechnicianDashboard: React.FC = () => {
             }}
             className="px-4 py-2 bg-zinc-950 hover:bg-black text-white font-bold rounded-xl text-xs transition shrink-0 cursor-pointer self-start sm:self-center"
           >
-            Review Inbox
+            View Jobs Waiting
           </button>
         </div>
       )}
 
       {/* =========================================================================
-          ROW 1: 5 TOP KPI METRIC CARDS (Real Database Values)
+          ROW 1: 5 TOP KPI METRIC CARDS (Worker-Focused Everyday English)
           ========================================================================= */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-5">
-        {/* Card 1: Assigned Work Orders */}
+        {/* Card 1: My Total Jobs */}
         <TopKPICard
           icon={Wrench}
           iconBgColor="bg-amber-100"
           iconColor="text-amber-800"
-          label="Assigned Work Orders"
+          label="My Total Jobs"
           value={totalAssignedCount}
-          subtitle={`${completedCount} Completed`}
+          subtitle={`${completedCount} Finished`}
         />
 
-        {/* Card 2: Active In-Progress Repairs */}
+        {/* Card 2: Jobs in Progress */}
         <TopKPICard
           icon={Clock}
           iconBgColor="bg-blue-100"
           iconColor="text-blue-800"
-          label="Active In-Progress"
+          label="Jobs in Progress"
           value={activeCount}
-          subtitle={activeCount > 0 ? 'Under Repair' : 'Queue Clear'}
-          trend={activeCount > 0 ? 'In Progress' : 'Optimal'}
+          subtitle={activeCount > 0 ? 'Working Now' : 'Queue Clear'}
+          trend={activeCount > 0 ? 'In Progress' : 'Clear'}
           trendColor="bg-blue-50 text-blue-700 border border-blue-200"
         />
 
-        {/* Card 3: Pending Acceptance */}
+        {/* Card 3: New Jobs Waiting */}
         <TopKPICard
           icon={AlertTriangle}
           iconBgColor="bg-red-100"
           iconColor="text-red-800"
-          label="Pending Acceptance"
+          label="New Jobs Waiting"
           value={pendingCount}
-          subtitle={pendingCount > 0 ? 'Immediate Action' : 'All Accepted'}
+          subtitle={pendingCount > 0 ? 'Need Response' : 'All Accepted'}
           trend={pendingCount > 0 ? 'Action Needed' : 'Clear'}
           trendColor={
             pendingCount > 0
@@ -495,29 +495,29 @@ export const TechnicianDashboard: React.FC = () => {
           }
         />
 
-        {/* Card 4: Spare Parts Consumed */}
+        {/* Card 4: Spare Parts Used */}
         <TopKPICard
           icon={Package}
           iconBgColor="bg-purple-100"
           iconColor="text-purple-800"
-          label="Parts Consumed"
+          label="Spare Parts Used"
           value={partsConsumedCount}
-          subtitle="Linked to Orders"
+          subtitle="In Repair Jobs"
         />
 
-        {/* Card 5: On-Time SLA Rate */}
+        {/* Card 5: Finished on Time */}
         <TopKPICard
           icon={CheckCircle2}
           iconBgColor="bg-emerald-100"
           iconColor="text-emerald-800"
-          label="SLA Compliance"
+          label="Finished on Time"
           value={completedCount > 0 ? `${onTimeSlaRate}%` : 'N/A'}
-          subtitle={completedCount > 0 ? `${onTimeCompleted} of ${completedCount} On-Time` : 'No Completed Orders'}
+          subtitle={completedCount > 0 ? `${onTimeCompleted} of ${completedCount} on schedule` : 'No Completed Jobs'}
         />
       </div>
 
       {/* =========================================================================
-          BREAKDOWN ASSIGNMENT INBOX: Incoming Automatic Breakdown Assignments
+          BREAKDOWN ASSIGNMENT INBOX: Incoming Job Assignments
           ========================================================================= */}
       <div id="assignment-inbox-section" className="bg-white rounded-2xl border-2 border-zinc-200 shadow-sm overflow-hidden">
         {/* Inbox Header */}
@@ -529,7 +529,7 @@ export const TechnicianDashboard: React.FC = () => {
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-sm sm:text-base font-black uppercase tracking-wider text-zinc-900">
-                  Breakdown Assignment Inbox
+                  New Job Assignments
                 </h3>
                 {pendingAssignments.length > 0 && (
                   <span className="px-2 py-0.5 bg-red-600 text-white text-[10px] font-black uppercase rounded-full animate-pulse">
@@ -538,7 +538,7 @@ export const TechnicianDashboard: React.FC = () => {
                 )}
               </div>
               <p className="text-[11px] text-zinc-500">
-                Incoming machine breakdowns allocated via CMMS automatic technician assignment
+                Incoming machine problems assigned to you
               </p>
             </div>
           </div>
@@ -554,7 +554,7 @@ export const TechnicianDashboard: React.FC = () => {
                 }`}
             >
               <Clock className="w-3.5 h-3.5" />
-              <span>Pending ({pendingAssignments.length})</span>
+              <span>Waiting for You ({pendingAssignments.length})</span>
             </button>
             <button
               type="button"
@@ -565,7 +565,7 @@ export const TechnicianDashboard: React.FC = () => {
                 }`}
             >
               <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>Accepted ({acceptedAssignments.length})</span>
+              <span>Accepted by You ({acceptedAssignments.length})</span>
             </button>
           </div>
         </div>
@@ -604,14 +604,14 @@ export const TechnicianDashboard: React.FC = () => {
           {loadingAssignments ? (
             <div className="py-12 text-center text-xs text-zinc-400 font-bold flex flex-col items-center gap-2">
               <RefreshCw className="w-5 h-5 animate-spin text-amber-500" />
-              <span>Loading breakdown assignments...</span>
+              <span>Loading job assignments...</span>
             </div>
           ) : assignmentTab === 'pending' ? (
             pendingAssignments.length === 0 ? (
               <div className="py-10 text-center text-zinc-400 space-y-1">
                 <CheckCircle2 className="w-8 h-8 mx-auto text-emerald-500" />
-                <p className="font-bold text-zinc-700 text-sm">No Pending Breakdown Assignments</p>
-                <p className="text-xs text-zinc-400">All assigned equipment breakdown tickets have been processed.</p>
+                <p className="font-bold text-zinc-700 text-sm">No Pending Job Assignments</p>
+                <p className="text-xs text-zinc-400">All assigned equipment repair jobs have been processed.</p>
               </div>
             ) : (
               <div className="space-y-3.5">
@@ -636,7 +636,7 @@ export const TechnicianDashboard: React.FC = () => {
                         </span>
                         <span className="text-[10px] font-bold text-blue-800 bg-blue-100 px-2 py-0.5 rounded flex items-center gap-1">
                           <Clock className="w-3 h-3 text-blue-600 animate-pulse" />
-                          <span>Action Required: Accept or Reject</span>
+                          <span>Action Needed: Accept or Decline</span>
                         </span>
                       </div>
 
@@ -648,14 +648,14 @@ export const TechnicianDashboard: React.FC = () => {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
                       {/* Column 1: Machine & Facility */}
                       <div className="p-3 bg-white rounded-lg border border-slate-200 space-y-1">
-                        <span className="text-[10px] font-black uppercase text-zinc-400 block">Machine Equipment</span>
+                        <span className="text-[10px] font-black uppercase text-zinc-400 block">Machine</span>
                         <p className="font-bold text-zinc-900 text-sm">{b.machine_code} - {b.machine_name}</p>
                         <p className="text-[11px] text-zinc-500">{b.shop_name || 'Shop'} • {b.plant_name || 'Plant'}</p>
                       </div>
 
                       {/* Column 2: Problem Description */}
                       <div className="p-3 bg-white rounded-lg border border-slate-200 space-y-1 md:col-span-2">
-                        <span className="text-[10px] font-black uppercase text-zinc-400 block">Problem Symptoms</span>
+                        <span className="text-[10px] font-black uppercase text-zinc-400 block">Reported Problem</span>
                         <p className="font-bold text-zinc-900">{b.problem_title}</p>
                         <p className="text-[11px] text-zinc-600 line-clamp-2">{b.description}</p>
                       </div>
@@ -675,7 +675,7 @@ export const TechnicianDashboard: React.FC = () => {
                           className="px-3.5 py-2 bg-white hover:bg-red-50 text-red-700 font-bold rounded-xl text-xs border border-red-200 transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
                         >
                           <AlertTriangle className="w-3.5 h-3.5 text-red-600" />
-                          <span>Decline / Reject</span>
+                          <span>Cannot Take Job</span>
                         </button>
                         <button
                           type="button"
@@ -684,7 +684,7 @@ export const TechnicianDashboard: React.FC = () => {
                           className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase tracking-wider rounded-xl text-xs transition cursor-pointer flex items-center gap-1.5 shadow-sm disabled:opacity-50"
                         >
                           <CheckCircle2 className="w-4 h-4" />
-                          <span>Accept Assignment</span>
+                          <span>Accept Job</span>
                         </button>
                       </div>
                     </div>
@@ -696,8 +696,8 @@ export const TechnicianDashboard: React.FC = () => {
             acceptedAssignments.length === 0 ? (
               <div className="py-10 text-center text-zinc-400 space-y-1">
                 <UserCheck className="w-8 h-8 mx-auto text-zinc-300" />
-                <p className="font-bold text-zinc-700 text-sm">No Accepted Breakdowns Pending Dispatch</p>
-                <p className="text-xs text-zinc-400">Accepted breakdowns convert to work orders upon supervisor dispatch.</p>
+                <p className="font-bold text-zinc-700 text-sm">No Accepted Jobs Pending Repair</p>
+                <p className="text-xs text-zinc-400">Accepted jobs appear in your active repair jobs list.</p>
               </div>
             ) : (
               <div className="space-y-3.5">
@@ -728,13 +728,13 @@ export const TechnicianDashboard: React.FC = () => {
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
                       <div className="p-3 bg-white rounded-lg border border-slate-200 space-y-1">
-                        <span className="text-[10px] font-black uppercase text-zinc-400 block">Machine Equipment</span>
+                        <span className="text-[10px] font-black uppercase text-zinc-400 block">Machine</span>
                         <p className="font-bold text-zinc-900">{b.machine_code} - {b.machine_name}</p>
                         <p className="text-[11px] text-zinc-500">{b.shop_name || 'Shop'} • {b.plant_name || 'Plant'}</p>
                       </div>
 
                       <div className="p-3 bg-white rounded-lg border border-slate-200 space-y-1 md:col-span-2">
-                        <span className="text-[10px] font-black uppercase text-zinc-400 block">Problem Symptoms</span>
+                        <span className="text-[10px] font-black uppercase text-zinc-400 block">Reported Problem</span>
                         <p className="font-bold text-zinc-900">{b.problem_title}</p>
                         <p className="text-[11px] text-zinc-600 line-clamp-2">{b.description}</p>
                       </div>
@@ -742,14 +742,14 @@ export const TechnicianDashboard: React.FC = () => {
 
                     <div className="flex items-center justify-between text-xs pt-1 border-t border-emerald-100/60">
                       <span className="text-[11px] text-emerald-800 font-bold">
-                        Responsibility active. Triage supervisor will dispatch work order for spare parts logging.
+                        Job accepted. You can log spare parts and start work on this machine.
                       </span>
 
                       <Link
                         to="/work-orders"
                         className="px-3.5 py-1.5 bg-zinc-900 hover:bg-black text-white rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer"
                       >
-                        <span>Check Work Orders</span>
+                        <span>Open Repair Jobs</span>
                         <ArrowRight className="w-3.5 h-3.5" />
                       </Link>
                     </div>
@@ -763,70 +763,16 @@ export const TechnicianDashboard: React.FC = () => {
 
 
       {/* =========================================================================
-          ROW 2: 3 MIDDLE ANALYTICS CARDS (Real Database Records)
-          ========================================================================= */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {/* Card 1: Work Order Type Donut */}
-        <MachineStatusDonut
-          title="Work Order Categories"
-          totalLabel="Orders"
-          totalCount={totalAssignedCount}
-          segments={categorySegments}
-          emptyMessage="No work orders dispatched to technician"
-          loading={loading}
-        />
-
-        {/* Card 2: Repair Resolution Velocity Spline */}
-        <MaintenanceTrendChart
-          title="Repair Execution Velocity"
-          series1Name="Total Volume"
-          series2Name="Active Repairs"
-          series1Color="#18181B"
-          series2Color="#EAB308"
-          data={velocityTrend}
-          loading={loading}
-          emptyMessage="No repair velocity records available"
-        />
-
-        {/* Card 3: SLA Performance & MTTR Gauge */}
-        <DowntimeAnalysisCard
-          title="SLA Compliance & MTTR"
-          rateValue={completedCount > 0 ? `${onTimeSlaRate}%` : '0%'}
-          rateLabel="On-Time SLA"
-          percentage={onTimeSlaRate}
-          gaugeColor="#10B981"
-          loading={loading}
-          emptyMessage="No completed repair records"
-          metrics={[
-            {
-              icon: Clock,
-              label: 'Average MTTR',
-              value: avgMTTRMinutes > 0 ? `${avgMTTRMinutes} Mins` : 'N/A',
-              change: avgMTTRMinutes > 0 ? 'Active Wrench' : 'No Data',
-              isPositiveChange: true,
-            },
-            {
-              icon: CheckCircle2,
-              label: 'Overdue Work Orders',
-              value: `${overdueRepairs.length} Tasks`,
-              change: overdueRepairs.length === 0 ? 'On Schedule' : 'Overdue',
-              isPositiveChange: overdueRepairs.length === 0,
-            },
-          ]}
-        />
-      </div>
-
-      {/* =========================================================================
-          ROW 3: BOTTOM ROW 2-COLUMN SPLIT (~60% Left, ~40% Right)
+          ROW 2: BOTTOM ROW 2-COLUMN SPLIT (~60% Left, ~40% Right)
           ========================================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-        {/* Left Column (~60%): My Dispatched Work Orders from Database */}
+        {/* Left Column (~60%): My Assigned Repair Jobs from Database */}
         <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between pb-4 border-b border-slate-100">
             <div className="flex items-center gap-2">
               <Wrench className="w-4 h-4 text-amber-500" />
               <h3 className="text-xs sm:text-sm font-bold text-zinc-900 tracking-tight">
-                My Dispatched Work Orders
+                My Assigned Repair Jobs
               </h3>
             </div>
             <Link
@@ -842,10 +788,10 @@ export const TechnicianDashboard: React.FC = () => {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-100 text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
-                  <th className="py-2.5 px-3">WO Code</th>
+                  <th className="py-2.5 px-3">Job #</th>
                   <th className="py-2.5 px-3">Machine</th>
-                  <th className="py-2.5 px-3">Fault / Task</th>
-                  <th className="py-2.5 px-3">Priority</th>
+                  <th className="py-2.5 px-3">Problem</th>
+                  <th className="py-2.5 px-3">Urgency</th>
                   <th className="py-2.5 px-3">Status</th>
                   <th className="py-2.5 px-3 text-right">Action</th>
                 </tr>
@@ -854,13 +800,13 @@ export const TechnicianDashboard: React.FC = () => {
                 {loading ? (
                   <tr>
                     <td colSpan={6} className="py-8 text-center text-xs text-zinc-400 font-medium">
-                      Loading dispatched work orders...
+                      Loading assigned repair jobs...
                     </td>
                   </tr>
                 ) : workOrders.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="py-8 text-center text-xs text-zinc-400 font-medium">
-                      No maintenance work orders assigned to you.
+                      No repair jobs assigned to you.
                     </td>
                   </tr>
                 ) : (
@@ -918,7 +864,7 @@ export const TechnicianDashboard: React.FC = () => {
                               disabled={actionLoading}
                               className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-black font-extrabold rounded-lg text-[10px] transition cursor-pointer"
                             >
-                              Accept
+                              Accept Job
                             </button>
                           ) : statusStr === 'accepted' ? (
                             <button
@@ -926,14 +872,14 @@ export const TechnicianDashboard: React.FC = () => {
                               disabled={actionLoading}
                               className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-lg text-[10px] transition cursor-pointer"
                             >
-                              Start
+                              Start Repair
                             </button>
                           ) : (
                             <Link
                               to={`/work-orders/${wo.id}`}
                               className="text-[11px] font-bold text-zinc-500 hover:text-black transition"
                             >
-                              Details →
+                              View Job →
                             </Link>
                           )}
                         </td>
@@ -946,13 +892,13 @@ export const TechnicianDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Right Column (~40%): Assigned Preventive Maintenance Schedule from Database */}
+        {/* Right Column (~40%): Assigned Regular Maintenance Schedule from Database */}
         <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between pb-4 border-b border-slate-100">
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4 text-amber-500" />
               <h3 className="text-xs sm:text-sm font-bold text-zinc-900 tracking-tight">
-                Scheduled Maintenance Due
+                Upcoming Regular Maintenance
               </h3>
             </div>
             <Link
@@ -969,7 +915,7 @@ export const TechnicianDashboard: React.FC = () => {
               <thead>
                 <tr className="border-b border-slate-100 text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
                   <th className="py-2.5 px-3">Machine</th>
-                  <th className="py-2.5 px-3">PM Task</th>
+                  <th className="py-2.5 px-3">Service Task</th>
                   <th className="py-2.5 px-3">Due Date</th>
                   <th className="py-2.5 px-3">Status</th>
                 </tr>
@@ -984,13 +930,13 @@ export const TechnicianDashboard: React.FC = () => {
                 ) : upcomingPMs.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="py-8 text-center text-xs text-zinc-400 font-medium">
-                      No upcoming preventive maintenance tasks due.
+                      No upcoming regular maintenance tasks due.
                     </td>
                   </tr>
                 ) : (
                   upcomingPMs.slice(0, 5).map((item: any, idx: number) => {
                     const machineName = item.machine_code || item.machine?.code || item.machine_name || 'Asset';
-                    const taskName = item.title || item.task_name || 'PM Service';
+                    const taskName = item.title || item.task_name || 'Regular Service';
                     const dueDateStr = item.next_pm_date
                       ? new Date(item.next_pm_date).toLocaleDateString([], {
                         month: 'short',
@@ -1044,7 +990,7 @@ export const TechnicianDashboard: React.FC = () => {
                   <RotateCcw className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-base text-white">Decline Breakdown Assignment</h3>
+                  <h3 className="font-bold text-base text-white">Cannot Take This Job</h3>
                   <p className="text-xs text-rose-100">
                     Ticket #{rejectingBreakdown.complaint_number || rejectingBreakdown.id?.slice(0, 8)}
                   </p>
@@ -1085,9 +1031,7 @@ export const TechnicianDashboard: React.FC = () => {
               <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-start gap-2.5">
                 <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                 <p className="leading-relaxed">
-                  Declining this assignment will automatically trigger the system to identify and assign the
-                  <strong className="font-semibold text-amber-950"> next eligible technician</strong> in the shop/plant.
-                  If no technician is available, it will return to the supervisor triage queue.
+                  Declining this job will alert your manager and the system will try to assign another available technician in the shop.
                 </p>
               </div>
 
@@ -1111,7 +1055,7 @@ export const TechnicianDashboard: React.FC = () => {
                     setTechnicianRejectReason(e.target.value);
                     if (technicianRejectReasonError) setTechnicianRejectReasonError('');
                   }}
-                  placeholder="Explain why you cannot take this breakdown (e.g., handling critical emergency on Line 2, missing tooling, shift changeover)..."
+                  placeholder="Explain why you cannot take this job (e.g., working on emergency machine, missing special tools, shift ending soon)..."
                   className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F59E0B] focus:border-transparent resize-none"
                   autoFocus
                 />
@@ -1124,10 +1068,10 @@ export const TechnicianDashboard: React.FC = () => {
                 </span>
                 <div className="flex flex-wrap gap-1.5">
                   {[
-                    'Engaged in active high-priority emergency repair',
-                    'Lacks required specialized tools / diagnostic equipment',
-                    'Shift concluding shortly / handover scheduled',
-                    'Off-duty / authorized break',
+                    'Working on another urgent repair right now',
+                    'Missing required tools or equipment',
+                    'Shift ending soon / handing over work',
+                    'On authorized break / off duty',
                   ].map((preset) => (
                     <button
                       key={preset}
@@ -1166,12 +1110,12 @@ export const TechnicianDashboard: React.FC = () => {
                   {actionLoading ? (
                     <>
                       <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      <span>Reassigning...</span>
+                      <span>Sending...</span>
                     </>
                   ) : (
                     <>
                       <RotateCcw className="w-3.5 h-3.5" />
-                      <span>Confirm Decline & Reassign</span>
+                      <span>Confirm - Cannot Take Job</span>
                     </>
                   )}
                 </button>

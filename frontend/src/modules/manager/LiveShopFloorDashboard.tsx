@@ -167,12 +167,12 @@ export const LiveShopFloorDashboard: React.FC = () => {
   const totalDowntimeHours = stats?.total_downtime_hours ?? 0;
   const avgMTTRMinutes = stats?.avg_mttr_minutes ?? 0;
 
-  // Machine status segments dynamically calculated
+  // Machine status segments dynamically calculated with plain English labels
   const statusSegments = useMemo(() => {
     if (totalMachines === 0) return [];
     return [
       {
-        label: 'Running',
+        label: 'Working',
         count: runningMachines,
         percentage: (runningMachines / totalMachines) * 100,
         color: '#10B981',
@@ -184,13 +184,13 @@ export const LiveShopFloorDashboard: React.FC = () => {
         color: '#F59E0B',
       },
       {
-        label: 'Breakdown',
+        label: 'Machine Stopped',
         count: breakdownMachines,
         percentage: (breakdownMachines / totalMachines) * 100,
         color: '#EF4444',
       },
       {
-        label: 'Under Maintenance',
+        label: 'Under Repair',
         count: maintenanceMachines,
         percentage: (maintenanceMachines / totalMachines) * 100,
         color: '#1E293B',
@@ -205,7 +205,7 @@ export const LiveShopFloorDashboard: React.FC = () => {
           ========================================================================= */}
       <DashboardHeader
         title="Manager Dashboard"
-        subtitle="Overview of maintenance operations across your plant"
+        subtitle="Real-time view of shop floor machines, active repairs, and maintenance work"
         plantOptions={plantOptions}
         selectedPlant={plant}
         onPlantChange={setPlant}
@@ -241,55 +241,45 @@ export const LiveShopFloorDashboard: React.FC = () => {
       )}
 
       {/* =========================================================================
-          ROW 1: 5 TOP KPI METRIC CARDS (Real Database Values)
+          ROW 1: 4 TOP KPI METRIC CARDS (Focused Factory Operations)
           ========================================================================= */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-5">
-        {/* Card 1: Total Machines */}
-        <TopKPICard
-          icon={Truck}
-          iconBgColor="bg-amber-100"
-          iconColor="text-amber-800"
-          label="Total Machines"
-          value={totalMachines}
-          subtitle={`${idleMachines} Idle`}
-        />
-
-        {/* Card 2: Running Machines */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+        {/* Card 1: Machines Working */}
         <TopKPICard
           icon={CheckCircle2}
           iconBgColor="bg-emerald-100"
           iconColor="text-emerald-800"
-          label="Running Machines"
+          label="Machines Working"
           value={runningMachines}
-          subtitle={totalMachines > 0 ? `${((runningMachines / totalMachines) * 100).toFixed(0)}% Operating` : 'No Machines'}
+          subtitle={`of ${totalMachines} Machines (${totalMachines > 0 ? ((runningMachines / totalMachines) * 100).toFixed(0) : 0}% Active)`}
         />
 
-        {/* Card 3: Breakdown Machines */}
+        {/* Card 2: Breakdown Machines */}
         <TopKPICard
           icon={Wrench}
           iconBgColor="bg-red-100"
           iconColor="text-red-800"
           label="Breakdown Machines"
           value={breakdownMachines}
-          subtitle={breakdownMachines > 0 ? 'Requires Action' : 'Zero Stoppages'}
+          subtitle={breakdownMachines > 0 ? `${breakdownMachines} Need Urgent Action` : 'Zero Stoppages'}
         />
 
-        {/* Card 4: Pending Requests */}
+        {/* Card 3: New Problem Reports */}
         <TopKPICard
           icon={ClipboardList}
           iconBgColor="bg-amber-100"
           iconColor="text-amber-800"
-          label="Pending Requests"
+          label="New Problem Reports"
           value={pendingRequests}
-          subtitle="Triage Queue"
+          subtitle="Waiting for Assignment"
         />
 
-        {/* Card 5: Active Work Orders */}
+        {/* Card 4: Active Repair Jobs */}
         <TopKPICard
           icon={Clock}
           iconBgColor="bg-blue-100"
           iconColor="text-blue-800"
-          label="Active Work Orders"
+          label="Active Repair Jobs"
           value={activeWorkOrders}
           subtitle={`${stats?.overdue_work_orders ?? 0} Overdue`}
         />
@@ -312,37 +302,37 @@ export const LiveShopFloorDashboard: React.FC = () => {
         {/* Card 2: Maintenance Trend Spline Chart */}
         <MaintenanceTrendChart
           title="Maintenance Trend"
-          series1Name="Corrective"
-          series2Name="Preventive"
+          series1Name="Breakdown Repairs"
+          series2Name="Regular Maintenance"
           series1Color="#18181B"
           series2Color="#EAB308"
           data={trendData}
           loading={loading}
-          emptyMessage="No maintenance work orders recorded in period"
+          emptyMessage="No maintenance repair jobs recorded in period"
         />
 
         {/* Card 3: Downtime Analysis Gauge Card */}
         <DowntimeAnalysisCard
-          title="Downtime Analysis"
+          title="Machine Stopped Time"
           rateValue={`${downtimeRatePercent}%`}
-          rateLabel="Downtime Rate"
+          rateLabel="Stopped Time Rate"
           percentage={downtimeRatePercent}
           gaugeColor="#F59E0B"
           loading={loading}
-          emptyMessage="Zero downtime recorded"
+          emptyMessage="Zero machine stopped time recorded"
           metrics={[
             {
               icon: Clock,
-              label: 'Total Downtime',
+              label: 'Total Stopped Time',
               value: `${totalDowntimeHours} Hrs`,
               change: totalDowntimeHours > 0 ? 'Recorded' : 'Zero Halts',
               isPositiveChange: totalDowntimeHours === 0,
             },
             {
               icon: Clock,
-              label: 'Avg. Repair Time',
+              label: 'Average Fix Time',
               value: `${avgMTTRMinutes} Mins`,
-              change: avgMTTRMinutes > 0 ? 'Mean Wrench' : 'No Outages',
+              change: avgMTTRMinutes > 0 ? 'Avg Fix' : 'No Outages',
               isPositiveChange: true,
             },
           ]}
@@ -356,7 +346,7 @@ export const LiveShopFloorDashboard: React.FC = () => {
         {/* Left Column (~60%): Recent Maintenance Requests */}
         <div className="lg:col-span-7">
           <RecentMaintenanceRequestsTable
-            title="Recent Maintenance Requests"
+            title="Recent Problem Reports"
             viewAllLink="/triage"
             requests={recentRequests}
             loading={loading}
@@ -366,7 +356,7 @@ export const LiveShopFloorDashboard: React.FC = () => {
         {/* Right Column (~40%): Upcoming Preventive Maintenance */}
         <div className="lg:col-span-5">
           <UpcomingPMTable
-            title="Upcoming Preventive Maintenance"
+            title="Upcoming Regular Maintenance"
             viewCalendarLink="/pm"
             activities={upcomingPMs}
             loading={loading}

@@ -105,13 +105,13 @@ export const PMCalendarPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 bg-white rounded-2xl border-2 border-zinc-200 shadow-sm">
         <div>
           <div className="flex items-center gap-3">
-            <h2 className="text-xl font-black text-zinc-950 tracking-tight">PREVENTIVE MAINTENANCE (PM) ENGINE</h2>
+            <h2 className="text-xl font-black text-zinc-950 tracking-tight">REGULAR MAINTENANCE SCHEDULE</h2>
             <span className="bg-jcb-yellow text-black text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-amber-500 shadow-sm">
-              Reliability Standards
+              Service Plans
             </span>
           </div>
           <p className="text-xs text-zinc-500 font-medium mt-1">
-            Dual-trigger maintenance scheduler: calendar days interval and machine cumulative operating hours counter.
+            Service plans by calendar days and machine operating hours.
           </p>
         </div>
 
@@ -122,7 +122,7 @@ export const PMCalendarPage: React.FC = () => {
               className="bg-zinc-900 hover:bg-black text-white text-xs font-black px-4 py-2.5 rounded-xl shadow transition-all flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
-              <span>CONFIGURE PM PLAN</span>
+              <span>+ New Service Plan</span>
             </button>
           )}
           <button
@@ -131,7 +131,7 @@ export const PMCalendarPage: React.FC = () => {
             className="flex items-center gap-2 px-4 py-2.5 bg-jcb-yellow hover:bg-jcb-yellowDark text-black font-black text-xs uppercase tracking-wider rounded-xl shadow border border-amber-500 transition disabled:opacity-50"
           >
             <Play className="w-3.5 h-3.5 fill-black" />
-            <span>{generating ? 'Processing Engine...' : 'Run Scheduled PM Generator'}</span>
+            <span>{generating ? 'Checking Due Jobs...' : 'Check Due Maintenance Now'}</span>
           </button>
         </div>
       </div>
@@ -142,10 +142,10 @@ export const PMCalendarPage: React.FC = () => {
           <table className="w-full text-left text-xs">
             <thead className="bg-zinc-50 border-b border-zinc-200 text-zinc-600 font-black uppercase tracking-wider">
               <tr>
-                <th className="px-6 py-3.5">Plan Code & Title</th>
-                <th className="px-6 py-3.5">Machine Target</th>
-                <th className="px-6 py-3.5">Schedule Cadence</th>
-                <th className="px-6 py-3.5">Operating Hours Trigger</th>
+                <th className="px-6 py-3.5">Plan Name</th>
+                <th className="px-6 py-3.5">Machine</th>
+                <th className="px-6 py-3.5">Service Frequency</th>
+                <th className="px-6 py-3.5">Hour Limit</th>
                 <th className="px-6 py-3.5">Next Due Date</th>
                 <th className="px-6 py-3.5">Status</th>
               </tr>

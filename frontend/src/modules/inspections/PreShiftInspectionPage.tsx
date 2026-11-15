@@ -676,14 +676,14 @@ export const PreShiftInspectionPage: React.FC = () => {
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <h2 className="text-xl font-black text-zinc-950 uppercase tracking-tight">
-              Pre-Shift Machinery Safety Audit
+              Daily Machine Safety Check
             </h2>
             <span className="bg-jcb-yellow text-black text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-amber-500 shadow-xs">
-              Daily Operator Clearance
+              Daily Operator Check
             </span>
           </div>
           <p className="text-xs text-zinc-500 font-medium mt-1">
-            Operator: <strong className="text-zinc-900">{user?.fullName || 'Operator'}</strong> ({user?.employeeCode || 'OP-01'}) • Shift: <strong className="text-zinc-900">{user?.shift || 'Shift A'}</strong> • Verify safety interlocks, physical gauge levels & telemetry readings before powering on.
+            Operator: <strong className="text-zinc-900">{user?.fullName || 'Operator'}</strong> ({user?.employeeCode || 'OP-01'}) • Shift: <strong className="text-zinc-900">{user?.shift || 'Shift A'}</strong> • Verify machine safety and gauge readings before starting work.
           </p>
         </div>
 
@@ -693,7 +693,7 @@ export const PreShiftInspectionPage: React.FC = () => {
             className="flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-xs transition"
           >
             <AlertTriangle className="w-3.5 h-3.5" />
-            <span>Emergency Breakdown</span>
+            <span>+ Report a Problem</span>
           </button>
         </div>
       </div>
@@ -710,7 +710,7 @@ export const PreShiftInspectionPage: React.FC = () => {
           }`}
         >
           <ClipboardCheck className="w-4 h-4 text-jcb-yellow" />
-          <span>Execute Pre-Shift Audit</span>
+          <span>Do Safety Check</span>
         </button>
 
         <button
@@ -723,7 +723,7 @@ export const PreShiftInspectionPage: React.FC = () => {
           }`}
         >
           <FileText className="w-4 h-4 text-jcb-yellow" />
-          <span>Audit Logs & History</span>
+          <span>Past Safety Checks</span>
         </button>
       </div>
 

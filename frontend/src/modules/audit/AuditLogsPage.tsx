@@ -217,14 +217,14 @@ export const AuditLogsPage: React.FC = () => {
             </div>
             <div>
               <h2 className="text-xl font-black text-zinc-950 tracking-tight uppercase">
-                Enterprise Immutable Audit Ledger
+                System Activity Log (Audit Trail)
               </h2>
               <div className="flex items-center gap-2 mt-0.5">
                 <span className="bg-jcb-yellow text-black text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-amber-500 shadow-2xs">
-                  ISO 9001 / 55000 Compliant
+                  Security &amp; Activity
                 </span>
                 <span className="text-xs text-zinc-400 font-medium">
-                  Tamper-evident regulatory audit trail
+                  Complete record of user actions and system changes
                 </span>
               </div>
             </div>
@@ -437,12 +437,12 @@ export const AuditLogsPage: React.FC = () => {
           <table className="w-full text-left text-xs">
             <thead className="bg-zinc-50 border-b border-zinc-200 text-zinc-600 font-black uppercase tracking-wider">
               <tr>
-                <th className="px-5 py-3.5">Timestamp</th>
-                <th className="px-5 py-3.5">Domain</th>
-                <th className="px-5 py-3.5">Event Action</th>
-                <th className="px-5 py-3.5">Performed By</th>
-                <th className="px-5 py-3.5">Client IP</th>
-                <th className="px-5 py-3.5 text-right">Payload Diff</th>
+                <th className="px-5 py-3.5">Date &amp; Time</th>
+                <th className="px-5 py-3.5">Changed Item</th>
+                <th className="px-5 py-3.5">Action</th>
+                <th className="px-5 py-3.5">User</th>
+                <th className="px-5 py-3.5">IP Address</th>
+                <th className="px-5 py-3.5 text-right">View Changes</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100">

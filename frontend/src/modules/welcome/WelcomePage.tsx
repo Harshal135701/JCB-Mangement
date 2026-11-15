@@ -21,10 +21,11 @@ import {
   Building2,
   Layers,
   Sparkles,
-  FileText
+  FileText,
+  Boxes
 } from 'lucide-react';
 
-type RoleKey = 'admin' | 'manager' | 'operator' | 'technician';
+type RoleKey = 'admin' | 'manager' | 'operator' | 'technician' | 'store_manager';
 
 export const WelcomePage: React.FC = () => {
   const navigate = useNavigate();
@@ -69,7 +70,7 @@ export const WelcomePage: React.FC = () => {
           <nav className="hidden lg:flex items-center gap-8 text-xs font-semibold text-zinc-600">
             <a href="#equipment" className="hover:text-zinc-950 transition-colors">Equipment & Fleet</a>
             <a href="#platform" className="hover:text-zinc-950 transition-colors">Platform Engine</a>
-            <a href="#roles" className="hover:text-zinc-950 transition-colors">4 Operational Roles</a>
+            <a href="#roles" className="hover:text-zinc-950 transition-colors">5 Operational Roles</a>
             <a href="#disciplines" className="hover:text-zinc-950 transition-colors">Core Disciplines</a>
             <a href="#plants" className="hover:text-zinc-950 transition-colors">Plant Sites</a>
           </nav>
@@ -150,7 +151,7 @@ export const WelcomePage: React.FC = () => {
                   href="#roles"
                   className="bg-white hover:bg-slate-50 text-zinc-800 font-semibold px-5 py-3 rounded-xl transition-all flex items-center gap-1.5 text-xs border border-slate-300 shadow-2xs hover:border-slate-400"
                 >
-                  <span>Explore 4 Roles</span>
+                  <span>Explore 5 Roles</span>
                   <ChevronRight className="w-3.5 h-3.5 text-zinc-500" />
                 </a>
 
@@ -471,7 +472,7 @@ export const WelcomePage: React.FC = () => {
       </section>
 
       {/* =========================================================================
-          SECTION 4: 4 OPERATIONAL ROLES (Interactive Selection: HIGHLIGHTS ONLY SELECTED!)
+          SECTION 4: 5 OPERATIONAL ROLES (Interactive Selection: HIGHLIGHTS ONLY SELECTED!)
           ========================================================================= */}
       <section id="roles" className="py-14 sm:py-20 bg-zinc-950 text-white border-b-2 border-jcb-yellow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -488,7 +489,7 @@ export const WelcomePage: React.FC = () => {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
             
             {/* ROLE 1: Plant Administrator */}
             <div 
@@ -766,6 +767,76 @@ export const WelcomePage: React.FC = () => {
                 }`}
               >
                 <span>Login as Technician</span>
+                <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
+
+            {/* ROLE 5: Store Manager */}
+            <div 
+              onClick={() => setSelectedRole(selectedRole === 'store_manager' ? null : 'store_manager')}
+              className={`rounded-2xl p-5 transition-all cursor-pointer flex flex-col justify-between relative ${
+                selectedRole === 'store_manager'
+                  ? 'bg-zinc-900 border-2 border-jcb-yellow shadow-xl transform lg:-translate-y-1 ring-1 ring-amber-400'
+                  : selectedRole !== null
+                  ? 'bg-zinc-900/60 border border-zinc-800 opacity-60 hover:opacity-100'
+                  : 'bg-zinc-900 border border-zinc-800 hover:border-zinc-700 opacity-100'
+              }`}
+            >
+              {selectedRole === 'store_manager' && (
+                <span className="absolute -top-2.5 right-4 bg-jcb-yellow text-black text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider border border-black shadow-xs">
+                  Active Selection
+                </span>
+              )}
+
+              <div>
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-4 transition-colors ${
+                  selectedRole === 'store_manager'
+                    ? 'bg-jcb-yellow text-black border border-amber-400'
+                    : 'bg-zinc-800 text-zinc-400 border border-zinc-700'
+                }`}>
+                  <Boxes className="w-5 h-5" />
+                </div>
+
+                <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">
+                  Parts & Warehouse
+                </div>
+                <h3 className={`text-base font-bold mb-2 transition-colors ${
+                  selectedRole === 'store_manager' ? 'text-jcb-yellow' : 'text-white'
+                }`}>
+                  Store Manager
+                </h3>
+                <p className="text-zinc-400 text-xs mb-4 leading-relaxed font-normal">
+                  Warehouse stock monitoring, receiving incoming goods, low-stock reorder triggers, and delivery pass clearance.
+                </p>
+
+                <ul className="space-y-1.5 text-xs text-zinc-300 mb-5">
+                  <li className="flex items-center gap-2">
+                    <Check className={`w-3 h-3 shrink-0 ${selectedRole === 'store_manager' ? 'text-jcb-yellow' : 'text-zinc-500'}`} />
+                    <span>Spare Parts Stock Balance</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Check className={`w-3 h-3 shrink-0 ${selectedRole === 'store_manager' ? 'text-jcb-yellow' : 'text-zinc-500'}`} />
+                    <span>Receive Materials (GRN)</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Check className={`w-3 h-3 shrink-0 ${selectedRole === 'store_manager' ? 'text-jcb-yellow' : 'text-zinc-500'}`} />
+                    <span>Delivery Passes (RDC / NRDC)</span>
+                  </li>
+                </ul>
+              </div>
+
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleRoleLogin('store@jcb.com');
+                }}
+                className={`w-full text-xs font-bold py-2.5 rounded-lg transition-all flex items-center justify-center gap-2 uppercase tracking-wider ${
+                  selectedRole === 'store_manager'
+                    ? 'bg-jcb-yellow hover:bg-amber-400 text-black shadow border border-amber-500 font-extrabold'
+                    : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700'
+                }`}
+              >
+                <span>Login as Store Mgr</span>
                 <ArrowRight className="w-3 h-3" />
               </button>
             </div>

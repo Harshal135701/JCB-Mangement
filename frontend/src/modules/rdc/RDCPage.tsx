@@ -1125,14 +1125,13 @@ export const RDCPage: React.FC = () => {
             </div>
             <div>
               <h1 className="text-xl sm:text-2xl font-black tracking-wider uppercase text-zinc-950 flex items-center gap-2">
-                RDC & NRDC Material Gate Passes
+                Delivery Passes (RDC / NRDC)
                 <span className="text-[10px] font-black px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300">
-                  v2.4 Enterprise
+                  Gate Security
                 </span>
               </h1>
               <p className="text-xs text-zinc-500 font-medium">
-                Authorized material movement, external repair tracking, gate security authorization
-                & inventory reconciliation
+                Material movement passes, items sent for repair, and returned spare parts check.
               </p>
             </div>
           </div>
@@ -1160,7 +1159,7 @@ export const RDCPage: React.FC = () => {
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-jcb-yellow hover:bg-jcb-yellowDark text-black font-black text-xs uppercase tracking-wider transition shadow-sm border border-amber-500 cursor-pointer"
             >
               <Plus className="w-4 h-4 stroke-[3]" />
-              Issue Delivery Challan
+              + New Delivery Pass
             </button>
           )}
         </div>
@@ -2130,7 +2129,7 @@ export const RDCPage: React.FC = () => {
                             {/* RECONCILIATION PROGRESS BAR */}
                             <div>
                               <div className="flex items-center justify-between text-[10px] text-zinc-500 font-semibold mb-1">
-                                <span>Reconciliation Progress</span>
+                                <span>Check &amp; Match Progress</span>
                                 <span>{progressPct}% Accounted</span>
                               </div>
                               <div className="w-full bg-zinc-100 h-2 rounded-full overflow-hidden border border-zinc-200">
@@ -2274,7 +2273,7 @@ export const RDCPage: React.FC = () => {
                       }
                     >
                       <Check className="w-4 h-4 stroke-[3]" />
-                      {actionSubmitting ? 'Approving...' : 'Approve Challan'}
+                      {actionSubmitting ? 'Approving...' : 'Approve Delivery Pass'}
                     </button>
                   </>
                 )}
@@ -2286,7 +2285,7 @@ export const RDCPage: React.FC = () => {
                     className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-black text-xs uppercase tracking-wider transition shadow-sm border border-purple-600 flex items-center gap-1.5 cursor-pointer"
                   >
                     <Truck className="w-4 h-4" />
-                    Dispatch & Issue Gate Pass
+                    Send Out Material
                   </button>
                 )}
 
@@ -2317,7 +2316,7 @@ export const RDCPage: React.FC = () => {
                         className="px-3.5 py-2 rounded-xl bg-emerald-100 hover:bg-emerald-600 text-emerald-900 hover:text-white border border-emerald-300 font-black text-xs uppercase transition flex items-center gap-1 cursor-pointer"
                       >
                         <ArrowDownLeft className="w-3.5 h-3.5" />
-                        Inward Return
+                        Check Returned Items
                       </button>
 
                       {/* Receive Replacement */}

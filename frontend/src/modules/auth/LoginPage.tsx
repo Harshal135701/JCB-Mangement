@@ -186,11 +186,10 @@ export const LoginPage: React.FC = () => {
               <div className="flex items-start gap-2.5 pr-4">
                 <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                 <div className="space-y-1">
-                  <p className="font-bold text-amber-900">Centralized Access Governance</p>
+                  <p className="font-bold text-amber-900">Need Help Logging In?</p>
                   <p className="text-zinc-700 text-[11px] leading-relaxed">
-                    Employee credentials and password resets are managed centrally by JCB Plant
-                    Administration. Please contact your Plant System Administrator or Shift
-                    In-Charge for access assistance.
+                    Passwords and login details are managed by your plant supervisor or system admin.
+                    Please contact them to reset your password or update your employee ID.
                   </p>
                 </div>
               </div>

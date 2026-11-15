@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth, UserRole } from '../../context/AuthContext';
 import {
   LayoutDashboard,
+  Activity,
   AlertTriangle,
   Cpu,
   Package,
@@ -38,124 +39,62 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
   const { user } = useAuth();
   const location = useLocation();
 
-  const allNavItems: NavItem[] = [
-    // Manager Dashboard
-    {
-      name: 'Dashboard',
-      path: '/dashboard',
-      icon: LayoutDashboard,
-      roles: ['manager']
-    },
-    // Admin Dashboard
-    {
-      name: 'Dashboard',
-      path: '/admin/dashboard',
-      icon: LayoutDashboard,
-      roles: ['admin']
-    },
-    // Technician Dashboard
-    {
-      name: 'Dashboard',
-      path: '/technician/dashboard',
-      icon: LayoutDashboard,
-      roles: ['technician']
-    },
-    // Store Manager Dashboard
-    {
-      name: 'Store Dashboard',
-      path: '/store/dashboard',
-      icon: Boxes,
-      roles: ['store_manager', 'admin']
-    },
-    // Personnel & Technician Management
-    {
-      name: 'Technician Management',
-      path: '/users',
-      icon: Users,
-      roles: ['admin', 'manager']
-    },
-    // Pre-Shift Safety Inspections
-    {
-      name: 'Pre-Shift Inspection',
-      path: '/inspections/run',
-      icon: ClipboardCheck,
-      roles: ['operator', 'manager', 'admin', 'technician']
-    },
-    // Work Orders Master
-    {
-      name: 'Work Orders',
-      path: '/work-orders',
-      icon: Wrench,
-      roles: ['admin', 'manager', 'technician', 'store_manager']
-    },
-    // Breakdowns / Maintenance Requests
-    {
-      name: 'Maintenance Requests',
-      path: '/triage',
-      icon: AlertTriangle,
-      roles: ['manager', 'admin'],
-    },
-    // Machines Master / Machine Monitoring
-    {
-      name: 'Machine Monitoring',
-      path: '/machines',
-      icon: Cpu,
-      roles: ['admin', 'manager', 'technician', 'operator']
-    },
-    // Spare Parts Inventory / Requests
-    {
-      name: 'Spare Parts Requests',
-      path: '/inventory',
-      icon: Package,
-      roles: ['admin', 'manager', 'technician', 'store_manager']
-    },
-    // Purchase Requisition / Procurement
-    {
-      name: 'Purchase Requisition',
-      path: '/procurement',
-      icon: ShoppingCart,
-      roles: ['admin', 'manager', 'technician', 'store_manager'],
-    },
-    // Preventive Maintenance
-    {
-      name: 'Preventive Maintenance',
-      path: '/pm',
-      icon: Calendar,
-      roles: ['admin', 'manager', 'technician']
-    },
-    // Downtime & Analytics
-    {
-      name: 'Downtime Management',
-      path: '/downtime',
-      icon: Clock,
-      roles: ['admin', 'manager']
-    },
-    // Gate Passes (RDC)
-    {
-      name: 'RDC Gate Passes',
-      path: '/rdc',
-      icon: FileText,
-      roles: ['admin', 'manager', 'store_manager', 'technician']
-    },
-    // Operator Dashboard
-    {
-      name: 'Dashboard',
-      path: '/operator/dashboard',
-      icon: HardHat,
-      roles: ['operator']
-    },
-    // Audit Trail
-    {
-      name: 'Audit Trail',
-      path: '/audit',
-      icon: ShieldCheck,
-      roles: ['admin', 'manager', 'store_manager']
-    },
-  ];
-
-  // Filter items visible to user's role
   const userRole = (user?.role || 'manager') as UserRole;
-  const navItems = allNavItems.filter((item) => item.roles.includes(userRole));
+
+  // Role-tailored navigation items matching plain English factory worker standards
+  const roleNavItems: Record<UserRole, NavItem[]> = {
+    admin: [
+      { name: 'Dashboard', path: '/admin/dashboard', icon: LayoutDashboard, roles: ['admin'] },
+      { name: 'Live Shop Floor', path: '/dashboard', icon: Activity, roles: ['admin'] },
+      { name: 'Users & Personnel', path: '/users', icon: Users, roles: ['admin'] },
+      { name: 'Machines & Equipment', path: '/machines', icon: Cpu, roles: ['admin'] },
+      { name: 'Repair Jobs', path: '/work-orders', icon: Wrench, roles: ['admin'] },
+      { name: 'Regular Maintenance', path: '/pm', icon: Calendar, roles: ['admin'] },
+      { name: 'Machine Stopped Time', path: '/downtime', icon: Clock, roles: ['admin'] },
+      { name: 'Daily Safety Checks', path: '/inspections', icon: ClipboardCheck, roles: ['admin'] },
+      { name: 'Spare Parts Catalog', path: '/inventory', icon: Package, roles: ['admin'] },
+      { name: 'Buying & Orders', path: '/procurement', icon: ShoppingCart, roles: ['admin'] },
+      { name: 'Gate Passes', path: '/rdc', icon: FileText, roles: ['admin'] },
+      { name: 'Audit Trail', path: '/audit', icon: ShieldCheck, roles: ['admin'] },
+    ],
+    manager: [
+      { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, roles: ['manager'] },
+      { name: 'Problem Reports', path: '/triage', icon: AlertTriangle, roles: ['manager'] },
+      { name: 'Repair Jobs', path: '/work-orders', icon: Wrench, roles: ['manager'] },
+      { name: 'Technician Management', path: '/users', icon: Users, roles: ['manager'] },
+      { name: 'Regular Maintenance', path: '/pm', icon: Calendar, roles: ['manager'] },
+      { name: 'Machines & Lines', path: '/machines', icon: Cpu, roles: ['manager'] },
+      { name: 'Machine Stopped Time', path: '/downtime', icon: Clock, roles: ['manager'] },
+      { name: 'Daily Safety Checks', path: '/inspections', icon: ClipboardCheck, roles: ['manager'] },
+      { name: 'Buying Approvals', path: '/procurement', icon: ShoppingCart, roles: ['manager'] },
+      { name: 'Gate Passes', path: '/rdc', icon: FileText, roles: ['manager'] },
+      { name: 'Audit Trail', path: '/audit', icon: ShieldCheck, roles: ['manager'] },
+    ],
+    technician: [
+      { name: 'My Workbench', path: '/technician/dashboard', icon: LayoutDashboard, roles: ['technician'] },
+      { name: 'My Repair Jobs', path: '/work-orders', icon: Wrench, roles: ['technician'] },
+      { name: 'Regular Maintenance', path: '/pm', icon: Calendar, roles: ['technician'] },
+      { name: 'Machine Details', path: '/machines', icon: Cpu, roles: ['technician'] },
+      { name: 'Daily Safety Checks', path: '/inspections', icon: ClipboardCheck, roles: ['technician'] },
+      { name: 'Spare Parts', path: '/inventory', icon: Package, roles: ['technician'] },
+      { name: 'Delivery Passes', path: '/rdc', icon: FileText, roles: ['technician'] },
+    ],
+    operator: [
+      { name: 'My Dashboard', path: '/operator/dashboard', icon: HardHat, roles: ['operator'] },
+      { name: 'Daily Safety Check', path: '/inspections/run', icon: ClipboardCheck, roles: ['operator'] },
+      { name: 'My Machine Details', path: '/machines', icon: Cpu, roles: ['operator'] },
+    ],
+    store_manager: [
+      { name: 'Store Dashboard', path: '/store/dashboard', icon: Boxes, roles: ['store_manager'] },
+      { name: 'Spare Parts Stock', path: '/inventory', icon: Package, roles: ['store_manager'] },
+      { name: 'Buying & Receiving', path: '/procurement', icon: ShoppingCart, roles: ['store_manager'] },
+      { name: 'Delivery Passes', path: '/rdc', icon: FileText, roles: ['store_manager'] },
+      { name: 'Part Requests from Jobs', path: '/work-orders', icon: Wrench, roles: ['store_manager'] },
+      { name: 'Stock Audit Log', path: '/audit', icon: ShieldCheck, roles: ['store_manager'] },
+    ],
+  };
+
+  const navItems = roleNavItems[userRole] || roleNavItems.manager;
 
   return (
     <>
