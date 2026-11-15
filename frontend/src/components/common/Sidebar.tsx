@@ -1,19 +1,19 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth, UserRole } from '../../context/AuthContext';
-import { 
-  LayoutDashboard, 
-  AlertTriangle, 
-  Cpu, 
-  Package, 
-  ShoppingCart, 
-  FileText, 
-  Calendar, 
-  Clock, 
-  ShieldCheck, 
-  Users, 
-  Wrench, 
-  HardHat, 
+import {
+  LayoutDashboard,
+  AlertTriangle,
+  Cpu,
+  Package,
+  ShoppingCart,
+  FileText,
+  Calendar,
+  Clock,
+  ShieldCheck,
+  Users,
+  Wrench,
+  HardHat,
   ClipboardCheck,
   Boxes,
   X,
@@ -40,74 +40,39 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
 
   const allNavItems: NavItem[] = [
     // Manager Dashboard
-    { 
-      name: 'Dashboard', 
-      path: '/dashboard', 
-      icon: LayoutDashboard, 
-      roles: ['manager'] 
+    {
+      name: 'Dashboard',
+      path: '/dashboard',
+      icon: LayoutDashboard,
+      roles: ['manager']
     },
     // Admin Dashboard
-    { 
-      name: 'Dashboard', 
-      path: '/admin/dashboard', 
-      icon: LayoutDashboard, 
-      roles: ['admin'] 
+    {
+      name: 'Dashboard',
+      path: '/admin/dashboard',
+      icon: LayoutDashboard,
+      roles: ['admin']
     },
     // Technician Dashboard
-    { 
-      name: 'Dashboard', 
-      path: '/technician/dashboard', 
-      icon: LayoutDashboard, 
-      roles: ['technician'] 
-    },
-    // Operator Dashboard
-    { 
-      name: 'Dashboard', 
-      path: '/operator/dashboard', 
-      icon: HardHat, 
-      roles: ['operator'] 
+    {
+      name: 'Dashboard',
+      path: '/technician/dashboard',
+      icon: LayoutDashboard,
+      roles: ['technician']
     },
     // Store Manager Dashboard
-    { 
-      name: 'Store Dashboard', 
-      path: '/store/dashboard', 
-      icon: Boxes, 
-      roles: ['store_manager', 'admin'] 
-    },
-    // Breakdowns / Maintenance Requests
-    { 
-      name: 'Maintenance Requests', 
-      path: '/triage', 
-      icon: AlertTriangle, 
-      roles: ['manager', 'admin'],
-    },
-    // Work Orders Master
-    { 
-      name: 'Work Orders', 
-      path: '/work-orders', 
-      icon: Wrench, 
-      roles: ['admin', 'manager', 'technician', 'store_manager'] 
+    {
+      name: 'Store Dashboard',
+      path: '/store/dashboard',
+      icon: Boxes,
+      roles: ['store_manager', 'admin']
     },
     // Personnel & Technician Management
-    { 
-      name: 'Technician Management', 
-      path: '/users', 
-      icon: Users, 
-      roles: ['admin', 'manager'] 
-    },
-    // Preventive Maintenance
-    { 
-      name: 'Preventive Maintenance', 
-      path: '/pm', 
-      icon: Calendar, 
-      roles: ['admin', 'manager', 'technician'] 
-    },
-    // Machines Master / Machine Monitoring
-    { 
-      name: 'Machine Monitoring', 
-      path: '/machines', 
-      icon: Cpu, 
-      roles: ['admin', 'manager', 'technician', 'operator'] 
+    {
+      name: 'Technician Management',
+      path: '/users',
+      icon: Users,
+      roles: ['admin', 'manager']
     },
     // Pre-Shift Safety Inspections
     {
@@ -116,40 +81,75 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
       icon: ClipboardCheck,
       roles: ['operator', 'manager', 'admin', 'technician']
     },
+    // Work Orders Master
+    {
+      name: 'Work Orders',
+      path: '/work-orders',
+      icon: Wrench,
+      roles: ['admin', 'manager', 'technician', 'store_manager']
+    },
+    // Breakdowns / Maintenance Requests
+    {
+      name: 'Maintenance Requests',
+      path: '/triage',
+      icon: AlertTriangle,
+      roles: ['manager', 'admin'],
+    },
+    // Machines Master / Machine Monitoring
+    {
+      name: 'Machine Monitoring',
+      path: '/machines',
+      icon: Cpu,
+      roles: ['admin', 'manager', 'technician', 'operator']
+    },
     // Spare Parts Inventory / Requests
-    { 
-      name: 'Spare Parts Requests', 
-      path: '/inventory', 
-      icon: Package, 
-      roles: ['admin', 'manager', 'technician', 'store_manager'] 
+    {
+      name: 'Spare Parts Requests',
+      path: '/inventory',
+      icon: Package,
+      roles: ['admin', 'manager', 'technician', 'store_manager']
     },
     // Purchase Requisition / Procurement
-    { 
-      name: 'Purchase Requisition', 
-      path: '/procurement', 
-      icon: ShoppingCart, 
+    {
+      name: 'Purchase Requisition',
+      path: '/procurement',
+      icon: ShoppingCart,
       roles: ['admin', 'manager', 'technician', 'store_manager'],
     },
-    // Gate Passes (RDC)
-    { 
-      name: 'RDC Gate Passes', 
-      path: '/rdc', 
-      icon: FileText, 
-      roles: ['admin', 'manager', 'store_manager', 'technician'] 
+    // Preventive Maintenance
+    {
+      name: 'Preventive Maintenance',
+      path: '/pm',
+      icon: Calendar,
+      roles: ['admin', 'manager', 'technician']
     },
     // Downtime & Analytics
-    { 
-      name: 'Downtime Management', 
-      path: '/downtime', 
-      icon: Clock, 
-      roles: ['admin', 'manager'] 
+    {
+      name: 'Downtime Management',
+      path: '/downtime',
+      icon: Clock,
+      roles: ['admin', 'manager']
+    },
+    // Gate Passes (RDC)
+    {
+      name: 'RDC Gate Passes',
+      path: '/rdc',
+      icon: FileText,
+      roles: ['admin', 'manager', 'store_manager', 'technician']
+    },
+    // Operator Dashboard
+    {
+      name: 'Dashboard',
+      path: '/operator/dashboard',
+      icon: HardHat,
+      roles: ['operator']
     },
     // Audit Trail
-    { 
-      name: 'Audit Trail', 
-      path: '/audit', 
-      icon: ShieldCheck, 
-      roles: ['admin', 'manager', 'store_manager'] 
+    {
+      name: 'Audit Trail',
+      path: '/audit',
+      icon: ShieldCheck,
+      roles: ['admin', 'manager', 'store_manager']
     },
   ];
 
@@ -161,7 +161,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
     <>
       {/* Mobile Backdrop */}
       {isMobileOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/60 z-40 lg:hidden backdrop-blur-xs"
           onClick={onMobileClose}
         />
@@ -169,9 +169,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
 
       {/* Sidebar Aside: Full-height JCB Excavator Background properly adjusted from very top to bottom */}
       <aside
-        className={`fixed lg:static inset-y-0 left-0 z-50 w-64 lg:w-[268px] h-screen text-white flex flex-col justify-between shrink-0 border-r border-zinc-800 transition-transform duration-200 ease-in-out select-none shadow-2xl overflow-hidden relative ${
-          isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
-        }`}
+        className={`fixed lg:static inset-y-0 left-0 z-50 w-64 lg:w-[268px] h-screen text-white flex flex-col justify-between shrink-0 border-r border-zinc-800 transition-transform duration-200 ease-in-out select-none shadow-2xl overflow-hidden relative ${isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+          }`}
         style={{
           backgroundImage: `url('/jcb-excavator-adjusted.jpg')`,
           backgroundSize: 'cover',
@@ -220,11 +219,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
                   key={item.path + item.name}
                   to={item.path}
                   onClick={onMobileClose}
-                  className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-bold transition-all relative shrink-0 group ${
-                    isActive
-                      ? 'bg-jcb-yellow text-zinc-950 font-black shadow-md'
-                      : 'text-zinc-200 hover:bg-white/15 hover:text-white'
-                  }`}
+                  className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-bold transition-all relative shrink-0 group ${isActive
+                    ? 'bg-jcb-yellow text-zinc-950 font-black shadow-md'
+                    : 'text-zinc-200 hover:bg-white/15 hover:text-white'
+                    }`}
                 >
                   <Icon className={`w-[18px] h-[18px] shrink-0 transition-colors ${isActive ? 'text-zinc-950 font-bold' : 'text-zinc-300 group-hover:text-white'}`} />
                   <span className="truncate flex-1 tracking-tight">{item.name}</span>
