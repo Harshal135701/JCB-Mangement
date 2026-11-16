@@ -503,7 +503,7 @@ export const ReportsPage: React.FC = () => {
         { label: 'In Progress / Accepted', value: s.acceptedOrInProgress ?? 0, icon: Clock, variant: 'amber' },
         { label: 'Waiting for Parts', value: s.waitingForParts ?? 0, icon: Boxes, variant: 'red' },
         { label: 'Awaiting Verification', value: s.awaitingVerification ?? 0, icon: AlertTriangle, variant: 'amber' },
-        { label: 'Verified & Closed', value: s.verifiedAndClosed ?? 0, icon: CheckCircle2, variant: 'green' },
+        { label: 'Verified & Closed', value: s.verifiedAndClosed ?? 0, icon: CheckCircle2 },
         { label: 'Total Downtime Handled', value: `${s.totalDowntimeHours || 0} hrs`, icon: Clock, variant: 'blue' },
       ];
     } else if (currentRole === 'operator') {
@@ -530,7 +530,7 @@ export const ReportsPage: React.FC = () => {
         { label: 'Converted to WO', value: s.complaintsConverted ?? 0, icon: Wrench, variant: 'amber' },
         { label: 'Active Work Orders', value: s.workOrdersActive ?? 0, icon: Clock, variant: 'amber' },
         { label: 'Awaiting Verify', value: s.awaitingVerification ?? 0, icon: AlertTriangle, variant: 'red' },
-        { label: 'Verified & Closed', value: s.verifiedAndClosed ?? 0, icon: CheckCircle2, variant: 'green' },
+        { label: 'Verified & Closed', value: s.verifiedAndClosed ?? 0, icon: CheckCircle2 },
       ];
     } else if (userRole === 'admin' && activeTab === 'enterprise') {
       cards = [
@@ -795,26 +795,7 @@ export const ReportsPage: React.FC = () => {
           {/* 6. Live Summary KPI Cards */}
           {renderKPICards()}
 
-          {/* 7. Executive Performance Assessment (Live On-Screen Preview) */}
-          {reportData && (
-            <div className="bg-amber-50/60 border-2 border-amber-300 rounded-2xl p-5 shadow-xs space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-                <h3 className="text-xs font-black uppercase tracking-wider text-amber-900">
-                  Executive Performance & Activity Assessment (Summary Preview)
-                </h3>
-              </div>
-              <p className="text-xs text-zinc-700 leading-relaxed font-medium">
-                {generateOverallSummary(
-                  isSubordinateTab && selectedUser ? selectedUser.role : userRole,
-                  isSubordinateTab && selectedUser ? selectedUser.full_name : (user?.fullName || 'User'),
-                  reportData.stats
-                )}
-              </p>
-            </div>
-          )}
-
-          {/* 8. Concise Activity Summaries (Management Summary Tables) */}
+          {/* 7. Concise Activity Summaries (Management Summary Tables) */}
           {reportData && (
             <div className="bg-white border-2 border-zinc-200 rounded-2xl p-5 space-y-4 shadow-xs">
               <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
