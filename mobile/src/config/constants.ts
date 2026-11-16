@@ -6,8 +6,8 @@
  */
 
 export const CONFIG = {
-  API_BASE_URL: 'http://10.0.2.2:5000/api/v1',
-  SOCKET_URL: 'http://10.0.2.2:5000',
+  API_BASE_URL: 'https://jcb-smart-cmms-api.onrender.com/api/v1',
+  SOCKET_URL: 'https://jcb-smart-cmms-api.onrender.com',
   APP_NAME: 'JCB CMMS',
   VERSION: '1.0.0',
 };
@@ -30,7 +30,7 @@ export const COLORS = {
   text: '#000000',
   textMuted: '#64748B',
   border: '#E2E8F0',
-  
+
   // High-Visibility Status Colors
   statusRunning: '#16A34A',      // 🟢 Operational / Restored
   statusBreakdown: '#DC2626',    // 🔴 Breakdown / Immediate Stoppage

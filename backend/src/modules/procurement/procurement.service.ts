@@ -573,7 +573,7 @@ export async function getPurchaseRequisitionsService(
            m.machine_code,
            m.name as machine_name,
            s.shop_name,
-           p.name as plant_name,
+           p.plant_name,
            wo.wo_number
   `;
 
@@ -629,7 +629,7 @@ export async function getPurchaseRequisitionDetailsService(
             m.model as machine_model,
             s.shop_name,
             s.id as shop_id,
-            p.name as plant_name,
+            p.plant_name,
             p.id as plant_id,
             wo.wo_number,
             wo.status as work_order_status
@@ -1114,7 +1114,7 @@ export async function getPurchaseOrdersService(
            app.full_name as approved_by_name,
            m.machine_code,
            s.shop_name,
-           p.name as plant_name
+           p.plant_name
   `;
 
   const dataQuery = `${selectCols} ${baseQuery} ORDER BY pr.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;

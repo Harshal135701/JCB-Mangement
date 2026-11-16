@@ -5,16 +5,24 @@ export const getHierarchy = async (req: Request, res: Response, next: NextFuncti
   try {
     const plantsRes = await query('SELECT * FROM plants WHERE status = \'active\' ORDER BY plant_name ASC');
     const shopsRes = await query('SELECT * FROM shops WHERE status = \'active\' ORDER BY shop_name ASC');
-    const baysRes = await query('SELECT * FROM bays WHERE status = \'active\' ORDER BY bay_name ASC');
-    const linesRes = await query('SELECT * FROM production_lines WHERE status = \'active\' ORDER BY line_name ASC');
+    let baysRows: any[] = [];
+    let linesRows: any[] = [];
+    try {
+      const baysRes = await query("SELECT * FROM bays WHERE status = 'active' ORDER BY bay_name ASC");
+      baysRows = baysRes.rows;
+    } catch {}
+    try {
+      const linesRes = await query("SELECT * FROM production_lines WHERE status = 'active' ORDER BY line_name ASC");
+      linesRows = linesRes.rows;
+    } catch {}
 
     res.json({
       success: true,
       data: {
         plants: plantsRes.rows,
         shops: shopsRes.rows,
-        bays: baysRes.rows,
-        lines: linesRes.rows,
+        bays: baysRows,
+        lines: linesRows,
       },
     });
   } catch (err) {

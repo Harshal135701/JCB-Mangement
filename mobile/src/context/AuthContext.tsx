@@ -36,13 +36,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const loadStoredSession = async () => {
     try {
-      const storedToken = await AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
-      const storedUser = await AsyncStorage.getItem(STORAGE_KEYS.USER_PROFILE);
-
-      if (storedToken && storedUser) {
-        setToken(storedToken);
-        setUser(JSON.parse(storedUser));
-      }
+      // 500ms safety timeout to prevent black screen if AsyncStorage takes time to respond
+      const timeout = new Promise((resolve) => setTimeout(resolve, 500));
+      const readStorage = (async () => {
+        const storedToken = await AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+        const storedUser = await AsyncStorage.getItem(STORAGE_KEYS.USER_PROFILE);
+        if (storedToken && storedUser) {
+          setToken(storedToken);
+          setUser(JSON.parse(storedUser));
+        }
+      })();
+      await Promise.race([readStorage, timeout]);
     } catch (e) {
       console.warn('[Session Load Error]:', e);
     } finally {
@@ -52,12 +56,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (identifier: string, password: string) => {
     const res: any = await apiClient.post('/auth/login', { identifier, password });
-    if (res.success && res.data) {
+    if (res && res.success && res.data) {
       const { token: jwtToken, user: userData } = res.data;
       setToken(jwtToken);
       setUser(userData);
       await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, jwtToken);
       await AsyncStorage.setItem(STORAGE_KEYS.USER_PROFILE, JSON.stringify(userData));
+    } else {
+      throw new Error(res?.message || 'Login failed. Invalid credentials.');
     }
   };
 

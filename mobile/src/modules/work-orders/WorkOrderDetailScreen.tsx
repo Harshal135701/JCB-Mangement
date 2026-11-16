@@ -8,11 +8,16 @@ import {
   Alert,
   TextInput,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { COLORS } from '../../config/constants';
 import apiClient from '../../services/api';
+import { AppHeader } from '../../components/AppHeader';
 
 export const WorkOrderDetailScreen = ({ route, navigation }: any) => {
+  const insets = useSafeAreaInsets();
   const { workOrder } = route.params;
   const [currentStatus, setCurrentStatus] = useState(workOrder.status);
   const [loading, setLoading] = useState(false);
@@ -20,8 +25,8 @@ export const WorkOrderDetailScreen = ({ route, navigation }: any) => {
   // RCA Form states
   const [showRcaModal, setShowRcaModal] = useState(false);
   const [diagnosis, setDiagnosis] = useState('Proportional solenoid spool stuck due to hydraulic fluid varnish');
-  const [rootCause, setRootCause] = useState('Why 1: Spool failed to actuate -> Why 2: High friction -> Why 3: Oil varnish -> Why 4: Filter saturation');
-  const [correctiveAction, setCorrectiveAction] = useState('Replaced proportional valve 332/Y2415 and flushed line filter');
+  const [rootCause, setRootCause] = useState('Spool stuck -> High friction -> Oil varnish -> Filter saturation');
+  const [correctiveAction, setCorrectiveAction] = useState('Replaced proportional valve and flushed line filter');
 
   const triggerMilestone = async (action: string) => {
     try {
@@ -44,7 +49,7 @@ export const WorkOrderDetailScreen = ({ route, navigation }: any) => {
           setShowRcaModal(false);
           Alert.alert('Work Completed', 'Repair submitted for Manager Quality Verification & Handover.');
         } else {
-          Alert.alert('Status Updated', `Action ${action} recorded in machine downtime ledger.`);
+          Alert.alert('Status Updated', `Action ${action} recorded in downtime ledger.`);
         }
       }
     } catch (e: any) {
@@ -54,267 +59,451 @@ export const WorkOrderDetailScreen = ({ route, navigation }: any) => {
     }
   };
 
+  const isCompleted = currentStatus === 'repair_completed' || currentStatus === 'verified_closed';
+  const isInProgress = currentStatus === 'in_progress';
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.scroll}>
-      {/* WO Header Banner */}
-      <View style={styles.card}>
-        <View style={styles.badgeRow}>
-          <Text style={styles.woNumber}>{workOrder.wo_number}</Text>
-          <View style={styles.statusBadge}>
-            <Text style={styles.statusText}>{currentStatus.toUpperCase()}</Text>
+    <View style={styles.container}>
+      <AppHeader
+        title={workOrder.wo_number || 'Work Order'}
+        icon="wrench"
+        sectionTitle="Work Order Execution"
+        sectionSubtitle="Step-by-step repair, parts usage & LOTO compliance"
+        showBack={true}
+        onBack={() => navigation.goBack()}
+      />
+
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* WO Overview Card */}
+        <View style={styles.overviewCard}>
+          <View style={styles.cardHeaderRow}>
+            <View>
+              <Text style={styles.machineCode}>{workOrder.machine_code || 'JCB-MACH'}</Text>
+              <Text style={styles.machineName}>{workOrder.machine_name || 'Machining Center'}</Text>
+            </View>
+            <View
+              style={[
+                styles.statusBadge,
+                isInProgress
+                  ? styles.statusBadgeActive
+                  : isCompleted
+                  ? styles.statusBadgeDone
+                  : styles.statusBadgeAssigned,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.statusBadgeText,
+                  isInProgress
+                    ? { color: '#1D4ED8' }
+                    : isCompleted
+                    ? { color: '#047857' }
+                    : { color: '#B45309' },
+                ]}
+              >
+                {(currentStatus || 'ASSIGNED').replace('_', ' ').toUpperCase()}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.metaRow}>
+            <View style={styles.metaCol}>
+              <Text style={styles.metaLabel}>Location</Text>
+              <Text style={styles.metaValue}>{workOrder.bay_line_location || 'Bay 1 / Line 4'}</Text>
+            </View>
+            <View style={styles.metaCol}>
+              <Text style={styles.metaLabel}>Assigned Tech</Text>
+              <Text style={styles.metaValue}>{workOrder.technician_name || 'Assigned Crew'}</Text>
+            </View>
+          </View>
+
+          {workOrder.problem_description ? (
+            <View style={styles.issueBox}>
+              <Text style={styles.issueLabel}>Issue Description:</Text>
+              <Text style={styles.issueText}>{workOrder.problem_description}</Text>
+            </View>
+          ) : null}
+        </View>
+
+        {/* Safety LOTO Warning */}
+        <View style={styles.safetyCard}>
+          <MaterialCommunityIcons name="shield-alert" size={24} color="#D97706" />
+          <View style={{ flex: 1, marginLeft: 10 }}>
+            <Text style={styles.safetyTitle}>Mandatory Safety Rule (LOTO)</Text>
+            <Text style={styles.safetyText}>
+              Ensure Lockout/Tagout (LOTO) key is attached to the main breaker before opening valve blocks or electrical panels.
+            </Text>
           </View>
         </View>
 
-        <Text style={styles.machineName}>{workOrder.machine_code} - {workOrder.machine_name}</Text>
-        <Text style={styles.location}>Location: {workOrder.bay_line_location || 'Bay 1 / Line 4'}</Text>
-      </View>
-
-      {/* Safety LOTO Warning */}
-      <View style={styles.safetyBox}>
-        <Text style={styles.safetyTitle}>⚠️ MANDATORY SAFETY INSTRUCTIONS</Text>
-        <Text style={styles.safetyText}>
-          Lockout/Tagout (LOTO) key must be attached to the breaker panel prior to opening hydraulic valve blocks.
-        </Text>
-      </View>
-
-      {/* Spare Parts Action */}
-      <TouchableOpacity
-        style={styles.sparesBtn}
-        onPress={() => navigation.navigate('PartSearch', { workOrderId: workOrder.id })}
-      >
-        <Text style={styles.sparesIcon}>🔍</Text>
-        <View style={styles.sparesTextContainer}>
-          <Text style={styles.sparesTitle}>Search & Reserve Spare Parts (160k Catalog)</Text>
-          <Text style={styles.sparesSub}>Lookup JCB part number, bin rack & check stock</Text>
-        </View>
-      </TouchableOpacity>
-
-      {/* Milestone Action Timer Buttons */}
-      <Text style={styles.sectionTitle}>Execution Milestones</Text>
-
-      {currentStatus === 'assigned' && (
+        {/* Spare Parts Action Button */}
         <TouchableOpacity
-          style={[styles.actionBtn, { backgroundColor: '#3B82F6' }]}
-          onPress={() => triggerMilestone('ARRIVED')}
-          disabled={loading}
+          style={styles.sparesTile}
+          onPress={() => navigation.navigate('PartSearch', { workOrderId: workOrder.id })}
+          activeOpacity={0.8}
         >
-          <Text style={styles.actionBtnText}>ARRIVED AT MACHINE</Text>
+          <View style={styles.sparesIconBox}>
+            <MaterialCommunityIcons name="package-variant-closed" size={22} color="#000000" />
+          </View>
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <Text style={styles.sparesTitle}>Find & Reserve Spare Parts</Text>
+            <Text style={styles.sparesSubtitle}>Check bin rack locations & reserve stock</Text>
+          </View>
+          <MaterialCommunityIcons name="chevron-right" size={20} color="#94A3B8" />
         </TouchableOpacity>
-      )}
 
-      {currentStatus !== 'in_progress' && currentStatus !== 'repair_completed' && currentStatus !== 'verified_closed' && (
-        <TouchableOpacity
-          style={[styles.actionBtn, { backgroundColor: COLORS.statusRunning }]}
-          onPress={() => triggerMilestone('START_WORK')}
-          disabled={loading}
-        >
-          <Text style={styles.actionBtnText}>START ACTIVE REPAIR TIMER</Text>
-        </TouchableOpacity>
-      )}
+        {/* Execution Milestones */}
+        <View style={styles.milestoneSection}>
+          <Text style={styles.sectionHeading}>Repair Milestones</Text>
 
-      {currentStatus === 'in_progress' && (
-        <>
-          <TouchableOpacity
-            style={[styles.actionBtn, { backgroundColor: '#F59E0B' }]}
-            onPress={() => triggerMilestone('PAUSE')}
-            disabled={loading}
-          >
-            <Text style={styles.actionBtnText}>PAUSE (AWAITING PARTS / SHIFT HANDOVER)</Text>
-          </TouchableOpacity>
+          {currentStatus === 'assigned' && (
+            <TouchableOpacity
+              style={[styles.actionBtn, { backgroundColor: '#3B82F6' }]}
+              onPress={() => triggerMilestone('ARRIVED')}
+              disabled={loading}
+              activeOpacity={0.8}
+            >
+              <MaterialCommunityIcons name="map-marker-check" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
+              <Text style={styles.actionBtnText}>Confirm Arrival at Machine</Text>
+            </TouchableOpacity>
+          )}
 
-          <TouchableOpacity
-            style={[styles.actionBtn, { backgroundColor: COLORS.primary }]}
-            onPress={() => setShowRcaModal(true)}
-            disabled={loading}
-          >
-            <Text style={[styles.actionBtnText, { color: '#000000' }]}>FINISH REPAIR & SUBMIT RCA</Text>
-          </TouchableOpacity>
-        </>
-      )}
+          {!isInProgress && !isCompleted && (
+            <TouchableOpacity
+              style={[styles.actionBtn, { backgroundColor: '#10B981', marginTop: 10 }]}
+              onPress={() => triggerMilestone('START_WORK')}
+              disabled={loading}
+              activeOpacity={0.8}
+            >
+              <MaterialCommunityIcons name="timer-play-outline" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
+              <Text style={styles.actionBtnText}>Start Active Repair Timer</Text>
+            </TouchableOpacity>
+          )}
 
-      {/* RCA 5-Why Modal / Inputs */}
-      {showRcaModal && (
-        <View style={styles.rcaBox}>
-          <Text style={styles.rcaHeading}>5-Why Root Cause Analysis (RCA)</Text>
+          {isInProgress && (
+            <View style={{ gap: 10 }}>
+              <TouchableOpacity
+                style={[styles.actionBtn, { backgroundColor: '#F59E0B' }]}
+                onPress={() => triggerMilestone('PAUSE')}
+                disabled={loading}
+                activeOpacity={0.8}
+              >
+                <MaterialCommunityIcons name="pause-circle-outline" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
+                <Text style={styles.actionBtnText}>Pause Repair (Awaiting Parts)</Text>
+              </TouchableOpacity>
 
-          <Text style={styles.inputLabel}>Technician Diagnosis</Text>
-          <TextInput
-            style={styles.input}
-            value={diagnosis}
-            onChangeText={setDiagnosis}
-          />
-
-          <Text style={styles.inputLabel}>5-Why Failure Analysis</Text>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            value={rootCause}
-            onChangeText={setRootCause}
-            multiline
-          />
-
-          <Text style={styles.inputLabel}>Corrective Action Taken</Text>
-          <TextInput
-            style={styles.input}
-            value={correctiveAction}
-            onChangeText={setCorrectiveAction}
-          />
-
-          <TouchableOpacity
-            style={[styles.actionBtn, { backgroundColor: COLORS.statusRunning, marginTop: 12 }]}
-            onPress={() => triggerMilestone('COMPLETE')}
-            disabled={loading}
-          >
-            {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.actionBtnText}>CONFIRM & SUBMIT FOR QA</Text>}
-          </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionBtn, { backgroundColor: COLORS.primary }]}
+                onPress={() => setShowRcaModal(true)}
+                disabled={loading}
+                activeOpacity={0.8}
+              >
+                <MaterialCommunityIcons name="check-circle" size={20} color="#000000" style={{ marginRight: 8 }} />
+                <Text style={[styles.actionBtnText, { color: '#000000' }]}>Complete Repair & Submit Handover</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
-      )}
-    </ScrollView>
+
+        {/* RCA 5-Why Modal */}
+        {showRcaModal && (
+          <View style={styles.rcaCard}>
+            <Text style={styles.rcaHeading}>Root Cause Analysis (RCA)</Text>
+
+            <Text style={styles.inputLabel}>Technician Diagnosis *</Text>
+            <TextInput
+              style={styles.textInput}
+              value={diagnosis}
+              onChangeText={setDiagnosis}
+              placeholder="What specifically failed on the machine?"
+              placeholderTextColor="#94A3B8"
+            />
+
+            <Text style={styles.inputLabel}>5-Why Failure Analysis</Text>
+            <TextInput
+              style={[styles.textInput, styles.textArea]}
+              value={rootCause}
+              onChangeText={setRootCause}
+              placeholder="Why did it happen? (e.g. Oil contamination -> Filter saturated)"
+              placeholderTextColor="#94A3B8"
+              multiline
+            />
+
+            <Text style={styles.inputLabel}>Corrective Action Taken *</Text>
+            <TextInput
+              style={styles.textInput}
+              value={correctiveAction}
+              onChangeText={setCorrectiveAction}
+              placeholder="What repair/replacement was performed?"
+              placeholderTextColor="#94A3B8"
+            />
+
+            <TouchableOpacity
+              style={[styles.actionBtn, { backgroundColor: '#10B981', marginTop: 14 }]}
+              onPress={() => triggerMilestone('COMPLETE')}
+              disabled={loading}
+              activeOpacity={0.8}
+            >
+              {loading ? (
+                <ActivityIndicator color="#FFF" />
+              ) : (
+                <Text style={styles.actionBtnText}>Confirm & Submit Quality Handover</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  scroll: {
-    padding: 16,
-    paddingBottom: 40,
-  },
-  card: {
     backgroundColor: '#F8FAFC',
-    borderRadius: 8,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 14,
   },
-  badgeRow: {
+  topHeader: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    borderBottomWidth: 1.5,
+    borderBottomColor: '#E2E8F0',
   },
-  woNumber: {
+  backBtn: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+  },
+  headerTitle: {
     fontSize: 16,
     fontWeight: '800',
     color: '#0F172A',
   },
-  statusBadge: {
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  statusText: {
+  headerSubtitle: {
     fontSize: 11,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  brandBadge: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: COLORS.primaryDark,
+  },
+  brandBadgeText: {
+    color: '#000000',
+    fontSize: 13,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 40,
+    gap: 14,
+  },
+  overviewCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  machineCode: {
+    fontSize: 16,
     fontWeight: '800',
-    color: '#D97706',
+    color: '#0F172A',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   machineName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  location: {
-    fontSize: 12,
-    color: '#64748B',
+    fontSize: 13,
+    color: '#475569',
+    fontWeight: '600',
     marginTop: 2,
   },
-  safetyBox: {
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FCA5A5',
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  statusBadgeAssigned: {
+    backgroundColor: '#FEF3C7',
+  },
+  statusBadgeActive: {
+    backgroundColor: '#DBEAFE',
+  },
+  statusBadgeDone: {
+    backgroundColor: '#DCFCE7',
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginVertical: 12,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  metaCol: {
+    flex: 1,
+  },
+  metaLabel: {
+    fontSize: 11,
+    color: '#94A3B8',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  metaValue: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginTop: 2,
+  },
+  issueBox: {
+    backgroundColor: '#F8FAFC',
     borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
+    padding: 10,
+    marginTop: 12,
+  },
+  issueLabel: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '700',
+  },
+  issueText: {
+    fontSize: 12,
+    color: '#334155',
+    marginTop: 2,
+  },
+  safetyCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 12,
+    padding: 14,
   },
   safetyTitle: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#B91C1C',
-    marginBottom: 4,
+    color: '#92400E',
   },
   safetyText: {
-    fontSize: 12,
-    color: '#7F1D1D',
+    fontSize: 11.5,
+    color: '#B45309',
+    marginTop: 2,
     lineHeight: 16,
   },
-  sparesBtn: {
+  sparesTile: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#EFF6FF',
-    borderWidth: 1.5,
-    borderColor: '#93C5FD',
-    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
     padding: 14,
-    marginBottom: 20,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 3,
+    elevation: 1,
   },
-  sparesIcon: {
-    fontSize: 22,
-    marginRight: 12,
-  },
-  sparesTextContainer: {
-    flex: 1,
+  sparesIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   sparesTitle: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#1E3A8A',
+    fontWeight: '800',
+    color: '#0F172A',
   },
-  sparesSub: {
+  sparesSubtitle: {
     fontSize: 11,
-    color: '#3B82F6',
+    color: '#64748B',
     marginTop: 2,
   },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#334155',
-    marginBottom: 10,
+  milestoneSection: {
+    gap: 8,
+  },
+  sectionHeading: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#475569',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   actionBtn: {
-    height: 48,
-    borderRadius: 8,
-    justifyContent: 'center',
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 10,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   actionBtnText: {
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '800',
-    letterSpacing: 0.5,
   },
-  rcaBox: {
-    backgroundColor: '#F1F5F9',
-    borderRadius: 8,
-    padding: 14,
-    marginTop: 14,
+  rcaCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: '#E2E8F0',
   },
   rcaHeading: {
     fontSize: 14,
     fontWeight: '800',
     color: '#0F172A',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   inputLabel: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '700',
     color: '#475569',
+    marginTop: 10,
     marginBottom: 4,
-    marginTop: 8,
   },
-  input: {
-    height: 42,
-    backgroundColor: '#FFFFFF',
+  textInput: {
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    fontSize: 13,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    height: 40,
+    fontSize: 12.5,
     color: '#0F172A',
   },
   textArea: {
@@ -323,4 +512,3 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
 });
-
