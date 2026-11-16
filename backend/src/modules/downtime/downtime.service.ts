@@ -324,7 +324,7 @@ export async function getDowntimeSummaryService(
     JOIN shops s ON m.shop_id = s.id
     LEFT JOIN maintenance_requests mr ON wo.complaint_id = mr.id
     WHERE ${whereClause}
-    GROUP BY issue_category
+    GROUP BY 1
     ORDER BY count DESC
   `;
   const categoryRes = await query(categorySql, params);
@@ -1123,7 +1123,7 @@ export async function getDowntimeByCategoryService(
     JOIN shops s ON m.shop_id = s.id
     LEFT JOIN maintenance_requests mr ON wo.complaint_id = mr.id
     WHERE ${whereClause} AND wo.status = 'verified_closed'
-    GROUP BY issue_category
+    GROUP BY 1
     ORDER BY incident_count DESC
   `;
 

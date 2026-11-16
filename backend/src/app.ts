@@ -37,6 +37,13 @@ const corsOptions: cors.CorsOptions = {
     if (config.allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
+    // In development mode, dynamically permit any localhost / 127.0.0.1 port
+    if (config.nodeEnv !== 'production') {
+      const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+      if (isLocalhost) {
+        return callback(null, true);
+      }
+    }
     // Origin not allowed: omit CORS headers
     return callback(null, false);
   },

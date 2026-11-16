@@ -870,7 +870,15 @@ class MockWorkOrdersDatabase {
     // Notifications
     if (trimmed.startsWith('INSERT INTO notifications')) {
       const [recipient_id, title, message, type, link_url] = params;
-      const notif = { id: `notif-${this.notifications.length + 1}`, recipient_id, title, message, type, link_url, created_at: new Date() };
+      const notif = {
+        id: `c0000000-0000-0000-0000-${String(this.notifications.length + 1).padStart(12, '0')}`,
+        recipient_id,
+        title,
+        message,
+        type,
+        link_url,
+        created_at: new Date(),
+      };
       this.notifications.push(notif);
       return { rows: [notif], rowCount: 1 };
     }

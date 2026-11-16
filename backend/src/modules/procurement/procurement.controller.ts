@@ -1,15 +1,22 @@
 import { Request, Response, NextFunction } from 'express';
 import {
   createPurchaseRequisitionService,
+  editPurchaseRequisitionService,
+  deletePurchaseRequisitionService,
   getPurchaseRequisitionsService,
   getPurchaseRequisitionDetailsService,
   updatePRStatusService,
+  approvePurchaseRequisitionService,
+  rejectPurchaseRequisitionService,
   createPurchaseOrderService,
   getPurchaseOrdersService,
   cancelPurchaseRequisitionService,
   processGRNInwardService,
   getVendorsService,
   getProcurementDashboardService,
+  createVendorService,
+  updateVendorService,
+  getVendorByIdService,
   ProcurementServiceError,
   setProcurementServiceDb,
   resetProcurementServiceDb,
@@ -60,6 +67,7 @@ export const createPurchaseRequisition = async (
       urgency,
       technical_justification,
       expected_delivery_date,
+      plant_id,
     } = req.body || {};
 
     const pr = await createPurchaseRequisitionService(
@@ -71,6 +79,7 @@ export const createPurchaseRequisition = async (
         urgency,
         technical_justification,
         expected_delivery_date,
+        plant_id,
       },
       user
     );
@@ -186,7 +195,43 @@ export const updatePRStatus = async (
     }
 
     const { id } = req.params;
-    const { status, po_number, supplier_name, unit_price, expected_delivery_date, remarks } = req.body || {};
+    const {
+      status,
+      po_number,
+      supplier_name,
+      unit_price,
+      expected_delivery_date,
+      remarks,
+      part_id,
+      quantity_required,
+      urgency,
+      technical_justification,
+      machine_id,
+      work_order_id,
+    } = req.body || {};
+
+    if ((part_id !== undefined || quantity_required !== undefined || urgency !== undefined || technical_justification !== undefined) && !status) {
+      const updatedPR = await editPurchaseRequisitionService(
+        id,
+        {
+          part_id,
+          quantity_required,
+          urgency,
+          technical_justification,
+          machine_id,
+          work_order_id,
+          expected_delivery_date,
+        },
+        user
+      );
+
+      res.json({
+        success: true,
+        message: `Purchase Requisition ${updatedPR.pr_number} updated successfully.`,
+        data: updatedPR,
+      });
+      return;
+    }
 
     const updatedPR = await updatePRStatusService(
       id,
@@ -214,6 +259,84 @@ export const updatePRStatus = async (
 // ---------------------------------------------------------------------------
 // 5. Approve Purchase Requisition (POST /api/v1/procurement/pr/:id/approve)
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// 4b. Edit Purchase Requisition Specification (PUT /api/v1/procurement/pr/:id/edit)
+// ---------------------------------------------------------------------------
+export const editPurchaseRequisition = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user || !user.id) {
+      res.status(401).json({ success: false, message: 'Unauthorized: Authentication required.' });
+      return;
+    }
+
+    const { id } = req.params;
+    const {
+      part_id,
+      quantity_required,
+      urgency,
+      technical_justification,
+      machine_id,
+      work_order_id,
+      expected_delivery_date,
+    } = req.body || {};
+
+    const updatedPR = await editPurchaseRequisitionService(
+      id,
+      {
+        part_id,
+        quantity_required,
+        urgency,
+        technical_justification,
+        machine_id,
+        work_order_id,
+        expected_delivery_date,
+      },
+      user
+    );
+
+    res.json({
+      success: true,
+      message: `Purchase Requisition ${updatedPR.pr_number} updated successfully.`,
+      data: updatedPR,
+    });
+  } catch (err) {
+    handleControllerError(err, res, next);
+  }
+};
+
+// ---------------------------------------------------------------------------
+// 4c. Delete Purchase Requisition (DELETE /api/v1/procurement/pr/:id)
+// ---------------------------------------------------------------------------
+export const deletePurchaseRequisition = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user || !user.id) {
+      res.status(401).json({ success: false, message: 'Unauthorized: Authentication required.' });
+      return;
+    }
+
+    const { id } = req.params;
+    const result = await deletePurchaseRequisitionService(id, user);
+
+    res.json({
+      success: true,
+      message: `Purchase Requisition ${result.pr_number} deleted successfully.`,
+      data: result,
+    });
+  } catch (err) {
+    handleControllerError(err, res, next);
+  }
+};
+
 export const approvePurchaseRequisition = async (
   req: Request,
   res: Response,
@@ -227,12 +350,14 @@ export const approvePurchaseRequisition = async (
     }
 
     const { id } = req.params;
-    const { remarks, next_status = 'vendor_selected' } = req.body || {};
+    const { remarks, next_status, target_status } = req.body || {};
+    const effectiveTargetStatus = target_status || next_status || 'vendor_selected';
 
-    const updatedPR = await updatePRStatusService(
+    const updatedPR = await approvePurchaseRequisitionService(
       id,
       {
-        status: next_status,
+        next_status: effectiveTargetStatus,
+        target_status: effectiveTargetStatus,
         remarks: remarks || 'Requisition approved by management.',
       },
       user
@@ -267,7 +392,7 @@ export const rejectPurchaseRequisition = async (
     const { reason, remarks } = req.body || {};
     const rejectionReason = reason || remarks;
 
-    const updatedPR = await cancelPurchaseRequisitionService(id, rejectionReason, user);
+    const updatedPR = await rejectPurchaseRequisitionService(id, rejectionReason, user);
 
     res.json({
       success: true,
@@ -295,9 +420,10 @@ export const cancelPurchaseRequisition = async (
     }
 
     const { id } = req.params;
-    const { reason } = req.body || {};
+    const { reason, remarks } = req.body || {};
+    const cancellationReason = reason || remarks;
 
-    const updatedPR = await cancelPurchaseRequisitionService(id, reason, user);
+    const updatedPR = await cancelPurchaseRequisitionService(id, cancellationReason, user);
 
     res.json({
       success: true,
@@ -325,7 +451,28 @@ export const createPurchaseOrder = async (
     }
 
     const { id } = req.params;
-    const { po_number, supplier_name, unit_price, expected_delivery_date, remarks, mark_as_ordered } = req.body || {};
+    const {
+      po_number,
+      supplier_name,
+      unit_price,
+      expected_delivery_date,
+      remarks,
+      mark_as_ordered,
+      supply_method,
+      delivery_document_type,
+      challan_type,
+      vendor_challan_number,
+      expected_dispatch_date,
+      transporter_name,
+      vehicle_number,
+      lr_tracking_number,
+      delivery_remarks,
+      dispatch_location,
+      destination_plant_name,
+      transport_mode,
+      freight_cost,
+      overall_shipment_cost,
+    } = req.body || {};
 
     const updatedPR = await createPurchaseOrderService(
       id,
@@ -336,6 +483,20 @@ export const createPurchaseOrder = async (
         expected_delivery_date,
         remarks,
         mark_as_ordered,
+        supply_method,
+        delivery_document_type,
+        challan_type,
+        vendor_challan_number,
+        expected_dispatch_date,
+        transporter_name,
+        vehicle_number,
+        lr_tracking_number,
+        delivery_remarks,
+        dispatch_location,
+        destination_plant_name,
+        transport_mode,
+        freight_cost,
+        overall_shipment_cost,
       },
       user
     );
@@ -441,9 +602,26 @@ export const processGRNInward = async (
       received_quantity,
       accepted_quantity,
       rejected_quantity,
+      damaged_quantity,
+      defective_quantity,
+      inspection_status,
+      inspection_remarks,
       rejection_reason,
       remarks,
       delivery_note_number,
+      vendor_challan_number,
+      invoice_number,
+      supply_method,
+      delivery_document_type,
+      challan_type,
+      vehicle_number,
+      lr_tracking_number,
+      dispatch_location,
+      destination_plant_name,
+      transport_mode,
+      transporter_name,
+      freight_cost,
+      overall_shipment_cost,
     } = req.body || {};
 
     const result = await processGRNInwardService(
@@ -452,9 +630,26 @@ export const processGRNInward = async (
         received_quantity,
         accepted_quantity,
         rejected_quantity,
+        damaged_quantity,
+        defective_quantity,
+        inspection_status,
+        inspection_remarks,
         rejection_reason,
         remarks,
         delivery_note_number,
+        vendor_challan_number,
+        invoice_number,
+        supply_method,
+        delivery_document_type,
+        challan_type,
+        vehicle_number,
+        lr_tracking_number,
+        dispatch_location,
+        destination_plant_name,
+        transport_mode,
+        transporter_name,
+        freight_cost,
+        overall_shipment_cost,
       },
       user
     );
@@ -464,10 +659,27 @@ export const processGRNInward = async (
       message: `GRN processed successfully. ${result.accepted_quantity} units added to physical stock ledger.`,
       data: result.pr,
       receipt_details: {
+        grn_number: result.grn_number,
+        received_quantity: result.received_quantity,
         accepted_quantity: result.accepted_quantity,
         rejected_quantity: result.rejected_quantity,
+        damaged_quantity: result.damaged_quantity || 0,
+        defective_quantity: result.defective_quantity || 0,
+        inspection_status: result.inspection_status || 'passed',
+        inspection_remarks: result.inspection_remarks || null,
+        rejection_reason: result.rejection_reason || null,
+        previous_inwarded: result.previous_inwarded,
         total_inwarded: result.total_inwarded,
+        cumulative_physical_delivered: result.cumulative_physical_delivered,
         remaining_quantity: result.remaining_quantity,
+        remaining_receivable: result.remaining_receivable,
+        transport_mode: result.transport_mode || null,
+        dispatch_location: result.dispatch_location || null,
+        destination_plant_name: result.destination_plant_name || null,
+        transporter_name: result.transporter_name || null,
+        lr_tracking_number: result.lr_tracking_number || null,
+        freight_cost: result.freight_cost || 0,
+        overall_shipment_cost: result.overall_shipment_cost || 0,
       },
     });
   } catch (err) {
@@ -521,6 +733,131 @@ export const getProcurementDashboard = async (
     res.json({
       success: true,
       data: metrics,
+    });
+  } catch (err) {
+    handleControllerError(err, res, next);
+  }
+};
+
+// ---------------------------------------------------------------------------
+// 14. Vendor Master CRUD Controllers
+// ---------------------------------------------------------------------------
+export const createVendor = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user || !user.id) {
+      res.status(401).json({ success: false, message: 'Unauthorized: Authentication required.' });
+      return;
+    }
+
+    const {
+      vendor_code,
+      name,
+      contact_person,
+      email,
+      phone,
+      address,
+      gstin,
+      payment_terms,
+      plant_id,
+    } = req.body || {};
+
+    const vendor = await createVendorService(
+      {
+        vendor_code,
+        name,
+        contact_person,
+        email,
+        phone,
+        address,
+        gstin,
+        payment_terms,
+        plant_id,
+      },
+      user
+    );
+
+    res.status(201).json({
+      success: true,
+      message: `Vendor ${vendor.name} registered successfully.`,
+      data: vendor,
+    });
+  } catch (err) {
+    handleControllerError(err, res, next);
+  }
+};
+
+export const updateVendor = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user || !user.id) {
+      res.status(401).json({ success: false, message: 'Unauthorized: Authentication required.' });
+      return;
+    }
+
+    const { id } = req.params;
+    const {
+      name,
+      contact_person,
+      email,
+      phone,
+      address,
+      gstin,
+      payment_terms,
+      status,
+    } = req.body || {};
+
+    const updated = await updateVendorService(
+      id,
+      {
+        name,
+        contact_person,
+        email,
+        phone,
+        address,
+        gstin,
+        payment_terms,
+        status,
+      },
+      user
+    );
+
+    res.json({
+      success: true,
+      message: `Vendor ${updated.name} updated successfully.`,
+      data: updated,
+    });
+  } catch (err) {
+    handleControllerError(err, res, next);
+  }
+};
+
+export const getVendorById = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user || !user.id) {
+      res.status(401).json({ success: false, message: 'Unauthorized: Authentication required.' });
+      return;
+    }
+
+    const { id } = req.params;
+    const vendor = await getVendorByIdService(id, user);
+
+    res.json({
+      success: true,
+      data: vendor,
     });
   } catch (err) {
     handleControllerError(err, res, next);

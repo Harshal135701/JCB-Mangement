@@ -10,6 +10,7 @@ import {
   verifyAndCloseWorkOrderService,
   reopenWorkOrderService,
   WorkOrderServiceError,
+  isUUID,
   setWorkOrdersServiceDb,
   resetWorkOrdersServiceDb,
   setWorkOrdersServiceIo,
@@ -39,6 +40,11 @@ export const createWorkOrderFromComplaint = async (
 
     if (!complaint_id || !technician_id) {
       res.status(400).json({ success: false, message: 'Complaint ID and Technician ID are required.' });
+      return;
+    }
+
+    if (!isUUID(complaint_id) || !isUUID(technician_id)) {
+      res.status(400).json({ success: false, message: 'Valid Complaint ID and Technician ID format required.' });
       return;
     }
 

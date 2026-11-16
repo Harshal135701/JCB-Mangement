@@ -21,9 +21,9 @@ router.post('/refresh-token', refreshToken);
 // Authenticated Session Endpoints
 router.get('/profile', authenticateJWT, getProfile);
 
-// Admin-only User Governance CRUD
-router.get('/users', authenticateJWT, requireRoles('admin'), getUsers);
-router.post('/users', authenticateJWT, requireRoles('admin'), createUser);
+// Admin, Manager, and Store Manager can view users (e.g. managers dispatching technicians, stores verifying requestors)
+router.get('/users', authenticateJWT, requireRoles('admin', 'manager', 'store_manager'), getUsers);
+router.post('/users', authenticateJWT, requireRoles('admin', 'manager'), createUser);
 router.put('/users/:id', authenticateJWT, requireRoles('admin'), updateUser);
 router.delete('/users/:id', authenticateJWT, requireRoles('admin'), deleteUser);
 

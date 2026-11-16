@@ -1,4 +1,5 @@
 import { query as defaultQuery, pool as defaultPool } from '../../config/db';
+import { autoAssignBreakdownService } from './breakdown-assignment.service';
 
 export const isUUID = (value: unknown): value is string =>
   typeof value === 'string' &&
@@ -386,18 +387,43 @@ export async function createBreakdownComplaintService(
       [machine.plant_id, machine.shop_id]
     );
 
+    const reportedByName = (user as any).full_name || (user as any).employee_code || 'Operator';
+    const notifTitle = cleanPriority === 'critical' ? 'CRITICAL Breakdown Reported' : 'New Breakdown Reported';
+    const notifMessage = `New breakdown request received. Machine: ${machine.machine_code}. Reported by: ${reportedByName}. Priority: ${cleanPriority}. Request ID: ${complaint_number}.`;
+
     for (const mgr of managersRes.rows) {
       await client.query(
         `INSERT INTO notifications (recipient_id, title, message, type, link_url, created_at)
          VALUES ($1, $2, $3, $4, $5, NOW())`,
         [
           mgr.id,
-          cleanPriority === 'critical' ? 'CRITICAL Breakdown Reported' : 'New Breakdown Reported',
-          `Complaint ${complaint_number} reported on machine ${machine.machine_code} (${machine.name}) for ${cleanCategory} issue.`,
+          notifTitle,
+          notifMessage,
           cleanPriority === 'critical' ? 'critical' : 'warning',
-          `/breakdowns/${complaint.id}`,
+          `/triage?breakdownId=${complaint.id}`,
         ]
       );
+    }
+
+    // 15b. Automatic Technician Assignment
+    try {
+      const assignmentResult = await autoAssignBreakdownService(client, complaint.id, customIoParam, {
+        breakdown: complaint,
+        machine,
+      });
+      if (assignmentResult && assignmentResult.assigned && assignmentResult.assignment) {
+        complaint.assigned_technician_id = assignmentResult.assignment.technician_id;
+        complaint.assignment_status = (assignmentResult.assignment.status || 'PENDING').toLowerCase();
+        complaint.current_assignment_id = assignmentResult.assignment.id;
+      } else {
+        complaint.assigned_technician_id = null;
+        complaint.assignment_status = 'unassigned';
+        complaint.current_assignment_id = null;
+      }
+    } catch {
+      complaint.assigned_technician_id = null;
+      complaint.assignment_status = 'unassigned';
+      complaint.current_assignment_id = null;
     }
 
     await client.query('COMMIT');
@@ -414,17 +440,41 @@ export async function createBreakdownComplaintService(
           shop_name: machine.shop_name,
           plant_name: machine.plant_name,
         },
-        message: `New Complaint ${complaint_number} raised on machine ${machine.machine_code}.`,
+        reported_by: reportedByName,
+        message: notifMessage,
       };
+
+      // Real-time notification inbox event for each concerned manager
+      for (const mgr of managersRes.rows) {
+        if (typeof activeIo.to === 'function') {
+          const notifItem = {
+            recipient_id: mgr.id,
+            title: notifTitle,
+            message: notifMessage,
+            type: cleanPriority === 'critical' ? 'critical' : 'warning',
+            link_url: `/breakdowns/${complaint.id}`,
+            action_url: `/breakdowns/${complaint.id}`,
+            is_read: false,
+            created_at: new Date(),
+          };
+          activeIo.to(`user:${mgr.id}`).emit('notification:new', notifItem);
+          activeIo.to(`user_${mgr.id}`).emit('notification:new', notifItem);
+          activeIo.to(`user:${mgr.id}`).emit('notification', notifItem);
+        }
+      }
 
       if (machine.plant_id && typeof activeIo.to === 'function') {
         activeIo.to(`plant:${machine.plant_id}`).emit('complaint:created', socketPayload);
+        activeIo.to(`managers:${machine.plant_id}`).emit('complaint:created', socketPayload);
       }
       if (machine.shop_id && typeof activeIo.to === 'function') {
         activeIo.to(`shop:${machine.shop_id}`).emit('complaint:created', socketPayload);
       }
-      if (cleanPriority === 'critical' && machine.plant_id && typeof activeIo.to === 'function') {
-        activeIo.to(`plant:${machine.plant_id}`).emit('complaint:critical', socketPayload);
+      if (cleanPriority === 'critical' && typeof activeIo.to === 'function') {
+        if (machine.plant_id) {
+          activeIo.to(`plant:${machine.plant_id}`).emit('complaint:critical', socketPayload);
+        }
+        activeIo.to('role:admin').emit('complaint:critical', socketPayload);
       }
     }
 

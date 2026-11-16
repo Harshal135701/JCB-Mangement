@@ -10,16 +10,24 @@ export async function runMigrations() {
   try {
     console.log('[Migration] Starting automated database migration for JCB CMMS...');
 
-    const schemaPath = path.resolve(__dirname, '../../../database/migrations/001_initial_schema.sql');
+    const migrationsDir = path.resolve(__dirname, '../../../database/migrations');
     const seedPath = path.resolve(__dirname, '../../../database/seeds/001_initial_seed.sql');
 
-    if (fs.existsSync(schemaPath)) {
-      console.log('[Migration] Executing 001_initial_schema.sql...');
-      const schemaSql = fs.readFileSync(schemaPath, 'utf8');
-      await client.query(schemaSql);
-      console.log('[Migration] Schema created successfully.');
+    if (fs.existsSync(migrationsDir)) {
+      const migrationFiles = fs
+        .readdirSync(migrationsDir)
+        .filter((file) => file.endsWith('.sql'))
+        .sort();
+
+      for (const file of migrationFiles) {
+        const filePath = path.join(migrationsDir, file);
+        console.log(`[Migration] Executing migration ${file}...`);
+        const sql = fs.readFileSync(filePath, 'utf8');
+        await client.query(sql);
+        console.log(`[Migration] Migration ${file} executed successfully.`);
+      }
     } else {
-      console.warn('[Migration Warning] Schema file not found at:', schemaPath);
+      console.warn('[Migration Warning] Migrations directory not found at:', migrationsDir);
     }
 
     if (fs.existsSync(seedPath)) {

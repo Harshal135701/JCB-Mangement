@@ -6,6 +6,8 @@ import {
   getPurchaseRequisitions,
   getPurchaseRequisitionDetails,
   updatePRStatus,
+  editPurchaseRequisition,
+  deletePurchaseRequisition,
   approvePurchaseRequisition,
   rejectPurchaseRequisition,
   cancelPurchaseRequisition,
@@ -149,6 +151,7 @@ class AdvisoryLockManager {
 interface MockPlant {
   id: string;
   name: string;
+  plant_name?: string;
   code: string;
 }
 
@@ -174,6 +177,7 @@ interface MockMachine {
   shop_id: string;
   machine_code: string;
   name: string;
+  model_number?: string;
   status: string;
 }
 
@@ -219,6 +223,21 @@ interface MockPurchaseRequisition {
   unit_price: number;
   expected_delivery_date: string | null;
   received_date: string | null;
+  plant_id?: string | null;
+  supply_method?: string | null;
+  delivery_document_type?: string | null;
+  challan_type?: string | null;
+  vendor_challan_number?: string | null;
+  expected_dispatch_date?: string | null;
+  transporter_name?: string | null;
+  vehicle_number?: string | null;
+  lr_tracking_number?: string | null;
+  delivery_remarks?: string | null;
+  dispatch_location?: string | null;
+  destination_plant_name?: string | null;
+  transport_mode?: string | null;
+  freight_cost?: number;
+  overall_shipment_cost?: number;
   created_at: Date;
   updated_at: Date;
 }
@@ -254,7 +273,42 @@ interface MockNotification {
   message: string;
   type: string;
   link_url?: string;
+  entity_type?: string;
+  entity_id?: string;
+  plant_id?: string;
+  shop_id?: string;
   is_read: boolean;
+  created_at: Date;
+}
+
+interface MockGrnReceipt {
+  id: string;
+  grn_number: string;
+  pr_id: string;
+  delivery_note_number?: string | null;
+  received_quantity: number;
+  accepted_quantity: number;
+  rejected_quantity: number;
+  damaged_quantity: number;
+  defective_quantity: number;
+  inspection_status: string;
+  inspection_remarks?: string | null;
+  rejection_reason?: string | null;
+  remarks?: string | null;
+  received_by: string;
+  vendor_challan_number?: string | null;
+  supply_method?: string | null;
+  delivery_document_type?: string | null;
+  challan_type?: string | null;
+  vehicle_number?: string | null;
+  lr_tracking_number?: string | null;
+  invoice_number?: string | null;
+  dispatch_location?: string | null;
+  destination_plant_name?: string | null;
+  transport_mode?: string | null;
+  transporter_name?: string | null;
+  freight_cost?: number;
+  overall_shipment_cost?: number;
   created_at: Date;
 }
 
@@ -272,9 +326,13 @@ class MockProcurementDatabase implements DbPoolLike {
   public transactions: MockInventoryTransaction[] = [];
   public auditLogs: MockAuditLog[] = [];
   public notifications: MockNotification[] = [];
+  public grnReceipts: MockGrnReceipt[] = [];
 
   public lockManager = new AdvisoryLockManager();
   public failNextTransaction = false;
+  public shouldFailGrnInsert = false;
+  public rolledBack = false;
+  public queriedForUpdateLocks: string[] = [];
 
   constructor() {
     this.seed();
@@ -282,8 +340,8 @@ class MockProcurementDatabase implements DbPoolLike {
 
   seed() {
     this.plants = [
-      { id: '10000000-0000-0000-0000-000000000001', name: 'JCB Pune Plant 1', code: 'PUNE-01' },
-      { id: '10000000-0000-0000-0000-000000000002', name: 'JCB Ballabgarh Plant 2', code: 'BLB-02' },
+      { id: '10000000-0000-0000-0000-000000000001', name: 'JCB Pune Plant 1', plant_name: 'JCB Pune Plant 1', code: 'PUNE-01' },
+      { id: '10000000-0000-0000-0000-000000000002', name: 'JCB Ballabgarh Plant 2', plant_name: 'JCB Ballabgarh Plant 2', code: 'BLB-02' },
     ];
 
     this.shops = [
@@ -453,6 +511,7 @@ class MockProcurementDatabase implements DbPoolLike {
         unit_price: 4850.0,
         expected_delivery_date: '2026-11-20',
         received_date: null,
+        plant_id: '10000000-0000-0000-0000-000000000001',
         created_at: new Date('2026-11-01T10:00:00Z'),
         updated_at: new Date('2026-11-01T10:00:00Z'),
       },
@@ -473,6 +532,7 @@ class MockProcurementDatabase implements DbPoolLike {
         unit_price: 76200.0,
         expected_delivery_date: '2026-11-02', // Overdue date
         received_date: null,
+        plant_id: '10000000-0000-0000-0000-000000000001',
         created_at: new Date('2026-10-25T08:00:00Z'),
         updated_at: new Date('2026-10-26T09:00:00Z'),
       },
@@ -481,6 +541,10 @@ class MockProcurementDatabase implements DbPoolLike {
     this.transactions = [];
     this.auditLogs = [];
     this.notifications = [];
+    this.grnReceipts = [];
+    this.shouldFailGrnInsert = false;
+    this.rolledBack = false;
+    this.queriedForUpdateLocks = [];
   }
 
   async connect(): Promise<DbClientLike> {
@@ -496,6 +560,11 @@ class MockProcurementDatabase implements DbPoolLike {
 
   async query(text: string, params: any[] = []): Promise<{ rows: any[]; rowCount: number }> {
     const trimmed = text.trim();
+
+    if (trimmed === 'ROLLBACK') {
+      this.rolledBack = true;
+      return { rows: [], rowCount: 0 };
+    }
 
     if (this.failNextTransaction && trimmed.toUpperCase().startsWith('INSERT')) {
       this.failNextTransaction = false;
@@ -557,6 +626,12 @@ class MockProcurementDatabase implements DbPoolLike {
       };
     }
 
+    // 5b. Plant query (by id)
+    if (trimmed.includes('FROM plants') && trimmed.includes('WHERE id = $1')) {
+      const plant = this.plants.find((p) => p.id === params[0]);
+      return { rows: plant ? [{ ...plant, plant_name: plant.plant_name || plant.name }] : [], rowCount: plant ? 1 : 0 };
+    }
+
     // 6. Work order query (by id)
     if (trimmed.includes('FROM work_orders wo') && trimmed.includes('WHERE wo.id = $1')) {
       const wo = this.workOrders.find((w) => w.id === params[0]);
@@ -596,6 +671,7 @@ class MockProcurementDatabase implements DbPoolLike {
         expected_delivery_date: params[8] || null,
         supplier_name: params[9] || null,
         unit_price: params[10] || 0,
+        plant_id: params[11] || null,
         received_date: null,
         created_at: new Date(),
         updated_at: new Date(),
@@ -701,6 +777,12 @@ class MockProcurementDatabase implements DbPoolLike {
         performedBy = params[1];
         oldValues = params[2];
         newValues = params[3];
+      } else if (trimmed.includes(`'PR_REJECTED'`) || trimmed.includes(`'PR_CANCELLED'`)) {
+        action = trimmed.includes(`'PR_REJECTED'`) ? 'PR_REJECTED' : 'PR_CANCELLED';
+        entityId = params[0];
+        performedBy = params[1];
+        oldValues = params[2];
+        newValues = params[3];
       } else if (trimmed.includes(`'purchase_requisitions', $1, 'PO_CREATED', $2, $3, $4`)) {
         action = 'PO_CREATED';
         entityId = params[0];
@@ -748,11 +830,25 @@ class MockProcurementDatabase implements DbPoolLike {
         message: params[2],
         type: params[3],
         link_url: params[4] || undefined,
+        entity_type: params[5] || undefined,
+        entity_id: params[6] || undefined,
+        plant_id: params[7] || undefined,
+        shop_id: params[8] || undefined,
         is_read: false,
         created_at: new Date(),
       };
       this.notifications.push(notif);
       return { rows: [{ ...notif }], rowCount: 1 };
+    }
+
+    // 13b. Check existing notifications (for duplicate prevention)
+    if (trimmed.startsWith('SELECT') && trimmed.includes('FROM notifications')) {
+      const recipientId = params[0];
+      let matches = this.notifications.filter((n) => n.recipient_id === recipientId);
+      if (trimmed.includes('Good news')) {
+        matches = matches.filter((n) => n.message && n.message.includes('Good news! The spare part you reported as unavailable'));
+      }
+      return { rows: matches.map((m) => ({ id: m.id })), rowCount: matches.length };
     }
 
     // 14. Managers query for notifications
@@ -763,6 +859,9 @@ class MockProcurementDatabase implements DbPoolLike {
 
     // 15. Lock PR row FOR UPDATE (by ID)
     if (trimmed.includes('FROM purchase_requisitions pr') && trimmed.includes('WHERE pr.id = $1')) {
+      if (trimmed.includes('FOR UPDATE')) {
+        this.queriedForUpdateLocks.push(params[0]);
+      }
       const pr = this.requisitions.find((r) => r.id === params[0]);
       if (!pr) return { rows: [], rowCount: 0 };
       const machine = this.machines.find((m) => m.id === pr.machine_id);
@@ -802,9 +901,26 @@ class MockProcurementDatabase implements DbPoolLike {
           pr.expected_delivery_date = params[4];
           pr.status = params[5];
           pr.approved_by = params[6];
+          pr.supply_method = params[7] || null;
+          pr.delivery_document_type = params[8] || null;
+          pr.challan_type = params[9] || null;
+          pr.vendor_challan_number = params[10] || null;
+          pr.expected_dispatch_date = params[11] || null;
+          pr.transporter_name = params[12] || null;
+          pr.vehicle_number = params[13] || null;
+          pr.lr_tracking_number = params[14] || null;
+          pr.delivery_remarks = params[15] || null;
+          pr.dispatch_location = params[16] || null;
+          pr.destination_plant_name = params[17] || null;
+          pr.transport_mode = params[18] || null;
+          pr.freight_cost = params[19] !== undefined ? Number(params[19]) : 0;
+          pr.overall_shipment_cost = params[20] !== undefined ? Number(params[20]) : 0;
+        } else if (trimmed.includes("SET status = 'rejected'")) {
+          pr.status = 'rejected';
+        } else if (trimmed.includes("SET status = 'cancelled'")) {
+          pr.status = 'cancelled';
         } else if (trimmed.includes('status = $2,') && trimmed.includes('po_number = $3')) {
           // updatePRStatusService query:
-          // SET status = $2, po_number = $3, supplier_name = $4, unit_price = $5, expected_delivery_date = $6, approved_by = COALESCE($7, approved_by)
           pr.status = params[1];
           pr.po_number = params[2];
           pr.supplier_name = params[3];
@@ -812,10 +928,16 @@ class MockProcurementDatabase implements DbPoolLike {
           pr.expected_delivery_date = params[5];
           pr.approved_by = params[6];
         } else if (trimmed.includes('SET status = $2,') && trimmed.includes('received_date = CURRENT_DATE')) {
-          // processGRNInwardService query:
-          // SET status = $2, received_date = CURRENT_DATE
           pr.status = params[1];
           pr.received_date = new Date().toISOString().split('T')[0];
+        } else if (trimmed.includes('SET part_id = $2,')) {
+          // editPurchaseRequisitionService query:
+          pr.part_id = params[1];
+          pr.quantity_required = Number(params[2]);
+          pr.urgency = params[3];
+          pr.technical_justification = params[4];
+          pr.machine_id = params[5] || null;
+          pr.expected_delivery_date = params[6] || null;
         }
         pr.updated_at = new Date();
       }
@@ -828,6 +950,97 @@ class MockProcurementDatabase implements DbPoolLike {
       const excludeId = params[1];
       const match = this.requisitions.find((r) => r.po_number === poNum && r.id !== excludeId);
       return { rows: match ? [{ id: match.id }] : [], rowCount: match ? 1 : 0 };
+    }
+
+    // 17b. Delete PR row
+    if (trimmed.startsWith('DELETE FROM purchase_requisitions')) {
+      const match = trimmed.match(/WHERE id = \$(\d+)/i);
+      const prId = match ? params[parseInt(match[1], 10) - 1] : params[0];
+      const idx = this.requisitions.findIndex((r) => r.id === prId);
+      const deleted = idx !== -1 ? this.requisitions.splice(idx, 1)[0] : null;
+      return { rows: deleted ? [{ id: deleted.id, pr_number: deleted.pr_number }] : [], rowCount: deleted ? 1 : 0 };
+    }
+
+    // 17c. Check grn_receipts for PR (count)
+    if (trimmed.includes('FROM grn_receipts WHERE pr_id = $1') && !trimmed.includes('SUM')) {
+      const count = this.grnReceipts.filter((g) => g.pr_id === params[0]).length;
+      return { rows: [{ count: String(count) }], rowCount: 1 };
+    }
+
+    // Insert into grn_receipts
+    if (trimmed.startsWith('INSERT INTO grn_receipts')) {
+      if (this.shouldFailGrnInsert) {
+        throw new Error('Database relation "grn_receipts" insertion error (simulated schema/write failure)');
+      }
+      const grn: MockGrnReceipt = {
+        id: `b0000000-0000-0000-0000-${String(this.grnReceipts.length + 1).padStart(12, '0')}`,
+        grn_number: params[0],
+        pr_id: params[1],
+        delivery_note_number: params[2],
+        received_quantity: Number(params[3]),
+        accepted_quantity: Number(params[4]),
+        rejected_quantity: Number(params[5]),
+        damaged_quantity: Number(params[6] || 0),
+        defective_quantity: Number(params[7] || 0),
+        inspection_status: params[8] || 'passed',
+        inspection_remarks: params[9] || null,
+        rejection_reason: params[10] || null,
+        remarks: params[11] || null,
+        received_by: params[12],
+        vendor_challan_number: params[13] || null,
+        supply_method: params[14] || null,
+        delivery_document_type: params[15] || null,
+        challan_type: params[16] || null,
+        vehicle_number: params[17] || null,
+        lr_tracking_number: params[18] || null,
+        invoice_number: params[19] || null,
+        dispatch_location: params[20] || null,
+        destination_plant_name: params[21] || null,
+        transport_mode: params[22] || null,
+        transporter_name: params[23] || null,
+        freight_cost: Number(params[24] || 0),
+        overall_shipment_cost: Number(params[25] || 0),
+        created_at: new Date(),
+      };
+      this.grnReceipts.push(grn);
+      return { rows: [{ id: grn.id, grn_number: grn.grn_number }], rowCount: 1 };
+    }
+
+    // Query grn_receipts sum
+    if (trimmed.includes('FROM grn_receipts') && (trimmed.includes('SUM(received_quantity)') || trimmed.includes('SUM(accepted_quantity)'))) {
+      const prId = params[0];
+      const receipts = this.grnReceipts.filter((g) => g.pr_id === prId);
+      const totalDelivered = receipts.reduce((sum, g) => sum + g.received_quantity, 0);
+      const totalAccepted = receipts.reduce((sum, g) => sum + g.accepted_quantity, 0);
+      return {
+        rows: [
+          {
+            total_prev_delivered: totalDelivered,
+            total_prev_accepted: totalAccepted,
+          },
+        ],
+        rowCount: 1,
+      };
+    }
+
+    // Query grn_receipts list
+    if (trimmed.includes('FROM grn_receipts gr') && trimmed.includes('WHERE gr.pr_id = $1')) {
+      const prId = params[0];
+      const receipts = this.grnReceipts.filter((g) => g.pr_id === prId);
+      const rows = receipts.map((gr) => {
+        const u = this.users.find((user) => user.id === gr.received_by);
+        return {
+          ...gr,
+          received_by_name: u?.full_name,
+          received_by_code: u?.employee_code,
+        };
+      });
+      return { rows, rowCount: rows.length };
+    }
+
+    // 17d. Delete notifications
+    if (trimmed.startsWith('DELETE FROM notifications')) {
+      return { rows: [], rowCount: 0 };
     }
 
     // 18. Count PRs for pagination
@@ -860,8 +1073,9 @@ class MockProcurementDatabase implements DbPoolLike {
           approved_by_name: appUser?.full_name,
           machine_code: machine?.machine_code,
           machine_name: machine?.name,
+          machine_model: machine?.model_number || 'Mazak VARIAXIS',
           shop_name: shop?.shop_name,
-          plant_name: plant?.name,
+          plant_name: plant?.plant_name || plant?.name,
           wo_number: wo?.wo_number,
         };
       });
@@ -870,7 +1084,7 @@ class MockProcurementDatabase implements DbPoolLike {
     }
 
     // 20. Vendor Directory Aggregation
-    if (trimmed.includes('FROM spare_parts sp') && trimmed.includes('FULL OUTER JOIN purchase_requisitions')) {
+    if (trimmed.includes('all_vendors') || (trimmed.includes('FROM spare_parts sp') && trimmed.includes('purchase_requisitions'))) {
       const vendorNames = Array.from(
         new Set([
           ...this.parts.map((p) => p.supplier_name).filter(Boolean),
@@ -1140,6 +1354,65 @@ describe('Procurement & Purchase Requisition Module (CMMS Module 4)', () => {
       assert.equal(res.statusCode, 201);
       assert.equal(wo.status, 'waiting_for_parts');
     });
+
+    it('8b. Enterprise Admin creates generic stock PR with explicit valid plant_id', async () => {
+      const { req, res, next } = createMockContext(
+        {
+          part_id: '30000000-0000-0000-0000-000000000001',
+          quantity_required: 10,
+          plant_id: '10000000-0000-0000-0000-000000000001',
+          technical_justification: 'Plant 1 Central Store replenishment',
+        },
+        {},
+        {},
+        {},
+        adminUser
+      );
+
+      await createPurchaseRequisition(req, res, next);
+      assert.equal(res.statusCode, 201);
+      assert.equal(res.responseData.success, true);
+      assert.equal(res.responseData.data.plant_id, '10000000-0000-0000-0000-000000000001');
+    });
+
+    it('8c. Rejects conflicting plant_id when machine belongs to another plant (HTTP 400)', async () => {
+      const { req, res, next } = createMockContext(
+        {
+          part_id: '30000000-0000-0000-0000-000000000001',
+          machine_id: '40000000-0000-0000-0000-000000000001', // Pune Plant 1
+          plant_id: '10000000-0000-0000-0000-000000000002', // Ballabgarh Plant 2 (conflict)
+          quantity_required: 2,
+        },
+        {},
+        {},
+        {},
+        adminUser
+      );
+
+      await createPurchaseRequisition(req, res, next);
+      assert.equal(res.statusCode, 400);
+      assert.equal(res.responseData.success, false);
+      assert.match(res.responseData.message, /Plant conflict/i);
+    });
+
+    it('8d. Rejects generic stock PR creation when plant ownership cannot be determined (HTTP 400)', async () => {
+      const unscopedAdmin = { ...adminUser, plant_id: undefined };
+      const { req, res, next } = createMockContext(
+        {
+          part_id: '30000000-0000-0000-0000-000000000001',
+          quantity_required: 5,
+        },
+        {},
+        {},
+        {},
+        unscopedAdmin
+      );
+
+      await createPurchaseRequisition(req, res, next);
+      assert.equal(res.statusCode, 400);
+      assert.equal(res.responseData.success, false);
+      assert.match(res.responseData.message, /Plant ownership is required/i);
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -1212,6 +1485,7 @@ describe('Procurement & Purchase Requisition Module (CMMS Module 4)', () => {
       assert.equal(res.responseData.success, true);
       assert.equal(res.responseData.data.pr_number, 'PR-2026-00001');
       assert.equal(res.responseData.data.part_number, 'HYD-10025');
+      assert.ok(Array.isArray(res.responseData.data.grn_receipts), 'Response must include grn_receipts array');
     });
 
     it('14. Manager approves requisition and sets status to vendor_selected', async () => {
@@ -1230,6 +1504,47 @@ describe('Procurement & Purchase Requisition Module (CMMS Module 4)', () => {
       assert.equal(res.statusCode, 200);
       assert.equal(res.responseData.success, true);
       assert.equal(res.responseData.data.status, 'vendor_selected');
+    });
+
+    it('14b. Manager approves with target_status: approval_pending (frontend contract)', async () => {
+      const pr1 = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000001')!;
+      pr1.status = 'under_review';
+
+      const { req, res, next } = createMockContext(
+        {
+          target_status: 'approval_pending',
+          remarks: 'Needs secondary plant management signoff',
+        },
+        { id: pr1.id },
+        {},
+        {},
+        puneManagerUser
+      );
+
+      await approvePurchaseRequisition(req, res, next);
+      assert.equal(res.statusCode, 200);
+      assert.equal(res.responseData.success, true);
+      assert.equal(res.responseData.data.status, 'approval_pending');
+    });
+
+    it('14c. Approval with invalid target status is rejected with HTTP 400', async () => {
+      const pr1 = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000001')!;
+      pr1.status = 'new';
+
+      const { req, res, next } = createMockContext(
+        {
+          target_status: 'fully_received',
+        },
+        { id: pr1.id },
+        {},
+        {},
+        puneManagerUser
+      );
+
+      await approvePurchaseRequisition(req, res, next);
+      assert.equal(res.statusCode, 400);
+      assert.equal(res.responseData.success, false);
+      assert.match(res.responseData.message, /Invalid approval status/i);
     });
 
     it('15. Separation of duties: Manager cannot self-approve their own requisition (HTTP 403)', async () => {
@@ -1268,7 +1583,7 @@ describe('Procurement & Purchase Requisition Module (CMMS Module 4)', () => {
       assert.match(res.responseData.message, /minimum 5 characters/i);
     });
 
-    it('17. Successful rejection cancels the requisition and logs audit trail', async () => {
+    it('17. Successful rejection sets status to rejected and logs audit trail', async () => {
       const { req, res, next } = createMockContext(
         {
           reason: 'Part already available in Plant 2 buffer stock. Transfer arranged.',
@@ -1282,10 +1597,30 @@ describe('Procurement & Purchase Requisition Module (CMMS Module 4)', () => {
       await rejectPurchaseRequisition(req, res, next);
       assert.equal(res.statusCode, 200);
       assert.equal(res.responseData.success, true);
-      assert.equal(res.responseData.data.status, 'cancelled');
+      assert.equal(res.responseData.data.status, 'rejected');
 
       const audit = mockDb.auditLogs.find((a) => a.entity_id === '70000000-0000-0000-0000-000000000001');
       assert.ok(audit);
+    });
+
+    it('17b. Explicit cancellation sets status to cancelled and logs audit trail', async () => {
+      const pr = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000001')!;
+      pr.status = 'under_review';
+
+      const { req, res, next } = createMockContext(
+        {
+          reason: 'Duplicate requisition created by technician by mistake.',
+        },
+        { id: pr.id },
+        {},
+        {},
+        puneManagerUser
+      );
+
+      await cancelPurchaseRequisition(req, res, next);
+      assert.equal(res.statusCode, 200);
+      assert.equal(res.responseData.success, true);
+      assert.equal(res.responseData.data.status, 'cancelled');
     });
 
     it('18. State machine rejects illegal status transitions (e.g. new -> fully_received directly) (HTTP 400)', async () => {
@@ -1334,7 +1669,151 @@ describe('Procurement & Purchase Requisition Module (CMMS Module 4)', () => {
       await cancelPurchaseRequisition(req, res, next);
       assert.equal(res.statusCode, 400);
       assert.equal(res.responseData.success, false);
-      assert.match(res.responseData.message, /Invalid status transition/i);
+      assert.match(res.responseData.message, /(Invalid status transition|Cannot cancel)/i);
+    });
+
+    it('18d. Successfully edit purchase requisition specifications (quantity, urgency, justification) in draft new status', async () => {
+      const pr = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000001')!;
+      pr.status = 'new';
+      pr.quantity_required = 5;
+
+      const { req, res, next } = createMockContext(
+        {
+          quantity_required: 12,
+          urgency: 'critical',
+          technical_justification: 'Updated justification for urgent cylinder breakdown',
+        },
+        { id: pr.id },
+        {},
+        {},
+        tech1User
+      );
+
+      await editPurchaseRequisition(req, res, next);
+      assert.equal(res.statusCode, 200);
+      assert.equal(res.responseData.success, true);
+      assert.equal(pr.quantity_required, 12);
+      assert.equal(pr.urgency, 'critical');
+    });
+
+    it('18e. Edit requisition is rejected with HTTP 409 Conflict if PR is already ordered or PO issued', async () => {
+      const pr = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000002')!;
+      assert.equal(pr.status, 'ordered');
+
+      const { req, res, next } = createMockContext(
+        { quantity_required: 20 },
+        { id: pr.id },
+        {},
+        {},
+        puneManagerUser
+      );
+
+      await editPurchaseRequisition(req, res, next);
+      assert.equal(res.statusCode, 409);
+      assert.equal(res.responseData.success, false);
+      assert.match(res.responseData.message, /Cannot edit requisition/i);
+    });
+
+    it('18f. Edit requisition rejects invalid quantity (0 or negative) with HTTP 400', async () => {
+      const pr = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000001')!;
+      pr.status = 'new';
+
+      const { req, res, next } = createMockContext(
+        { quantity_required: 0 },
+        { id: pr.id },
+        {},
+        {},
+        tech1User
+      );
+
+      await editPurchaseRequisition(req, res, next);
+      assert.equal(res.statusCode, 400);
+      assert.equal(res.responseData.success, false);
+      assert.match(res.responseData.message, /must be greater than zero/i);
+    });
+
+    it('18g. Successfully delete purchase requisition in draft new status without PO', async () => {
+      // Create a dedicated new PR to delete
+      const prToDelete = {
+        id: '70000000-0000-0000-0000-000000000099',
+        pr_number: 'PR-2026-00099',
+        work_order_id: null,
+        machine_id: '40000000-0000-0000-0000-000000000001',
+        part_id: '30000000-0000-0000-0000-000000000001',
+        quantity_required: 3,
+        urgency: 'high' as const,
+        technical_justification: 'Temporary draft requisition',
+        status: 'new' as const,
+        requested_by: tech1User.id,
+        approved_by: null,
+        po_number: null,
+        supplier_name: null,
+        unit_price: 1000,
+        expected_delivery_date: null,
+        received_date: null,
+        plant_id: '10000000-0000-0000-0000-000000000001',
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+      mockDb.requisitions.push(prToDelete);
+
+      const { req, res, next } = createMockContext(
+        {},
+        { id: prToDelete.id },
+        {},
+        {},
+        tech1User
+      );
+
+      await deletePurchaseRequisition(req, res, next);
+      assert.equal(res.statusCode, 200);
+      assert.equal(res.responseData.success, true);
+      assert.equal(mockDb.requisitions.some((r) => r.id === prToDelete.id), false);
+    });
+
+    it('18h. Delete requisition is rejected with HTTP 409 Conflict if PO is already issued', async () => {
+      const pr = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000002')!;
+      assert.ok(pr.po_number);
+
+      const { req, res, next } = createMockContext(
+        {},
+        { id: pr.id },
+        {},
+        {},
+        adminUser
+      );
+
+      await deletePurchaseRequisition(req, res, next);
+      assert.equal(res.statusCode, 409);
+      assert.equal(res.responseData.success, false);
+      assert.match(res.responseData.message, /Cannot delete requisition/i);
+    });
+
+    it('18i. Technician cannot delete another technician\'s purchase requisition (HTTP 403)', async () => {
+      const pr = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000001')!;
+      pr.requested_by = '00000000-0000-0000-0000-000000000004'; // tech1
+
+      // tech2 tries to delete
+      const otherTech: AuthenticatedUser = {
+        id: '00000000-0000-0000-0000-000000000099',
+        employee_code: 'TECH-99',
+        email: 'tech99@jcb.com',
+        role: 'technician',
+        plant_id: '10000000-0000-0000-0000-000000000001',
+      };
+
+      const { req, res, next } = createMockContext(
+        {},
+        { id: pr.id },
+        {},
+        {},
+        otherTech
+      );
+
+      await deletePurchaseRequisition(req, res, next);
+      assert.equal(res.statusCode, 403);
+      assert.equal(res.responseData.success, false);
+      assert.match(res.responseData.message, /Forbidden/i);
     });
   });
 
@@ -1343,6 +1822,10 @@ describe('Procurement & Purchase Requisition Module (CMMS Module 4)', () => {
   // -------------------------------------------------------------------------
   describe('4. Purchase Order (PO) Creation & Tracking', () => {
     it('19. Manager issues Purchase Order with vendor, unit price, and auto-generated PO number', async () => {
+      const pr1 = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000001')!;
+      pr1.status = 'vendor_selected';
+      pr1.po_number = null;
+
       const { req, res, next } = createMockContext(
         {
           supplier_name: 'Bosch Rexroth India',
@@ -1383,6 +1866,10 @@ describe('Procurement & Purchase Requisition Module (CMMS Module 4)', () => {
     });
 
     it('21. Custom PO number duplicate validation against existing POs (HTTP 409)', async () => {
+      const pr1 = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000001')!;
+      pr1.status = 'vendor_selected';
+      pr1.po_number = null;
+
       const { req, res, next } = createMockContext(
         {
           po_number: 'PO-2026-00001', // Already in use by Requisition 2
@@ -1703,6 +2190,224 @@ describe('Procurement & Purchase Requisition Module (CMMS Module 4)', () => {
       assert.equal(res.statusCode, 200);
       assert.equal(res.responseData.data.status, 'fully_received');
     });
+
+    it('30d. GRN insert failure forces transaction rollback: stock is NOT updated, PR status is preserved, and HTTP 500 is returned', async () => {
+      const pr = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000002')!;
+      pr.status = 'ordered';
+      pr.quantity_required = 10;
+      const part = mockDb.parts.find((p) => p.id === pr.part_id)!;
+      const initialStock = part.current_physical_stock;
+
+      // Simulate database failure during grn_receipts persistence
+      mockDb.shouldFailGrnInsert = true;
+
+      const { req, res, next } = createMockContext(
+        {
+          accepted_quantity: 4,
+          rejected_quantity: 0,
+          delivery_note_number: 'DC-FAIL-TEST',
+        },
+        { id: pr.id },
+        {},
+        {},
+        adminUser
+      );
+
+      await processGRNInward(req, res, next);
+
+      assert.equal(res.statusCode, 500);
+      assert.equal(res.responseData.success, false);
+      assert.match(res.responseData.message, /Failed to persist Goods Receipt Note/i);
+      // Verify transaction rollback occurred
+      assert.equal(mockDb.rolledBack, true);
+      // Verify physical inventory was NOT incremented
+      assert.equal(part.current_physical_stock, initialStock);
+      // Verify PR status was NOT modified
+      assert.equal(pr.status, 'ordered');
+      // Verify no GRN_PROCESSED audit log was saved
+      const grnAudit = mockDb.auditLogs.find((a) => a.action === 'GRN_PROCESSED' && a.entity_id === pr.id);
+      assert.ok(!grnAudit, 'No GRN_PROCESSED audit log should exist after transaction rollback');
+    });
+
+    it('30e. Quality Control quantity model: rejects defective quantity exceeding sum of rejected and damaged goods (HTTP 400)', async () => {
+      const pr = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000002')!;
+      pr.status = 'ordered';
+
+      const { req, res, next } = createMockContext(
+        {
+          accepted_quantity: 5,
+          rejected_quantity: 2,
+          damaged_quantity: 1,
+          defective_quantity: 4, // 4 > (2 + 1 = 3), invalid!
+          rejection_reason: 'Crushed packaging with ceramic damage',
+          delivery_note_number: 'DC-QC-TEST',
+        },
+        { id: pr.id },
+        {},
+        {},
+        adminUser
+      );
+
+      await processGRNInward(req, res, next);
+
+      assert.equal(res.statusCode, 400);
+      assert.equal(res.responseData.success, false);
+      assert.match(res.responseData.message, /Defective quantity \(4\) cannot exceed total non-conforming/i);
+    });
+
+    it('30f. Quality Control quantity model: rejects negative defective quantity (HTTP 400)', async () => {
+      const pr = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000002')!;
+      pr.status = 'ordered';
+
+      const { req, res, next } = createMockContext(
+        {
+          accepted_quantity: 5,
+          rejected_quantity: 2,
+          defective_quantity: -1,
+          rejection_reason: 'Dimensional tolerance failure',
+          delivery_note_number: 'DC-QC-NEG',
+        },
+        { id: pr.id },
+        {},
+        {},
+        adminUser
+      );
+
+      await processGRNInward(req, res, next);
+
+      assert.equal(res.statusCode, 400);
+      assert.equal(res.responseData.success, false);
+      assert.match(res.responseData.message, /Defective quantity must be a valid non-negative integer/i);
+    });
+
+    it('30g. Quality Control quantity model: rejects mismatch when received_quantity differs from accepted + rejected + damaged (HTTP 400)', async () => {
+      const pr = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000002')!;
+      pr.status = 'ordered';
+
+      const { req, res, next } = createMockContext(
+        {
+          received_quantity: 10,
+          accepted_quantity: 5,
+          rejected_quantity: 2,
+          damaged_quantity: 1, // 5 + 2 + 1 = 8 != 10
+          rejection_reason: 'Non-conforming threads',
+          delivery_note_number: 'DC-MISMATCH',
+        },
+        { id: pr.id },
+        {},
+        {},
+        adminUser
+      );
+
+      await processGRNInward(req, res, next);
+
+      assert.equal(res.statusCode, 400);
+      assert.equal(res.responseData.success, false);
+      assert.match(res.responseData.message, /Received quantity \(10\) does not match the sum/i);
+    });
+
+    it('30h. Physical delivery over-receipt prevention: total physical deliveries cannot exceed ordered PO quantity (HTTP 400)', async () => {
+      const pr = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000002')!;
+      pr.status = 'ordered';
+      pr.quantity_required = 10;
+
+      // Delivery 1: Deliver 10 units (6 accepted, 4 rejected). Total physical = 10.
+      const ctx1 = createMockContext(
+        {
+          accepted_quantity: 6,
+          rejected_quantity: 4,
+          rejection_reason: 'Hardness test failed on 4 units',
+          delivery_note_number: 'DC-BATCH-01',
+        },
+        { id: pr.id },
+        {},
+        {},
+        adminUser
+      );
+      await processGRNInward(ctx1.req, ctx1.res, ctx1.next);
+      assert.equal(ctx1.res.statusCode, 200);
+      assert.equal(ctx1.res.responseData.data.status, 'partially_received'); // Only 6 accepted, 4 still pending
+
+      // Delivery 2: Vendor attempts to deliver another 5 units (exceeding original 10 PO ordered)
+      const ctx2 = createMockContext(
+        {
+          accepted_quantity: 5,
+          rejected_quantity: 0,
+          delivery_note_number: 'DC-BATCH-02',
+        },
+        { id: pr.id },
+        {},
+        {},
+        adminUser
+      );
+      await processGRNInward(ctx2.req, ctx2.res, ctx2.next);
+      assert.equal(ctx2.res.statusCode, 400);
+      assert.equal(ctx2.res.responseData.success, false);
+      assert.match(ctx2.res.responseData.message, /Over-receipt rejected: Total physical delivery \(15\) exceeds ordered PO quantity \(10\)/i);
+    });
+
+    it('30i. Linked work order remains waiting_for_parts on partial receipt and only resumes on full fulfillment', async () => {
+      const pr = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000001')!;
+      pr.status = 'ordered';
+      pr.quantity_required = 10;
+      const wo = mockDb.workOrders.find((w) => w.id === pr.work_order_id)!;
+      wo.status = 'waiting_for_parts';
+
+      // Partial Delivery 1: 4 accepted out of 10
+      const ctx1 = createMockContext(
+        {
+          accepted_quantity: 4,
+          rejected_quantity: 0,
+          delivery_note_number: 'DC-WO-01',
+        },
+        { id: pr.id },
+        {},
+        {},
+        adminUser
+      );
+      await processGRNInward(ctx1.req, ctx1.res, ctx1.next);
+      assert.equal(ctx1.res.statusCode, 200);
+      assert.equal(wo.status, 'waiting_for_parts', 'Work order must remain waiting_for_parts during partial receipt');
+
+      // Partial Delivery 2: Remaining 6 accepted
+      const ctx2 = createMockContext(
+        {
+          accepted_quantity: 6,
+          rejected_quantity: 0,
+          delivery_note_number: 'DC-WO-02',
+        },
+        { id: pr.id },
+        {},
+        {},
+        adminUser
+      );
+      await processGRNInward(ctx2.req, ctx2.res, ctx2.next);
+      assert.equal(ctx2.res.statusCode, 200);
+      assert.equal(wo.status, 'in_progress', 'Work order must resume to in_progress upon full quantity fulfillment');
+    });
+
+    it('30j. Concurrency protection: acquires FOR UPDATE OF pr exclusive row lock during GRN inwarding', async () => {
+      const pr = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000002')!;
+      pr.status = 'ordered';
+      pr.quantity_required = 5;
+      mockDb.queriedForUpdateLocks = [];
+
+      const { req, res, next } = createMockContext(
+        {
+          accepted_quantity: 2,
+          rejected_quantity: 0,
+          delivery_note_number: 'DC-LOCK-TEST',
+        },
+        { id: pr.id },
+        {},
+        {},
+        adminUser
+      );
+
+      await processGRNInward(req, res, next);
+      assert.equal(res.statusCode, 200);
+      assert.ok(mockDb.queriedForUpdateLocks.includes(pr.id), 'Must acquire exclusive FOR UPDATE lock on the PR row');
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -1812,6 +2517,11 @@ describe('Procurement & Purchase Requisition Module (CMMS Module 4)', () => {
       assert.ok(res.responseData.data.kpi.active_purchase_orders !== undefined);
       assert.ok(res.responseData.data.kpi.overdue_purchase_orders !== undefined);
       assert.ok(res.responseData.data.kpi.total_expenditure !== undefined);
+      assert.ok(res.responseData.data.summary);
+      assert.ok(res.responseData.data.summary.total_pending_prs !== undefined);
+      assert.ok(res.responseData.data.summary.active_pos !== undefined);
+      assert.ok(res.responseData.data.summary.overdue_pos !== undefined);
+      assert.ok(res.responseData.data.summary.total_spend !== undefined);
     });
 
     it('36. Technicians and operators cannot access vendor directory or dashboard (HTTP 403)', async () => {
@@ -1822,6 +2532,425 @@ describe('Procurement & Purchase Requisition Module (CMMS Module 4)', () => {
       const { req: req2, res: res2, next: next2 } = createMockContext({}, {}, {}, {}, operatorUser);
       await getProcurementDashboard(req2, res2, next2);
       assert.equal(res2.statusCode, 403);
+    });
+  });
+
+  describe('Vendor Supply & Delivery Details Integration (PO & GRN)', () => {
+    it('1. Successfully issues PO with complete vendor supply and delivery challan details', async () => {
+      const pr = mockDb.requisitions[0];
+      pr.status = 'vendor_selected';
+      pr.po_number = null;
+
+      const { req, res, next } = createMockContext(
+        {
+          supplier_name: 'Raju Bhai Industrial Supplies',
+          unit_price: 1500,
+          expected_delivery_date: '2026-11-20',
+          mark_as_ordered: true,
+          supply_method: 'Vendor Direct Delivery',
+          delivery_document_type: 'Delivery Challan',
+          challan_type: 'Non-Returnable',
+          vendor_challan_number: 'DC-2026-00125',
+          expected_dispatch_date: '2026-11-15',
+          transporter_name: 'FastTrack Logistics',
+          vehicle_number: 'MH-14-GH-9988',
+          lr_tracking_number: 'LR-JCB-88221',
+          delivery_remarks: 'Deliver to Machine Shop Gate 2',
+        },
+        { id: pr.id },
+        {},
+        {},
+        puneManagerUser
+      );
+
+      await createPurchaseOrder(req, res, next);
+
+      assert.equal(res.statusCode, 201);
+      assert.equal(res.responseData.success, true);
+      const data = res.responseData.data;
+      assert.equal(data.supplier_name, 'Raju Bhai Industrial Supplies');
+      assert.equal(data.supply_method, 'Vendor Direct Delivery');
+      assert.equal(data.delivery_document_type, 'Delivery Challan');
+      assert.equal(data.challan_type, 'Non-Returnable');
+      assert.equal(data.vendor_challan_number, 'DC-2026-00125');
+      assert.equal(data.transporter_name, 'FastTrack Logistics');
+      assert.equal(data.vehicle_number, 'MH-14-GH-9988');
+      assert.equal(data.lr_tracking_number, 'LR-JCB-88221');
+      assert.equal(data.delivery_remarks, 'Deliver to Machine Shop Gate 2');
+      assert.equal(data.status, 'ordered');
+    });
+
+    it('2. Rejects PO creation if expected dispatch date is invalid', async () => {
+      const pr = mockDb.requisitions[0];
+      pr.status = 'vendor_selected';
+      pr.po_number = null;
+
+      const { req, res, next } = createMockContext(
+        {
+          supplier_name: 'SKF India',
+          unit_price: 500,
+          expected_dispatch_date: 'invalid-date-format',
+        },
+        { id: pr.id },
+        {},
+        {},
+        puneManagerUser
+      );
+
+      await createPurchaseOrder(req, res, next);
+      assert.ok(res.statusCode === 400 || (res.responseData && res.responseData.success === false));
+    });
+
+    it('3. Issues PO with realistic Air Freight transportation tracking and cost breakdown', async () => {
+      const pr = mockDb.requisitions[0];
+      pr.status = 'vendor_selected';
+      pr.po_number = null;
+
+      const { req, res, next } = createMockContext(
+        {
+          supplier_name: 'Honeywell Aerospace Ltd',
+          unit_price: 25000,
+          expected_delivery_date: '2026-11-25',
+          mark_as_ordered: true,
+          transport_mode: 'Air Freight',
+          dispatch_location: 'Bengaluru Airport Cargo Terminal (BLR)',
+          destination_plant_name: 'JCB India Plant 1 - Pune',
+          transporter_name: 'Blue Dart Aviation Express',
+          lr_tracking_number: 'AWB-77291044',
+          expected_dispatch_date: '2026-11-20',
+          freight_cost: 3500,
+          overall_shipment_cost: 28500,
+          delivery_remarks: 'High priority hydraulic avionics valve - fragile cargo',
+        },
+        { id: pr.id },
+        {},
+        {},
+        puneManagerUser
+      );
+
+      await createPurchaseOrder(req, res, next);
+
+      assert.equal(res.statusCode, 201);
+      assert.equal(res.responseData.success, true);
+      const data = res.responseData.data;
+      assert.equal(data.transport_mode, 'Air Freight');
+      assert.equal(data.dispatch_location, 'Bengaluru Airport Cargo Terminal (BLR)');
+      assert.equal(data.destination_plant_name, 'JCB India Plant 1 - Pune');
+      assert.equal(data.transporter_name, 'Blue Dart Aviation Express');
+      assert.equal(data.lr_tracking_number, 'AWB-77291044');
+      assert.equal(data.freight_cost, 3500);
+      assert.equal(data.overall_shipment_cost, 28500);
+    });
+
+    it('4. Processes GRN with Quality Control: records accepted, rejected, and damaged quantities', async () => {
+      const qcPrId = '70000000-0000-0000-0000-000000000099';
+      const part = mockDb.parts[0];
+      const initialStock = part.current_physical_stock;
+
+      mockDb.requisitions.push({
+        id: qcPrId,
+        pr_number: 'PR-2026-QC99',
+        work_order_id: null,
+        machine_id: '40000000-0000-0000-0000-000000000001',
+        part_id: part.id,
+        quantity_required: 4,
+        urgency: 'high',
+        technical_justification: 'QC testing requisition',
+        status: 'ordered',
+        requested_by: puneManagerUser.id,
+        approved_by: puneManagerUser.id,
+        po_number: 'PO-2026-QC99',
+        supplier_name: 'Honeywell Aerospace Ltd',
+        unit_price: 25000,
+        expected_delivery_date: '2026-11-25',
+        received_date: null,
+        plant_id: puneManagerUser.plant_id,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+
+      const { req, res, next } = createMockContext(
+        {
+          received_quantity: 4,
+          accepted_quantity: 2,
+          rejected_quantity: 1,
+          damaged_quantity: 1,
+          rejection_reason: 'Specification tolerance deviation on 1 unit',
+          inspection_remarks: '1 unit damaged in air cargo handling (cracked casing); 1 unit failed caliper check',
+          inspection_status: 'partially_passed',
+          delivery_note_number: 'DC-QC-TEST-001',
+          transport_mode: 'Air Freight',
+          transporter_name: 'Blue Dart Aviation',
+          lr_tracking_number: 'AWB-99881122',
+        },
+        { id: qcPrId },
+        {},
+        {},
+        puneManagerUser
+      );
+
+      await processGRNInward(req, res, next);
+
+      assert.equal(res.statusCode, 200);
+      assert.equal(res.responseData.success, true);
+      const details = res.responseData.receipt_details;
+      assert.equal(details.accepted_quantity, 2);
+      assert.equal(details.rejected_quantity, 1);
+      assert.equal(details.damaged_quantity, 1);
+      assert.equal(details.inspection_status, 'partially_passed');
+      assert.equal(details.total_inwarded, 2); // cumulative accepted
+      assert.equal(details.remaining_quantity, 2); // 4 - 2 = 2
+      // Physical stock only increased by ACCEPTED (2), NOT by rejected (1) or damaged (1)
+      assert.equal(part.current_physical_stock, initialStock + 2);
+    });
+
+    it('5. GRN partial delivery calculates Remaining = Ordered - Cumulative Received correctly', async () => {
+      const pr = mockDb.requisitions[0];
+      pr.status = 'ordered';
+      pr.quantity_required = 100;
+      const part = mockDb.parts.find((p) => p.id === pr.part_id)!;
+      const initialStock = part.current_physical_stock;
+
+      // Delivery 1: 40 units arrive
+      const ctx1 = createMockContext(
+        {
+          accepted_quantity: 40,
+          rejected_quantity: 0,
+          delivery_note_number: 'DC-BATCH-01',
+        },
+        { id: pr.id },
+        {},
+        {},
+        puneManagerUser
+      );
+      await processGRNInward(ctx1.req, ctx1.res, ctx1.next);
+      assert.equal(ctx1.res.statusCode, 200);
+      assert.equal(ctx1.res.responseData.receipt_details.previous_inwarded ?? 0, 0);
+      assert.equal(ctx1.res.responseData.receipt_details.total_inwarded, 40);
+      assert.equal(ctx1.res.responseData.receipt_details.remaining_quantity, 60); // 100 - 40 = 60
+
+      // Delivery 2: 30 more units arrive
+      const ctx2 = createMockContext(
+        {
+          accepted_quantity: 30,
+          rejected_quantity: 0,
+          delivery_note_number: 'DC-BATCH-02',
+        },
+        { id: pr.id },
+        {},
+        {},
+        puneManagerUser
+      );
+      await processGRNInward(ctx2.req, ctx2.res, ctx2.next);
+      assert.equal(ctx2.res.statusCode, 200);
+      assert.equal(ctx2.res.responseData.receipt_details.total_inwarded, 70); // 40 + 30 = 70
+      assert.equal(ctx2.res.responseData.receipt_details.remaining_quantity, 30); // 100 - 70 = 30
+      assert.equal(part.current_physical_stock, initialStock + 70);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // SECTION 8: Inventory Unavailable -> Received -> Technician Notification Flow
+  // -------------------------------------------------------------------------
+  describe('8. Inventory Unavailable -> Inventory Received -> Notify Original Technician Flow', () => {
+    it('46. Scenario Step 1 & 2: Technician raises PR for unavailable part; Manager reviews/accepts it -> Only standard approval notification sent, NO arrival notification yet', async () => {
+      // 1. Tech1 raises PR
+      const createCtx = createMockContext(
+        {
+          part_id: '30000000-0000-0000-0000-000000000001',
+          quantity_required: 2,
+          urgency: 'critical',
+          technical_justification: 'Hydraulic pump failure - part unavailable in store stock',
+        },
+        {},
+        {},
+        {},
+        tech1User
+      );
+      await createPurchaseRequisition(createCtx.req, createCtx.res, createCtx.next);
+      assert.equal(createCtx.res.statusCode, 201);
+      const prId = createCtx.res.responseData.data.id;
+
+      // Clear notifications generated during creation
+      mockDb.notifications = [];
+      mockIo.emissions = [];
+
+      // 2. Manager reviews/accepts the issue (transitions to vendor_selected)
+      const acceptCtx = createMockContext(
+        {
+          status: 'vendor_selected',
+          supplier_name: 'Bosch Rexroth India',
+          unit_price: 5200,
+          remarks: 'Reviewed and approved for vendor quotation',
+        },
+        { id: prId },
+        {},
+        {},
+        puneManagerUser
+      );
+      await updatePRStatus(acceptCtx.req, acceptCtx.res, acceptCtx.next);
+      assert.equal(acceptCtx.res.statusCode, 200);
+
+      // Verify notification sent was standard status update
+      const arrivalNotif = mockDb.notifications.find((n) =>
+        n.message && n.message.includes('Good news! The spare part you reported as unavailable')
+      );
+      assert.equal(arrivalNotif, undefined, 'Arrival notification must NOT trigger when manager accepts PR');
+
+      // Verify standard update notification was sent to tech1
+      const updateNotif = mockDb.notifications.find((n) => n.recipient_id === tech1User.id);
+      assert.ok(updateNotif);
+      assert.match(updateNotif.title, /Status Updated/i);
+    });
+
+    it('47. Scenario Step 3, 4 & 5: Inventory arrives in store; Manager updates status to fully_received -> Automatically notifies original technician with exact message', async () => {
+      const pr = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000001')!;
+      pr.status = 'ordered';
+      pr.requested_by = tech1User.id; // Original technician
+      mockDb.notifications = [];
+      mockIo.emissions = [];
+
+      // Manager updates status to fully_received (goods arrived/issue resolved)
+      const updateCtx = createMockContext(
+        {
+          status: 'fully_received',
+          remarks: 'Shipment received at store and verified',
+        },
+        { id: pr.id },
+        {},
+        {},
+        puneManagerUser
+      );
+      await updatePRStatus(updateCtx.req, updateCtx.res, updateCtx.next);
+      assert.equal(updateCtx.res.statusCode, 200);
+
+      // Verify notification sent to the ORIGINAL technician
+      const techNotif = mockDb.notifications.find((n) => n.recipient_id === tech1User.id);
+      assert.ok(techNotif, 'Technician who raised the PR must receive notification');
+
+      // Verify exact expected message
+      assert.match(
+        techNotif.message,
+        /Good news! The spare part you reported as unavailable is now available in the store\. Your inventory request has been updated\./
+      );
+
+      // Verify Request ID and spare part details are in the notification
+      assert.match(techNotif.message, /PR-2026-00001/);
+      assert.match(techNotif.title, /Spare Part Available/i);
+      assert.match(techNotif.title, /Hydraulic Pump Filter Element/i);
+
+      // Verify link_url routes to /procurement?prId=${pr.id}
+      assert.equal(techNotif.link_url, `/procurement?prId=${pr.id}`);
+      assert.equal((techNotif as any).entity_type, 'purchase_requisitions');
+      assert.equal((techNotif as any).entity_id, pr.id);
+
+      // Verify real-time Socket.IO emission to technician
+      const socketNotifNew = mockIo.emissions.find(
+        (e) => e.event === 'notification:new' && e.room === `user:${tech1User.id}`
+      );
+      assert.ok(socketNotifNew, 'Socket.IO notification:new must be emitted to technician user room');
+      assert.equal(socketNotifNew.data.link_url, `/procurement?prId=${pr.id}`);
+
+      const socketInventoryAvail = mockIo.emissions.find(
+        (e) => e.event === 'inventory:available' && e.room === `user:${tech1User.id}`
+      );
+      assert.ok(socketInventoryAvail, 'Socket.IO inventory:available must be emitted to technician');
+      assert.equal(socketInventoryAvail.data.pr_id, pr.id);
+    });
+
+    it('48. Duplicate prevention: Manager saving completed status multiple times does NOT generate duplicate notifications', async () => {
+      const pr = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000001')!;
+      pr.status = 'ordered';
+      pr.requested_by = tech1User.id;
+      mockDb.notifications = [];
+
+      // First update to fully_received
+      const ctx1 = createMockContext(
+        { status: 'fully_received', remarks: 'First receipt' },
+        { id: pr.id },
+        {},
+        {},
+        puneManagerUser
+      );
+      await updatePRStatus(ctx1.req, ctx1.res, ctx1.next);
+      assert.equal(ctx1.res.statusCode, 200);
+
+      const countAfterFirst = mockDb.notifications.filter(
+        (n) => n.recipient_id === tech1User.id && n.message.includes('Good news! The spare part you reported as unavailable')
+      ).length;
+      assert.equal(countAfterFirst, 1);
+
+      // Second update with same status / updated remarks
+      const ctx2 = createMockContext(
+        { status: 'fully_received', remarks: 'Re-saving remarks after stock binning' },
+        { id: pr.id },
+        {},
+        {},
+        puneManagerUser
+      );
+      await updatePRStatus(ctx2.req, ctx2.res, ctx2.next);
+      assert.equal(ctx2.res.statusCode, 200);
+
+      const countAfterSecond = mockDb.notifications.filter(
+        (n) => n.recipient_id === tech1User.id && n.message.includes('Good news! The spare part you reported as unavailable')
+      ).length;
+      assert.equal(countAfterSecond, 1, 'Duplicate notifications must be prevented');
+    });
+
+    it('49. Goods Receipt Note (GRN) inwarding triggers arrival notification to original technician only', async () => {
+      const pr = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000002')!;
+      pr.status = 'ordered';
+      pr.requested_by = tech1User.id;
+      mockDb.notifications = [];
+      mockIo.emissions = [];
+
+      const grnCtx = createMockContext(
+        {
+          accepted_quantity: pr.quantity_required,
+          rejected_quantity: 0,
+          delivery_note_number: 'GRN-INWARD-999',
+        },
+        { id: pr.id },
+        {},
+        {},
+        puneManagerUser
+      );
+      await processGRNInward(grnCtx.req, grnCtx.res, grnCtx.next);
+      assert.equal(grnCtx.res.statusCode, 200);
+
+      // Tech1 receives the notification
+      const tech1Notif = mockDb.notifications.find(
+        (n) => n.recipient_id === tech1User.id && n.message.includes('Good news! The spare part you reported as unavailable')
+      );
+      assert.ok(tech1Notif, 'Original technician must receive arrival notification on GRN inwarding');
+      assert.equal(tech1Notif.link_url, `/procurement?prId=${pr.id}`);
+
+      // Tech2 (unrelated user) does NOT receive the notification
+      const tech2Notif = mockDb.notifications.find(
+        (n) => n.recipient_id === '00000000-0000-0000-0000-000000000005'
+      );
+      assert.equal(tech2Notif, undefined, 'Unrelated technicians must NOT receive the notification');
+    });
+
+    it('50. Missing technician ID or incomplete request data is handled safely without crashing', async () => {
+      const pr = mockDb.requisitions.find((r) => r.id === '70000000-0000-0000-0000-000000000001')!;
+      pr.status = 'ordered';
+      pr.requested_by = null as any; // Missing technician ID
+      mockDb.notifications = [];
+
+      const updateCtx = createMockContext(
+        {
+          status: 'fully_received',
+          remarks: 'Received without requester ID',
+        },
+        { id: pr.id },
+        {},
+        {},
+        puneManagerUser
+      );
+      await updatePRStatus(updateCtx.req, updateCtx.res, updateCtx.next);
+      assert.equal(updateCtx.res.statusCode, 200);
+      assert.equal(updateCtx.res.responseData.success, true);
     });
   });
 });
