@@ -18,7 +18,8 @@ import {
   ClipboardCheck,
   Boxes,
   X,
-  ChevronRight
+  ChevronRight,
+  BarChart3
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -46,6 +47,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
     admin: [
       { name: 'Dashboard', path: '/admin/dashboard', icon: LayoutDashboard, roles: ['admin'] },
       { name: 'Live Shop Floor', path: '/dashboard', icon: Activity, roles: ['admin'] },
+      { name: 'Reports', path: '/reports', icon: BarChart3, roles: ['admin'] },
       { name: 'Users & Personnel', path: '/users', icon: Users, roles: ['admin'] },
       { name: 'Machines & Equipment', path: '/machines', icon: Cpu, roles: ['admin'] },
       { name: 'Repair Jobs', path: '/work-orders', icon: Wrench, roles: ['admin'] },
@@ -59,6 +61,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
     ],
     manager: [
       { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, roles: ['manager'] },
+      { name: 'Reports', path: '/reports', icon: BarChart3, roles: ['manager'] },
       { name: 'Problem Reports', path: '/triage', icon: AlertTriangle, roles: ['manager'] },
       { name: 'Repair Jobs', path: '/work-orders', icon: Wrench, roles: ['manager'] },
       { name: 'Technician Management', path: '/users', icon: Users, roles: ['manager'] },
@@ -72,6 +75,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
     ],
     technician: [
       { name: 'My Workbench', path: '/technician/dashboard', icon: LayoutDashboard, roles: ['technician'] },
+      { name: 'Reports', path: '/reports', icon: BarChart3, roles: ['technician'] },
       { name: 'My Repair Jobs', path: '/work-orders', icon: Wrench, roles: ['technician'] },
       { name: 'Regular Maintenance', path: '/pm', icon: Calendar, roles: ['technician'] },
       { name: 'Machine Details', path: '/machines', icon: Cpu, roles: ['technician'] },
@@ -81,11 +85,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
     ],
     operator: [
       { name: 'My Dashboard', path: '/operator/dashboard', icon: HardHat, roles: ['operator'] },
+      { name: 'Reports', path: '/reports', icon: BarChart3, roles: ['operator'] },
       { name: 'Daily Safety Check', path: '/inspections/run', icon: ClipboardCheck, roles: ['operator'] },
       { name: 'My Machine Details', path: '/machines', icon: Cpu, roles: ['operator'] },
     ],
     store_manager: [
       { name: 'Store Dashboard', path: '/store/dashboard', icon: Boxes, roles: ['store_manager'] },
+      { name: 'Reports', path: '/reports', icon: BarChart3, roles: ['store_manager'] },
       { name: 'Spare Parts Stock', path: '/inventory', icon: Package, roles: ['store_manager'] },
       { name: 'Buying & Receiving', path: '/procurement', icon: ShoppingCart, roles: ['store_manager'] },
       { name: 'Delivery Passes', path: '/rdc', icon: FileText, roles: ['store_manager'] },

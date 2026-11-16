@@ -28,6 +28,7 @@ import { UserManagementPage } from './modules/users/UserManagementPage';
 import { PreShiftInspectionPage } from './modules/inspections/PreShiftInspectionPage';
 import { WorkOrderListPage } from './modules/work-orders/WorkOrderListPage';
 import { WorkOrderDetailPage } from './modules/work-orders/WorkOrderDetailPage';
+import { ReportsPage } from './modules/reports/ReportsPage';
 
 function BreakdownRedirectRoute() {
   const { user } = useAuth();
@@ -248,6 +249,15 @@ export default function App() {
                 element={
                   <RoleGuard allowedRoles={['admin', 'manager', 'store_manager']}>
                     <AuditLogsPage />
+                  </RoleGuard>
+                }
+              />
+              {/* Role-Based Reports & PDF Generator */}
+              <Route
+                path="/reports"
+                element={
+                  <RoleGuard allowedRoles={['admin', 'manager', 'technician', 'operator', 'store_manager']}>
+                    <ReportsPage />
                   </RoleGuard>
                 }
               />
