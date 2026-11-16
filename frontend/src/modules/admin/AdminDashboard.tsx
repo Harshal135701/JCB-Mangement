@@ -169,7 +169,7 @@ export const AdminDashboard: React.FC = () => {
               className="flex items-center gap-1.5 px-3 py-2 bg-jcb-yellow hover:bg-amber-400 text-black rounded-xl text-xs font-bold border border-amber-500 shadow-2xs transition"
             >
               <Users className="w-3.5 h-3.5" />
-              <span>Users & Personnel</span>
+              <span>Staff Personnel</span>
             </Link>
             <button
               onClick={fetchData}
