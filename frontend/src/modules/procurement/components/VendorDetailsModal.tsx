@@ -40,32 +40,32 @@ export const VendorDetailsModal: React.FC<VendorDetailsModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
       <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 max-h-[92vh] flex flex-col my-auto">
         {/* Header */}
-        <div className="bg-zinc-950 p-5 flex items-center justify-between border-b border-zinc-800 shrink-0">
+        <div className="bg-white p-5 flex items-center justify-between border-b border-zinc-200 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-jcb-yellow text-black flex items-center justify-center font-black shadow-sm">
+            <div className="w-11 h-11 rounded-xl bg-jcb-yellow text-black flex items-center justify-center font-black shadow-sm border border-amber-500">
               <Building2 className="w-6 h-6" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-base font-black text-white">{vendor.vendor_name}</h3>
+                <h3 className="text-base font-black text-zinc-950">{vendor.vendor_name}</h3>
                 <span
                   className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${
                     isActive
-                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                      : 'bg-zinc-700 text-zinc-300 border-zinc-600'
+                      ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                      : 'bg-zinc-100 text-zinc-700 border-zinc-300'
                   }`}
                 >
                   {isActive ? 'Active Supplier' : 'Inactive'}
                 </span>
               </div>
-              <p className="text-[11px] text-zinc-400 font-medium">
+              <p className="text-[11px] text-zinc-500 font-medium">
                 {vendor.vendor_code ? `Code: ${vendor.vendor_code}` : 'JCB Ballabgarh Certified Supplier'}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-zinc-400 hover:text-white p-1 rounded-lg hover:bg-zinc-800 transition"
+            className="text-zinc-400 hover:text-zinc-800 p-1.5 rounded-xl hover:bg-zinc-100 transition cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>

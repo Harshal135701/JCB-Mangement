@@ -212,21 +212,21 @@ export const BreakdownReportModal: React.FC<BreakdownReportModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
       <div className="bg-white rounded-2xl max-w-xl w-full border-2 border-slate-200 shadow-2xl overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[90vh]">
-        {/* Header - Industrial Black with Red Alert Accent */}
-        <div className="p-4 bg-zinc-950 text-white flex items-center justify-between border-b border-zinc-800 shrink-0">
+        {/* Header - Industrial Light with Red Alert Accent */}
+        <div className="p-4 bg-white text-zinc-950 flex items-center justify-between border-b border-zinc-200 shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-red-600/30 text-red-500 border border-red-500/40 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-red-100 text-red-600 border border-red-200 flex items-center justify-center">
               <AlertTriangle className="w-4 h-4" />
             </div>
             <div>
               <h3 className="text-sm font-black tracking-wide uppercase">Report Machine Problem</h3>
-              <p className="text-[10px] text-zinc-400 font-semibold">Notify maintenance crew about a machine problem</p>
+              <p className="text-[10px] text-zinc-500 font-semibold">Notify maintenance crew about a machine problem</p>
             </div>
           </div>
           <button
             onClick={onClose}
             disabled={submitting}
-            className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition disabled:opacity-50"
+            className="p-1 rounded-lg text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 transition disabled:opacity-50"
             aria-label="Close dialog"
           >
             <X className="w-5 h-5" />

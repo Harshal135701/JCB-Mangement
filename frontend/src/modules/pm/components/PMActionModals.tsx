@@ -60,17 +60,17 @@ export const PMActionModal: React.FC<PMActionModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
       <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-        <div className="px-5 py-4 bg-zinc-900 text-white flex items-center justify-between">
+        <div className="px-5 py-4 bg-white text-zinc-950 flex items-center justify-between border-b border-zinc-200">
           <div>
             <h3 className="text-xs font-black tracking-wider uppercase">{titles[type]}</h3>
-            <p className="text-[11px] text-zinc-400">
+            <p className="text-[11px] text-zinc-500">
               {plan.plan_code} • {plan.machine_code || 'Machinery Asset'}
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="text-zinc-400 hover:text-white p-1 rounded transition cursor-pointer"
+            className="text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 p-1.5 rounded-lg transition cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>

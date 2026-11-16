@@ -75,23 +75,23 @@ export const MachineHistoryModal: React.FC<MachineHistoryModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
       <div className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden my-8 flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
-        <div className="bg-zinc-950 p-5 flex items-center justify-between border-b border-zinc-800 shrink-0">
+        <div className="bg-white p-5 flex items-center justify-between border-b border-zinc-200 shrink-0">
           <div className="flex items-center gap-3">
             <div className="bg-jcb-yellow text-black font-black text-lg px-2.5 py-0.5 rounded shadow">
               JCB
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-base font-black text-white tracking-wide">
+                <h3 className="text-base font-black text-zinc-950 tracking-wide">
                   MACHINE MAINTENANCE LIFECYCLE HISTORY
                 </h3>
                 {machine && (
-                  <span className="font-mono text-xs px-2 py-0.5 bg-zinc-800 text-amber-400 font-bold rounded">
+                  <span className="font-mono text-xs px-2 py-0.5 bg-zinc-100 text-zinc-800 border border-zinc-200 font-bold rounded">
                     {machine.machine_code}
                   </span>
                 )}
               </div>
-              <p className="text-[11px] text-zinc-400 font-medium">
+              <p className="text-[11px] text-zinc-500 font-medium">
                 Consolidated Work Orders, Breakdowns, PMs, Parts & Compliance Audit Trail
               </p>
             </div>
@@ -100,14 +100,14 @@ export const MachineHistoryModal: React.FC<MachineHistoryModalProps> = ({
             <button
               onClick={fetchHistory}
               disabled={loading}
-              className="text-zinc-400 hover:text-white p-1.5 rounded-lg transition"
+              className="text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 p-1.5 rounded-lg transition"
               title="Refresh History"
             >
               <RotateCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
             <button
               onClick={onClose}
-              className="text-zinc-400 hover:text-white p-1.5 rounded-lg transition"
+              className="text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 p-1.5 rounded-lg transition"
               aria-label="Close"
             >
               <X className="w-5 h-5" />

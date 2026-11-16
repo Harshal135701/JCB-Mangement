@@ -597,24 +597,24 @@ export const AuditLogsPage: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
           <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-auto flex flex-col max-h-[90vh]">
             {/* Modal Header */}
-            <div className="bg-zinc-950 p-5 flex items-center justify-between text-white border-b border-zinc-800 shrink-0">
+            <div className="bg-white p-5 flex items-center justify-between text-zinc-900 border-b border-zinc-200 shrink-0">
               <div className="flex items-center gap-3">
-                <div className="bg-jcb-yellow text-black font-black text-xs px-2.5 py-1 rounded shadow-2xs uppercase">
+                <div className="bg-jcb-yellow text-black font-black text-xs px-2.5 py-1 rounded shadow-2xs uppercase border border-amber-500">
                   {selectedLog.entity_name}
                 </div>
                 <div>
-                  <h3 className="text-sm font-black uppercase tracking-wide flex items-center gap-2 text-white">
+                  <h3 className="text-sm font-black uppercase tracking-wide flex items-center gap-2 text-zinc-950">
                     Audit Event Payload Diff
                   </h3>
-                  <p className="text-[11px] text-zinc-400">
-                    Action: <span className="font-mono text-amber-400 font-bold">{selectedLog.action}</span> •{' '}
+                  <p className="text-[11px] text-zinc-500">
+                    Action: <span className="font-mono text-amber-700 font-bold">{selectedLog.action}</span> •{' '}
                     {new Date(selectedLog.created_at).toLocaleString()}
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setSelectedLog(null)}
-                className="text-zinc-400 hover:text-white p-1 rounded-lg transition cursor-pointer"
+                className="text-zinc-400 hover:text-zinc-800 p-1.5 rounded-xl hover:bg-zinc-100 transition cursor-pointer"
                 title="Close"
               >
                 <X className="w-5 h-5" />
@@ -661,7 +661,7 @@ export const AuditLogsPage: React.FC = () => {
                     </span>
                     <span className="text-[10px] text-zinc-400 font-mono">JSON</span>
                   </div>
-                  <div className="p-4 bg-zinc-900 text-zinc-100 rounded-xl font-mono text-[11px] overflow-x-auto max-h-72 border border-zinc-800">
+                  <div className="p-4 bg-red-50/60 text-red-950 rounded-xl font-mono text-[11px] overflow-x-auto max-h-72 border border-red-200">
                     {selectedLog.old_values ? (
                       <pre className="whitespace-pre-wrap">
                         {JSON.stringify(selectedLog.old_values, null, 2)}
@@ -681,7 +681,7 @@ export const AuditLogsPage: React.FC = () => {
                     </span>
                     <span className="text-[10px] text-zinc-400 font-mono">JSON</span>
                   </div>
-                  <div className="p-4 bg-zinc-900 text-zinc-100 rounded-xl font-mono text-[11px] overflow-x-auto max-h-72 border border-zinc-800">
+                  <div className="p-4 bg-emerald-50/60 text-emerald-950 rounded-xl font-mono text-[11px] overflow-x-auto max-h-72 border border-emerald-200">
                     {selectedLog.new_values ? (
                       <pre className="whitespace-pre-wrap">
                         {JSON.stringify(selectedLog.new_values, null, 2)}

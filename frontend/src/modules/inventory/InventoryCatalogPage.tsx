@@ -798,18 +798,18 @@ export const InventoryCatalogPage: React.FC = () => {
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
           <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="bg-zinc-950 p-5 flex items-center justify-between border-b border-zinc-800">
+            <div className="bg-white p-5 flex items-center justify-between border-b border-zinc-200">
               <div className="flex items-center gap-3">
                 <div className="bg-jcb-yellow text-black font-black text-xl px-2.5 py-0.5 rounded shadow-xs">
                   JCB
                 </div>
-                <h3 className="text-sm font-black text-white tracking-wide">
+                <h3 className="text-sm font-black text-zinc-950 tracking-wide">
                   {editingPart ? `EDIT PART MASTER: ${editingPart.part_number}` : 'REGISTER NEW SPARE PART'}
                 </h3>
               </div>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="text-zinc-400 hover:text-white p-1 cursor-pointer"
+                className="text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 p-1.5 rounded-lg transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1035,16 +1035,16 @@ export const InventoryCatalogPage: React.FC = () => {
       {isAdjustModalOpen && adjustingPart && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
           <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="bg-zinc-950 p-5 flex items-center justify-between border-b border-zinc-800">
+            <div className="bg-white p-5 flex items-center justify-between border-b border-zinc-200">
               <div className="flex items-center gap-2">
-                <SlidersHorizontal className="w-4 h-4 text-jcb-yellow" />
-                <h3 className="text-sm font-black text-white tracking-wide">
+                <SlidersHorizontal className="w-4 h-4 text-amber-500" />
+                <h3 className="text-sm font-black text-zinc-950 tracking-wide">
                   STOCK ADJUSTMENT: {adjustingPart.part_number}
                 </h3>
               </div>
               <button
                 onClick={() => setIsAdjustModalOpen(false)}
-                className="text-zinc-400 hover:text-white p-1 cursor-pointer"
+                className="text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 p-1.5 rounded-lg transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1169,16 +1169,16 @@ export const InventoryCatalogPage: React.FC = () => {
       {partToDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
           <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="bg-red-950 p-5 flex items-center justify-between border-b border-red-900 text-white">
+            <div className="bg-red-600 p-5 flex items-center justify-between text-white">
               <div className="flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-red-400" />
+                <AlertTriangle className="w-5 h-5 text-white" />
                 <h3 className="text-sm font-black tracking-wide">
                   CONFIRM PART DELETION / DEACTIVATION
                 </h3>
               </div>
               <button
                 onClick={() => setPartToDelete(null)}
-                className="text-zinc-400 hover:text-white p-1 cursor-pointer"
+                className="text-red-200 hover:text-white p-1.5 rounded-lg transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1225,19 +1225,19 @@ export const InventoryCatalogPage: React.FC = () => {
       {prPart && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
           <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="bg-zinc-950 p-5 flex items-center justify-between border-b border-zinc-800">
+            <div className="bg-white p-5 flex items-center justify-between border-b border-zinc-200">
               <div className="flex items-center gap-3">
-                <ShoppingCart className="w-5 h-5 text-jcb-yellow" />
+                <ShoppingCart className="w-5 h-5 text-amber-500" />
                 <div>
-                  <h3 className="text-base font-black text-white">RAISE PURCHASE REQUISITION</h3>
-                  <p className="text-[10px] text-zinc-400 font-medium">
+                  <h3 className="text-base font-black text-zinc-950">RAISE PURCHASE REQUISITION</h3>
+                  <p className="text-[10px] text-zinc-500 font-medium">
                     Store replenishment request for manager approval
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setPrPart(null)}
-                className="text-zinc-400 hover:text-white p-1 cursor-pointer"
+                className="text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 p-1.5 rounded-lg transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>

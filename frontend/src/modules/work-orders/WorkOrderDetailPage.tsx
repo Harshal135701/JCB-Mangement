@@ -1384,14 +1384,16 @@ export const WorkOrderDetailPage: React.FC = () => {
       {isCompleteModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div className="bg-white rounded-2xl max-w-xl w-full border-2 border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-150 max-h-[90vh] flex flex-col">
-            <div className="p-4 bg-zinc-950 text-white flex items-center justify-between border-b border-zinc-800 shrink-0">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-                <h3 className="text-sm font-black uppercase tracking-wider">
+            <div className="p-5 bg-white text-zinc-950 flex items-center justify-between border-b border-zinc-200 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center">
+                  <CheckCircle2 className="w-5 h-5" />
+                </div>
+                <h3 className="text-sm font-black uppercase tracking-wider text-zinc-950">
                   Complete Repair & Submit for Quality Verification
                 </h3>
               </div>
-              <button onClick={() => setIsCompleteModalOpen(false)} className="text-zinc-400 hover:text-white cursor-pointer">
+              <button onClick={() => setIsCompleteModalOpen(false)} className="text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 p-1.5 rounded-xl transition cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1531,14 +1533,16 @@ export const WorkOrderDetailPage: React.FC = () => {
       {isVerifyModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div className="bg-white rounded-2xl max-w-lg w-full border-2 border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-150">
-            <div className="p-4 bg-zinc-950 text-white flex items-center justify-between border-b border-zinc-800">
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-jcb-yellow" />
-                <h3 className="text-sm font-black uppercase tracking-wider">
+            <div className="p-5 bg-white text-zinc-950 flex items-center justify-between border-b border-zinc-200">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-700 border border-amber-300 flex items-center justify-center font-black">
+                  <ShieldCheck className="w-5 h-5 text-amber-600" />
+                </div>
+                <h3 className="text-sm font-black uppercase tracking-wider text-zinc-950">
                   Manager Quality Verification & Sign-off
                 </h3>
               </div>
-              <button onClick={() => setIsVerifyModalOpen(false)} className="text-zinc-400 hover:text-white cursor-pointer">
+              <button onClick={() => setIsVerifyModalOpen(false)} className="text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 p-1.5 rounded-xl transition cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1631,14 +1635,16 @@ export const WorkOrderDetailPage: React.FC = () => {
       {isReassignModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div className="bg-white rounded-2xl max-w-md w-full border-2 border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-150">
-            <div className="p-4 bg-zinc-950 text-white flex items-center justify-between border-b border-zinc-800">
-              <div className="flex items-center gap-2">
-                <UserCheck className="w-5 h-5 text-jcb-yellow" />
-                <h3 className="text-sm font-black uppercase tracking-wider">
+            <div className="p-5 bg-white text-zinc-950 flex items-center justify-between border-b border-zinc-200">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-700 border border-amber-300 flex items-center justify-center">
+                  <UserCheck className="w-5 h-5 text-amber-600" />
+                </div>
+                <h3 className="text-sm font-black uppercase tracking-wider text-zinc-950">
                   Reassign Work Order to Technician
                 </h3>
               </div>
-              <button onClick={() => setIsReassignModalOpen(false)} className="text-zinc-400 hover:text-white cursor-pointer">
+              <button onClick={() => setIsReassignModalOpen(false)} className="text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 p-1.5 rounded-xl transition cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1736,11 +1742,11 @@ export const WorkOrderDetailPage: React.FC = () => {
       {isScheduleModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div className="bg-white rounded-2xl max-w-md w-full border-2 border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-150">
-            <div className="p-4 bg-zinc-950 text-white flex items-center justify-between border-b border-zinc-800">
-              <h3 className="text-sm font-black uppercase tracking-wider">
+            <div className="p-5 bg-white text-zinc-950 flex items-center justify-between border-b border-zinc-200">
+              <h3 className="text-sm font-black uppercase tracking-wider text-zinc-950">
                 Schedule On-Site Maintenance Visit
               </h3>
-              <button onClick={() => setIsScheduleModalOpen(false)} className="text-zinc-400 hover:text-white cursor-pointer">
+              <button onClick={() => setIsScheduleModalOpen(false)} className="text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 p-1.5 rounded-xl transition cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1816,11 +1822,11 @@ export const WorkOrderDetailPage: React.FC = () => {
       {isProgressModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div className="bg-white rounded-2xl max-w-md w-full border-2 border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-150">
-            <div className="p-4 bg-zinc-950 text-white flex items-center justify-between border-b border-zinc-800">
-              <h3 className="text-sm font-black uppercase tracking-wider">
+            <div className="p-5 bg-white text-zinc-950 flex items-center justify-between border-b border-zinc-200">
+              <h3 className="text-sm font-black uppercase tracking-wider text-zinc-950">
                 Log Intermediate Diagnosis & Progress
               </h3>
-              <button onClick={() => setIsProgressModalOpen(false)} className="text-zinc-400 hover:text-white cursor-pointer">
+              <button onClick={() => setIsProgressModalOpen(false)} className="text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 p-1.5 rounded-xl transition cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1901,11 +1907,11 @@ export const WorkOrderDetailPage: React.FC = () => {
       {isDeclineModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div className="bg-white rounded-2xl max-w-md w-full border-2 border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-150">
-            <div className="p-4 bg-zinc-950 text-white flex items-center justify-between border-b border-zinc-800">
-              <h3 className="text-sm font-black uppercase tracking-wider text-red-400">
+            <div className="p-5 bg-white text-zinc-950 flex items-center justify-between border-b border-zinc-200">
+              <h3 className="text-sm font-black uppercase tracking-wider text-red-600">
                 Decline Work Order Assignment
               </h3>
-              <button onClick={() => setIsDeclineModalOpen(false)} className="text-zinc-400 hover:text-white cursor-pointer">
+              <button onClick={() => setIsDeclineModalOpen(false)} className="text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 p-1.5 rounded-xl transition cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1963,14 +1969,16 @@ export const WorkOrderDetailPage: React.FC = () => {
       {isReopenModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div className="bg-white rounded-2xl max-w-md w-full border-2 border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-150">
-            <div className="p-4 bg-zinc-950 text-white flex items-center justify-between border-b border-zinc-800">
-              <div className="flex items-center gap-2">
-                <RotateCcw className="w-5 h-5 text-amber-500" />
-                <h3 className="text-sm font-black uppercase tracking-wider">
+            <div className="p-5 bg-white text-zinc-950 flex items-center justify-between border-b border-zinc-200">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-700 border border-amber-300 flex items-center justify-center">
+                  <RotateCcw className="w-5 h-5 text-amber-600" />
+                </div>
+                <h3 className="text-sm font-black uppercase tracking-wider text-zinc-950">
                   Reopen Closed Work Order
                 </h3>
               </div>
-              <button onClick={() => setIsReopenModalOpen(false)} className="text-zinc-400 hover:text-white cursor-pointer">
+              <button onClick={() => setIsReopenModalOpen(false)} className="text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 p-1.5 rounded-xl transition cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -2019,14 +2027,16 @@ export const WorkOrderDetailPage: React.FC = () => {
       {isReserveModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div className="bg-white rounded-2xl max-w-lg w-full border-2 border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-150">
-            <div className="p-4 bg-zinc-950 text-white flex items-center justify-between border-b border-zinc-800">
-              <div className="flex items-center gap-2">
-                <Package className="w-5 h-5 text-jcb-yellow" />
-                <h3 className="text-sm font-black uppercase tracking-wider">
+            <div className="p-5 bg-white text-zinc-950 flex items-center justify-between border-b border-zinc-200">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-700 border border-amber-300 flex items-center justify-center">
+                  <Package className="w-5 h-5 text-amber-600" />
+                </div>
+                <h3 className="text-sm font-black uppercase tracking-wider text-zinc-950">
                   Reserve Spare Part for Work Order
                 </h3>
               </div>
-              <button onClick={() => setIsReserveModalOpen(false)} className="text-zinc-400 hover:text-white cursor-pointer">
+              <button onClick={() => setIsReserveModalOpen(false)} className="text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 p-1.5 rounded-xl transition cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -2176,19 +2186,21 @@ export const WorkOrderDetailPage: React.FC = () => {
       {isPRModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="bg-zinc-950 p-5 flex items-center justify-between border-b border-zinc-800">
+            <div className="bg-white p-5 flex items-center justify-between border-b border-zinc-200">
               <div className="flex items-center gap-3">
-                <ShoppingCart className="w-5 h-5 text-jcb-yellow" />
+                <div className="w-9 h-9 rounded-xl bg-jcb-yellow text-black flex items-center justify-center font-black shadow-sm border border-amber-500">
+                  <ShoppingCart className="w-5 h-5" />
+                </div>
                 <div>
-                  <h3 className="text-base font-black text-white">RAISE PURCHASE REQUISITION (PR)</h3>
-                  <p className="text-[10px] text-zinc-400 font-medium">
+                  <h3 className="text-base font-black text-zinc-950">RAISE PURCHASE REQUISITION (PR)</h3>
+                  <p className="text-[10px] text-zinc-500 font-medium">
                     Initiate spare part procurement workflow for Work Order
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setIsPRModalOpen(false)}
-                className="text-zinc-400 hover:text-white p-1"
+                className="text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 p-1.5 rounded-xl transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>

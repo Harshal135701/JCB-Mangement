@@ -483,16 +483,16 @@ export const UserManagementPage: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             {/* Header */}
-            <div className="bg-zinc-950 p-5 flex items-center justify-between border-b border-zinc-800">
+            <div className="bg-white p-5 flex items-center justify-between border-b border-zinc-200">
               <div className="flex items-center gap-3">
                 <div className="bg-jcb-yellow text-black font-black text-xl px-2.5 py-0.5 rounded shadow">
                   JCB
                 </div>
-                <h3 className="text-base font-black text-white tracking-wide">
+                <h3 className="text-base font-black text-zinc-950 tracking-wide">
                   {editingUser ? `EDIT PERSONNEL: ${formData.employee_code}` : 'ENROLL NEW PLANT PERSONNEL'}
                 </h3>
               </div>
-              <button onClick={() => setIsModalOpen(false)} className="text-zinc-400 hover:text-white p-1">
+              <button onClick={() => setIsModalOpen(false)} className="text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 p-1.5 rounded-lg transition" aria-label="Close dialog">
                 <X className="w-5 h-5" />
               </button>
             </div>

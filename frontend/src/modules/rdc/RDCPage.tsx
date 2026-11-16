@@ -1300,13 +1300,13 @@ export const RDCPage: React.FC = () => {
           onClick={() => setActiveTab('challans')}
           className={`flex items-center gap-2 px-4 py-2.5 text-xs font-black uppercase tracking-wider transition cursor-pointer rounded-t-xl ${
             activeTab === 'challans'
-              ? 'bg-zinc-950 text-white shadow-sm'
+              ? 'bg-zinc-900 text-white shadow-sm'
               : 'text-zinc-600 hover:text-black hover:bg-zinc-100'
           }`}
         >
           <FileText className="w-4 h-4" />
           Delivery Challans
-          <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${activeTab === 'challans' ? 'bg-zinc-800 text-zinc-200' : 'bg-zinc-200 text-zinc-800'}`}>
+          <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${activeTab === 'challans' ? 'bg-jcb-yellow text-black' : 'bg-zinc-200 text-zinc-800'}`}>
             {totalCount}
           </span>
         </button>

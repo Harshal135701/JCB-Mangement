@@ -135,7 +135,7 @@ export const PMCreateEditPlanModal: React.FC<PMCreateEditPlanModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
       <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-zinc-200 overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
-        <div className="px-6 py-4 bg-zinc-900 text-white flex items-center justify-between">
+        <div className="px-6 py-4 bg-white text-zinc-950 flex items-center justify-between border-b border-zinc-200">
           <div className="flex items-center gap-3">
             <div className="bg-amber-500 text-black font-black text-sm px-2.5 py-0.5 rounded shadow">
               JCB PM
@@ -144,7 +144,7 @@ export const PMCreateEditPlanModal: React.FC<PMCreateEditPlanModalProps> = ({
               <h3 className="text-sm font-black tracking-wide">
                 {editingPlan ? 'UPDATE PREVENTIVE MAINTENANCE PLAN' : 'CONFIGURE PREVENTIVE MAINTENANCE SCHEDULE'}
               </h3>
-              <p className="text-[11px] text-zinc-400">
+              <p className="text-[11px] text-zinc-500">
                 {editingPlan ? `Editing ${editingPlan.plan_code}` : 'Define routine service intervals and maintenance checklists.'}
               </p>
             </div>
@@ -152,7 +152,7 @@ export const PMCreateEditPlanModal: React.FC<PMCreateEditPlanModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="text-zinc-400 hover:text-white p-1 rounded transition cursor-pointer"
+            className="text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 p-1.5 rounded-lg transition cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>

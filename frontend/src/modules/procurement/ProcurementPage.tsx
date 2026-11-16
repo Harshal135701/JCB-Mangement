@@ -2559,19 +2559,21 @@ export const ProcurementPage: React.FC = () => {
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
             <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 max-h-[92vh] flex flex-col">
-              <div className="bg-zinc-950 p-5 flex items-center justify-between border-b border-zinc-800 shrink-0">
+              <div className="bg-white p-5 flex items-center justify-between border-b border-zinc-200 shrink-0">
                 <div className="flex items-center gap-3">
-                  <Boxes className="w-5 h-5 text-emerald-400" />
+                  <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center font-black">
+                    <Boxes className="w-5 h-5 text-emerald-600" />
+                  </div>
                   <div>
-                    <h3 className="text-base font-black text-white">GOODS RECEIPT NOTE (GRN) &amp; QUALITY CONTROL</h3>
-                    <p className="text-[10px] text-zinc-400 font-medium">
+                    <h3 className="text-base font-black text-zinc-950">GOODS RECEIPT NOTE (GRN) &amp; QUALITY CONTROL</h3>
+                    <p className="text-[10px] text-zinc-500 font-medium">
                       Store gate receipt inspection &amp; physical inventory reconciliation
                     </p>
                   </div>
                 </div>
                 <button
                   onClick={() => setSelectedPRForGRN(null)}
-                  className="text-zinc-400 hover:text-white p-1"
+                  className="text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 p-1.5 rounded-xl transition cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>

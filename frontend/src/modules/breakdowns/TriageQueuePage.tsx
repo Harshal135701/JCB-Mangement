@@ -1373,9 +1373,9 @@ export const TriageQueuePage: React.FC = () => {
       {detailModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
           <div className="bg-white rounded-2xl max-w-2xl w-full border-2 border-slate-200 shadow-2xl overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] flex flex-col">
-            <div className="p-4 bg-zinc-950 text-white flex items-center justify-between border-b border-zinc-800 shrink-0">
+            <div className="p-4 bg-white text-zinc-950 flex items-center justify-between border-b border-zinc-200 shrink-0">
               <div className="flex items-center gap-2">
-                <span className="font-mono text-sm font-black text-jcb-yellow">
+                <span className="font-mono text-sm font-black text-amber-700">
                   {detailComplaint ? detailComplaint.complaint_number : 'BREAKDOWN DETAILS'}
                 </span>
                 {detailComplaint && (
@@ -1385,7 +1385,7 @@ export const TriageQueuePage: React.FC = () => {
                   </>
                 )}
               </div>
-              <button onClick={() => setDetailModalOpen(false)} className="text-zinc-400 hover:text-white">
+              <button onClick={() => setDetailModalOpen(false)} className="text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 p-1.5 rounded-xl transition cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1621,14 +1621,14 @@ export const TriageQueuePage: React.FC = () => {
       {assignComplaint && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
           <div className="bg-white rounded-2xl max-w-lg w-full border-2 border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="p-4 bg-zinc-950 text-white flex items-center justify-between border-b border-zinc-800">
+            <div className="p-4 bg-white text-zinc-950 flex items-center justify-between border-b border-zinc-200">
               <div className="flex items-center gap-2">
-                <UserCheck className="w-5 h-5 text-jcb-yellow" />
-                <h3 className="text-sm font-black uppercase tracking-wider">
+                <UserCheck className="w-5 h-5 text-amber-600" />
+                <h3 className="text-sm font-black uppercase tracking-wider text-zinc-950">
                   Assign Repair Job to Technician
                 </h3>
               </div>
-              <button onClick={() => setAssignComplaint(null)} className="text-zinc-400 hover:text-white">
+              <button onClick={() => setAssignComplaint(null)} className="text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 p-1.5 rounded-xl transition cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1739,11 +1739,11 @@ export const TriageQueuePage: React.FC = () => {
       {priorityComplaint && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
           <div className="bg-white rounded-2xl max-w-sm w-full border-2 border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="p-4 bg-zinc-950 text-white flex items-center justify-between border-b border-zinc-800">
-              <h3 className="text-sm font-black uppercase tracking-wider">
+            <div className="p-4 bg-white text-zinc-950 flex items-center justify-between border-b border-zinc-200">
+              <h3 className="text-sm font-black uppercase tracking-wider text-zinc-950">
                 Update Complaint Priority
               </h3>
-              <button onClick={() => setPriorityComplaint(null)} className="text-zinc-400 hover:text-white">
+              <button onClick={() => setPriorityComplaint(null)} className="text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 p-1.5 rounded-xl transition cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1801,11 +1801,11 @@ export const TriageQueuePage: React.FC = () => {
       {rejectComplaint && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
           <div className="bg-white rounded-2xl max-w-md w-full border-2 border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="p-4 bg-zinc-950 text-white flex items-center justify-between border-b border-zinc-800">
-              <h3 className="text-sm font-black uppercase tracking-wider text-red-400">
+            <div className="p-4 bg-white text-zinc-950 flex items-center justify-between border-b border-zinc-200">
+              <h3 className="text-sm font-black uppercase tracking-wider text-red-600">
                 Reject Breakdown Complaint
               </h3>
-              <button onClick={() => setRejectComplaint(null)} className="text-zinc-400 hover:text-white">
+              <button onClick={() => setRejectComplaint(null)} className="text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 p-1.5 rounded-xl transition cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1859,11 +1859,11 @@ export const TriageQueuePage: React.FC = () => {
       {infoComplaint && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
           <div className="bg-white rounded-2xl max-w-md w-full border-2 border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="p-4 bg-zinc-950 text-white flex items-center justify-between border-b border-zinc-800">
-              <h3 className="text-sm font-black uppercase tracking-wider">
+            <div className="p-4 bg-white text-zinc-950 flex items-center justify-between border-b border-zinc-200">
+              <h3 className="text-sm font-black uppercase tracking-wider text-zinc-950">
                 Request Additional Information
               </h3>
-              <button onClick={() => setInfoComplaint(null)} className="text-zinc-400 hover:text-white">
+              <button onClick={() => setInfoComplaint(null)} className="text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 p-1.5 rounded-xl transition cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1913,23 +1913,23 @@ export const TriageQueuePage: React.FC = () => {
       {assignmentDetailModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
           <div className="bg-white rounded-2xl max-w-lg w-full border-2 border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="p-4 bg-zinc-950 text-white flex items-center justify-between border-b border-zinc-800">
+            <div className="p-4 bg-white text-zinc-950 flex items-center justify-between border-b border-zinc-200">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-blue-600/30 text-blue-400 border border-blue-500/40 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 border border-blue-200 flex items-center justify-center">
                   <UserCheck className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-black uppercase tracking-wider">
+                  <h3 className="text-sm font-black uppercase tracking-wider text-zinc-950">
                     Technician Assignment Details
                   </h3>
-                  <p className="text-[10px] text-zinc-400 font-mono">
+                  <p className="text-[10px] text-zinc-500 font-mono">
                     {assignmentDetailData?.complaint_number || 'Breakdown Assignment'}
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setAssignmentDetailModalOpen(false)}
-                className="text-zinc-400 hover:text-white"
+                className="text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 p-1.5 rounded-xl transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -2103,19 +2103,19 @@ export const TriageQueuePage: React.FC = () => {
       {historyModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
           <div className="bg-white rounded-2xl max-w-xl w-full border-2 border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 max-h-[85vh] flex flex-col">
-            <div className="p-4 bg-zinc-950 text-white flex items-center justify-between border-b border-zinc-800 shrink-0">
+            <div className="p-4 bg-white text-zinc-950 flex items-center justify-between border-b border-zinc-200 shrink-0">
               <div className="flex items-center gap-2">
-                <History className="w-5 h-5 text-jcb-yellow" />
+                <History className="w-5 h-5 text-amber-600" />
                 <div>
-                  <h3 className="text-sm font-black uppercase tracking-wider">
+                  <h3 className="text-sm font-black uppercase tracking-wider text-zinc-950">
                     Technician Assignment History
                   </h3>
-                  <p className="text-[10px] text-zinc-400 font-mono">
+                  <p className="text-[10px] text-zinc-500 font-mono">
                     Ticket: {historyComplaint?.complaint_number || ''}
                   </p>
                 </div>
               </div>
-              <button onClick={() => setHistoryModalOpen(false)} className="text-zinc-400 hover:text-white">
+              <button onClick={() => setHistoryModalOpen(false)} className="text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 p-1.5 rounded-xl transition cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -2198,19 +2198,19 @@ export const TriageQueuePage: React.FC = () => {
       {eligibleModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
           <div className="bg-white rounded-2xl max-w-2xl w-full border-2 border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 max-h-[85vh] flex flex-col">
-            <div className="p-4 bg-zinc-950 text-white flex items-center justify-between border-b border-zinc-800 shrink-0">
+            <div className="p-4 bg-white text-zinc-950 flex items-center justify-between border-b border-zinc-200 shrink-0">
               <div className="flex items-center gap-2">
-                <Users className="w-5 h-5 text-jcb-yellow" />
+                <Users className="w-5 h-5 text-amber-600" />
                 <div>
-                  <h3 className="text-sm font-black uppercase tracking-wider">
+                  <h3 className="text-sm font-black uppercase tracking-wider text-zinc-950">
                     Eligible Technicians & Workload Balancing
                   </h3>
-                  <p className="text-[10px] text-zinc-400 font-mono">
+                  <p className="text-[10px] text-zinc-500 font-mono">
                     Complaint: {eligibleComplaint?.complaint_number || ''}
                   </p>
                 </div>
               </div>
-              <button onClick={() => setEligibleModalOpen(false)} className="text-zinc-400 hover:text-white">
+              <button onClick={() => setEligibleModalOpen(false)} className="text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 p-1.5 rounded-xl transition cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -2347,14 +2347,14 @@ export const TriageQueuePage: React.FC = () => {
       {assignModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
           <div className="bg-white rounded-2xl max-w-md w-full border-2 border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="p-4 bg-zinc-950 text-white flex items-center justify-between border-b border-zinc-800">
+            <div className="p-4 bg-white text-zinc-950 flex items-center justify-between border-b border-zinc-200">
               <div className="flex items-center gap-2">
-                <UserCheck className="w-5 h-5 text-jcb-yellow" />
-                <h3 className="text-sm font-black uppercase tracking-wider">
+                <UserCheck className="w-5 h-5 text-amber-600" />
+                <h3 className="text-sm font-black uppercase tracking-wider text-zinc-950">
                   Manually Assign Technician
                 </h3>
               </div>
-              <button onClick={() => setAssignModalOpen(false)} className="text-zinc-400 hover:text-white">
+              <button onClick={() => setAssignModalOpen(false)} className="text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 p-1.5 rounded-xl transition cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -2423,14 +2423,14 @@ export const TriageQueuePage: React.FC = () => {
       {reassignModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
           <div className="bg-white rounded-2xl max-w-md w-full border-2 border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="p-4 bg-zinc-950 text-white flex items-center justify-between border-b border-zinc-800">
+            <div className="p-4 bg-white text-zinc-950 flex items-center justify-between border-b border-zinc-200">
               <div className="flex items-center gap-2">
-                <RotateCcw className="w-5 h-5 text-amber-500" />
-                <h3 className="text-sm font-black uppercase tracking-wider text-amber-400">
+                <RotateCcw className="w-5 h-5 text-amber-600" />
+                <h3 className="text-sm font-black uppercase tracking-wider text-amber-700">
                   Reassign Breakdown Technician
                 </h3>
               </div>
-              <button onClick={() => setReassignModalOpen(false)} className="text-zinc-400 hover:text-white">
+              <button onClick={() => setReassignModalOpen(false)} className="text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 p-1.5 rounded-xl transition cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>

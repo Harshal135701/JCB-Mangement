@@ -77,23 +77,23 @@ export const MachineQrLookupModal: React.FC<MachineQrLookupModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
       <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
         {/* Header */}
-        <div className="bg-zinc-950 p-5 flex items-center justify-between border-b border-zinc-800">
+        <div className="bg-white p-5 flex items-center justify-between border-b border-zinc-200">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-jcb-yellow text-black rounded-xl shadow">
               <QrCode className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-black text-white tracking-wide">
+              <h3 className="text-base font-black text-zinc-950 tracking-wide">
                 QR CODE & ASSET IDENTIFIER LOOKUP
               </h3>
-              <p className="text-[11px] text-zinc-400 font-medium">
+              <p className="text-[11px] text-zinc-500 font-medium">
                 Instant Shop Floor Asset Resolution & Service Card
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-zinc-400 hover:text-white p-1.5 rounded-lg transition"
+            className="text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 p-1.5 rounded-lg transition"
             aria-label="Close"
           >
             <X className="w-5 h-5" />

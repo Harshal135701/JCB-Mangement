@@ -75,14 +75,14 @@ export const PurchaseOrderDetailsModal: React.FC<PurchaseOrderDetailsModalProps>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
       <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 max-h-[92vh] flex flex-col my-auto">
         {/* Header */}
-        <div className="bg-zinc-950 p-5 flex items-center justify-between border-b border-zinc-800 shrink-0">
+        <div className="bg-white p-5 flex items-center justify-between border-b border-zinc-200 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-jcb-yellow text-black flex items-center justify-center font-black shadow-sm">
+            <div className="w-10 h-10 rounded-xl bg-jcb-yellow text-black flex items-center justify-center font-black shadow-sm border border-amber-500">
               <FileText className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-base font-black text-white">{po.po_number}</h3>
+                <h3 className="text-base font-black text-zinc-950">{po.po_number}</h3>
                 <span
                   className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${getStatusColor(
                     po.status
@@ -96,23 +96,23 @@ export const PurchaseOrderDetailsModal: React.FC<PurchaseOrderDetailsModalProps>
                   </span>
                 )}
               </div>
-              <p className="text-[11px] text-zinc-400 font-medium">
-                Linked PR: <span className="font-mono text-zinc-200">{po.pr_number}</span> | Plant: {po.plant_name || 'JCB Ballabgarh Works'}
+              <p className="text-[11px] text-zinc-500 font-medium">
+                Linked PR: <span className="font-mono text-zinc-700 font-bold">{po.pr_number}</span> | Plant: {po.plant_name || 'JCB Ballabgarh Works'}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => onPrint(po)}
-              className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold rounded-lg transition flex items-center gap-1.5 border border-zinc-700 cursor-pointer"
+              className="px-3 py-1.5 bg-white hover:bg-zinc-100 text-zinc-800 text-xs font-bold rounded-lg transition flex items-center gap-1.5 border border-zinc-300 cursor-pointer shadow-2xs"
               title="Print Official PO"
             >
-              <Printer className="w-3.5 h-3.5 text-jcb-yellow" />
+              <Printer className="w-3.5 h-3.5 text-amber-600" />
               <span>Print</span>
             </button>
             <button
               onClick={onClose}
-              className="text-zinc-400 hover:text-white p-1 rounded-lg hover:bg-zinc-800 transition cursor-pointer"
+              className="text-zinc-400 hover:text-zinc-800 p-1.5 rounded-xl hover:bg-zinc-100 transition cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>

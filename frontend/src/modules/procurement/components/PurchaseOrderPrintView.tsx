@@ -30,9 +30,9 @@ export const PurchaseOrderPrintView: React.FC<PurchaseOrderPrintViewProps> = ({
       {/* Container - on print this fills the printed page cleanly */}
       <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden flex flex-col my-auto max-h-[95vh] print:max-h-none print:shadow-none print:border-none print:w-full print:m-0 print:p-0">
         {/* Top Control Bar (Hidden during print) */}
-        <div className="bg-zinc-950 p-4 flex items-center justify-between border-b border-zinc-800 shrink-0 print:hidden">
-          <div className="flex items-center gap-2 text-white">
-            <Printer className="w-5 h-5 text-jcb-yellow" />
+        <div className="bg-white p-4 flex items-center justify-between border-b border-zinc-200 shrink-0 print:hidden">
+          <div className="flex items-center gap-2 text-zinc-950">
+            <Printer className="w-5 h-5 text-amber-600" />
             <span className="text-xs font-black uppercase tracking-wider">
               Purchase Order Document Preview
             </span>
@@ -47,7 +47,7 @@ export const PurchaseOrderPrintView: React.FC<PurchaseOrderPrintViewProps> = ({
             </button>
             <button
               onClick={onClose}
-              className="p-2 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition cursor-pointer"
+              className="p-1.5 text-zinc-400 hover:text-zinc-800 rounded-xl hover:bg-zinc-100 transition cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>

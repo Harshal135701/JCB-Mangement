@@ -899,29 +899,29 @@ export const PreShiftInspectionPage: React.FC = () => {
           {template && !loadingTemplate && !submissionResult && (
             <div className="bg-white rounded-2xl border-2 border-slate-200 shadow-xs overflow-hidden space-y-0">
               {/* Checklist Header */}
-              <div className="p-4 sm:p-5 bg-zinc-950 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800">
+              <div className="p-4 sm:p-5 bg-white text-zinc-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-200">
                 <div>
                   <div className="flex items-center gap-2">
-                    <ClipboardCheck className="w-4 h-4 text-jcb-yellow" />
+                    <ClipboardCheck className="w-5 h-5 text-amber-500" />
                     <h3 className="text-sm font-black uppercase tracking-wider">{template.title}</h3>
                   </div>
-                  <p className="text-[11px] text-zinc-400 font-medium mt-0.5">
-                    Category: <strong className="text-white">{template.machine_category}</strong> • Version {template.version || 1} • {template.checklist.length} Checkpoints
+                  <p className="text-[11px] text-zinc-500 font-medium mt-0.5">
+                    Category: <strong className="text-zinc-900">{template.machine_category}</strong> • Version {template.version || 1} • {template.checklist.length} Checkpoints
                   </p>
                 </div>
 
                 {/* Live Counter Badges */}
                 <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-wider">
-                  <span className="px-2.5 py-1 bg-emerald-950 text-emerald-400 border border-emerald-800 rounded-md">
+                  <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md">
                     {summary.pass} Pass
                   </span>
                   {summary.flagged > 0 && (
-                    <span className="px-2.5 py-1 bg-amber-950 text-amber-400 border border-amber-800 rounded-md">
+                    <span className="px-2.5 py-1 bg-amber-50 text-amber-700 border border-amber-200 rounded-md">
                       {summary.flagged} Flagged
                     </span>
                   )}
                   {summary.fail > 0 && (
-                    <span className="px-2.5 py-1 bg-red-950 text-red-400 border border-red-800 rounded-md animate-pulse">
+                    <span className="px-2.5 py-1 bg-red-50 text-red-700 border border-red-200 rounded-md animate-pulse">
                       {summary.fail} Fail
                     </span>
                   )}
@@ -1501,15 +1501,15 @@ export const PreShiftInspectionPage: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div className="bg-white rounded-2xl max-w-lg w-full border-2 border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-150 flex flex-col max-h-[90vh]">
             {/* Modal Header */}
-            <div className="p-4 bg-zinc-950 text-white flex items-center justify-between border-b border-zinc-800 shrink-0">
+            <div className="p-4 bg-white text-zinc-950 flex items-center justify-between border-b border-zinc-200 shrink-0">
               <div className="flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-jcb-yellow" />
+                <ShieldCheck className="w-4 h-4 text-amber-500" />
                 <h3 className="text-sm font-black uppercase tracking-wider">Confirm Pre-Shift Sign-Off</h3>
               </div>
               <button
                 type="button"
                 onClick={() => setIsReviewOpen(false)}
-                className="text-zinc-400 hover:text-white"
+                className="text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 p-1 rounded-lg transition"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1643,9 +1643,9 @@ export const PreShiftInspectionPage: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div className="bg-white rounded-2xl max-w-2xl w-full border-2 border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-150 flex flex-col max-h-[90vh]">
             {/* Modal Header */}
-            <div className="p-4 bg-zinc-950 text-white flex items-center justify-between border-b border-zinc-800 shrink-0">
+            <div className="p-4 bg-white text-zinc-950 flex items-center justify-between border-b border-zinc-200 shrink-0">
               <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-jcb-yellow" />
+                <FileText className="w-4 h-4 text-amber-500" />
                 <h3 className="text-sm font-black uppercase tracking-wider">
                   Pre-Shift Inspection Record Details
                 </h3>
@@ -1656,7 +1656,7 @@ export const PreShiftInspectionPage: React.FC = () => {
                   setSelectedRecordDetail(null);
                   setRecordDetailError('');
                 }}
-                className="text-zinc-400 hover:text-white"
+                className="text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 p-1 rounded-lg transition"
               >
                 <X className="w-5 h-5" />
               </button>

@@ -1062,7 +1062,7 @@ export const DowntimeAnalyticsPage: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
           <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             {/* Modal Header */}
-            <div className="bg-zinc-950 p-5 flex items-center justify-between text-white border-b border-zinc-800">
+            <div className="bg-white p-5 flex items-center justify-between text-zinc-950 border-b border-zinc-200">
               <div className="flex items-center gap-3">
                 <span className="bg-jcb-yellow text-black font-black text-sm px-2.5 py-1 rounded uppercase tracking-wide">
                   {selectedIncident.wo_number}
@@ -1071,14 +1071,14 @@ export const DowntimeAnalyticsPage: React.FC = () => {
                   <h3 className="text-base font-black tracking-wide uppercase">
                     Stoppage Incident Breakdown Details
                   </h3>
-                  <p className="text-xs text-zinc-400">
+                  <p className="text-xs text-zinc-500">
                     Asset: {selectedIncident.machine_code} ({selectedIncident.machine_name})
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setSelectedIncident(null)}
-                className="text-zinc-400 hover:text-white p-1 rounded-lg transition"
+                className="text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 p-1.5 rounded-lg transition"
               >
                 <X className="w-5 h-5" />
               </button>
