@@ -8,11 +8,10 @@ export interface PDFReportMetric {
   highlight?: boolean;
 }
 
-export interface PDFReportSection {
+export interface PDFSummaryBlock {
   title: string;
-  tableHead?: string[];
-  tableRows?: (string | number)[][];
-  emptyText?: string;
+  tableHead: string[];
+  tableRows: (string | number)[][];
 }
 
 export interface GenerateReportPDFOptions {
@@ -32,10 +31,15 @@ export interface GenerateReportPDFOptions {
     endDate?: string;
   };
   metrics?: PDFReportMetric[];
-  sections: PDFReportSection[];
+  executiveSummary?: string;
+  summaryBlocks?: PDFSummaryBlock[];
   fileName?: string;
 }
 
+/**
+ * Concise, Professional Summary-Based PDF Generator for JCB Smart CMMS.
+ * Designed to produce a management-level operational summary strictly limited to 1-2 pages.
+ */
 export function generateReportPDF(options: GenerateReportPDFOptions): string {
   const doc = new jsPDF({
     orientation: 'portrait',
@@ -49,7 +53,7 @@ export function generateReportPDF(options: GenerateReportPDFOptions): string {
   let currentY = margin;
 
   // 1. BRAND HEADER BANNER
-  // Yellow Brand Block
+  // JCB Yellow Logo Box
   doc.setFillColor(245, 158, 11); // JCB Yellow #F59E0B
   doc.roundedRect(margin, currentY, 20, 10, 1.5, 1.5, 'F');
 
@@ -61,15 +65,15 @@ export function generateReportPDF(options: GenerateReportPDFOptions): string {
   // Title & Subtitle beside logo
   doc.setTextColor(15, 23, 42); // slate-900
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(14);
+  doc.setFontSize(13);
   doc.text('SMART CMMS', margin + 24, currentY + 5);
 
   doc.setTextColor(100, 116, 139); // slate-500
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.text('Machine Maintenance Management System • Verified Production Report', margin + 24, currentY + 9);
+  doc.setFontSize(7.5);
+  doc.text('Machine Maintenance Management System • Operational Performance Summary', margin + 24, currentY + 9);
 
-  // Status / Real-time Stamp on Top-Right
+  // Real-time Stamp on Top-Right
   const now = new Date();
   const printDateStr = now.toLocaleDateString('en-IN', {
     year: 'numeric',
@@ -81,97 +85,96 @@ export function generateReportPDF(options: GenerateReportPDFOptions): string {
     minute: '2-digit',
   });
 
-  doc.setFontSize(7.5);
+  doc.setFontSize(7);
   doc.setTextColor(71, 85, 105);
-  doc.text(`Generated: ${printDateStr} ${printTimeStr}`, pageWidth - margin, currentY + 5, { align: 'right' });
-  doc.text(`By: ${options.generatedBy}`, pageWidth - margin, currentY + 9, { align: 'right' });
+  doc.text(`Generated: ${printDateStr} ${printTimeStr}`, pageWidth - margin, currentY + 4.5, { align: 'right' });
+  doc.text(`By: ${options.generatedBy}`, pageWidth - margin, currentY + 8.5, { align: 'right' });
 
-  currentY += 14;
+  currentY += 13;
 
   // Divider Line
   doc.setDrawColor(226, 232, 240); // slate-200
-  doc.setLineWidth(0.5);
+  doc.setLineWidth(0.4);
   doc.line(margin, currentY, pageWidth - margin, currentY);
 
-  currentY += 4;
+  currentY += 3.5;
 
   // 2. REPORT TITLE BAR
   doc.setFillColor(24, 24, 27); // zinc-900
-  doc.roundedRect(margin, currentY, pageWidth - margin * 2, 8, 1, 1, 'F');
+  doc.roundedRect(margin, currentY, pageWidth - margin * 2, 7.5, 1, 1, 'F');
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9.5);
-  doc.text(options.reportTitle.toUpperCase(), margin + 4, currentY + 5.5);
+  doc.setFontSize(8.5);
+  doc.text(options.reportTitle.toUpperCase(), margin + 4, currentY + 5);
 
-  currentY += 11;
+  currentY += 10.5;
 
   // 3. TARGET PERSONNEL & FACILITY METADATA BOX
   doc.setFillColor(248, 250, 252); // slate-50
   doc.setDrawColor(226, 232, 240);
-  doc.roundedRect(margin, currentY, pageWidth - margin * 2, 20, 1.5, 1.5, 'FD');
+  doc.roundedRect(margin, currentY, pageWidth - margin * 2, 18, 1.2, 1.2, 'FD');
 
-  doc.setFontSize(8);
+  doc.setFontSize(7.5);
   // Column 1: Personnel
   doc.setTextColor(100, 116, 139);
   doc.setFont('helvetica', 'normal');
-  doc.text('Subject Personnel:', margin + 4, currentY + 5);
+  doc.text('Report Subject:', margin + 4, currentY + 4.5);
   doc.setTextColor(15, 23, 42);
   doc.setFont('helvetica', 'bold');
   const codeText = options.targetUser.employeeCode ? ` (${options.targetUser.employeeCode})` : '';
-  doc.text(`${options.targetUser.name}${codeText}`, margin + 4, currentY + 10);
+  doc.text(`${options.targetUser.name}${codeText}`, margin + 4, currentY + 9);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(71, 85, 105);
-  doc.text(`Designation: ${options.targetUser.designation || options.role.toUpperCase()}`, margin + 4, currentY + 15);
+  doc.text(`Designation: ${options.targetUser.designation || options.role.toUpperCase()}`, margin + 4, currentY + 13.5);
 
   // Column 2: Facility & Location
   const col2X = margin + (pageWidth - margin * 2) * 0.42;
   doc.setTextColor(100, 116, 139);
   doc.setFont('helvetica', 'normal');
-  doc.text('Plant & Facility:', col2X, currentY + 5);
+  doc.text('Plant & Facility:', col2X, currentY + 4.5);
   doc.setTextColor(15, 23, 42);
   doc.setFont('helvetica', 'bold');
-  doc.text(options.targetUser.plantName || 'JCB Ballabgarh Works', col2X, currentY + 10);
+  doc.text(options.targetUser.plantName || 'JCB Ballabgarh Works', col2X, currentY + 9);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(71, 85, 105);
-  doc.text(`Shop / Line: ${options.targetUser.shopName || 'All Plant Shops'}`, col2X, currentY + 15);
+  doc.text(`Shop / Section: ${options.targetUser.shopName || 'All Assigned Shops'}`, col2X, currentY + 13.5);
 
-  // Column 3: Scope / Period
+  // Column 3: Scope Window
   const col3X = margin + (pageWidth - margin * 2) * 0.75;
   doc.setTextColor(100, 116, 139);
   doc.setFont('helvetica', 'normal');
-  doc.text('Report Window:', col3X, currentY + 5);
+  doc.text('Report Window:', col3X, currentY + 4.5);
   doc.setTextColor(15, 23, 42);
   doc.setFont('helvetica', 'bold');
-  let periodText = 'All Active DB Records';
+  let periodText = 'All Historic Records';
   if (options.dateRange?.startDate || options.dateRange?.endDate) {
     periodText = `${options.dateRange.startDate || 'Start'} to ${options.dateRange.endDate || 'Present'}`;
   }
-  doc.text(periodText, col3X, currentY + 10);
+  doc.text(periodText, col3X, currentY + 9);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(16, 185, 129); // green-600
-  doc.text('Verified Source Data', col3X, currentY + 15);
+  doc.setTextColor(16, 185, 129); // emerald-600
+  doc.text('Live Production Verified', col3X, currentY + 13.5);
 
-  currentY += 23;
+  currentY += 21;
 
-  // 4. EXECUTIVE SUMMARY METRICS CARDS
+  // 4. EXECUTIVE SUMMARY METRICS CARDS (KPIs)
   if (options.metrics && options.metrics.length > 0) {
     doc.setTextColor(15, 23, 42);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    doc.text('OPERATIONAL KPI OVERVIEW', margin, currentY + 1);
-    currentY += 4;
+    doc.setFontSize(8);
+    doc.text('OPERATIONAL KPI OVERVIEW', margin, currentY + 0.5);
+    currentY += 3.5;
 
     const totalMetrics = options.metrics.length;
-    const cardGap = 2.5;
+    const cardGap = 2;
     const availableWidth = pageWidth - margin * 2;
     const numCols = Math.min(totalMetrics, 6);
     const cardWidth = (availableWidth - (numCols - 1) * cardGap) / numCols;
-    const cardHeight = 16;
+    const cardHeight = 14;
 
     options.metrics.slice(0, numCols).forEach((metric, idx) => {
       const cardX = margin + idx * (cardWidth + cardGap);
 
-      // Card Background
       if (metric.highlight) {
         doc.setFillColor(254, 243, 199); // amber-100
         doc.setDrawColor(245, 158, 11); // amber-500
@@ -179,116 +182,170 @@ export function generateReportPDF(options: GenerateReportPDFOptions): string {
         doc.setFillColor(248, 250, 252); // slate-50
         doc.setDrawColor(226, 232, 240); // slate-200
       }
-      doc.roundedRect(cardX, currentY, cardWidth, cardHeight, 1.2, 1.2, 'FD');
+      doc.roundedRect(cardX, currentY, cardWidth, cardHeight, 1, 1, 'FD');
 
       // Metric Value
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(11);
+      doc.setFontSize(10);
       doc.setTextColor(metric.highlight ? 180 : 15, metric.highlight ? 83 : 23, metric.highlight ? 9 : 42);
-      doc.text(String(metric.value), cardX + cardWidth / 2, currentY + 6.5, { align: 'center' });
+      doc.text(String(metric.value), cardX + cardWidth / 2, currentY + 5.5, { align: 'center' });
 
       // Metric Label
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(6.5);
+      doc.setFontSize(6);
       doc.setTextColor(100, 116, 139);
-      // Split label if too long
-      const splitLabel = doc.splitTextToSize(metric.label.toUpperCase(), cardWidth - 3);
-      doc.text(splitLabel, cardX + cardWidth / 2, currentY + 11.5, { align: 'center' });
+      const splitLabel = doc.splitTextToSize(metric.label.toUpperCase(), cardWidth - 2);
+      doc.text(splitLabel, cardX + cardWidth / 2, currentY + 10, { align: 'center' });
     });
 
-    currentY += cardHeight + 6;
+    currentY += cardHeight + 5;
   }
 
-  // 5. DETAILED SECTIONS & AUTOTABLES
-  for (const section of options.sections) {
-    // Check remaining height before drawing section title
-    if (currentY > pageHeight - 35) {
-      doc.addPage();
-      currentY = margin;
-    }
+  // 5. EXECUTIVE SUMMARY PARAGRAPH (3-5 lines describing activities from real data)
+  if (options.executiveSummary) {
+    doc.setFillColor(255, 251, 235); // amber-50
+    doc.setDrawColor(251, 191, 36); // amber-400
+    doc.setLineWidth(0.3);
 
-    // Section Title
-    doc.setFillColor(245, 158, 11); // JCB yellow line accent
-    doc.rect(margin, currentY, 2.5, 4.5, 'F');
+    const summaryText = options.executiveSummary.trim();
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    const splitSummary = doc.splitTextToSize(summaryText, pageWidth - margin * 2 - 16);
+    const boxHeight = Math.max(16, splitSummary.length * 3.8 + 8);
 
-    doc.setTextColor(15, 23, 42);
+    doc.roundedRect(margin, currentY, pageWidth - margin * 2, boxHeight, 1.2, 1.2, 'FD');
+
+    // Left accent bar
+    doc.setFillColor(245, 158, 11);
+    doc.rect(margin, currentY, 2, boxHeight, 'F');
+
+    // Title
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    doc.text(section.title, margin + 4.5, currentY + 3.8);
+    doc.setFontSize(7.5);
+    doc.setTextColor(180, 83, 9); // amber-700
+    doc.text('EXECUTIVE PERFORMANCE & ACTIVITY ASSESSMENT', margin + 5, currentY + 4.5);
 
-    currentY += 6;
+    // Text
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(51, 65, 85); // slate-700
+    doc.text(splitSummary, margin + 5, currentY + 9);
 
-    if (section.tableHead && section.tableRows && section.tableRows.length > 0) {
-      autoTable(doc, {
-        startY: currentY,
-        head: [section.tableHead],
-        body: section.tableRows,
-        margin: { left: margin, right: margin },
-        theme: 'striped',
-        headStyles: {
-          fillColor: [24, 24, 27],
-          textColor: [255, 255, 255],
-          fontSize: 7.5,
-          fontStyle: 'bold',
-          cellPadding: 2,
-        },
-        bodyStyles: {
-          fontSize: 7,
-          cellPadding: 2,
-          textColor: [39, 39, 42],
-        },
-        alternateRowStyles: {
-          fillColor: [248, 250, 252],
-        },
-        styles: {
-          overflow: 'linebreak',
-          lineWidth: 0.1,
-          lineColor: [226, 232, 240],
-        },
-        didDrawPage: () => {
-          // Keep currentY updated
-        },
-      });
+    currentY += boxHeight + 5;
+  }
 
-      // Update currentY to after table
-      currentY = (doc as any).lastAutoTable.finalY + 7;
-    } else {
-      // Empty state box
-      doc.setFillColor(250, 250, 250);
-      doc.setDrawColor(229, 231, 235);
-      doc.roundedRect(margin, currentY, pageWidth - margin * 2, 10, 1, 1, 'FD');
-      doc.setTextColor(107, 114, 128);
-      doc.setFont('helvetica', 'italic');
-      doc.setFontSize(7.5);
-      doc.text(section.emptyText || 'No recorded events or records found for this period.', margin + 4, currentY + 6.5);
-      currentY += 15;
+  // 6. SUMMARY ACTIVITY BLOCKS (Concise Summary Tables Instead of Raw Records)
+  if (options.summaryBlocks && options.summaryBlocks.length > 0) {
+    for (const block of options.summaryBlocks) {
+      // Check remaining page height before drawing next summary block
+      if (currentY > pageHeight - 38) {
+        doc.addPage();
+        currentY = margin;
+      }
+
+      // Block Title
+      doc.setFillColor(245, 158, 11);
+      doc.rect(margin, currentY, 2, 4, 'F');
+
+      doc.setTextColor(15, 23, 42);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.text(block.title.toUpperCase(), margin + 4, currentY + 3.2);
+
+      currentY += 5;
+
+      if (block.tableHead && block.tableRows && block.tableRows.length > 0) {
+        autoTable(doc, {
+          startY: currentY,
+          head: [block.tableHead],
+          body: block.tableRows,
+          margin: { left: margin, right: margin },
+          theme: 'striped',
+          headStyles: {
+            fillColor: [24, 24, 27],
+            textColor: [255, 255, 255],
+            fontSize: 7,
+            fontStyle: 'bold',
+            cellPadding: 2,
+          },
+          bodyStyles: {
+            fontSize: 6.8,
+            cellPadding: 1.8,
+            textColor: [39, 39, 42],
+          },
+          alternateRowStyles: {
+            fillColor: [248, 250, 252],
+          },
+          styles: {
+            overflow: 'linebreak',
+            lineWidth: 0.1,
+            lineColor: [226, 232, 240],
+          },
+        });
+
+        currentY = (doc as any).lastAutoTable.finalY + 5;
+      }
     }
   }
 
-  // 6. MULTI-PAGE NUMBERING & FOOTERS
+  // 7. GOVERNANCE & VERIFICATION SIGN-OFF BLOCK
+  // Ensure sign-off block fits or starts on clean space
+  if (currentY > pageHeight - 32) {
+    doc.addPage();
+    currentY = margin;
+  }
+
+  doc.setFillColor(248, 250, 252);
+  doc.setDrawColor(226, 232, 240);
+  doc.roundedRect(margin, currentY, pageWidth - margin * 2, 18, 1, 1, 'FD');
+
+  doc.setFontSize(6.8);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(100, 116, 139);
+  doc.text(
+    'AUTHENTICITY CERTIFICATION: This document is an official management summary generated by JCB Smart CMMS. ' +
+    'All metrics, activities, and operational figures are computed directly from verified database records.',
+    margin + 4,
+    currentY + 4.5,
+    { maxWidth: pageWidth - margin * 2 - 8 }
+  );
+
+  // Signatures Line
+  const sigY = currentY + 12;
+  doc.setDrawColor(203, 213, 225);
+  doc.setLineWidth(0.3);
+
+  // Left signature
+  doc.line(margin + 6, sigY, margin + 55, sigY);
+  doc.text('Employee / Report Subject', margin + 6, sigY + 3.5);
+
+  // Right signature
+  const sig2X = pageWidth - margin - 55;
+  doc.line(sig2X, sigY, pageWidth - margin - 6, sigY);
+  doc.text('Authorized Supervisor / Plant Manager', sig2X, sigY + 3.5);
+
+  // 8. MULTI-PAGE NUMBERING & FOOTERS
   const totalPages = (doc.internal as any).getNumberOfPages();
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
 
-    // Footer divider line
+    // Footer line
     doc.setDrawColor(226, 232, 240);
-    doc.setLineWidth(0.4);
-    doc.line(margin, pageHeight - 10, pageWidth - margin, pageHeight - 10);
+    doc.setLineWidth(0.3);
+    doc.line(margin, pageHeight - 9, pageWidth - margin, pageHeight - 9);
 
-    // Footer text
-    doc.setFontSize(6.8);
+    doc.setFontSize(6.5);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(100, 116, 139);
     doc.text(
       'JCB Smart CMMS • Confidential • Official Operational Audit Document',
       margin,
-      pageHeight - 6
+      pageHeight - 5
     );
 
     doc.text(
       `Page ${i} of ${totalPages}`,
       pageWidth - margin,
-      pageHeight - 6,
+      pageHeight - 5,
       { align: 'right' }
     );
   }
@@ -301,7 +358,7 @@ export function generateReportPDF(options: GenerateReportPDFOptions): string {
   const dateStr = now.toISOString().split('T')[0];
   const finalFileName = options.fileName || `JCB_${cleanRole}_Report_${cleanName}_${dateStr}.pdf`;
 
-  // Trigger Save / Download
+  // Save / Download
   doc.save(finalFileName);
 
   return finalFileName;

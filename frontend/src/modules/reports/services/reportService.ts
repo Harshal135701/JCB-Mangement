@@ -93,11 +93,14 @@ export interface AuditReportItem {
 /**
  * Fetch users by role (technician, operator, manager, store_manager)
  */
-export async function fetchUsersByRole(role: string, search?: string): Promise<UserSummary[]> {
+export async function fetchUsersByRole(role: string, search?: string, plantId?: string): Promise<UserSummary[]> {
   try {
     const params: Record<string, any> = { role, limit: 100 };
     if (search && search.trim()) {
       params.search = search.trim();
+    }
+    if (plantId) {
+      params.plant_id = plantId;
     }
     const res = await apiClient.get('/auth/users', { params });
     return res.data?.data || [];
