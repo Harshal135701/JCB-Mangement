@@ -19,7 +19,8 @@ import {
   Boxes,
   X,
   ChevronRight,
-  BarChart3
+  BarChart3,
+  Network
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -47,6 +48,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
     admin: [
       { name: 'Dashboard', path: '/admin/dashboard', icon: LayoutDashboard, roles: ['admin'] },
       { name: 'Live Shop Floor', path: '/dashboard', icon: Activity, roles: ['admin'] },
+      { name: 'Factory Structure', path: '/organization/hierarchy', icon: Network, roles: ['admin'] },
       { name: 'Reports', path: '/reports', icon: BarChart3, roles: ['admin'] },
       { name: 'Users & Personnel', path: '/users', icon: Users, roles: ['admin'] },
       { name: 'Machines & Equipment', path: '/machines', icon: Cpu, roles: ['admin'] },
@@ -61,6 +63,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
     ],
     manager: [
       { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, roles: ['manager'] },
+      { name: 'Factory Structure', path: '/organization/hierarchy', icon: Network, roles: ['manager'] },
       { name: 'Reports', path: '/reports', icon: BarChart3, roles: ['manager'] },
       { name: 'Problem Reports', path: '/triage', icon: AlertTriangle, roles: ['manager'] },
       { name: 'Repair Jobs', path: '/work-orders', icon: Wrench, roles: ['manager'] },

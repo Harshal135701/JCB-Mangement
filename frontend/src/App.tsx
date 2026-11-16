@@ -29,6 +29,7 @@ import { PreShiftInspectionPage } from './modules/inspections/PreShiftInspection
 import { WorkOrderListPage } from './modules/work-orders/WorkOrderListPage';
 import { WorkOrderDetailPage } from './modules/work-orders/WorkOrderDetailPage';
 import { ReportsPage } from './modules/reports/ReportsPage';
+import { OrganizationalHierarchyPage } from './modules/organization/OrganizationalHierarchyPage';
 
 function BreakdownRedirectRoute() {
   const { user } = useAuth();
@@ -236,6 +237,14 @@ export default function App() {
               />
 
               {/* Personnel & Governance Modules */}
+              <Route
+                path="/organization/hierarchy"
+                element={
+                  <RoleGuard allowedRoles={['admin', 'manager']}>
+                    <OrganizationalHierarchyPage />
+                  </RoleGuard>
+                }
+              />
               <Route
                 path="/users"
                 element={
