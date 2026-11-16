@@ -41,6 +41,8 @@ import {
 } from 'lucide-react';
 import { EditPRModal } from './components/EditPRModal';
 import { DeletePRModal } from './components/DeletePRModal';
+import { PurchaseOrdersTab } from './components/PurchaseOrdersTab';
+import { VendorDirectoryTab } from './components/VendorDirectoryTab';
 
 // ============================================================================
 // TYPES & CONTRACTS
@@ -1355,52 +1357,50 @@ export const ProcurementPage: React.FC = () => {
           )}
         </button>
 
+        <button
+          onClick={() => setActiveTab('pos')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${activeTab === 'pos'
+            ? 'bg-zinc-900 text-white shadow'
+            : 'text-zinc-600 hover:text-black hover:bg-zinc-100'
+            }`}
+        >
+          <FileText className="w-4 h-4" />
+          <span>Purchase Orders (POs)</span>
+          <span
+            className={`px-2 py-0.5 rounded-full text-[10px] ${activeTab === 'pos' ? 'bg-blue-400 text-black' : 'bg-zinc-200 text-zinc-700'
+              }`}
+          >
+            {dashboardData?.summary?.active_pos ?? 0}
+          </span>
+        </button>
+
         {isManager && (
-          <>
-            <button
-              onClick={() => setActiveTab('pos')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${activeTab === 'pos'
-                ? 'bg-zinc-900 text-white shadow'
-                : 'text-zinc-600 hover:text-black hover:bg-zinc-100'
-                }`}
-            >
-              <FileText className="w-4 h-4" />
-              <span>Orders to Suppliers (POs)</span>
-              <span
-                className={`px-2 py-0.5 rounded-full text-[10px] ${activeTab === 'pos' ? 'bg-blue-400 text-black' : 'bg-zinc-200 text-zinc-700'
-                  }`}
-              >
-                {dashboardData?.summary?.active_pos ?? 0}
-              </span>
-            </button>
+          <button
+            onClick={() => setActiveTab('vendors')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${activeTab === 'vendors'
+              ? 'bg-zinc-900 text-white shadow'
+              : 'text-zinc-600 hover:text-black hover:bg-zinc-100'
+              }`}
+          >
+            <Building className="w-4 h-4" />
+            <span>Vendors / Suppliers</span>
+          </button>
+        )}
 
-            <button
-              onClick={() => setActiveTab('vendors')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${activeTab === 'vendors'
-                ? 'bg-zinc-900 text-white shadow'
-                : 'text-zinc-600 hover:text-black hover:bg-zinc-100'
-                }`}
-            >
-              <Building className="w-4 h-4" />
-              <span>Suppliers List</span>
-            </button>
-
-            {(dashboardData?.summary?.overdue_pos ?? 0) > 0 && (
-              <button
-                onClick={() => setActiveTab('analytics')}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${activeTab === 'analytics'
-                  ? 'bg-red-600 text-white shadow'
-                  : 'text-red-700 hover:bg-red-50'
-                  }`}
-              >
-                <AlertTriangle className="w-4 h-4" />
-                <span>Overdue Alerts</span>
-                <span className="bg-white text-red-700 px-2 py-0.5 rounded-full text-[10px] font-black">
-                  {dashboardData?.summary?.overdue_pos ?? 0}
-                </span>
-              </button>
-            )}
-          </>
+        {isManager && (dashboardData?.summary?.overdue_pos ?? 0) > 0 && (
+          <button
+            onClick={() => setActiveTab('analytics')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${activeTab === 'analytics'
+              ? 'bg-red-600 text-white shadow'
+              : 'text-red-700 hover:bg-red-50'
+              }`}
+          >
+            <AlertTriangle className="w-4 h-4" />
+            <span>Overdue Alerts</span>
+            <span className="bg-white text-red-700 px-2 py-0.5 rounded-full text-[10px] font-black">
+              {dashboardData?.summary?.overdue_pos ?? 0}
+            </span>
+          </button>
         )}
       </div>
 
@@ -1764,338 +1764,48 @@ export const ProcurementPage: React.FC = () => {
       {/* ==================================================================== */}
       {/* TAB 2: PURCHASE ORDERS (POS)                                         */}
       {/* ==================================================================== */}
-      {activeTab === 'pos' && isManager && (
-        <div className="space-y-4">
-          <div className="bg-white p-4 rounded-2xl border-2 border-zinc-200 shadow-sm flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-black text-zinc-700 uppercase">Filter:</span>
-              <button
-                onClick={() => {
-                  setPoFilterOverdue(!poFilterOverdue);
-                  setPoPage(1);
-                }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-black uppercase transition ${poFilterOverdue
-                  ? 'bg-red-600 text-white'
-                  : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
-                  }`}
-              >
-                {poFilterOverdue ? 'Overdue POs Only' : 'Show All POs'}
-              </button>
-            </div>
-            <div className="text-xs text-zinc-500 font-semibold">
-              Total Active POs: <span className="font-black text-zinc-900">{poTotalCount}</span>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl border-2 border-zinc-200 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-zinc-100 border-b border-zinc-200 text-zinc-700 font-black uppercase tracking-wider">
-                  <tr>
-                    <th className="px-5 py-3.5">PO &amp; Delivery Target</th>
-                    <th className="px-5 py-3.5">Supplier &amp; Route</th>
-                    <th className="px-5 py-3.5">Spare Part &amp; SKU</th>
-                    <th className="px-5 py-3.5">Quantities</th>
-                    <th className="px-5 py-3.5">Shipment &amp; Logistics</th>
-                    <th className="px-5 py-3.5">Commercials</th>
-                    <th className="px-5 py-3.5 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-100">
-                  {loadingPOs ? (
-                    <tr>
-                      <td colSpan={7} className="px-6 py-12 text-center text-zinc-400 font-bold">
-                        Loading Purchase Orders...
-                      </td>
-                    </tr>
-                  ) : pos.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="px-6 py-12 text-center text-zinc-400 font-bold">
-                        No purchase orders matching the filter.
-                      </td>
-                    </tr>
-                  ) : (
-                    pos.map((po) => {
-                      const badge = getStatusBadge(po.status);
-                      const transport = getTransportModeBadge(po.transport_mode);
-                      const received = Number(po.received_quantity || 0);
-                      const required = Number(po.quantity_required || 0);
-                      const remaining = Math.max(0, required - received);
-                      const partCost = Number(po.total_order_cost || po.total_spend || (po.unit_price * required));
-                      const freightCost = Number(po.freight_cost || 0);
-                      const overallCost = Number(po.overall_shipment_cost || (partCost + freightCost));
-
-                      return (
-                        <tr key={po.id} className="hover:bg-zinc-50/80 transition">
-                          {/* PO Number & Target */}
-                          <td className="px-5 py-3.5">
-                            <div className="font-mono text-xs font-black text-blue-700">
-                              {po.po_number}
-                            </div>
-                            <div className="font-mono text-[10px] text-zinc-400">PR: {po.pr_number}</div>
-                            {po.expected_delivery_date ? (
-                              <div className="space-y-0.5 mt-1">
-                                <div className="text-[11px] font-semibold text-zinc-800 flex items-center gap-1">
-                                  <Calendar className="w-3 h-3 text-zinc-400 shrink-0" />
-                                  <span>
-                                    {new Date(po.expected_delivery_date).toLocaleDateString('en-IN', {
-                                      day: '2-digit',
-                                      month: 'short',
-                                      year: 'numeric',
-                                    })}
-                                  </span>
-                                </div>
-                                {po.is_overdue && (
-                                  <span className="bg-red-100 text-red-800 text-[9px] font-black px-1.5 py-0.5 rounded uppercase">
-                                    Overdue by {po.days_overdue}d
-                                  </span>
-                                )}
-                              </div>
-                            ) : (
-                              <span className="text-[10px] text-zinc-400 block mt-1">Delivery TBD</span>
-                            )}
-                          </td>
-
-                          {/* Supplier & Route */}
-                          <td className="px-5 py-3.5">
-                            <div className="font-bold text-zinc-950 text-xs">{po.supplier_name || 'N/A'}</div>
-                            <div className="text-[10px] text-zinc-500 font-medium mt-0.5">
-                              {po.dispatch_location || 'Pune Hub'} <ArrowRight className="w-2.5 h-2.5 inline mx-0.5 text-zinc-400" /> {po.destination_plant_name || 'Ballabgarh Plant 1'}
-                            </div>
-                          </td>
-
-                          {/* Spare Part & SKU */}
-                          <td className="px-5 py-3.5">
-                            <div className="font-black text-zinc-900">{po.part_name}</div>
-                            <div className="flex items-center gap-1.5 mt-0.5">
-                              <span className="font-mono text-[11px] font-bold text-zinc-600">{po.part_number}</span>
-                              {po.sku && (
-                                <span className="font-mono text-[9px] font-bold text-blue-700 bg-blue-50 px-1 py-0.2 rounded border border-blue-200">
-                                  SKU: {po.sku}
-                                </span>
-                              )}
-                            </div>
-                          </td>
-
-                          {/* Quantities (Ordered, Received, Remaining) */}
-                          <td className="px-5 py-3.5">
-                            <div className="space-y-0.5 font-mono text-[11px]">
-                              <div>Ordered: <span className="font-black text-zinc-900">{required}</span></div>
-                              <div>Received: <span className="font-bold text-emerald-700">{received}</span></div>
-                              <div>Remaining: <span className="font-bold text-amber-700">{remaining}</span></div>
-                            </div>
-                            <span
-                              className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border ${badge.color} inline-block mt-1`}
-                            >
-                              {badge.label}
-                            </span>
-                          </td>
-
-                          {/* Shipment & Logistics */}
-                          <td className="px-5 py-3.5">
-                            <div className="flex items-center gap-1.5">
-                              <span
-                                className={`px-2 py-0.5 rounded-md text-[10px] font-bold border flex items-center gap-1 ${transport.color}`}
-                              >
-                                {transport.icon}
-                                <span>{transport.label}</span>
-                              </span>
-                            </div>
-                            <div className="text-[10px] text-zinc-600 font-semibold mt-1">
-                              Carrier: <span className="font-bold text-zinc-900">{po.transporter_name || 'Blue Dart Express'}</span>
-                            </div>
-                            {po.lr_tracking_number && (
-                              <div className="font-mono text-[10px] text-zinc-500">
-                                Ref: <span className="font-bold text-zinc-700">{po.lr_tracking_number}</span>
-                              </div>
-                            )}
-                          </td>
-
-                          {/* Commercials */}
-                          <td className="px-5 py-3.5 font-mono text-right">
-                            <div className="font-bold text-zinc-900 text-xs">
-                              ₹{Number(po.unit_price || 0).toLocaleString('en-IN')} <span className="text-[10px] text-zinc-500 font-normal">/ unit</span>
-                            </div>
-                            <div className="text-[10px] text-zinc-500 mt-0.5">
-                              Order: ₹{partCost.toLocaleString('en-IN')}
-                            </div>
-                            <div className="text-[10px] text-zinc-500">
-                              Freight: ₹{freightCost.toLocaleString('en-IN')}
-                            </div>
-                            <div className="text-[11px] font-black text-zinc-950 pt-0.5 border-t border-zinc-200 mt-0.5">
-                              Total: ₹{overallCost.toLocaleString('en-IN')}
-                            </div>
-                          </td>
-
-                          {/* Actions */}
-                          <td className="px-5 py-3.5 text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              {['ordered', 'partially_received', 'po_created'].includes(po.status) && (
-                                <button
-                                  onClick={() => {
-                                    // Map PO to PR structure for GRN modal
-                                    openGRNModal({
-                                      id: po.id,
-                                      pr_number: po.pr_number,
-                                      part_id: '',
-                                      part_number: po.part_number,
-                                      sku: po.sku,
-                                      part_name: po.part_name,
-                                      quantity_required: po.quantity_required,
-                                      urgency: 'high',
-                                      technical_justification: '',
-                                      status: po.status,
-                                      po_number: po.po_number,
-                                      supplier_name: po.supplier_name,
-                                      received_quantity: po.received_quantity,
-                                      dispatch_location: po.dispatch_location,
-                                      destination_plant_name: po.destination_plant_name,
-                                      transport_mode: po.transport_mode,
-                                      transporter_name: po.transporter_name,
-                                      vehicle_number: po.vehicle_number,
-                                      lr_tracking_number: po.lr_tracking_number,
-                                      freight_cost: po.freight_cost,
-                                      overall_shipment_cost: po.overall_shipment_cost,
-                                      created_at: po.created_at,
-                                      updated_at: po.created_at,
-                                    });
-                                  }}
-                                  className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black px-3 py-1.5 rounded-lg shadow-sm transition uppercase flex items-center gap-1"
-                                >
-                                  <Boxes className="w-3.5 h-3.5" />
-                                  <span>Inward GRN</span>
-                                </button>
-                              )}
-                              <button
-                                onClick={() => handleOpenDetails(po.id)}
-                                className="p-1.5 text-zinc-500 hover:text-black hover:bg-zinc-200 rounded-lg transition"
-                                title="Inspect Details"
-                              >
-                                <Eye className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* PO Pagination */}
-            {poTotalPages > 1 && (
-              <div className="p-4 bg-zinc-50 border-t border-zinc-200 flex items-center justify-between text-xs text-zinc-600">
-                <span className="font-semibold">
-                  Page <span className="font-black text-zinc-900">{poPage}</span> of {poTotalPages}
-                </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    disabled={poPage <= 1}
-                    onClick={() => setPoPage((p) => Math.max(1, p - 1))}
-                    className="p-1.5 rounded-lg border border-zinc-300 disabled:opacity-40 hover:bg-white transition"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                  <button
-                    disabled={poPage >= poTotalPages}
-                    onClick={() => setPoPage((p) => Math.min(poTotalPages, p + 1))}
-                    className="p-1.5 rounded-lg border border-zinc-300 disabled:opacity-40 hover:bg-white transition"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+      {activeTab === 'pos' && (
+        <PurchaseOrdersTab
+          canReceiveGRN={isManager}
+          onOpenGRN={(po) => {
+            openGRNModal({
+              id: po.id,
+              pr_number: po.pr_number,
+              part_id: '',
+              part_number: po.part_number,
+              sku: po.sku,
+              part_name: po.part_name,
+              quantity_required: po.quantity_required,
+              urgency: (po.urgency as any) || 'high',
+              technical_justification: '',
+              status: po.status,
+              po_number: po.po_number,
+              supplier_name: po.supplier_name,
+              received_quantity: po.received_quantity,
+              dispatch_location: po.dispatch_location,
+              destination_plant_name: po.destination_plant_name,
+              transport_mode: po.transport_mode,
+              transporter_name: po.transporter_name,
+              vehicle_number: po.vehicle_number,
+              lr_tracking_number: po.lr_tracking_number,
+              freight_cost: typeof po.freight_cost === 'number' ? po.freight_cost : parseFloat(String(po.freight_cost || 0)),
+              overall_shipment_cost: typeof po.overall_shipment_cost === 'number' ? po.overall_shipment_cost : parseFloat(String(po.overall_shipment_cost || 0)),
+              created_at: po.created_at,
+              updated_at: po.created_at,
+            });
+          }}
+          onShowFeedback={(type, message) => setFeedback({ type, message })}
+        />
       )}
 
       {/* ==================================================================== */}
-      {/* TAB 3: VENDOR PERFORMANCE DIRECTORY                                  */}
+      {/* TAB 3: VENDOR MANAGEMENT & SUPPLIER REGISTRY                        */}
       {/* ==================================================================== */}
-      {activeTab === 'vendors' && isManager && (
-        <div className="space-y-4">
-          <div className="bg-white p-4 rounded-2xl border-2 border-zinc-200 shadow-sm flex items-center justify-between gap-4">
-            <div className="relative flex-1 max-w-md">
-              <Search className="w-4 h-4 absolute left-3.5 top-3 text-zinc-400" />
-              <input
-                type="text"
-                placeholder="Search vendor / supplier directory..."
-                value={vendorSearch}
-                onChange={(e) => setVendorSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
-              />
-            </div>
-            <button
-              onClick={() => fetchVendors()}
-              className="px-3.5 py-2 bg-zinc-100 hover:bg-zinc-200 text-xs font-black rounded-xl transition flex items-center gap-1.5"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>Search</span>
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {loadingVendors ? (
-              <div className="col-span-full py-12 text-center text-zinc-400 font-bold">
-                Loading vendor directory...
-              </div>
-            ) : vendors.length === 0 ? (
-              <div className="col-span-full py-12 text-center text-zinc-400 font-bold">
-                No vendor profiles found.
-              </div>
-            ) : (
-              vendors.map((v, idx) => (
-                <div
-                  key={idx}
-                  className="bg-white p-5 rounded-2xl border-2 border-zinc-200 shadow-sm hover:border-zinc-300 transition space-y-3"
-                >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h3 className="font-black text-sm text-zinc-950">{v.vendor_name}</h3>
-                      <div className="text-[10px] font-bold text-zinc-400">JCB Certified Supplier</div>
-                    </div>
-                    <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-0.5 rounded-full text-[10px] font-black">
-                      {v.on_time_delivery_rate}% On-Time
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-zinc-100 text-xs">
-                    <div>
-                      <span className="text-[10px] text-zinc-400 font-bold uppercase block">
-                        Total Orders
-                      </span>
-                      <span className="font-black text-zinc-900">{v.total_orders} Orders</span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-zinc-400 font-bold uppercase block">
-                        Active In-Flight
-                      </span>
-                      <span className="font-black text-blue-600">{v.active_orders} Orders</span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-zinc-400 font-bold uppercase block">
-                        Parts Supplied
-                      </span>
-                      <span className="font-black text-zinc-900">
-                        {v.total_parts_supplied} Units
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-zinc-400 font-bold uppercase block">
-                        Cumulative Spend
-                      </span>
-                      <span className="font-black text-zinc-900">
-                        ₹{Number(v.total_spend || 0).toLocaleString('en-IN')}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
+      {activeTab === 'vendors' && (
+        <VendorDirectoryTab
+          canManageVendors={isManager}
+          onShowFeedback={(type, message) => setFeedback({ type, message })}
+        />
       )}
 
       {/* ==================================================================== */}
