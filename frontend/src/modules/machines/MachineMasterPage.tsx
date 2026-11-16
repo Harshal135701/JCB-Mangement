@@ -252,7 +252,7 @@ export const MachineMasterPage: React.FC = () => {
               className="bg-jcb-yellow hover:bg-jcb-yellowDark text-black text-xs font-black px-4 py-2.5 rounded-xl shadow transition-all flex items-center gap-2 border border-amber-500"
             >
               <Plus className="w-4 h-4" />
-              <span>+ Add Machine</span>
+              <span>Add Machine</span>
             </button>
           )}
         </div>

@@ -238,7 +238,7 @@ export const OperatorDashboard: React.FC = () => {
               className="flex items-center gap-1.5 px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold shadow-2xs transition cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>+ Report a Problem</span>
+              <span>Report a Problem</span>
             </button>
             <button
               onClick={fetchData}

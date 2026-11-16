@@ -989,7 +989,7 @@ export const StoreManagerDashboard: React.FC = () => {
             title="Register a new spare part master catalog record"
           >
             <Plus className="w-4 h-4 text-black" />
-            <span>+ Add New Part</span>
+            <span>Add New Part</span>
           </button>
 
           <button

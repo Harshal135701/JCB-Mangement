@@ -1159,7 +1159,7 @@ export const RDCPage: React.FC = () => {
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-jcb-yellow hover:bg-jcb-yellowDark text-black font-black text-xs uppercase tracking-wider transition shadow-sm border border-amber-500 cursor-pointer"
             >
               <Plus className="w-4 h-4 stroke-[3]" />
-              + New Delivery Pass
+              New Delivery Pass
             </button>
           )}
         </div>
