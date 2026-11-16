@@ -76,6 +76,8 @@ export const UserManagementScreen = () => {
         ? 'TCH'
         : presetRole === 'operator'
         ? 'OPR'
+        : presetRole === 'store_manager'
+        ? 'STM'
         : presetRole === 'manager'
         ? 'MGR'
         : 'ADM';
@@ -86,12 +88,18 @@ export const UserManagementScreen = () => {
       phone: '',
       role: presetRole,
       department:
-        presetRole === 'operator' ? 'Production Operations' : 'Mechanical Maintenance',
+        presetRole === 'operator'
+          ? 'Production Operations'
+          : presetRole === 'store_manager'
+          ? 'Central Stores & Inventory'
+          : 'Mechanical Maintenance',
       designation:
         presetRole === 'technician'
           ? 'Maintenance Technician'
           : presetRole === 'operator'
           ? 'CNC Line Operator'
+          : presetRole === 'store_manager'
+          ? 'Store Manager'
           : 'Maintenance Engineer',
       shift: 'Shift A',
       password: 'password123',
@@ -261,7 +269,7 @@ export const UserManagementScreen = () => {
 
         {/* Filter Chips */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll}>
-          {['all', 'technician', 'operator', 'manager', 'admin'].map((role) => {
+          {['all', 'technician', 'operator', 'store_manager', 'manager', 'admin'].map((role) => {
             const active = selectedRole === role;
             return (
               <TouchableOpacity
@@ -271,7 +279,11 @@ export const UserManagementScreen = () => {
                 activeOpacity={0.7}
               >
                 <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
-                  {role === 'all' ? 'All Roles' : role.toUpperCase()}
+                  {role === 'all'
+                    ? 'All Roles'
+                    : role === 'store_manager'
+                    ? 'STORE MANAGER'
+                    : role.toUpperCase()}
                 </Text>
               </TouchableOpacity>
             );
@@ -306,6 +318,8 @@ export const UserManagementScreen = () => {
                 ? '#DC2626'
                 : u.role === 'manager'
                 ? '#7C3AED'
+                : u.role === 'store_manager'
+                ? '#D97706'
                 : u.role === 'operator'
                 ? '#047857'
                 : '#2563EB';
@@ -315,6 +329,8 @@ export const UserManagementScreen = () => {
                 ? '#FEF2F2'
                 : u.role === 'manager'
                 ? '#F5F3FF'
+                : u.role === 'store_manager'
+                ? '#FEF3C7'
                 : u.role === 'operator'
                 ? '#ECFDF5'
                 : '#EFF6FF';
@@ -454,7 +470,7 @@ export const UserManagementScreen = () => {
 
               <Text style={styles.inputLabel}>Role Designation</Text>
               <View style={styles.roleSelectGrid}>
-                {['technician', 'operator', 'manager', 'admin'].map((r) => {
+                {['technician', 'operator', 'store_manager', 'manager', 'admin'].map((r) => {
                   const selected = formData.role === r;
                   return (
                     <TouchableOpacity
@@ -463,7 +479,7 @@ export const UserManagementScreen = () => {
                       onPress={() => setFormData({ ...formData, role: r })}
                     >
                       <Text style={[styles.roleSelectText, selected && styles.roleSelectTextActive]}>
-                        {r.toUpperCase()}
+                        {r === 'store_manager' ? 'STORE' : r.toUpperCase()}
                       </Text>
                     </TouchableOpacity>
                   );

@@ -184,8 +184,15 @@ const MainTabNavigator = ({ navigation }: any) => {
 
   const isOperator = role === 'operator';
   const isTechnician = role === 'technician' || role === 'maintenance_engineer';
+  const isStoreManager = role === 'store_manager' || role === 'store' || role === 'store_keeper';
 
-  const defaultTab = isOperator ? 'OperatorTab' : isTechnician ? 'WorkOrdersTab' : 'ShopfloorTab';
+  const defaultTab = isOperator
+    ? 'OperatorTab'
+    : isTechnician
+    ? 'WorkOrdersTab'
+    : isStoreManager
+    ? 'SparesTab'
+    : 'ShopfloorTab';
   const [activeTab, setActiveTab] = React.useState(defaultTab);
 
   // Android system navigation bar clearance
@@ -205,6 +212,9 @@ const MainTabNavigator = ({ navigation }: any) => {
           'OperatorTab',
           'ReportBreakdownTab',
           'WorkOrdersTab',
+          'ProcurementTab',
+          'RDCTab',
+          'AuditTab',
         ];
         if (tabNames.includes(name)) {
           setActiveTab(name);
@@ -286,6 +296,37 @@ const MainTabNavigator = ({ navigation }: any) => {
         activeIcon: 'package-variant-closed',
         inactiveIcon: 'package-variant-closed',
         component: <InventoryCatalogScreen navigation={tabNavigation} />,
+      },
+    ];
+  } else if (isStoreManager) {
+    tabs = [
+      {
+        id: 'SparesTab',
+        label: 'Inventory',
+        activeIcon: 'package-variant-closed',
+        inactiveIcon: 'package-variant-closed',
+        component: <InventoryCatalogScreen navigation={tabNavigation} />,
+      },
+      {
+        id: 'ProcurementTab',
+        label: 'Buying',
+        activeIcon: 'cart',
+        inactiveIcon: 'cart-outline',
+        component: <ProcurementScreen />,
+      },
+      {
+        id: 'RDCTab',
+        label: 'Passes',
+        activeIcon: 'truck-fast',
+        inactiveIcon: 'truck-fast-outline',
+        component: <RDCScreen />,
+      },
+      {
+        id: 'AuditTab',
+        label: 'Audit',
+        activeIcon: 'shield-check',
+        inactiveIcon: 'shield-check-outline',
+        component: <AuditLogsScreen />,
       },
     ];
   } else {

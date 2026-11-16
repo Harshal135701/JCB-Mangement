@@ -24,7 +24,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const JCB_OFFICIAL_BADGE = require('../../assets/jcb_official_badge.png');
 const JCB_MACHINE_HERO = require('../../assets/jcb_backhoe_loader.webp');
 
-type RoleType = 'admin' | 'manager' | 'operator' | 'technician';
+type RoleType = 'admin' | 'manager' | 'store_manager' | 'technician' | 'operator';
 
 interface RoleItem {
   id: RoleType;
@@ -50,18 +50,25 @@ const ROLES: RoleItem[] = [
     email: 'manager@jcb.com',
   },
   {
+    id: 'store_manager',
+    label: 'Store',
+    roleTitle: 'Stores & Spares',
+    icon: 'package-variant-closed',
+    email: 'store@jcb.com',
+  },
+  {
+    id: 'technician',
+    label: 'Tech',
+    roleTitle: 'Maintenance Tech',
+    icon: 'wrench-cog',
+    email: 'technician@jcb.com',
+  },
+  {
     id: 'operator',
     label: 'Operator',
     roleTitle: 'Machine Operator',
     icon: 'hard-hat',
     email: 'operator@jcb.com',
-  },
-  {
-    id: 'technician',
-    label: 'Technician',
-    roleTitle: 'Maintenance Technician',
-    icon: 'wrench-cog',
-    email: 'technician@jcb.com',
   },
 ];
 
@@ -182,7 +189,11 @@ export const LoginScreen = () => {
             <View style={styles.roleSelectionBox}>
               <Text style={styles.roleSectionTitle}>SELECT PROFILE</Text>
 
-              <View style={styles.roleGrid}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.roleScrollContainer}
+              >
                 {ROLES.map((role) => {
                   const isActive = selectedRole === role.id;
                   return (
@@ -218,7 +229,7 @@ export const LoginScreen = () => {
                     </TouchableOpacity>
                   );
                 })}
-              </View>
+              </ScrollView>
             </View>
 
             {/* Form Fields */}
@@ -519,19 +530,20 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     paddingHorizontal: 2,
   },
-  roleGrid: {
+  roleScrollContainer: {
     flexDirection: 'row',
     gap: 8,
+    paddingVertical: 2,
+    paddingHorizontal: 1,
   },
   roleCard: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 8,
-    paddingHorizontal: 6,
+    paddingHorizontal: 12,
     borderRadius: 10,
-    gap: 5,
+    gap: 6,
   },
   roleCardActive: {
     backgroundColor: '#F9B101',

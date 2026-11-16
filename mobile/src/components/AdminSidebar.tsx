@@ -73,6 +73,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
   const role = (user?.role || 'operator').toLowerCase();
   const isOperator = role === 'operator';
   const isTechnician = role === 'technician' || role === 'maintenance_engineer';
+  const isStoreManager = role === 'store_manager' || role === 'store' || role === 'store_keeper';
   const isManager = role === 'manager';
   const isAdmin = role === 'admin' || role === 'plant_admin' || role === 'enterprise_admin';
 
@@ -96,6 +97,15 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
         bg: '#D1FAE5',
       };
     }
+    if (isStoreManager) {
+      return {
+        title: 'Store Manager',
+        subtitle: 'Stores & Spares Control',
+        icon: 'package-variant-closed',
+        color: '#D97706',
+        bg: '#FEF3C7',
+      };
+    }
     if (isTechnician) {
       return {
         title: 'Technician',
@@ -109,10 +119,10 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       title: 'Machine Operator',
       subtitle: 'Line Operations',
       icon: 'hard-hat',
-      color: '#D97706',
-      bg: '#FEF3C7',
+      color: '#059669',
+      bg: '#D1FAE5',
     };
-  }, [isAdmin, isManager, isTechnician]);
+  }, [isAdmin, isManager, isStoreManager, isTechnician]);
 
   // Clean, simple English menu sections
   const menuSections: MenuSection[] = React.useMemo(() => {
@@ -202,6 +212,71 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
               icon: 'calendar-clock',
               iconColor: '#059669',
               iconBg: '#D1FAE5',
+            },
+            {
+              id: 'RDC',
+              label: 'Gate Passes (RDC)',
+              icon: 'truck-fast-outline',
+              iconColor: '#475569',
+              iconBg: '#F1F5F9',
+            },
+          ],
+        },
+      ];
+    }
+
+    // 3. Store Manager Menu (Web-aligned 100% English)
+    if (isStoreManager) {
+      return [
+        {
+          title: 'STORES & INVENTORY',
+          items: [
+            {
+              id: 'SparesTab',
+              label: 'Spare Parts Stock',
+              icon: 'package-variant-closed',
+              iconColor: '#7C3AED',
+              iconBg: '#EDE9FE',
+            },
+            {
+              id: 'Procurement',
+              label: 'Buying & Receiving',
+              icon: 'cart-outline',
+              iconColor: '#0284C7',
+              iconBg: '#E0F2FE',
+            },
+            {
+              id: 'RDC',
+              label: 'Delivery Passes (RDC)',
+              icon: 'truck-fast-outline',
+              iconColor: '#475569',
+              iconBg: '#F1F5F9',
+            },
+            {
+              id: 'WorkOrdersTab',
+              label: 'Part Requests from Jobs',
+              icon: 'wrench-clock',
+              iconColor: '#2563EB',
+              iconBg: '#DBEAFE',
+            },
+          ],
+        },
+        {
+          title: 'AUDIT & REPORTS',
+          items: [
+            {
+              id: 'AuditLogs',
+              label: 'Stock Audit Log',
+              icon: 'shield-check-outline',
+              iconColor: '#16A34A',
+              iconBg: '#DCFCE7',
+            },
+            {
+              id: 'OperationsTab',
+              label: 'Reports & Analytics',
+              icon: 'chart-box-outline',
+              iconColor: '#EA580C',
+              iconBg: '#FFEDD5',
             },
           ],
         },
@@ -308,7 +383,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
     }
 
     return sections;
-  }, [isOperator, isTechnician, isAdmin]);
+  }, [isOperator, isTechnician, isStoreManager, isAdmin]);
 
   if (!visible) {
     return null;
