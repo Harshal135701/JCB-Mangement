@@ -122,24 +122,11 @@ export const OperatorDashboardScreen = ({ navigation }: any) => {
           />
         }
       >
-        {/* Yellow Breadcrumb Banner */}
-        <TouchableOpacity
-          style={styles.breadcrumbBanner}
-          activeOpacity={0.9}
-          onPress={() => navigation.navigate('OperatorTab')}
-        >
-          <View style={styles.breadcrumbLeft}>
-            <MaterialCommunityIcons name="home-outline" size={22} color="#000000" />
-            <Text style={styles.breadcrumbTitle}>Dashboard</Text>
-          </View>
-          <MaterialCommunityIcons name="chevron-right" size={22} color="#000000" />
-        </TouchableOpacity>
-
         {/* Section Title Header */}
         <View style={styles.sectionTitleBlock}>
           <View style={styles.sectionTitleRow}>
             <View style={styles.yellowIndicatorBar} />
-            <Text style={styles.sectionMainTitle}>Operator Station</Text>
+            <Text style={styles.sectionMainTitle}>Operator Dashboard</Text>
           </View>
           <Text style={styles.sectionSubtitle}>
             Overview of assigned machinery & shopfloor line operations
