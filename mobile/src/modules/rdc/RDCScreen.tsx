@@ -116,7 +116,7 @@ export const RDCScreen = () => {
   const handleDispatch = async (id: string) => {
     try {
       const vehicleNum = 'HR-29-BA-' + Math.floor(1000 + Math.random() * 9000);
-      const res: any = await apiClient.put(`/rdc/${id}/dispatch`, {
+      const res: any = await apiClient.post(`/rdc/${id}/dispatch`, {
         vehicle_number: vehicleNum,
       });
       if (res?.success) {

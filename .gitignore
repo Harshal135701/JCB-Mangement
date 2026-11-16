@@ -35,4 +35,7 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+temp_apk/
+window_dump*.xml
+
 

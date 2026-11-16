@@ -47,10 +47,10 @@ export const OperationsHubScreen = ({ navigation }: any) => {
     try {
       setLoading(true);
       const [prsRes, rdcsRes, pmsRes, usersRes]: any = await Promise.allSettled([
-        apiClient.get('/procurement/prs'),
+        apiClient.get('/procurement/pr'),
         apiClient.get('/rdc'),
-        apiClient.get('/pm/tasks'),
-        apiClient.get('/users'),
+        apiClient.get('/pm/plans'),
+        apiClient.get('/auth/users'),
       ]);
 
       setCounts({
