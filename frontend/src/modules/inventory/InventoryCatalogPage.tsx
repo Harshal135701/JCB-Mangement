@@ -81,6 +81,7 @@ export const InventoryCatalogPage: React.FC = () => {
   // Search and filter state
   const [searchInput, setSearchInput] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
+  const [selectedPlantId, setSelectedPlantId] = useState('ALL');
   const [page, setPage] = useState(1);
   const [limit] = useState(25);
   const [totalCount, setTotalCount] = useState(0);
@@ -128,7 +129,7 @@ export const InventoryCatalogPage: React.FC = () => {
 
   const [formData, setFormData] = useState(INITIAL_FORM_DATA);
 
-  // Load active plants for spare-part assignment.
+  // Load active plants for spare-part assignment and plant filtering.
   useEffect(() => {
     if (!canManageParts) return;
 
@@ -141,6 +142,7 @@ export const InventoryCatalogPage: React.FC = () => {
 
         const res = await apiClient.get('/org/plants');
         const responseData = res.data?.data;
+
         const plantList: Plant[] = Array.isArray(responseData)
           ? responseData
           : Array.isArray(responseData?.plants)
@@ -153,17 +155,21 @@ export const InventoryCatalogPage: React.FC = () => {
           (plant) => plant.status?.toLowerCase() === 'active'
         );
 
-        // Store managers should only be offered their own assigned plant.
+        // Store managers should only see their assigned plant.
         if (!isAdmin && userPlantId) {
           activePlants = activePlants.filter(
             (plant) => plant.id === userPlantId
           );
+
+          setSelectedPlantId(userPlantId);
         }
 
         setPlants(activePlants);
       } catch (err: any) {
         if (cancelled) return;
+
         console.error('Failed to load plants:', err);
+
         setPlantsError(
           err.response?.data?.message || 'Unable to load active plants.'
         );
@@ -179,7 +185,7 @@ export const InventoryCatalogPage: React.FC = () => {
     };
   }, [canManageParts, isAdmin, userPlantId]);
 
-  // Fetch spare parts.
+  // Fetch spare parts with search, category, and plant filters.
   const fetchParts = useCallback(async (
     searchTerm = searchInput,
     category = selectedCategory,
@@ -193,18 +199,31 @@ export const InventoryCatalogPage: React.FC = () => {
 
       const params = new URLSearchParams();
 
-      if (searchTerm.trim()) params.append('query', searchTerm.trim());
-      if (category !== 'ALL') params.append('category', category);
+      if (searchTerm.trim()) {
+        params.append('query', searchTerm.trim());
+      }
+
+      if (category !== 'ALL') {
+        params.append('category', category);
+      }
+
+      // Apply selected plant filter.
+      if (selectedPlantId && selectedPlantId !== 'ALL') {
+        params.append('plant_id', selectedPlantId);
+      }
 
       params.append('page', String(pageNum));
       params.append('limit', String(limit));
 
-      const res = await apiClient.get(`/inventory?${params.toString()}`);
+      const res = await apiClient.get(
+        `/inventory?${params.toString()}`
+      );
 
       if (currentRequestId !== requestIdRef.current) return;
 
       if (res.data?.success) {
         const result = res.data.data || [];
+
         setParts(result);
 
         if (res.data.pagination) {
@@ -219,6 +238,7 @@ export const InventoryCatalogPage: React.FC = () => {
       if (currentRequestId !== requestIdRef.current) return;
 
       console.error('Failed to load parts catalog:', err);
+
       setFetchError(
         err.response?.data?.message ||
         'Failed to connect to spare parts catalog. Please check server status.'
@@ -228,9 +248,15 @@ export const InventoryCatalogPage: React.FC = () => {
         setLoading(false);
       }
     }
-  }, [searchInput, selectedCategory, page, limit]);
+  }, [
+    searchInput,
+    selectedCategory,
+    selectedPlantId,
+    page,
+    limit
+  ]);
 
-  // Debounced search.
+  // Debounced search and filter updates.
   useEffect(() => {
     const timer = setTimeout(() => {
       setPage(1);
@@ -238,7 +264,7 @@ export const InventoryCatalogPage: React.FC = () => {
     }, 350);
 
     return () => clearTimeout(timer);
-  }, [searchInput, selectedCategory, fetchParts]);
+  }, [searchInput, selectedCategory, selectedPlantId, fetchParts]);
 
   // Real-time inventory updates.
   useEffect(() => {
@@ -264,7 +290,7 @@ export const InventoryCatalogPage: React.FC = () => {
     return () => {
       events.forEach((event) => socket.off(event, handleRemoteUpdate));
     };
-  }, [socket, searchInput, selectedCategory, page, fetchParts]);
+  }, [socket, searchInput, selectedCategory, selectedPlantId, page, fetchParts]);
 
   const handleManualSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -277,18 +303,26 @@ export const InventoryCatalogPage: React.FC = () => {
     setPage(1);
   };
 
+  const handlePlantChange = (plantId: string) => {
+    setSelectedPlantId(plantId);
+    setPage(1);
+  };
+
   const handlePageChange = (newPage: number) => {
     if (newPage < 1 || newPage > totalPages) return;
+
     setPage(newPage);
     fetchParts(searchInput, selectedCategory, newPage);
   };
 
   const openCreateModal = () => {
     setEditingPart(null);
+
     setFormData({
       ...INITIAL_FORM_DATA,
       plant_id: !isAdmin && userPlantId ? userPlantId : ''
     });
+
     setModalFeedback(null);
     setIsModalOpen(true);
   };
@@ -311,7 +345,6 @@ export const InventoryCatalogPage: React.FC = () => {
       max_stock_level: part.max_stock_level ?? 100,
       unit_cost: part.unit_cost ?? 0,
       supplier_name: part.supplier_name || 'JCB Genuine Parts',
-      // Preserve the existing plant assignment.
       plant_id: part.plant_id || ''
     });
 
@@ -334,7 +367,6 @@ export const InventoryCatalogPage: React.FC = () => {
       return;
     }
 
-    // Plant assignment is mandatory when creating a new spare part.
     if (!editingPart && !formData.plant_id) {
       setModalFeedback({
         type: 'error',
@@ -343,7 +375,10 @@ export const InventoryCatalogPage: React.FC = () => {
       return;
     }
 
-    if (!editingPart && !plants.some((plant) => plant.id === formData.plant_id)) {
+    if (
+      !editingPart &&
+      !plants.some((plant) => plant.id === formData.plant_id)
+    ) {
       setModalFeedback({
         type: 'error',
         text: 'The selected plant is invalid or inactive. Please select an active plant.'
@@ -356,7 +391,6 @@ export const InventoryCatalogPage: React.FC = () => {
       setModalFeedback(null);
 
       if (editingPart) {
-        // Do not allow the plant assignment to be changed through this form.
         const {
           plant_id: _preservedPlantId,
           ...updatePayload
@@ -386,7 +420,6 @@ export const InventoryCatalogPage: React.FC = () => {
           }, 800);
         }
       } else {
-        // plant_id is explicitly sent to the backend.
         const createPayload = {
           ...formData,
           plant_id: formData.plant_id
@@ -436,6 +469,7 @@ export const InventoryCatalogPage: React.FC = () => {
 
   const handleAdjustSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
     if (!adjustingPart) return;
 
     if (adjustQty === 0) {
@@ -454,7 +488,10 @@ export const InventoryCatalogPage: React.FC = () => {
       return;
     }
 
-    const currentPhysical = Number(adjustingPart.current_physical_stock || 0);
+    const currentPhysical = Number(
+      adjustingPart.current_physical_stock || 0
+    );
+
     const reserved = Number(adjustingPart.reserved_stock || 0);
     const quarantined = Number(adjustingPart.quarantined_stock || 0);
     const expectedPhysical = currentPhysical + adjustQty;
@@ -520,7 +557,9 @@ export const InventoryCatalogPage: React.FC = () => {
     try {
       setActionLoading(true);
 
-      const res = await apiClient.delete(`/inventory/${partToDelete.id}`);
+      const res = await apiClient.delete(
+        `/inventory/${partToDelete.id}`
+      );
 
       if (res.data.success) {
         setPageFeedback({
@@ -539,6 +578,7 @@ export const InventoryCatalogPage: React.FC = () => {
         text: err.response?.data?.message ||
           'Failed to delete/deactivate part.'
       });
+
       setPartToDelete(null);
     } finally {
       setActionLoading(false);
@@ -574,6 +614,7 @@ export const InventoryCatalogPage: React.FC = () => {
 
   const handlePRSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
     if (!prPart || prQuantity <= 0) return;
 
     try {
@@ -592,6 +633,7 @@ export const InventoryCatalogPage: React.FC = () => {
           type: 'success',
           text: `Purchase Requisition ${res.data.data?.pr_number || ''} submitted successfully for manager approval!`
         });
+
         setPrPart(null);
       }
     } catch (err: any) {
@@ -753,6 +795,40 @@ export const InventoryCatalogPage: React.FC = () => {
           </button>
         </form>
 
+        {/* Plant filter */}
+        {canManageParts && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1">
+              <MapPin className="w-3 h-3" />
+              Plant:
+            </span>
+
+            <select
+              value={selectedPlantId}
+              onChange={(e) => handlePlantChange(e.target.value)}
+              disabled={plantsLoading || plants.length === 0 || !isAdmin}
+              className="px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-bold text-zinc-800 focus:outline-none focus:border-jcb-yellow disabled:bg-zinc-100 disabled:cursor-not-allowed"
+            >
+              {isAdmin && (
+                <option value="ALL">All Plants</option>
+              )}
+
+              {plants.map((plant) => (
+                <option key={plant.id} value={plant.id}>
+                  {plant.plant_name} ({plant.plant_code})
+                </option>
+              ))}
+            </select>
+
+            {plantsError && (
+              <span className="text-[10px] text-red-600">
+                {plantsError}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Category filter */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
           <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1 mr-1">
             <Filter className="w-3 h-3" /> Category:
@@ -827,11 +903,13 @@ export const InventoryCatalogPage: React.FC = () => {
                       Try adjusting your search terms or category filter.
                     </p>
 
-                    {(searchInput || selectedCategory !== 'ALL') && (
+                    {(searchInput || selectedCategory !== 'ALL' || selectedPlantId !== 'ALL') && (
                       <button
                         onClick={() => {
                           setSearchInput('');
                           setSelectedCategory('ALL');
+                          setSelectedPlantId(isAdmin ? 'ALL' : userPlantId || 'ALL');
+                          setPage(1);
                         }}
                         className="mt-3 px-3 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-lg text-xs font-bold transition"
                       >
