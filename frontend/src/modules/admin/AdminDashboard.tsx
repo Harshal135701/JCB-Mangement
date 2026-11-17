@@ -2,13 +2,13 @@ import React, { useState, useEffect, useMemo } from 'react';
 import apiClient from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
-import { 
-  Users, 
-  Building2, 
-  Cpu, 
-  ShieldCheck, 
-  Activity, 
-  RefreshCw, 
+import {
+  Users,
+  Building2,
+  Cpu,
+  ShieldCheck,
+  Activity,
+  RefreshCw,
   ArrowRight,
   AlertCircle
 } from 'lucide-react';
@@ -27,6 +27,7 @@ export const AdminDashboard: React.FC = () => {
   const [users, setUsers] = useState<any[]>([]);
   const [hierarchy, setHierarchy] = useState<any>(null);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [shops, setShops] = useState<any[]>([]);
   const [kpiStats, setKpiStats] = useState<any>(null);
   const [govTrend, setGovTrend] = useState<TrendDataPoint[]>([]);
   const [loading, setLoading] = useState(false);
@@ -106,7 +107,6 @@ export const AdminDashboard: React.FC = () => {
 
   const plantsCount = hierarchy?.plants?.length ?? kpiStats?.total_plants ?? 0;
   const totalAssets = kpiStats?.total_machines ?? 0;
-  const totalAuditCount = kpiStats?.total_audit_logs ?? auditLogs.length;
 
   // Real availability calculation from actual database records
   const availabilityPercent = kpiStats?.machine_availability_percent ?? 0;
@@ -203,17 +203,9 @@ export const AdminDashboard: React.FC = () => {
           ROW 1: 4 TOP KPI METRIC CARDS (Real DB Values)
           ========================================================================= */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
-        {/* Card 1: Total Users */}
-        <TopKPICard
-          icon={Users}
-          iconBgColor="bg-amber-100"
-          iconColor="text-amber-800"
-          label="Total Users"
-          value={totalUsers}
-          subtitle={`${techCount} Techs • ${operatorCount} Operators • ${managerCount} Mgrs`}
-        />
 
-        {/* Card 2: Active Plants */}
+
+        {/* Card 1: Active Plants */}
         <TopKPICard
           icon={Building2}
           iconBgColor="bg-blue-100"
@@ -221,6 +213,16 @@ export const AdminDashboard: React.FC = () => {
           label="Active Plants"
           value={plantsCount}
           subtitle={`${kpiStats?.total_shops ?? hierarchy?.shops?.length ?? 0} Active Shops`}
+        />
+
+        {/*  Card 2: Total Shops */}
+        <TopKPICard
+          icon={Building2}
+          iconBgColor="bg-emerald-100"
+          iconColor="text-emerald-800"
+          label="Total Shops"
+          value={kpiStats?.total_shops ?? hierarchy?.shops?.length ?? 0}
+          subtitle="Registered Shops Across Plants"
         />
 
         {/* Card 3: Total Machines */}
@@ -233,15 +235,16 @@ export const AdminDashboard: React.FC = () => {
           subtitle={`${kpiStats?.running_machines ?? 0} Running • ${kpiStats?.breakdown_machines ?? 0} Stopped`}
         />
 
-        {/* Card 4: Activity Records */}
+        {/* Card 4: Total Users */}
         <TopKPICard
-          icon={ShieldCheck}
-          iconBgColor="bg-emerald-100"
-          iconColor="text-emerald-800"
-          label="Activity Records"
-          value={totalAuditCount}
-          subtitle="System Audit Trail"
+          icon={Users}
+          iconBgColor="bg-amber-100"
+          iconColor="text-amber-800"
+          label="Total Users"
+          value={totalUsers}
+          subtitle={`${techCount} Techs • ${operatorCount} Operators • ${managerCount} Mgrs`}
         />
+
       </div>
 
       {/* =========================================================================
@@ -323,11 +326,11 @@ export const AdminDashboard: React.FC = () => {
                     const actor = log.performed_by_name || log.performed_by_email || 'System';
                     const timeStr = log.created_at
                       ? new Date(log.created_at).toLocaleString([], {
-                          month: 'short',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })
                       : 'Recent';
 
                     return (
@@ -411,11 +414,10 @@ export const AdminDashboard: React.FC = () => {
                       </td>
                       <td className="py-3 px-3">
                         <span
-                          className={`px-2.5 py-0.5 rounded-md text-[11px] font-bold border capitalize ${
-                            p.plant_status === 'active'
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                              : 'bg-zinc-100 text-zinc-700 border-zinc-200'
-                          }`}
+                          className={`px-2.5 py-0.5 rounded-md text-[11px] font-bold border capitalize ${p.plant_status === 'active'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : 'bg-zinc-100 text-zinc-700 border-zinc-200'
+                            }`}
                         >
                           {p.plant_status || 'Active'}
                         </span>
