@@ -121,7 +121,7 @@ export const LoginScreen = () => {
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor="#0B0F19" translucent={false} />
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" translucent={false} />
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -394,21 +394,23 @@ export const LoginScreen = () => {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#0B0F19',
+    backgroundColor: '#FFFFFF',
   },
   keyboardContainer: {
     flex: 1,
+    backgroundColor: '#FFFFFF',
   },
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
   },
 
-  /* Clean Industrial Header */
+  /* Clean Industrial Header (Pure White Background behind JCB) */
   heroHeader: {
-    backgroundColor: '#0B0F19',
+    backgroundColor: '#FFFFFF',
     paddingHorizontal: 16,
-    paddingBottom: 14,
+    paddingBottom: 10,
   },
   topNavRow: {
     flexDirection: 'row',
@@ -418,10 +420,9 @@ const styles = StyleSheet.create({
   },
   logoBadgeContainer: {
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
     borderRadius: 8,
-    elevation: 3,
   },
   officialBadge: {
     width: 90,
@@ -432,31 +433,32 @@ const styles = StyleSheet.create({
   },
   plantNameText: {
     fontSize: 11,
-    fontWeight: '800',
-    color: '#F9B101',
+    fontWeight: '900',
+    color: '#0F172A',
     letterSpacing: 0.5,
   },
   plantSubText: {
     fontSize: 9.5,
-    fontWeight: '600',
-    color: '#94A3B8',
+    fontWeight: '700',
+    color: '#D97706',
   },
 
-  /* Machine Showcase */
+  /* Machine Showcase (Pure White Background behind JCB) */
   machineStageContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
+    marginTop: 6,
+    backgroundColor: '#FFFFFF',
   },
   machineImage: {
     width: SCREEN_WIDTH * 0.92,
-    height: 146,
+    height: 152,
   },
   groundPlatformShadow: {
-    width: SCREEN_WIDTH * 0.78,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    width: SCREEN_WIDTH * 0.76,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: 'rgba(15, 23, 42, 0.08)',
     marginTop: -4,
     marginBottom: 4,
   },
@@ -469,11 +471,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 18,
     paddingBottom: 22,
+    borderTopWidth: 1.5,
+    borderTopColor: '#F1F5F9',
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: -6 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 8,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 4,
   },
   sheetHeader: {
     flexDirection: 'row',
