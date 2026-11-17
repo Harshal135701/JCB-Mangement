@@ -261,16 +261,40 @@ export const AdminDashboard: React.FC = () => {
           loading={loading}
         />
 
-        {/* Card 2: Security & Activity Trend */}
-        <MaintenanceTrendChart
-          title="System Activity Trend"
-          series1Name="User Actions"
-          series2Name="System Logs"
-          series1Color="#18181B"
-          series2Color="#EAB308"
-          data={govTrend}
+        {/* Card 2: Real Machine Status Overview */}
+        <MachineStatusDonut
+          title="Machine Status Overview"
+          totalLabel="Machines"
+          totalCount={Number(kpiStats?.total_machines ?? 0)}
+          segments={[
+            {
+              label: 'Running',
+              count: Number(kpiStats?.running_machines ?? 0),
+              color: '#16A34A',
+            },
+            {
+              label: 'Idle / Not Working',
+              count: Number(kpiStats?.idle_machines ?? 0),
+              color: '#64748B',
+            },
+            {
+              label: 'Breakdown',
+              count: Number(kpiStats?.breakdown_machines ?? 0),
+              color: '#DC2626',
+            },
+            {
+              label: 'Under Maintenance',
+              count: Number(kpiStats?.maintenance_machines ?? 0),
+              color: '#EAB308',
+            },
+            {
+              label: 'Awaiting Parts',
+              count: Number(kpiStats?.awaiting_parts_machines ?? 0),
+              color: '#2563EB',
+            },
+          ]}
           loading={loading}
-          emptyMessage="No activity events recorded for this period"
+          emptyMessage="No machines registered in the selected plant"
         />
       </div>
 
