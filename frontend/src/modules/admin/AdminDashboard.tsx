@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   CircleOff,
   ArrowRight,
+  Plus,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { DashboardHeader } from '../../components/dashboard/DashboardHeader';
@@ -73,7 +74,6 @@ export const AdminDashboard: React.FC = () => {
 
       let fetchedUsers = usersRes.data?.data || [];
 
-      // Keep the selected plant's users if the API returns an unfiltered list.
       if (selectedPlantId) {
         fetchedUsers = fetchedUsers.filter(
           (u: any) => u.plant_id === selectedPlantId
@@ -152,6 +152,7 @@ export const AdminDashboard: React.FC = () => {
   const plantsCount = selectedPlantId
     ? 1
     : hierarchy?.plants?.length ?? kpiStats?.total_plants ?? 0;
+
   const totalAssets = kpiStats?.total_machines ?? 0;
 
   // User role distribution
@@ -213,6 +214,7 @@ export const AdminDashboard: React.FC = () => {
 
   // Inventory summary
   const inventorySummary = inventoryStats?.summary || {};
+
   const inventoryCategories = Array.isArray(
     inventoryStats?.category_breakdown
   )
@@ -220,20 +222,23 @@ export const AdminDashboard: React.FC = () => {
     : [];
 
   const totalSKUs = Number(inventorySummary.total_parts ?? 0);
+
   const availableStock = Number(
     inventorySummary.total_available_stock ?? 0
   );
+
   const lowStockCount = Number(
     inventorySummary.low_stock_items_count ?? 0
   );
+
   const outOfStockCount = Number(
     inventorySummary.out_of_stock_count ?? 0
   );
+
   const physicalStock = Number(
     inventorySummary.total_physical_stock ?? 0
   );
 
-  // Dynamic category distribution using actual database categories
   const categoryColors = [
     '#2563EB',
     '#16A34A',
@@ -244,14 +249,6 @@ export const AdminDashboard: React.FC = () => {
     '#64748B',
     '#DB2777',
   ];
-
-  const inventoryCategorySegments = inventoryCategories.map(
-    (category: any, index: number) => ({
-      label: category.category || 'Uncategorized',
-      count: Number(category.part_count ?? 0),
-      color: categoryColors[index % categoryColors.length],
-    })
-  );
 
   const maxCategoryStock = Math.max(
     ...inventoryCategories.map((category: any) =>
@@ -276,29 +273,20 @@ export const AdminDashboard: React.FC = () => {
         selectedTimeframe={timeframe}
         onTimeframeChange={setTimeframe}
         actions={
-          <div className="flex items-center gap-2">
-            <Link
-              to="/users"
-              className="flex items-center gap-1.5 px-3 py-2 bg-jcb-yellow hover:bg-amber-400 text-black rounded-xl text-xs font-bold border border-amber-500 shadow-2xs transition"
-            >
-              <Users className="w-3.5 h-3.5" />
-              <span>Staff Personnel</span>
-            </Link>
-
-            <button
-              onClick={fetchData}
-              disabled={loading}
-              className="flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200/90 rounded-xl text-xs font-bold text-zinc-700 hover:bg-slate-50 transition shadow-2xs cursor-pointer"
-            >
-              <RefreshCw
-                className={`w-3.5 h-3.5 ${loading
+          <button
+            onClick={fetchData}
+            disabled={loading}
+            className="flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200/90 rounded-xl text-xs font-bold text-zinc-700 hover:bg-slate-50 transition shadow-2xs cursor-pointer"
+          >
+            <RefreshCw
+              className={`w-3.5 h-3.5 ${
+                loading
                   ? 'animate-spin text-amber-600'
                   : 'text-zinc-500'
-                  }`}
-              />
-              <span className="hidden sm:inline">Refresh</span>
-            </button>
-          </div>
+              }`}
+            />
+            <span className="hidden sm:inline">Refresh</span>
+          </button>
         }
       />
 
@@ -311,10 +299,11 @@ export const AdminDashboard: React.FC = () => {
             <button
               key={p.id}
               onClick={() => setPlant(p.plant_name)}
-              className={`px-5 py-2 rounded-full text-xs font-bold border transition-all duration-200 ${isSelected
+              className={`px-5 py-2 rounded-full text-xs font-bold border transition-all duration-200 ${
+                isSelected
                   ? 'bg-amber-400 border-amber-500 text-black shadow-sm'
                   : 'bg-white border-slate-200 text-zinc-600 hover:border-amber-400 hover:bg-amber-50'
-                }`}
+              }`}
             >
               {p.plant_name}
             </button>
@@ -365,8 +354,9 @@ export const AdminDashboard: React.FC = () => {
           iconColor="text-zinc-800"
           label="Total Machines"
           value={totalAssets}
-          subtitle={`${kpiStats?.running_machines ?? 0} Running • ${kpiStats?.breakdown_machines ?? 0
-            } Stopped`}
+          subtitle={`${kpiStats?.running_machines ?? 0} Running • ${
+            kpiStats?.breakdown_machines ?? 0
+          } Stopped`}
         />
 
         <TopKPICard
@@ -381,49 +371,85 @@ export const AdminDashboard: React.FC = () => {
 
       {/* ROW 2: USER AND MACHINE ANALYTICS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <MachineStatusDonut
-          title="User Role Distribution"
-          totalLabel="Users"
-          totalCount={totalUsers}
-          segments={userSegments}
-          emptyMessage="No personnel registered in system"
-          loading={loading}
-        />
+        {/* USER ROLE DISTRIBUTION */}
+        <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <h3 className="text-sm font-bold text-zinc-900 tracking-tight">
+              User Role Distribution
+            </h3>
 
-        <MachineStatusDonut
-          title="Machine Status Overview"
-          totalLabel="Machines"
-          totalCount={Number(kpiStats?.total_machines ?? 0)}
-          segments={[
-            {
-              label: 'Running',
-              count: Number(kpiStats?.running_machines ?? 0),
-              color: '#16A34A',
-            },
-            {
-              label: 'Idle / Not Working',
-              count: Number(kpiStats?.idle_machines ?? 0),
-              color: '#64748B',
-            },
-            {
-              label: 'Breakdown',
-              count: Number(kpiStats?.breakdown_machines ?? 0),
-              color: '#DC2626',
-            },
-            {
-              label: 'Under Maintenance',
-              count: Number(kpiStats?.maintenance_machines ?? 0),
-              color: '#EAB308',
-            },
-            {
-              label: 'Awaiting Parts',
-              count: Number(kpiStats?.awaiting_parts_machines ?? 0),
-              color: '#2563EB',
-            },
-          ]}
-          loading={loading}
-          emptyMessage="No machines registered in the selected plant"
-        />
+            <Link
+              to="/users"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-jcb-yellow hover:bg-amber-400 text-black rounded-xl text-xs font-bold border border-amber-500 shadow-2xs transition"
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>Staff Personnel</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+
+          <MachineStatusDonut
+            title=""
+            totalLabel="Users"
+            totalCount={totalUsers}
+            segments={userSegments}
+            emptyMessage="No personnel registered in system"
+            loading={loading}
+          />
+        </div>
+
+        {/* MACHINE STATUS OVERVIEW */}
+        <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <h3 className="text-sm font-bold text-zinc-900 tracking-tight">
+              Machine Status Overview
+            </h3>
+
+            <Link
+              to="/machines"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-jcb-yellow hover:bg-amber-400 text-black rounded-xl text-xs font-bold border border-amber-500 shadow-2xs transition"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Machine</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+
+          <MachineStatusDonut
+            title=""
+            totalLabel="Machines"
+            totalCount={Number(kpiStats?.total_machines ?? 0)}
+            segments={[
+              {
+                label: 'Running',
+                count: Number(kpiStats?.running_machines ?? 0),
+                color: '#16A34A',
+              },
+              {
+                label: 'Idle / Not Working',
+                count: Number(kpiStats?.idle_machines ?? 0),
+                color: '#64748B',
+              },
+              {
+                label: 'Breakdown',
+                count: Number(kpiStats?.breakdown_machines ?? 0),
+                color: '#DC2626',
+              },
+              {
+                label: 'Under Maintenance',
+                count: Number(kpiStats?.maintenance_machines ?? 0),
+                color: '#EAB308',
+              },
+              {
+                label: 'Awaiting Parts',
+                count: Number(kpiStats?.awaiting_parts_machines ?? 0),
+                color: '#2563EB',
+              },
+            ]}
+            loading={loading}
+            emptyMessage="No machines registered in the selected plant"
+          />
+        </div>
       </div>
 
       {/* ROW 3: SPARE PARTS INVENTORY */}
@@ -441,9 +467,22 @@ export const AdminDashboard: React.FC = () => {
             </div>
           </div>
 
-          <span className="text-[10px] font-semibold text-zinc-500 bg-slate-100 px-3 py-1.5 rounded-lg">
-            {plant === 'All Plants' ? 'All Plants Inventory' : `${plant} Inventory`}
-          </span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[10px] font-semibold text-zinc-500 bg-slate-100 px-3 py-1.5 rounded-lg">
+              {plant === 'All Plants'
+                ? 'All Plants Inventory'
+                : `${plant} Inventory`}
+            </span>
+
+            <Link
+              to="/inventory"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-jcb-yellow hover:bg-amber-400 text-black rounded-xl text-xs font-bold border border-amber-500 shadow-2xs transition"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Spare Part</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
         </div>
 
         {/* INVENTORY KPI CARDS */}
@@ -511,8 +550,7 @@ export const AdminDashboard: React.FC = () => {
 
         {/* INVENTORY ANALYTICS */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mt-6">
-
-          {/* CATEGORY DISTRIBUTION - RECTANGULAR CATEGORY BLOCKS */}
+          {/* CATEGORY DISTRIBUTION */}
           <div className="border border-slate-200 rounded-xl p-4">
             <div className="flex items-center justify-between mb-4">
               <h4 className="text-xs font-bold text-zinc-800">
@@ -546,8 +584,9 @@ export const AdminDashboard: React.FC = () => {
                   return (
                     <div
                       key={`${category.category}-${index}`}
-                      className={`rounded-xl border p-4 ${colors[index % colors.length]
-                        }`}
+                      className={`rounded-xl border p-4 ${
+                        colors[index % colors.length]
+                      }`}
                     >
                       <p className="text-xs font-semibold truncate">
                         {category.category || 'Uncategorized'}
@@ -570,7 +609,6 @@ export const AdminDashboard: React.FC = () => {
             )}
           </div>
 
-
           {/* AVAILABLE STOCK BY CATEGORY */}
           <div className="border border-slate-200 rounded-xl p-4">
             <div className="flex items-center justify-between mb-4">
@@ -592,58 +630,46 @@ export const AdminDashboard: React.FC = () => {
               </div>
             ) : (
               <div className="space-y-5">
-                {inventoryCategories.map(
-                  (category: any, index: number) => {
-                    const stock = Number(
-                      category.available_stock ?? 0
-                    );
-                    const percentage =
-                      maxCategoryStock > 0
-                        ? (stock / maxCategoryStock) * 100
-                        : 0;
+                {inventoryCategories.map((category: any, index: number) => {
+                  const stock = Number(category.available_stock ?? 0);
+                  const percentage =
+                    maxCategoryStock > 0
+                      ? (stock / maxCategoryStock) * 100
+                      : 0;
 
-                    return (
-                      <div key={`${category.category}-${index}`}>
-                        <div className="flex items-center justify-between gap-3 mb-2">
-                          <span className="text-xs font-semibold text-zinc-700 truncate">
-                            {category.category || 'Uncategorized'}
-                          </span>
-                          <span className="text-xs font-bold text-zinc-900 whitespace-nowrap">
-                            {formatNumber(stock)}
-                          </span>
-                        </div>
-
-                        <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                          <div
-                            className="h-full rounded-full transition-all duration-500"
-                            style={{
-                              width: `${percentage}%`,
-                              backgroundColor:
-                                categoryColors[
-                                index % categoryColors.length
-                                ],
-                            }}
-                          />
-                        </div>
-
-                        <div className="flex justify-between mt-1.5">
-                          <span className="text-[10px] text-zinc-400">
-                            {formatNumber(
-                              Number(category.part_count ?? 0)
-                            )}{' '}
-                            SKUs
-                          </span>
-                          <span className="text-[10px] text-zinc-400">
-                            {formatNumber(
-                              Number(category.physical_stock ?? 0)
-                            )}{' '}
-                            physical units
-                          </span>
-                        </div>
+                  return (
+                    <div key={`${category.category}-${index}`}>
+                      <div className="flex items-center justify-between gap-3 mb-2">
+                        <span className="text-xs font-semibold text-zinc-700 truncate">
+                          {category.category || 'Uncategorized'}
+                        </span>
+                        <span className="text-xs font-bold text-zinc-900 whitespace-nowrap">
+                          {formatNumber(stock)}
+                        </span>
                       </div>
-                    );
-                  }
-                )}
+
+                      <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{
+                            width: `${percentage}%`,
+                            backgroundColor:
+                              categoryColors[index % categoryColors.length],
+                          }}
+                        />
+                      </div>
+
+                      <div className="flex justify-between mt-1.5">
+                        <span className="text-[10px] text-zinc-400">
+                          {formatNumber(Number(category.part_count ?? 0))} SKUs
+                        </span>
+                        <span className="text-[10px] text-zinc-400">
+                          {formatNumber(Number(category.physical_stock ?? 0))} physical units
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -740,10 +766,11 @@ export const AdminDashboard: React.FC = () => {
 
                     <td className="py-3 px-3">
                       <span
-                        className={`px-2.5 py-0.5 rounded-md text-[11px] font-bold border capitalize ${p.plant_status === 'active'
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                          : 'bg-zinc-100 text-zinc-700 border-zinc-200'
-                          }`}
+                        className={`px-2.5 py-0.5 rounded-md text-[11px] font-bold border capitalize ${
+                          p.plant_status === 'active'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : 'bg-zinc-100 text-zinc-700 border-zinc-200'
+                        }`}
                       >
                         {p.plant_status || 'Active'}
                       </span>
