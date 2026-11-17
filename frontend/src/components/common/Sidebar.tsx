@@ -47,7 +47,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
   const roleNavItems: Record<UserRole, NavItem[]> = {
     admin: [
       { name: 'Dashboard', path: '/admin/dashboard', icon: LayoutDashboard, roles: ['admin'] },
-      { name: 'Live Shop Floor', path: '/dashboard', icon: Activity, roles: ['admin'] },
+      // { name: 'Live Shop Floor', path: '/dashboard', icon: Activity, roles: ['admin'] },
       // { name: 'Factory Structure', path: '/organization/hierarchy', icon: Network, roles: ['admin'] },
       { name: 'Staff Personnel', path: '/users', icon: Users, roles: ['admin'] },
       { name: 'Daily Safety Checks', path: '/inspections', icon: ClipboardCheck, roles: ['admin'] },

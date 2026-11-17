@@ -131,10 +131,7 @@ export const LoginPage: React.FC = () => {
           <ArrowLeft className="w-3.5 h-3.5" />
           Back to Home
         </Link>
-
-        <span className="text-[11px] font-black text-zinc-700 uppercase tracking-widest bg-white/70 px-3 py-1 rounded-md border border-zinc-200/60 shadow-sm">
-          JCB INDIA CMMS
-        </span>
+        
       </header>
 
       {/* ── Main — card at extreme right, nudged below vertical centre ──── */}
