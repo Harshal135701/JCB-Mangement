@@ -1,29 +1,21 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import apiClient from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
-import { 
-  Search, 
-  Package, 
-  MapPin, 
-  AlertTriangle, 
-  Plus, 
-  Edit2, 
-  Trash2, 
-  X, 
-  CheckCircle2, 
-  SlidersHorizontal,
-  AlertCircle,
-  RefreshCw,
-  ChevronLeft,
-  ChevronRight,
-  Info,
-  Filter,
-  Boxes,
-  ShoppingCart,
-  ArrowRight
+import {
+  Search, Package, MapPin, AlertTriangle, Plus, Edit2, Trash2, X,
+  CheckCircle2, SlidersHorizontal, AlertCircle, RefreshCw, ChevronLeft,
+  ChevronRight, Info, Filter, Boxes, ShoppingCart, ArrowRight
 } from 'lucide-react';
+
+interface Plant {
+  id: string;
+  plant_name: string;
+  plant_code: string;
+  status: string;
+}
 
 interface SparePart {
   id: string;
@@ -40,6 +32,8 @@ interface SparePart {
   shelf_number?: string | null;
   bin_number?: string | null;
   current_physical_stock: number;
+  plant_id?: string | null;
+  plant_name?: string | null;
   reserved_stock: number;
   quarantined_stock: number;
   available_stock: number;
@@ -53,15 +47,26 @@ interface SparePart {
 }
 
 const CATEGORIES = [
-  'ALL',
-  'Mechanical',
-  'Hydraulic',
-  'Electrical',
-  'Bearings',
-  'Seals',
-  'Pneumatic',
-  'Consumables',
+  'ALL', 'Mechanical', 'Hydraulic', 'Electrical',
+  'Bearings', 'Seals', 'Pneumatic', 'Consumables'
 ];
+
+const INITIAL_FORM_DATA = {
+  part_number: '',
+  oem_part_number: '',
+  name: '',
+  description: '',
+  category: 'Mechanical',
+  subcategory: '',
+  uom: 'Nos',
+  warehouse_zone: 'Main Store',
+  bin_location: '',
+  min_reorder_level: 5,
+  max_stock_level: 100,
+  unit_cost: 0,
+  supplier_name: 'JCB Genuine Parts',
+  plant_id: ''
+};
 
 export const InventoryCatalogPage: React.FC = () => {
   const { user } = useAuth();
@@ -71,7 +76,9 @@ export const InventoryCatalogPage: React.FC = () => {
   const canAdjust = isAdmin || isManager || isStoreManager;
   const canManageParts = isAdmin || isStoreManager;
 
-  // Search & Filter state
+  const userPlantId = (user as any)?.plant_id as string | undefined;
+
+  // Search and filter state
   const [searchInput, setSearchInput] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [page, setPage] = useState(1);
@@ -79,84 +86,143 @@ export const InventoryCatalogPage: React.FC = () => {
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
 
-  // Catalog data & loading
+  // Plant state
+  const [plants, setPlants] = useState<Plant[]>([]);
+  const [plantsLoading, setPlantsLoading] = useState(false);
+  const [plantsError, setPlantsError] = useState<string | null>(null);
+
+  // Catalog state
   const [parts, setParts] = useState<SparePart[]>([]);
   const [loading, setLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
-  // Request race-condition tracking
   const requestIdRef = useRef(0);
 
-  // Modal States
+  // Main modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPart, setEditingPart] = useState<SparePart | null>(null);
-  
-  // Adjustment Modal
+
+  // Stock adjustment modal
   const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false);
   const [adjustingPart, setAdjustingPart] = useState<SparePart | null>(null);
   const [adjustQty, setAdjustQty] = useState<number>(0);
   const [adjustReason, setAdjustReason] = useState('');
 
-  // Delete Confirmation Modal
+  // Delete confirmation
   const [partToDelete, setPartToDelete] = useState<SparePart | null>(null);
 
   const { socket } = useSocket();
-  const navigate = useNavigate();
 
-  // Form & Action states
   const [actionLoading, setActionLoading] = useState(false);
-  const [modalFeedback, setModalFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [pageFeedback, setPageFeedback] = useState<{ type: 'success' | 'error'; text: string; redirectLabel?: string; redirectUrl?: string } | null>(null);
+  const [modalFeedback, setModalFeedback] = useState<{
+    type: 'success' | 'error';
+    text: string;
+  } | null>(null);
 
-  // Create / Edit Form State (Clean defaults - no fabricated sample values)
-  const [formData, setFormData] = useState({
-    part_number: '',
-    oem_part_number: '',
-    name: '',
-    description: '',
-    category: 'Mechanical',
-    subcategory: '',
-    uom: 'Nos',
-    warehouse_zone: 'Main Store',
-    bin_location: '',
-    min_reorder_level: 5,
-    max_stock_level: 100,
-    unit_cost: 0,
-    supplier_name: 'JCB Genuine Parts',
-  });
+  const [pageFeedback, setPageFeedback] = useState<{
+    type: 'success' | 'error';
+    text: string;
+    redirectLabel?: string;
+    redirectUrl?: string;
+  } | null>(null);
 
-  // Fetch Parts with debouncing & race-condition cancellation
-  const fetchParts = useCallback(async (searchTerm = searchInput, category = selectedCategory, pageNum = page) => {
+  const [formData, setFormData] = useState(INITIAL_FORM_DATA);
+
+  // Load active plants for spare-part assignment.
+  useEffect(() => {
+    if (!canManageParts) return;
+
+    let cancelled = false;
+
+    const fetchPlants = async () => {
+      try {
+        setPlantsLoading(true);
+        setPlantsError(null);
+
+        const res = await apiClient.get('/org/plants');
+        const responseData = res.data?.data;
+        const plantList: Plant[] = Array.isArray(responseData)
+          ? responseData
+          : Array.isArray(responseData?.plants)
+            ? responseData.plants
+            : [];
+
+        if (cancelled) return;
+
+        let activePlants = plantList.filter(
+          (plant) => plant.status?.toLowerCase() === 'active'
+        );
+
+        // Store managers should only be offered their own assigned plant.
+        if (!isAdmin && userPlantId) {
+          activePlants = activePlants.filter(
+            (plant) => plant.id === userPlantId
+          );
+        }
+
+        setPlants(activePlants);
+      } catch (err: any) {
+        if (cancelled) return;
+        console.error('Failed to load plants:', err);
+        setPlantsError(
+          err.response?.data?.message || 'Unable to load active plants.'
+        );
+      } finally {
+        if (!cancelled) setPlantsLoading(false);
+      }
+    };
+
+    fetchPlants();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [canManageParts, isAdmin, userPlantId]);
+
+  // Fetch spare parts.
+  const fetchParts = useCallback(async (
+    searchTerm = searchInput,
+    category = selectedCategory,
+    pageNum = page
+  ) => {
     const currentRequestId = ++requestIdRef.current;
+
     try {
       setLoading(true);
       setFetchError(null);
 
       const params = new URLSearchParams();
+
       if (searchTerm.trim()) params.append('query', searchTerm.trim());
       if (category !== 'ALL') params.append('category', category);
+
       params.append('page', String(pageNum));
       params.append('limit', String(limit));
 
       const res = await apiClient.get(`/inventory?${params.toString()}`);
 
-      // Safely discard out-of-order stale responses
       if (currentRequestId !== requestIdRef.current) return;
 
-      if (res.data && res.data.success) {
-        setParts(res.data.data || []);
+      if (res.data?.success) {
+        const result = res.data.data || [];
+        setParts(result);
+
         if (res.data.pagination) {
           setTotalCount(res.data.pagination.total);
           setTotalPages(res.data.pagination.totalPages || 1);
         } else {
-          setTotalCount(res.data.data?.length || 0);
+          setTotalCount(result.length);
           setTotalPages(1);
         }
       }
     } catch (err: any) {
       if (currentRequestId !== requestIdRef.current) return;
+
       console.error('Failed to load parts catalog:', err);
-      setFetchError(err.response?.data?.message || 'Failed to connect to spare parts catalog. Please check server status.');
+      setFetchError(
+        err.response?.data?.message ||
+        'Failed to connect to spare parts catalog. Please check server status.'
+      );
     } finally {
       if (currentRequestId === requestIdRef.current) {
         setLoading(false);
@@ -164,52 +230,50 @@ export const InventoryCatalogPage: React.FC = () => {
     }
   }, [searchInput, selectedCategory, page, limit]);
 
-  // Debounced search on input change
+  // Debounced search.
   useEffect(() => {
     const timer = setTimeout(() => {
-      fetchParts(searchInput, selectedCategory, 1);
       setPage(1);
+      fetchParts(searchInput, selectedCategory, 1);
     }, 350);
 
     return () => clearTimeout(timer);
-  }, [searchInput, selectedCategory]);
+  }, [searchInput, selectedCategory, fetchParts]);
 
-  // Real-time synchronization: listen to stock adjustments, CRUD, transfers and GRN receipts
+  // Real-time inventory updates.
   useEffect(() => {
     if (!socket) return;
+
     const handleRemoteUpdate = () => {
       fetchParts(searchInput, selectedCategory, page);
     };
 
-    socket.on('inventory:stock_adjusted', handleRemoteUpdate);
-    socket.on('inventory:part_created', handleRemoteUpdate);
-    socket.on('inventory:part_updated', handleRemoteUpdate);
-    socket.on('inventory:part_deleted', handleRemoteUpdate);
-    socket.on('inventory:transfer_created', handleRemoteUpdate);
-    socket.on('inventory:damaged_reported', handleRemoteUpdate);
-    socket.on('inventory:disposition_updated', handleRemoteUpdate);
-    socket.on('procurement:grn_received', handleRemoteUpdate);
+    const events = [
+      'inventory:stock_adjusted',
+      'inventory:part_created',
+      'inventory:part_updated',
+      'inventory:part_deleted',
+      'inventory:transfer_created',
+      'inventory:damaged_reported',
+      'inventory:disposition_updated',
+      'procurement:grn_received'
+    ];
+
+    events.forEach((event) => socket.on(event, handleRemoteUpdate));
 
     return () => {
-      socket.off('inventory:stock_adjusted', handleRemoteUpdate);
-      socket.off('inventory:part_created', handleRemoteUpdate);
-      socket.off('inventory:part_updated', handleRemoteUpdate);
-      socket.off('inventory:part_deleted', handleRemoteUpdate);
-      socket.off('inventory:transfer_created', handleRemoteUpdate);
-      socket.off('inventory:damaged_reported', handleRemoteUpdate);
-      socket.off('inventory:disposition_updated', handleRemoteUpdate);
-      socket.off('procurement:grn_received', handleRemoteUpdate);
+      events.forEach((event) => socket.off(event, handleRemoteUpdate));
     };
   }, [socket, searchInput, selectedCategory, page, fetchParts]);
 
   const handleManualSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    fetchParts(searchInput, selectedCategory, 1);
     setPage(1);
+    fetchParts(searchInput, selectedCategory, 1);
   };
 
-  const handleCategoryChange = (cat: string) => {
-    setSelectedCategory(cat);
+  const handleCategoryChange = (category: string) => {
+    setSelectedCategory(category);
     setPage(1);
   };
 
@@ -219,55 +283,71 @@ export const InventoryCatalogPage: React.FC = () => {
     fetchParts(searchInput, selectedCategory, newPage);
   };
 
-  // Open Create Modal (Clean empty defaults, initial stock always 0)
   const openCreateModal = () => {
     setEditingPart(null);
     setFormData({
-      part_number: '',
-      oem_part_number: '',
-      name: '',
-      description: '',
-      category: 'Mechanical',
-      subcategory: '',
-      uom: 'Nos',
-      warehouse_zone: 'Main Store',
-      bin_location: '',
-      min_reorder_level: 5,
-      max_stock_level: 100,
-      unit_cost: 0,
-      supplier_name: 'JCB Genuine Parts',
+      ...INITIAL_FORM_DATA,
+      plant_id: !isAdmin && userPlantId ? userPlantId : ''
     });
     setModalFeedback(null);
     setIsModalOpen(true);
   };
 
-  // Open Edit Modal (Preserves exact existing record values, physical stock is read-only)
-  const openEditModal = (p: SparePart) => {
-    setEditingPart(p);
+  const openEditModal = (part: SparePart) => {
+    setEditingPart(part);
+
     setFormData({
-      part_number: p.part_number,
-      oem_part_number: p.oem_part_number || '',
-      name: p.name,
-      description: p.description || '',
-      category: p.category || 'Mechanical',
-      subcategory: p.subcategory || '',
-      uom: p.uom || 'Nos',
-      warehouse_zone: p.warehouse_zone || 'Main Store',
-      bin_location: p.bin_location || '',
-      min_reorder_level: p.min_reorder_level !== undefined ? p.min_reorder_level : 5,
-      max_stock_level: p.max_stock_level !== undefined ? p.max_stock_level : 100,
-      unit_cost: p.unit_cost !== undefined ? p.unit_cost : 0,
-      supplier_name: p.supplier_name || 'JCB Genuine Parts',
+      ...INITIAL_FORM_DATA,
+      part_number: part.part_number,
+      oem_part_number: part.oem_part_number || '',
+      name: part.name,
+      description: part.description || '',
+      category: part.category || 'Mechanical',
+      subcategory: part.subcategory || '',
+      uom: part.uom || 'Nos',
+      warehouse_zone: part.warehouse_zone || 'Main Store',
+      bin_location: part.bin_location || '',
+      min_reorder_level: part.min_reorder_level ?? 5,
+      max_stock_level: part.max_stock_level ?? 100,
+      unit_cost: part.unit_cost ?? 0,
+      supplier_name: part.supplier_name || 'JCB Genuine Parts',
+      // Preserve the existing plant assignment.
+      plant_id: part.plant_id || ''
     });
+
     setModalFeedback(null);
     setIsModalOpen(true);
   };
 
-  // Save Part (Create or Edit)
   const handleSavePart = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.part_number.trim() || !formData.name.trim() || !formData.bin_location.trim()) {
-      setModalFeedback({ type: 'error', text: 'Part Number, Name, and Bin Location are mandatory.' });
+
+    if (
+      !formData.part_number.trim() ||
+      !formData.name.trim() ||
+      !formData.bin_location.trim()
+    ) {
+      setModalFeedback({
+        type: 'error',
+        text: 'Part Number, Name, and Bin Location are mandatory.'
+      });
+      return;
+    }
+
+    // Plant assignment is mandatory when creating a new spare part.
+    if (!editingPart && !formData.plant_id) {
+      setModalFeedback({
+        type: 'error',
+        text: 'Please select a plant before creating the spare part.'
+      });
+      return;
+    }
+
+    if (!editingPart && !plants.some((plant) => plant.id === formData.plant_id)) {
+      setModalFeedback({
+        type: 'error',
+        text: 'The selected plant is invalid or inactive. Please select an active plant.'
+      });
       return;
     }
 
@@ -276,31 +356,57 @@ export const InventoryCatalogPage: React.FC = () => {
       setModalFeedback(null);
 
       if (editingPart) {
-        // Normal edit does NOT allow changing physical stock directly
-        const res = await apiClient.put(`/inventory/${editingPart.id}`, formData);
+        // Do not allow the plant assignment to be changed through this form.
+        const {
+          plant_id: _preservedPlantId,
+          ...updatePayload
+        } = formData;
+
+        const res = await apiClient.put(
+          `/inventory/${editingPart.id}`,
+          updatePayload
+        );
+
         if (res.data.success) {
-          setModalFeedback({ type: 'success', text: `Part ${formData.part_number} updated successfully.` });
+          setModalFeedback({
+            type: 'success',
+            text: `Part ${formData.part_number} updated successfully.`
+          });
+
           setPageFeedback({
             type: 'success',
             text: `Part ${formData.part_number} metadata updated in master catalog.`,
             redirectLabel: 'View in Store Dashboard',
-            redirectUrl: '/store/dashboard',
+            redirectUrl: '/store/dashboard'
           });
+
           setTimeout(() => {
             setIsModalOpen(false);
             fetchParts(searchInput, selectedCategory, page);
           }, 800);
         }
       } else {
-        const res = await apiClient.post('/inventory', formData);
+        // plant_id is explicitly sent to the backend.
+        const createPayload = {
+          ...formData,
+          plant_id: formData.plant_id
+        };
+
+        const res = await apiClient.post('/inventory', createPayload);
+
         if (res.data.success) {
-          setModalFeedback({ type: 'success', text: `Part ${formData.part_number} added to master catalog.` });
+          setModalFeedback({
+            type: 'success',
+            text: `Part ${formData.part_number} added to master catalog.`
+          });
+
           setPageFeedback({
             type: 'success',
             text: `Part ${formData.part_number} registered in master catalog.`,
             redirectLabel: 'View in Store Dashboard',
-            redirectUrl: '/store/dashboard',
+            redirectUrl: '/store/dashboard'
           });
+
           setTimeout(() => {
             setIsModalOpen(false);
             fetchParts(searchInput, selectedCategory, 1);
@@ -311,34 +417,40 @@ export const InventoryCatalogPage: React.FC = () => {
     } catch (err: any) {
       setModalFeedback({
         type: 'error',
-        text: err.response?.data?.message || 'Failed to save part. Please check inputs and ensure Part Number is unique.',
+        text:
+          err.response?.data?.message ||
+          'Failed to save part. Please check inputs and ensure Part Number is unique.'
       });
     } finally {
       setActionLoading(false);
     }
   };
 
-  // Open Stock Adjustment Modal
-  const openAdjustModal = (p: SparePart) => {
-    setAdjustingPart(p);
+  const openAdjustModal = (part: SparePart) => {
+    setAdjustingPart(part);
     setAdjustQty(0);
     setAdjustReason('');
     setModalFeedback(null);
     setIsAdjustModalOpen(true);
   };
 
-  // Submit Stock Adjustment with validation
   const handleAdjustSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!adjustingPart) return;
 
     if (adjustQty === 0) {
-      setModalFeedback({ type: 'error', text: 'Adjustment quantity must be non-zero (+ to add, - to deduct).' });
+      setModalFeedback({
+        type: 'error',
+        text: 'Adjustment quantity must be non-zero (+ to add, - to deduct).'
+      });
       return;
     }
 
     if (!adjustReason.trim()) {
-      setModalFeedback({ type: 'error', text: 'Adjustment reason is mandatory for compliance auditing.' });
+      setModalFeedback({
+        type: 'error',
+        text: 'Adjustment reason is mandatory for compliance auditing.'
+      });
       return;
     }
 
@@ -350,15 +462,15 @@ export const InventoryCatalogPage: React.FC = () => {
     if (expectedPhysical < 0) {
       setModalFeedback({
         type: 'error',
-        text: `Negative physical stock rejected: Current stock is ${currentPhysical}, cannot deduct ${Math.abs(adjustQty)}.`,
+        text: `Negative physical stock rejected: Current stock is ${currentPhysical}, cannot deduct ${Math.abs(adjustQty)}.`
       });
       return;
     }
 
-    if (expectedPhysical < (reserved + quarantined)) {
+    if (expectedPhysical < reserved + quarantined) {
       setModalFeedback({
         type: 'error',
-        text: `Cannot reduce physical stock below allocated stock (Reserved: ${reserved}, Quarantined: ${quarantined}).`,
+        text: `Cannot reduce physical stock below allocated stock (Reserved: ${reserved}, Quarantined: ${quarantined}).`
       });
       return;
     }
@@ -366,20 +478,26 @@ export const InventoryCatalogPage: React.FC = () => {
     try {
       setActionLoading(true);
       setModalFeedback(null);
+
       const res = await apiClient.post('/inventory/adjust', {
         part_id: adjustingPart.id,
         adjustment_quantity: adjustQty,
-        reason: adjustReason.trim(),
+        reason: adjustReason.trim()
       });
 
       if (res.data.success) {
-        setModalFeedback({ type: 'success', text: res.data.message });
+        setModalFeedback({
+          type: 'success',
+          text: res.data.message
+        });
+
         setPageFeedback({
           type: 'success',
           text: res.data.message,
           redirectLabel: 'View in Store Dashboard',
-          redirectUrl: '/store/dashboard',
+          redirectUrl: '/store/dashboard'
         });
+
         setTimeout(() => {
           setIsAdjustModalOpen(false);
           fetchParts(searchInput, selectedCategory, page);
@@ -388,33 +506,38 @@ export const InventoryCatalogPage: React.FC = () => {
     } catch (err: any) {
       setModalFeedback({
         type: 'error',
-        text: err.response?.data?.message || 'Stock adjustment failed. Please verify quantities.',
+        text: err.response?.data?.message ||
+          'Stock adjustment failed. Please verify quantities.'
       });
     } finally {
       setActionLoading(false);
     }
   };
 
-  // Delete / Inactivate
   const confirmDelete = async () => {
     if (!partToDelete) return;
+
     try {
       setActionLoading(true);
+
       const res = await apiClient.delete(`/inventory/${partToDelete.id}`);
+
       if (res.data.success) {
         setPageFeedback({
           type: 'success',
           text: res.data.message,
           redirectLabel: 'View in Store Dashboard',
-          redirectUrl: '/store/dashboard',
+          redirectUrl: '/store/dashboard'
         });
+
         setPartToDelete(null);
         fetchParts(searchInput, selectedCategory, page);
       }
     } catch (err: any) {
       setPageFeedback({
         type: 'error',
-        text: err.response?.data?.message || 'Failed to delete/deactivate part.',
+        text: err.response?.data?.message ||
+          'Failed to delete/deactivate part.'
       });
       setPartToDelete(null);
     } finally {
@@ -422,59 +545,81 @@ export const InventoryCatalogPage: React.FC = () => {
     }
   };
 
-  // PR Creation Modal from Catalog
+  // Purchase requisition state.
   const [prPart, setPrPart] = useState<SparePart | null>(null);
   const [prQuantity, setPrQuantity] = useState<number>(5);
-  const [prUrgency, setPrUrgency] = useState<'critical' | 'high' | 'medium' | 'low'>('high');
+  const [prUrgency, setPrUrgency] = useState<
+    'critical' | 'high' | 'medium' | 'low'
+  >('high');
   const [prJustification, setPrJustification] = useState('');
   const [prLoading, setPrLoading] = useState(false);
 
-  const openPRModal = (p: SparePart) => {
-    setPrPart(p);
-    setPrQuantity(Math.max(1, p.min_reorder_level || 5));
+  const openPRModal = (part: SparePart) => {
+    setPrPart(part);
+    setPrQuantity(Math.max(1, part.min_reorder_level || 5));
     setPrUrgency('high');
-    const avail = p.available_stock !== undefined
-      ? Number(p.available_stock)
-      : (Number(p.current_physical_stock || 0) - Number(p.reserved_stock || 0) - Number(p.quarantined_stock || 0));
-    setPrJustification(`Spare part replenishment request: Current available inventory is ${avail} ${p.uom || 'Nos'}.`);
+
+    const available = part.available_stock !== undefined
+      ? Number(part.available_stock)
+      : Number(part.current_physical_stock || 0) -
+        Number(part.reserved_stock || 0) -
+        Number(part.quarantined_stock || 0);
+
+    setPrJustification(
+      `Spare part replenishment request: Current available inventory is ${available} ${part.uom || 'Nos'}.`
+    );
+
     setModalFeedback(null);
   };
 
   const handlePRSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!prPart || prQuantity <= 0) return;
+
     try {
       setPrLoading(true);
+
       const res = await apiClient.post('/procurement/pr', {
         part_id: prPart.id,
         quantity_required: prQuantity,
         urgency: prUrgency,
-        technical_justification: prJustification.trim() || `Replenishment request for part ${prPart.part_number}`,
+        technical_justification: prJustification.trim() ||
+          `Replenishment request for part ${prPart.part_number}`
       });
+
       if (res.data?.success) {
         setPageFeedback({
           type: 'success',
-          text: `Purchase Requisition ${res.data.data?.pr_number || ''} submitted successfully for manager approval!`,
+          text: `Purchase Requisition ${res.data.data?.pr_number || ''} submitted successfully for manager approval!`
         });
         setPrPart(null);
       }
     } catch (err: any) {
       setModalFeedback({
         type: 'error',
-        text: err.response?.data?.message || 'Failed to submit purchase requisition.',
+        text: err.response?.data?.message ||
+          'Failed to submit purchase requisition.'
       });
     } finally {
       setPrLoading(false);
     }
   };
 
+  const selectedPlantName = (part: SparePart) =>
+    part.plant_name ||
+    plants.find((plant) => plant.id === part.plant_id)?.plant_name ||
+    'Plant assignment unavailable';
+
   return (
     <div className="space-y-6">
-      {/* Top Banner / Breadcrumb */}
+      {/* Top banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border-2 border-zinc-200 shadow-xs">
         <div>
           <div className="flex items-center gap-3">
-            <h2 className="text-xl font-black text-zinc-950 tracking-tight">SPARE PARTS CATALOG & INVENTORY</h2>
+            <h2 className="text-xl font-black text-zinc-950 tracking-tight">
+              SPARE PARTS CATALOG & INVENTORY
+            </h2>
+
             {canManageParts ? (
               <span className="bg-jcb-yellow text-black text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-amber-500 shadow-xs">
                 {isAdmin ? 'Admin Full Access (CRUD)' : 'Store Manager Full Access (CRUD)'}
@@ -489,13 +634,17 @@ export const InventoryCatalogPage: React.FC = () => {
               </span>
             )}
           </div>
+
           <p className="text-xs text-zinc-500 font-medium mt-1">
-            Real-time PostgreSQL Trigram indexed search with strict stock arithmetic: <strong className="text-zinc-800">Available = Physical - Reserved - Quarantined</strong>.
+            Real-time PostgreSQL Trigram indexed search with strict stock arithmetic:{' '}
+            <strong className="text-zinc-800">
+              Available = Physical - Reserved - Quarantined
+            </strong>.
           </p>
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
-          {(isAdmin || user?.role === 'store_manager') && (
+          {(isAdmin || isStoreManager) && (
             <Link
               to="/store/dashboard"
               className="px-3.5 py-2 bg-white hover:bg-slate-50 text-zinc-800 rounded-xl text-xs font-bold transition border border-zinc-300 shadow-2xs flex items-center gap-1.5"
@@ -504,6 +653,7 @@ export const InventoryCatalogPage: React.FC = () => {
               <span>Store Dashboard</span>
             </Link>
           )}
+
           <Link
             to="/procurement"
             className="px-3.5 py-2 bg-white hover:bg-slate-50 text-zinc-800 rounded-xl text-xs font-bold transition border border-zinc-300 shadow-2xs flex items-center gap-1.5"
@@ -511,37 +661,46 @@ export const InventoryCatalogPage: React.FC = () => {
             <ShoppingCart className="w-4 h-4 text-blue-600" />
             <span>Procurement PRs</span>
           </Link>
+
           <button
             onClick={() => fetchParts(searchInput, selectedCategory, page)}
             disabled={loading}
-            className="p-2.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-xl transition border border-zinc-300 cursor-pointer"
             title="Refresh Catalog"
+            className="p-2.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-xl transition border border-zinc-300 cursor-pointer"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-jcb-yellowDark' : ''}`} />
           </button>
+
           {canManageParts && (
             <button
               onClick={openCreateModal}
-              className="bg-jcb-yellow hover:bg-jcb-yellowDark text-black text-xs font-black px-4 py-2.5 rounded-xl shadow-xs transition flex items-center gap-2 border border-amber-500 cursor-pointer"
+              disabled={plantsLoading || plants.length === 0}
+              title={plants.length === 0 ? 'An active plant is required before creating a spare part' : 'Add Spare Part'}
+              className="bg-jcb-yellow hover:bg-jcb-yellowDark text-black text-xs font-black px-4 py-2.5 rounded-xl shadow-xs transition flex items-center gap-2 border border-amber-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Plus className="w-4 h-4" />
-              <span>ADD SPARE PART</span>
+              <span>{plantsLoading ? 'LOADING PLANTS...' : 'ADD SPARE PART'}</span>
             </button>
           )}
         </div>
       </div>
 
-      {/* Global Feedback Alert */}
+      {/* Global feedback */}
       {pageFeedback && (
         <div className={`p-4 rounded-xl text-xs font-bold flex flex-wrap items-center justify-between gap-3 border ${
-          pageFeedback.type === 'success' ? 'bg-emerald-50 text-emerald-900 border-emerald-300' : 'bg-red-50 text-red-900 border-red-300'
+          pageFeedback.type === 'success'
+            ? 'bg-emerald-50 text-emerald-900 border-emerald-300'
+            : 'bg-red-50 text-red-900 border-red-300'
         }`}>
           <div className="flex items-center gap-2">
-            {pageFeedback.type === 'success' ? <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" /> : <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />}
+            {pageFeedback.type === 'success'
+              ? <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              : <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />}
             <span>{pageFeedback.text}</span>
           </div>
+
           <div className="flex items-center gap-3">
-            {pageFeedback.redirectUrl && (isAdmin || user?.role === 'store_manager') && (
+            {pageFeedback.redirectUrl && (isAdmin || isStoreManager) && (
               <Link
                 to={pageFeedback.redirectUrl}
                 className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-bold flex items-center gap-1.5 shadow-xs transition"
@@ -550,25 +709,31 @@ export const InventoryCatalogPage: React.FC = () => {
                 <ArrowRight className="w-3.5 h-3.5" />
               </Link>
             )}
-            <button onClick={() => setPageFeedback(null)} className="text-zinc-500 hover:text-black p-1 cursor-pointer">
+
+            <button
+              onClick={() => setPageFeedback(null)}
+              className="text-zinc-500 hover:text-black p-1 cursor-pointer"
+            >
               <X className="w-4 h-4" />
             </button>
           </div>
         </div>
       )}
 
-      {/* Search & Category Filter Controls */}
+      {/* Search and filters */}
       <div className="bg-white p-4 rounded-2xl border-2 border-zinc-200 shadow-xs space-y-3">
         <form onSubmit={handleManualSearch} className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-3" />
+
             <input
               type="text"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Search by Part No (e.g. HYD-10025, 332/Y2415), Name, or OEM Part code..."
+              placeholder="Search by Part No, Name, or OEM Part code..."
               className="w-full pl-10 pr-4 py-2.5 bg-zinc-50 border border-zinc-300 rounded-xl text-xs text-zinc-900 focus:outline-none focus:border-jcb-yellow font-medium shadow-2xs"
             />
+
             {searchInput && (
               <button
                 type="button"
@@ -579,6 +744,7 @@ export const InventoryCatalogPage: React.FC = () => {
               </button>
             )}
           </div>
+
           <button
             type="submit"
             className="bg-zinc-900 hover:bg-zinc-800 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
@@ -587,28 +753,28 @@ export const InventoryCatalogPage: React.FC = () => {
           </button>
         </form>
 
-        {/* Category Pills */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
           <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1 mr-1">
             <Filter className="w-3 h-3" /> Category:
           </span>
-          {CATEGORIES.map((cat) => (
+
+          {CATEGORIES.map((category) => (
             <button
-              key={cat}
-              onClick={() => handleCategoryChange(cat)}
+              key={category}
+              onClick={() => handleCategoryChange(category)}
               className={`px-3 py-1 rounded-lg font-bold text-xs transition cursor-pointer shrink-0 ${
-                selectedCategory === cat
+                selectedCategory === category
                   ? 'bg-zinc-950 text-white shadow-xs'
                   : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-600 border border-zinc-200'
               }`}
             >
-              {cat}
+              {category}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Catalog Table */}
+      {/* Catalog table */}
       <div className="bg-white rounded-2xl border-2 border-zinc-200 shadow-xs overflow-hidden">
         {fetchError && (
           <div className="p-6 bg-red-50 border-b border-red-200 text-red-800 flex items-center justify-between">
@@ -616,6 +782,7 @@ export const InventoryCatalogPage: React.FC = () => {
               <AlertCircle className="w-4 h-4 text-red-600" />
               <span>{fetchError}</span>
             </div>
+
             <button
               onClick={() => fetchParts(searchInput, selectedCategory, page)}
               className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold uppercase transition"
@@ -640,6 +807,7 @@ export const InventoryCatalogPage: React.FC = () => {
                 <th className="px-5 py-3.5 text-right">Actions</th>
               </tr>
             </thead>
+
             <tbody className="divide-y divide-zinc-100">
               {loading ? (
                 <tr>
@@ -655,10 +823,16 @@ export const InventoryCatalogPage: React.FC = () => {
                   <td colSpan={9} className="text-center py-16 text-zinc-400">
                     <Package className="w-10 h-10 mx-auto text-zinc-300 mb-2" />
                     <p className="font-bold text-zinc-700">No matching spare parts found</p>
-                    <p className="text-xs text-zinc-400 mt-1">Try adjusting your search terms or category filter.</p>
+                    <p className="text-xs text-zinc-400 mt-1">
+                      Try adjusting your search terms or category filter.
+                    </p>
+
                     {(searchInput || selectedCategory !== 'ALL') && (
                       <button
-                        onClick={() => { setSearchInput(''); setSelectedCategory('ALL'); }}
+                        onClick={() => {
+                          setSearchInput('');
+                          setSelectedCategory('ALL');
+                        }}
                         className="mt-3 px-3 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-lg text-xs font-bold transition"
                       >
                         Reset All Filters
@@ -667,44 +841,67 @@ export const InventoryCatalogPage: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                parts.map((p) => {
-                  const physical = Number(p.current_physical_stock ?? 0);
-                  const reserved = Number(p.reserved_stock ?? 0);
-                  const quarantined = Number(p.quarantined_stock ?? 0);
-                  const available = p.available_stock !== undefined
-                    ? Number(p.available_stock)
-                    : (physical - reserved - quarantined);
-                  const reorderThreshold = Number(p.min_reorder_level ?? 5);
+                parts.map((part) => {
+                  const physical = Number(part.current_physical_stock ?? 0);
+                  const reserved = Number(part.reserved_stock ?? 0);
+                  const quarantined = Number(part.quarantined_stock ?? 0);
+
+                  const available = part.available_stock !== undefined
+                    ? Number(part.available_stock)
+                    : physical - reserved - quarantined;
+
+                  const reorderThreshold = Number(part.min_reorder_level ?? 5);
                   const isLow = available <= reorderThreshold;
 
                   return (
-                    <tr key={p.id} className="hover:bg-zinc-50/70 transition">
+                    <tr key={part.id} className="hover:bg-zinc-50/70 transition">
                       <td className="px-5 py-3.5">
-                        <div className="font-black text-sm text-zinc-950">{p.part_number}</div>
-                        <div className="font-semibold text-zinc-700">{p.name}</div>
-                        {p.oem_part_number && (
-                          <div className="text-[10px] text-zinc-400 font-mono">OEM: {p.oem_part_number}</div>
+                        <div className="font-black text-sm text-zinc-950">
+                          {part.part_number}
+                        </div>
+                        <div className="font-semibold text-zinc-700">
+                          {part.name}
+                        </div>
+                        {part.oem_part_number && (
+                          <div className="text-[10px] text-zinc-400 font-mono">
+                            OEM: {part.oem_part_number}
+                          </div>
                         )}
                       </td>
+
                       <td className="px-4 py-3.5">
-                        <span className="font-bold text-zinc-800">{p.category}</span>
-                        <div className="text-[10px] text-zinc-400">{p.uom || 'Nos'}</div>
+                        <span className="font-bold text-zinc-800">{part.category}</span>
+                        <div className="text-[10px] text-zinc-400">{part.uom || 'Nos'}</div>
                       </td>
+
                       <td className="px-4 py-3.5">
                         <div className="flex items-center gap-1.5 font-bold text-zinc-900">
                           <MapPin className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                          <span>{p.bin_location}</span>
+                          <span>{part.bin_location}</span>
                         </div>
-                        <div className="text-[10px] text-zinc-400 font-medium">{p.warehouse_zone || 'Main Store'}</div>
+                        <div className="text-[10px] text-zinc-400 font-medium">
+                          {part.warehouse_zone || 'Main Store'}
+                        </div>
                       </td>
-                      <td className="px-3 py-3.5 font-mono font-bold text-zinc-900 text-right">{physical}</td>
-                      <td className="px-3 py-3.5 font-mono text-amber-700 font-bold text-right">{reserved}</td>
-                      <td className="px-3 py-3.5 font-mono text-purple-700 font-bold text-right">{quarantined}</td>
+
+                      <td className="px-3 py-3.5 font-mono font-bold text-zinc-900 text-right">
+                        {physical}
+                      </td>
+                      <td className="px-3 py-3.5 font-mono text-amber-700 font-bold text-right">
+                        {reserved}
+                      </td>
+                      <td className="px-3 py-3.5 font-mono text-purple-700 font-bold text-right">
+                        {quarantined}
+                      </td>
+
                       <td className="px-4 py-3.5 text-right">
                         <div className="flex flex-col items-end">
-                          <span className={`font-mono text-sm font-black ${isLow ? 'text-red-700' : 'text-emerald-700'}`}>
+                          <span className={`font-mono text-sm font-black ${
+                            isLow ? 'text-red-700' : 'text-emerald-700'
+                          }`}>
                             {available}
                           </span>
+
                           {isLow && (
                             <span className="bg-red-50 text-red-700 text-[9px] font-black px-1.5 py-0.2 rounded uppercase mt-0.5 border border-red-200">
                               Low Stock (≤{reorderThreshold})
@@ -712,39 +909,45 @@ export const InventoryCatalogPage: React.FC = () => {
                           )}
                         </div>
                       </td>
+
                       <td className="px-4 py-3.5 font-mono text-zinc-800 font-bold text-right">
-                        ₹{Number(p.unit_cost || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        ₹{Number(part.unit_cost || 0).toLocaleString('en-IN', {
+                          minimumFractionDigits: 2
+                        })}
                       </td>
+
                       <td className="px-5 py-3.5 text-right">
                         <div className="flex items-center justify-end gap-1.5">
-                          {/* Raise Purchase Requisition */}
                           <button
-                            onClick={() => openPRModal(p)}
+                            onClick={() => openPRModal(part)}
                             className="p-1.5 text-amber-700 hover:text-black hover:bg-amber-100 rounded-lg transition cursor-pointer"
                             title="Raise Purchase Requisition (PR)"
                           >
                             <ShoppingCart className="w-4 h-4" />
                           </button>
+
                           {canAdjust && (
                             <button
-                              onClick={() => openAdjustModal(p)}
+                              onClick={() => openAdjustModal(part)}
                               className="p-1.5 text-zinc-600 hover:text-black hover:bg-zinc-100 rounded-lg transition cursor-pointer"
                               title="Adjust Stock Quantity"
                             >
                               <SlidersHorizontal className="w-4 h-4" />
                             </button>
                           )}
+
                           {canManageParts && (
                             <>
                               <button
-                                onClick={() => openEditModal(p)}
+                                onClick={() => openEditModal(part)}
                                 className="p-1.5 text-zinc-600 hover:text-black hover:bg-amber-100 rounded-lg transition cursor-pointer"
                                 title="Edit Part Metadata"
                               >
                                 <Edit2 className="w-4 h-4" />
                               </button>
+
                               <button
-                                onClick={() => setPartToDelete(p)}
+                                onClick={() => setPartToDelete(part)}
                                 className="p-1.5 text-zinc-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition cursor-pointer"
                                 title="Deactivate / Delete Part"
                               >
@@ -762,11 +965,18 @@ export const InventoryCatalogPage: React.FC = () => {
           </table>
         </div>
 
-        {/* Pagination Footer */}
+        {/* Pagination */}
         <div className="bg-zinc-50 px-6 py-3.5 border-t border-zinc-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
           <div className="text-zinc-500 font-medium">
-            Showing <strong className="text-zinc-900">{parts.length > 0 ? (page - 1) * limit + 1 : 0}</strong> to{' '}
-            <strong className="text-zinc-900">{Math.min(page * limit, totalCount)}</strong> of{' '}
+            Showing{' '}
+            <strong className="text-zinc-900">
+              {parts.length > 0 ? (page - 1) * limit + 1 : 0}
+            </strong>
+            {' '}to{' '}
+            <strong className="text-zinc-900">
+              {Math.min(page * limit, totalCount)}
+            </strong>
+            {' '}of{' '}
             <strong className="text-zinc-900">{totalCount}</strong> parts
           </div>
 
@@ -779,9 +989,11 @@ export const InventoryCatalogPage: React.FC = () => {
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
+
             <span className="font-bold text-zinc-800 px-2">
               Page {page} of {totalPages}
             </span>
+
             <button
               onClick={() => handlePageChange(page + 1)}
               disabled={page >= totalPages || loading}
@@ -804,9 +1016,12 @@ export const InventoryCatalogPage: React.FC = () => {
                   JCB
                 </div>
                 <h3 className="text-sm font-black text-zinc-950 tracking-wide">
-                  {editingPart ? `EDIT PART MASTER: ${editingPart.part_number}` : 'REGISTER NEW SPARE PART'}
+                  {editingPart
+                    ? `EDIT PART MASTER: ${editingPart.part_number}`
+                    : 'REGISTER NEW SPARE PART'}
                 </h3>
               </div>
+
               <button
                 onClick={() => setIsModalOpen(false)}
                 className="text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 p-1.5 rounded-lg transition cursor-pointer"
@@ -827,18 +1042,82 @@ export const InventoryCatalogPage: React.FC = () => {
                 </div>
               )}
 
-              {/* If editing, show read-only stock metrics bar */}
+              {/* Plant assignment */}
+              <div>
+                <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
+                  Plant Assignment *
+                </label>
+
+                {editingPart ? (
+                  <div className="w-full px-3 py-2 bg-zinc-100 border border-zinc-300 rounded-lg text-xs font-bold text-zinc-700">
+                    {selectedPlantName(editingPart)}
+                    {editingPart.plant_id && (
+                      <span className="ml-2 text-[10px] text-zinc-400 font-mono">
+                        ({editingPart.plant_id})
+                      </span>
+                    )}
+                    <p className="text-[10px] text-zinc-500 font-medium mt-1">
+                      Existing plant assignment is preserved and cannot be changed here.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <select
+                      required
+                      value={formData.plant_id}
+                      disabled={actionLoading || plantsLoading || plants.length === 0}
+                      onChange={(e) =>
+                        setFormData({ ...formData, plant_id: e.target.value })
+                      }
+                      className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow disabled:bg-zinc-100"
+                    >
+                      <option value="">
+                        {plantsLoading ? 'Loading plants...' : 'Select Plant'}
+                      </option>
+                      {plants.map((plant) => (
+                        <option key={plant.id} value={plant.id}>
+                          {plant.plant_name} ({plant.plant_code})
+                        </option>
+                      ))}
+                    </select>
+
+                    {plantsError && (
+                      <p className="text-[10px] text-red-700 mt-1 font-medium">
+                        {plantsError}
+                      </p>
+                    )}
+
+                    {!plantsLoading && !plantsError && plants.length === 0 && (
+                      <p className="text-[10px] text-red-700 mt-1 font-medium">
+                        No active plant is available. Please configure an active plant before creating spare parts.
+                      </p>
+                    )}
+
+                    <p className="text-[10px] text-zinc-500 mt-1">
+                      Each spare part must belong to a specific plant.
+                    </p>
+                  </>
+                )}
+              </div>
+
               {editingPart && (
                 <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-200 text-xs space-y-1">
                   <div className="flex items-center justify-between text-zinc-500 font-bold uppercase text-[10px]">
                     <span>Current Stock Status</span>
-                    <span>Available: <strong className="text-emerald-700 font-mono text-xs">{editingPart.available_stock}</strong></span>
+                    <span>
+                      Available:{' '}
+                      <strong className="text-emerald-700 font-mono text-xs">
+                        {editingPart.available_stock}
+                      </strong>
+                    </span>
                   </div>
+
                   <div className="grid grid-cols-3 gap-2 pt-1 font-mono text-zinc-800 text-xs">
                     <div>Physical: <strong>{editingPart.current_physical_stock}</strong></div>
                     <div>Reserved: <strong>{editingPart.reserved_stock}</strong></div>
                     <div>Quarantined: <strong>{editingPart.quarantined_stock}</strong></div>
                   </div>
+
                   <p className="text-[10px] text-amber-800 font-medium pt-1 flex items-center gap-1">
                     <Info className="w-3 h-3 shrink-0" />
                     Physical stock can only be updated via the Stock Adjustment action to preserve regulatory audit trails.
@@ -856,11 +1135,14 @@ export const InventoryCatalogPage: React.FC = () => {
                     required
                     disabled={!!editingPart || actionLoading}
                     value={formData.part_number}
-                    onChange={(e) => setFormData({ ...formData, part_number: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, part_number: e.target.value })
+                    }
                     placeholder="e.g. HYD-20015 or 332/Y2415"
                     className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow disabled:bg-zinc-100 disabled:text-zinc-500"
                   />
                 </div>
+
                 <div>
                   <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
                     OEM Part Number
@@ -869,7 +1151,9 @@ export const InventoryCatalogPage: React.FC = () => {
                     type="text"
                     disabled={actionLoading}
                     value={formData.oem_part_number}
-                    onChange={(e) => setFormData({ ...formData, oem_part_number: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, oem_part_number: e.target.value })
+                    }
                     placeholder="e.g. REX-4WRKE-25"
                     className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
                   />
@@ -885,7 +1169,9 @@ export const InventoryCatalogPage: React.FC = () => {
                   required
                   disabled={actionLoading}
                   value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
                   placeholder="e.g. High Pressure Hydraulic Proportional Valve"
                   className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
                 />
@@ -899,14 +1185,17 @@ export const InventoryCatalogPage: React.FC = () => {
                   <select
                     value={formData.category}
                     disabled={actionLoading}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, category: e.target.value })
+                    }
                     className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
                   >
-                    {CATEGORIES.filter(c => c !== 'ALL').map((c) => (
-                      <option key={c} value={c}>{c}</option>
+                    {CATEGORIES.filter((category) => category !== 'ALL').map((category) => (
+                      <option key={category} value={category}>{category}</option>
                     ))}
                   </select>
                 </div>
+
                 <div>
                   <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
                     Unit of Measure (UOM)
@@ -915,7 +1204,9 @@ export const InventoryCatalogPage: React.FC = () => {
                     type="text"
                     disabled={actionLoading}
                     value={formData.uom}
-                    onChange={(e) => setFormData({ ...formData, uom: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, uom: e.target.value })
+                    }
                     placeholder="Nos, Sets, Mtr..."
                     className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
                   />
@@ -932,11 +1223,14 @@ export const InventoryCatalogPage: React.FC = () => {
                     required
                     disabled={actionLoading}
                     value={formData.bin_location}
-                    onChange={(e) => setFormData({ ...formData, bin_location: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, bin_location: e.target.value })
+                    }
                     placeholder="e.g. A-02-04 or B-102"
                     className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
                   />
                 </div>
+
                 <div>
                   <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
                     Warehouse Zone
@@ -945,7 +1239,9 @@ export const InventoryCatalogPage: React.FC = () => {
                     type="text"
                     disabled={actionLoading}
                     value={formData.warehouse_zone}
-                    onChange={(e) => setFormData({ ...formData, warehouse_zone: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, warehouse_zone: e.target.value })
+                    }
                     placeholder="Main Store, Bay Store..."
                     className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
                   />
@@ -962,10 +1258,16 @@ export const InventoryCatalogPage: React.FC = () => {
                     min="0"
                     disabled={actionLoading}
                     value={formData.min_reorder_level}
-                    onChange={(e) => setFormData({ ...formData, min_reorder_level: parseInt(e.target.value, 10) || 0 })}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        min_reorder_level: parseInt(e.target.value, 10) || 0
+                      })
+                    }
                     className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
                   />
                 </div>
+
                 <div>
                   <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
                     Max Stock Level
@@ -975,10 +1277,16 @@ export const InventoryCatalogPage: React.FC = () => {
                     min="1"
                     disabled={actionLoading}
                     value={formData.max_stock_level}
-                    onChange={(e) => setFormData({ ...formData, max_stock_level: parseInt(e.target.value, 10) || 1 })}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        max_stock_level: parseInt(e.target.value, 10) || 1
+                      })
+                    }
                     className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
                   />
                 </div>
+
                 <div>
                   <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
                     Unit Cost (₹)
@@ -989,7 +1297,12 @@ export const InventoryCatalogPage: React.FC = () => {
                     step="0.01"
                     disabled={actionLoading}
                     value={formData.unit_cost}
-                    onChange={(e) => setFormData({ ...formData, unit_cost: parseFloat(e.target.value) || 0 })}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        unit_cost: parseFloat(e.target.value) || 0
+                      })
+                    }
                     className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
                   />
                 </div>
@@ -1003,7 +1316,9 @@ export const InventoryCatalogPage: React.FC = () => {
                   type="text"
                   disabled={actionLoading}
                   value={formData.supplier_name}
-                  onChange={(e) => setFormData({ ...formData, supplier_name: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, supplier_name: e.target.value })
+                  }
                   placeholder="e.g. Bosch Rexroth India Ltd."
                   className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
                 />
@@ -1018,12 +1333,24 @@ export const InventoryCatalogPage: React.FC = () => {
                 >
                   Cancel
                 </button>
+
                 <button
                   type="submit"
-                  disabled={actionLoading}
+                  disabled={
+                    actionLoading ||
+                    (!editingPart && (
+                      plantsLoading ||
+                      !formData.plant_id ||
+                      plants.length === 0
+                    ))
+                  }
                   className="bg-jcb-yellow hover:bg-jcb-yellowDark text-black font-black px-6 py-2 rounded-xl text-xs uppercase tracking-wider transition shadow-xs border border-amber-500 disabled:opacity-50 cursor-pointer"
                 >
-                  {actionLoading ? 'Saving...' : editingPart ? 'Update Part' : 'Add Part Master'}
+                  {actionLoading
+                    ? 'Saving...'
+                    : editingPart
+                      ? 'Update Part'
+                      : 'Add Part Master'}
                 </button>
               </div>
             </form>
@@ -1031,7 +1358,7 @@ export const InventoryCatalogPage: React.FC = () => {
         </div>
       )}
 
-      {/* Adjust Stock Modal */}
+      {/* Stock Adjustment Modal */}
       {isAdjustModalOpen && adjustingPart && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
           <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
@@ -1042,6 +1369,7 @@ export const InventoryCatalogPage: React.FC = () => {
                   STOCK ADJUSTMENT: {adjustingPart.part_number}
                 </h3>
               </div>
+
               <button
                 onClick={() => setIsAdjustModalOpen(false)}
                 className="text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 p-1.5 rounded-lg transition cursor-pointer"
@@ -1062,11 +1390,14 @@ export const InventoryCatalogPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Current Metrics Card */}
               <div className="bg-zinc-50 p-3.5 rounded-xl border border-zinc-200 text-xs space-y-2">
                 <div>
-                  <span className="font-black text-zinc-950 text-sm">{adjustingPart.name}</span>
-                  <div className="text-[11px] text-zinc-500 font-mono">Location: {adjustingPart.bin_location} ({adjustingPart.warehouse_zone || 'Main Store'})</div>
+                  <span className="font-black text-zinc-950 text-sm">
+                    {adjustingPart.name}
+                  </span>
+                  <div className="text-[11px] text-zinc-500 font-mono">
+                    Location: {adjustingPart.bin_location} ({adjustingPart.warehouse_zone || 'Main Store'})
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-4 gap-2 pt-2 border-t border-zinc-200 text-center font-mono">
@@ -1089,7 +1420,6 @@ export const InventoryCatalogPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Input for Adjustment Quantity */}
               <div>
                 <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
                   Adjustment Quantity (+ to Add, - to Deduct) *
@@ -1108,26 +1438,34 @@ export const InventoryCatalogPage: React.FC = () => {
                 </span>
               </div>
 
-              {/* Live Preview Calculation */}
               {adjustQty !== 0 && (
                 <div className="bg-amber-50/70 p-3 rounded-xl border border-amber-200 text-xs space-y-1">
-                  <div className="text-[10px] uppercase font-bold text-amber-900">Live Stock Arithmetic Preview:</div>
+                  <div className="text-[10px] uppercase font-bold text-amber-900">
+                    Live Stock Arithmetic Preview:
+                  </div>
+
                   <div className="flex items-center justify-between font-mono">
                     <span className="text-zinc-600">Expected Physical Stock:</span>
-                    <strong className={`${Number(adjustingPart.current_physical_stock) + adjustQty < 0 ? 'text-red-700' : 'text-zinc-950'}`}>
+                    <strong className={`${
+                      Number(adjustingPart.current_physical_stock) + adjustQty < 0
+                        ? 'text-red-700'
+                        : 'text-zinc-950'
+                    }`}>
                       {Number(adjustingPart.current_physical_stock) + adjustQty}
                     </strong>
                   </div>
+
                   <div className="flex items-center justify-between font-mono">
                     <span className="text-zinc-600">Expected Available Stock:</span>
                     <strong className="text-emerald-700">
-                      {Number(adjustingPart.current_physical_stock) + adjustQty - Number(adjustingPart.reserved_stock) - Number(adjustingPart.quarantined_stock)}
+                      {Number(adjustingPart.current_physical_stock) + adjustQty -
+                        Number(adjustingPart.reserved_stock) -
+                        Number(adjustingPart.quarantined_stock)}
                     </strong>
                   </div>
                 </div>
               )}
 
-              {/* Input for Mandatory Reason */}
               <div>
                 <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
                   Reason for Adjustment * (Audit Ledger)
@@ -1152,6 +1490,7 @@ export const InventoryCatalogPage: React.FC = () => {
                 >
                   Cancel
                 </button>
+
                 <button
                   type="submit"
                   disabled={actionLoading || adjustQty === 0 || !adjustReason.trim()}
@@ -1165,7 +1504,7 @@ export const InventoryCatalogPage: React.FC = () => {
         </div>
       )}
 
-      {/* Delete / Inactivate Confirmation Dialog */}
+      {/* Delete / Inactivate Confirmation */}
       {partToDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
           <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
@@ -1176,6 +1515,7 @@ export const InventoryCatalogPage: React.FC = () => {
                   CONFIRM PART DELETION / DEACTIVATION
                 </h3>
               </div>
+
               <button
                 onClick={() => setPartToDelete(null)}
                 className="text-red-200 hover:text-white p-1.5 rounded-lg transition cursor-pointer"
@@ -1186,15 +1526,18 @@ export const InventoryCatalogPage: React.FC = () => {
 
             <div className="p-6 space-y-4 text-xs">
               <p className="text-zinc-700 font-medium">
-                Are you sure you want to delete or deactivate spare part <strong className="text-zinc-950">{partToDelete.part_number}</strong> ({partToDelete.name})?
+                Are you sure you want to delete or deactivate spare part{' '}
+                <strong className="text-zinc-950">{partToDelete.part_number}</strong>
+                {' '}({partToDelete.name})?
               </p>
+
               <div className="bg-amber-50 p-3 rounded-xl border border-amber-200 text-amber-900 space-y-1">
                 <p className="font-bold flex items-center gap-1.5">
                   <Info className="w-4 h-4 shrink-0 text-amber-700" />
                   Referential Integrity Safeguard:
                 </p>
                 <p className="text-[11px]">
-                  If this part has historical maintenance records, work orders, or inventory transaction history, it will be marked as <strong className="uppercase">inactive</strong> rather than hard deleted to preserve compliance audit trails.
+                  If this part has historical maintenance records, work orders, or inventory transaction history, it will be marked as inactive rather than hard deleted to preserve compliance audit trails.
                 </p>
               </div>
 
@@ -1207,6 +1550,7 @@ export const InventoryCatalogPage: React.FC = () => {
                 >
                   Cancel
                 </button>
+
                 <button
                   type="button"
                   disabled={actionLoading}
@@ -1221,7 +1565,7 @@ export const InventoryCatalogPage: React.FC = () => {
         </div>
       )}
 
-      {/* Raise Purchase Requisition Modal */}
+      {/* Purchase Requisition Modal */}
       {prPart && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
           <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
@@ -1229,12 +1573,15 @@ export const InventoryCatalogPage: React.FC = () => {
               <div className="flex items-center gap-3">
                 <ShoppingCart className="w-5 h-5 text-amber-500" />
                 <div>
-                  <h3 className="text-base font-black text-zinc-950">RAISE PURCHASE REQUISITION</h3>
+                  <h3 className="text-base font-black text-zinc-950">
+                    RAISE PURCHASE REQUISITION
+                  </h3>
                   <p className="text-[10px] text-zinc-500 font-medium">
                     Store replenishment request for manager approval
                   </p>
                 </div>
               </div>
+
               <button
                 onClick={() => setPrPart(null)}
                 className="text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 p-1.5 rounded-lg transition cursor-pointer"
@@ -1245,24 +1592,38 @@ export const InventoryCatalogPage: React.FC = () => {
 
             <form onSubmit={handlePRSubmit} className="p-6 space-y-4">
               {modalFeedback && (
-                <div
-                  className={`p-3 rounded-xl text-xs font-bold flex items-center gap-2 ${
-                    modalFeedback.type === 'success'
-                      ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                      : 'bg-red-50 text-red-800 border border-red-200'
-                  }`}
-                >
+                <div className={`p-3 rounded-xl text-xs font-bold flex items-center gap-2 ${
+                  modalFeedback.type === 'success'
+                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                    : 'bg-red-50 text-red-800 border border-red-200'
+                }`}>
                   <AlertCircle className="w-4 h-4 shrink-0" />
                   <span>{modalFeedback.text}</span>
                 </div>
               )}
 
               <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-200 text-xs space-y-1">
-                <div className="font-mono font-black text-amber-800">{prPart.part_number}</div>
+                <div className="font-mono font-black text-amber-800">
+                  {prPart.part_number}
+                </div>
                 <div className="font-black text-zinc-900">{prPart.name}</div>
+
                 <div className="flex justify-between text-zinc-500 pt-1 font-mono text-[11px]">
-                  <span>Available Stock: <strong className="text-zinc-900">{prPart.available_stock ?? (Number(prPart.current_physical_stock || 0) - Number(prPart.reserved_stock || 0) - Number(prPart.quarantined_stock || 0))}</strong></span>
-                  <span>Min Reorder Level: <strong className="text-zinc-900">{prPart.min_reorder_level || 5}</strong></span>
+                  <span>
+                    Available Stock:{' '}
+                    <strong className="text-zinc-900">
+                      {prPart.available_stock ??
+                        (Number(prPart.current_physical_stock || 0) -
+                          Number(prPart.reserved_stock || 0) -
+                          Number(prPart.quarantined_stock || 0))}
+                    </strong>
+                  </span>
+                  <span>
+                    Min Reorder Level:{' '}
+                    <strong className="text-zinc-900">
+                      {prPart.min_reorder_level || 5}
+                    </strong>
+                  </span>
                 </div>
               </div>
 
@@ -1276,7 +1637,9 @@ export const InventoryCatalogPage: React.FC = () => {
                     min="1"
                     required
                     value={prQuantity}
-                    onChange={(e) => setPrQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                    onChange={(e) =>
+                      setPrQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))
+                    }
                     className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-xl text-xs font-bold font-mono text-zinc-900 focus:outline-none focus:border-jcb-yellow"
                   />
                 </div>
@@ -1287,7 +1650,9 @@ export const InventoryCatalogPage: React.FC = () => {
                   </label>
                   <select
                     value={prUrgency}
-                    onChange={(e: any) => setPrUrgency(e.target.value)}
+                    onChange={(e) =>
+                      setPrUrgency(e.target.value as typeof prUrgency)
+                    }
                     className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-xl text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
                   >
                     <option value="critical">Critical (Zero Stock / Line Risk)</option>
@@ -1321,9 +1686,14 @@ export const InventoryCatalogPage: React.FC = () => {
                 >
                   Cancel
                 </button>
+
                 <button
                   type="submit"
-                  disabled={prLoading || prQuantity <= 0 || prJustification.trim().length < 5}
+                  disabled={
+                    prLoading ||
+                    prQuantity <= 0 ||
+                    prJustification.trim().length < 5
+                  }
                   className="bg-jcb-yellow hover:bg-jcb-yellowDark text-black font-black px-6 py-2 rounded-xl text-xs uppercase tracking-wider transition shadow border border-amber-500 disabled:opacity-50 cursor-pointer"
                 >
                   {prLoading ? 'Submitting...' : 'Submit Requisition'}

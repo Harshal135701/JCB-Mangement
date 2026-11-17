@@ -685,12 +685,26 @@ export function validateStoreManagerOrAdmin(user?: AuthenticatedUser, action: st
 /**
  * Store Dashboard Summary & Real-time Inventory Statistics
  */
-export async function getStoreDashboardService(user: AuthenticatedUser): Promise<any> {
+
+export async function getStoreDashboardService(
+  user: AuthenticatedUser,
+  selectedPlantId?: string | null
+): Promise<any> {
   validateStoreManagerOrAdmin(user, 'accessing store dashboard');
+
   const { query } = getInventoryServiceDb();
 
-  const plantId = (user.role !== 'admin' && user.plant_id) ? user.plant_id : null;
-  const plantFilter = plantId ? 'AND (sp.plant_id = $1 OR sp.plant_id IS NULL)' : '';
+  // Admin can select a plant or view all plants.
+  // Other roles remain restricted to their assigned plant.
+  const plantId =
+    user.role === 'admin'
+      ? (selectedPlantId || null)
+      : (user.plant_id || null);
+
+  const plantFilter = plantId
+    ? 'AND (sp.plant_id = $1 OR sp.plant_id IS NULL)'
+    : '';
+
   const params: any[] = plantId ? [plantId] : [];
 
   // Summary KPIs
@@ -722,32 +736,49 @@ export async function getStoreDashboardService(user: AuthenticatedUser): Promise
     ORDER BY valuation DESC
   `, params);
 
-  // Transfers count
-  const transferParams: any[] = plantId ? [plantId] : [];
-  const transferFilter = plantId ? 'WHERE (source_plant_id = $1 OR destination_plant_id = $1)' : '';
+  // Stock transfers
+  const transferFilter = plantId
+    ? 'WHERE (source_plant_id = $1 OR destination_plant_id = $1)'
+    : '';
+
   const transferRes = await query(`
     SELECT
       COUNT(CASE WHEN status IN ('pending', 'in_transit') THEN 1 END)::int AS active_transfers_count,
       COUNT(*)::int AS total_transfers_count
-    FROM stock_transfers ${transferFilter}
-  `, transferParams);
+    FROM stock_transfers
+    ${transferFilter}
+  `, params);
 
   // Damaged stock summary
-  const damagedParams: any[] = plantId ? [plantId] : [];
-  const damagedFilter = plantId ? 'WHERE (plant_id = $1 OR plant_id IS NULL)' : '';
+  const damagedFilter = plantId
+    ? 'WHERE (plant_id = $1 OR plant_id IS NULL)'
+    : '';
+
   const damagedRes = await query(`
     SELECT
       COUNT(*)::int AS total_damaged_reports,
       COALESCE(SUM(CASE WHEN disposition = 'quarantined' THEN quantity ELSE 0 END), 0)::int AS quarantined_units,
       COALESCE(SUM(CASE WHEN disposition = 'scrapped' THEN quantity ELSE 0 END), 0)::int AS scrapped_units
-    FROM damaged_stock_items ${damagedFilter}
-  `, damagedParams);
+    FROM damaged_stock_items
+    ${damagedFilter}
+  `, params);
 
   // Recent 10 transactions
   const txRes = await query(`
-    SELECT it.id, it.part_id, it.transaction_type, it.quantity, it.source_location,
-           it.destination_location, it.reference_work_order_id, it.remarks, it.created_at,
-           sp.part_number, sp.name AS part_name, u.full_name AS performed_by_name, u.role AS performed_by_role
+    SELECT
+      it.id,
+      it.part_id,
+      it.transaction_type,
+      it.quantity,
+      it.source_location,
+      it.destination_location,
+      it.reference_work_order_id,
+      it.remarks,
+      it.created_at,
+      sp.part_number,
+      sp.name AS part_name,
+      u.full_name AS performed_by_name,
+      u.role AS performed_by_role
     FROM inventory_transactions it
     JOIN spare_parts sp ON it.part_id = sp.id
     LEFT JOIN users u ON it.performed_by = u.id
@@ -769,8 +800,15 @@ export async function getStoreDashboardService(user: AuthenticatedUser): Promise
       out_of_stock_count: parseInt(kpis.out_of_stock_count || 0, 10),
       total_inventory_valuation: parseFloat(kpis.total_inventory_valuation || 0),
     },
-    transfers: transferRes.rows[0] || { active_transfers_count: 0, total_transfers_count: 0 },
-    damaged_stock: damagedRes.rows[0] || { total_damaged_reports: 0, quarantined_units: 0, scrapped_units: 0 },
+    transfers: transferRes.rows[0] || {
+      active_transfers_count: 0,
+      total_transfers_count: 0,
+    },
+    damaged_stock: damagedRes.rows[0] || {
+      total_damaged_reports: 0,
+      quarantined_units: 0,
+      scrapped_units: 0,
+    },
     category_breakdown: categoryRes.rows.map((r: any) => ({
       category: r.category,
       part_count: parseInt(r.part_count, 10),
@@ -781,6 +819,7 @@ export async function getStoreDashboardService(user: AuthenticatedUser): Promise
     recent_transactions: txRes.rows,
   };
 }
+
 
 export interface GetLowStockAlertsFilter {
   category?: string;

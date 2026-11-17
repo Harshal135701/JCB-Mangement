@@ -1,63 +1,95 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import apiClient from '../../api/client';
-import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import {
   Users,
   Building2,
   Cpu,
-  ShieldCheck,
-  Activity,
   RefreshCw,
+  AlertCircle,
+  Package,
+  Boxes,
+  AlertTriangle,
+  CircleOff,
   ArrowRight,
-  AlertCircle
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { DashboardHeader } from '../../components/dashboard/DashboardHeader';
 import { TopKPICard } from '../../components/dashboard/TopKPICard';
 import { MachineStatusDonut } from '../../components/dashboard/MachineStatusDonut';
-import { MaintenanceTrendChart, TrendDataPoint } from '../../components/dashboard/MaintenanceTrendChart';
-import { DowntimeAnalysisCard } from '../../components/dashboard/DowntimeAnalysisCard';
 
 export const AdminDashboard: React.FC = () => {
-  const { user } = useAuth();
   const { socket } = useSocket();
+
   const [plant, setPlant] = useState('All Plants');
   const [timeframe, setTimeframe] = useState('Last 30 Days');
   const [users, setUsers] = useState<any[]>([]);
   const [hierarchy, setHierarchy] = useState<any>(null);
-  const [auditLogs, setAuditLogs] = useState<any[]>([]);
-  const [shops, setShops] = useState<any[]>([]);
   const [kpiStats, setKpiStats] = useState<any>(null);
-  const [govTrend, setGovTrend] = useState<TrendDataPoint[]>([]);
+  const [inventoryStats, setInventoryStats] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const selectedPlantId = useMemo(() => {
+    if (plant === 'All Plants') return undefined;
+
+    const selected = hierarchy?.plants?.find(
+      (p: any) => p.plant_name === plant
+    );
+
+    return selected?.id;
+  }, [plant, hierarchy]);
 
   const fetchData = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const plantParam = plant !== 'All Plants' ? plant : undefined;
+      const plantParams = selectedPlantId
+        ? { plant_id: selectedPlantId }
+        : {};
 
-      const [usersRes, orgRes, auditRes, kpiRes, trendRes] = await Promise.all([
-        apiClient.get('/auth/users', { params: { limit: 100 } }),
-        apiClient.get('/org/hierarchy'),
-        apiClient.get('/audit', { params: { limit: 6 } }),
-        apiClient.get('/reports/dashboard-kpis', { params: { plant_id: plantParam, timeframe } }),
-        apiClient.get('/reports/governance-trend', { params: { plant_id: plantParam, timeframe } }),
+      const [usersRes, orgRes, kpiRes, inventoryRes] = await Promise.all([
+        apiClient.get('/auth/users', {
+          params: { limit: 100, ...plantParams },
+        }),
+
+        apiClient.get('/org/hierarchy', {
+          params: plantParams,
+        }),
+
+        apiClient.get('/reports/dashboard-kpis', {
+          params: {
+            ...plantParams,
+            timeframe,
+          },
+        }),
+
+        apiClient.get('/inventory/dashboard', {
+          params: plantParams,
+        }),
       ]);
 
-      setUsers(usersRes.data?.data || []);
+      let fetchedUsers = usersRes.data?.data || [];
+
+      // Keep the selected plant's users if the API returns an unfiltered list.
+      if (selectedPlantId) {
+        fetchedUsers = fetchedUsers.filter(
+          (u: any) => u.plant_id === selectedPlantId
+        );
+      }
+
+      setUsers(fetchedUsers);
       setHierarchy(orgRes.data?.data || null);
-      setAuditLogs(auditRes.data?.data || []);
       setKpiStats(kpiRes.data?.data || null);
-      setGovTrend(trendRes.data?.data || []);
+      setInventoryStats(inventoryRes.data?.data || null);
     } catch (err: any) {
       console.error('Failed to load admin dashboard:', err);
+
       setError(
         err.response?.data?.message ||
-        'Unable to retrieve real governance and telemetry data from the backend.'
+        'Unable to retrieve dashboard data from the backend.'
       );
     } finally {
       setLoading(false);
@@ -66,14 +98,16 @@ export const AdminDashboard: React.FC = () => {
 
   useEffect(() => {
     fetchData();
-  }, [plant, timeframe]);
+  }, [plant, timeframe, selectedPlantId]);
 
-  // Real-time Socket.IO auto-refresh for critical events and system alerts
+  // Real-time Socket.IO auto-refresh
   useEffect(() => {
     if (!socket) return;
+
     const handleRefresh = () => {
       fetchData();
     };
+
     socket.on('complaint:critical', handleRefresh);
     socket.on('complaint:created', handleRefresh);
     socket.on('notification:new', handleRefresh);
@@ -83,11 +117,12 @@ export const AdminDashboard: React.FC = () => {
       socket.off('complaint:created', handleRefresh);
       socket.off('notification:new', handleRefresh);
     };
-  }, [socket, plant, timeframe]);
+  }, [socket, plant, timeframe, selectedPlantId]);
 
-  // Dynamic Plant Options from real database hierarchy
+  // Dynamic plant options
   const plantOptions = useMemo(() => {
     const list = ['All Plants'];
+
     if (hierarchy?.plants && Array.isArray(hierarchy.plants)) {
       hierarchy.plants.forEach((p: any) => {
         if (p.plant_name && !list.includes(p.plant_name)) {
@@ -95,64 +130,142 @@ export const AdminDashboard: React.FC = () => {
         }
       });
     }
+
     return list;
   }, [hierarchy]);
 
-  // Real Counts from DB
+  // User and machine KPIs
   const totalUsers = kpiStats?.total_users ?? users.length;
-  const adminCount = kpiStats?.admin_count ?? users.filter((u) => u.role === 'admin').length;
-  const managerCount = kpiStats?.manager_count ?? users.filter((u) => u.role === 'manager').length;
-  const techCount = kpiStats?.technician_count ?? users.filter((u) => u.role === 'technician').length;
-  const operatorCount = kpiStats?.operator_count ?? users.filter((u) => u.role === 'operator').length;
+  const adminCount =
+    kpiStats?.admin_count ??
+    users.filter((u) => u.role === 'admin').length;
+  const managerCount =
+    kpiStats?.manager_count ??
+    users.filter((u) => u.role === 'manager').length;
+  const techCount =
+    kpiStats?.technician_count ??
+    users.filter((u) => u.role === 'technician').length;
+  const operatorCount =
+    kpiStats?.operator_count ??
+    users.filter((u) => u.role === 'operator').length;
 
-  const plantsCount = hierarchy?.plants?.length ?? kpiStats?.total_plants ?? 0;
+  const plantsCount = selectedPlantId
+    ? 1
+    : hierarchy?.plants?.length ?? kpiStats?.total_plants ?? 0;
   const totalAssets = kpiStats?.total_machines ?? 0;
 
-  // Real availability calculation from actual database records
-  const availabilityPercent = kpiStats?.machine_availability_percent ?? 0;
-  const downtimeRatePercent = kpiStats?.downtime_rate_percent ?? 0;
-  const totalDowntimeHours = kpiStats?.total_downtime_hours ?? 0;
-  const avgMTTRMinutes = kpiStats?.avg_mttr_minutes ?? 0;
-
-  // User distribution segments dynamically computed from actual database records
+  // User role distribution
   const userSegments = useMemo(() => {
     if (totalUsers === 0) return [];
+
     return [
       {
         label: 'Technicians',
         count: techCount,
-        percentage: totalUsers > 0 ? (techCount / totalUsers) * 100 : 0,
+        percentage: (techCount / totalUsers) * 100,
         color: '#10B981',
       },
       {
         label: 'Operators',
         count: operatorCount,
-        percentage: totalUsers > 0 ? (operatorCount / totalUsers) * 100 : 0,
+        percentage: (operatorCount / totalUsers) * 100,
         color: '#F59E0B',
       },
       {
         label: 'Managers',
         count: managerCount,
-        percentage: totalUsers > 0 ? (managerCount / totalUsers) * 100 : 0,
+        percentage: (managerCount / totalUsers) * 100,
         color: '#3B82F6',
       },
       {
         label: 'System Admins',
         count: adminCount,
-        percentage: totalUsers > 0 ? (adminCount / totalUsers) * 100 : 0,
+        percentage: (adminCount / totalUsers) * 100,
         color: '#18181B',
       },
     ];
   }, [totalUsers, techCount, operatorCount, managerCount, adminCount]);
 
-  // Plant network data from real database
-  const plantNetwork = kpiStats?.plant_network || [];
+  // Plant network
+  const plantNetwork = useMemo(() => {
+    const network = Array.isArray(kpiStats?.plant_network)
+      ? kpiStats.plant_network
+      : [];
+
+    return selectedPlantId
+      ? network.filter((p: any) => p.id === selectedPlantId)
+      : network;
+  }, [kpiStats, selectedPlantId]);
+
+  const totalShops = useMemo(() => {
+    const shops = Array.isArray(hierarchy?.shops)
+      ? hierarchy.shops
+      : [];
+
+    if (selectedPlantId) {
+      return shops.filter(
+        (shop: any) => shop.plant_id === selectedPlantId
+      ).length;
+    }
+
+    return shops.length || Number(kpiStats?.total_shops ?? 0);
+  }, [hierarchy, selectedPlantId, kpiStats]);
+
+  // Inventory summary
+  const inventorySummary = inventoryStats?.summary || {};
+  const inventoryCategories = Array.isArray(
+    inventoryStats?.category_breakdown
+  )
+    ? inventoryStats.category_breakdown
+    : [];
+
+  const totalSKUs = Number(inventorySummary.total_parts ?? 0);
+  const availableStock = Number(
+    inventorySummary.total_available_stock ?? 0
+  );
+  const lowStockCount = Number(
+    inventorySummary.low_stock_items_count ?? 0
+  );
+  const outOfStockCount = Number(
+    inventorySummary.out_of_stock_count ?? 0
+  );
+  const physicalStock = Number(
+    inventorySummary.total_physical_stock ?? 0
+  );
+
+  // Dynamic category distribution using actual database categories
+  const categoryColors = [
+    '#2563EB',
+    '#16A34A',
+    '#D97706',
+    '#9333EA',
+    '#0891B2',
+    '#DC2626',
+    '#64748B',
+    '#DB2777',
+  ];
+
+  const inventoryCategorySegments = inventoryCategories.map(
+    (category: any, index: number) => ({
+      label: category.category || 'Uncategorized',
+      count: Number(category.part_count ?? 0),
+      color: categoryColors[index % categoryColors.length],
+    })
+  );
+
+  const maxCategoryStock = Math.max(
+    ...inventoryCategories.map((category: any) =>
+      Number(category.available_stock ?? 0)
+    ),
+    0
+  );
+
+  const formatNumber = (value: number) =>
+    new Intl.NumberFormat('en-IN').format(value);
 
   return (
     <div className="space-y-6 min-h-full pb-8">
-      {/* =========================================================================
-          TOP HEADER: Admin Dashboard
-          ========================================================================= */}
+      {/* TOP HEADER */}
       <DashboardHeader
         title="Admin Dashboard"
         subtitle="Manage users, plants, machines, and activity across JCB plants"
@@ -171,25 +284,32 @@ export const AdminDashboard: React.FC = () => {
               <Users className="w-3.5 h-3.5" />
               <span>Staff Personnel</span>
             </Link>
+
             <button
               onClick={fetchData}
               disabled={loading}
               className="flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200/90 rounded-xl text-xs font-bold text-zinc-700 hover:bg-slate-50 transition shadow-2xs cursor-pointer"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-amber-600' : 'text-zinc-500'}`} />
+              <RefreshCw
+                className={`w-3.5 h-3.5 ${loading
+                  ? 'animate-spin text-amber-600'
+                  : 'text-zinc-500'
+                  }`}
+              />
               <span className="hidden sm:inline">Refresh</span>
             </button>
           </div>
         }
       />
 
-      {/* Error Banner with Retry */}
+      {/* ERROR BANNER */}
       {error && (
         <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-center justify-between text-xs text-red-800">
           <div className="flex items-center gap-2">
             <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
             <span>{error}</span>
           </div>
+
           <button
             onClick={fetchData}
             className="px-3 py-1 bg-white border border-red-300 text-red-700 rounded-lg font-bold hover:bg-red-100 transition"
@@ -199,43 +319,36 @@ export const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* =========================================================================
-          ROW 1: 4 TOP KPI METRIC CARDS (Real DB Values)
-          ========================================================================= */}
+      {/* ROW 1: TOP KPI CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
-
-
-        {/* Card 1: Active Plants */}
         <TopKPICard
           icon={Building2}
           iconBgColor="bg-blue-100"
           iconColor="text-blue-800"
           label="Active Plants"
           value={plantsCount}
-          subtitle={`${kpiStats?.total_shops ?? hierarchy?.shops?.length ?? 0} Active Shops`}
+          subtitle={`${totalShops} Active Shops`}
         />
 
-        {/*  Card 2: Total Shops */}
         <TopKPICard
           icon={Building2}
           iconBgColor="bg-emerald-100"
           iconColor="text-emerald-800"
           label="Total Shops"
-          value={kpiStats?.total_shops ?? hierarchy?.shops?.length ?? 0}
+          value={totalShops}
           subtitle="Registered Shops Across Plants"
         />
 
-        {/* Card 3: Total Machines */}
         <TopKPICard
           icon={Cpu}
           iconBgColor="bg-zinc-100"
           iconColor="text-zinc-800"
           label="Total Machines"
           value={totalAssets}
-          subtitle={`${kpiStats?.running_machines ?? 0} Running • ${kpiStats?.breakdown_machines ?? 0} Stopped`}
+          subtitle={`${kpiStats?.running_machines ?? 0} Running • ${kpiStats?.breakdown_machines ?? 0
+            } Stopped`}
         />
 
-        {/* Card 4: Total Users */}
         <TopKPICard
           icon={Users}
           iconBgColor="bg-amber-100"
@@ -244,14 +357,10 @@ export const AdminDashboard: React.FC = () => {
           value={totalUsers}
           subtitle={`${techCount} Techs • ${operatorCount} Operators • ${managerCount} Mgrs`}
         />
-
       </div>
 
-      {/* =========================================================================
-          ROW 2: 2 ANALYTICS CARDS (User Distribution & Activity Trend)
-          ========================================================================= */}
+      {/* ROW 2: USER AND MACHINE ANALYTICS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* Card 1: User Distribution by Role Donut */}
         <MachineStatusDonut
           title="User Role Distribution"
           totalLabel="Users"
@@ -261,7 +370,6 @@ export const AdminDashboard: React.FC = () => {
           loading={loading}
         />
 
-        {/* Card 2: Real Machine Status Overview */}
         <MachineStatusDonut
           title="Machine Status Overview"
           totalLabel="Machines"
@@ -298,160 +406,333 @@ export const AdminDashboard: React.FC = () => {
         />
       </div>
 
-      {/* =========================================================================
-          ROW 3: BOTTOM ROW 2-COLUMN SPLIT (~60% Left, ~40% Right)
-          ========================================================================= */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-        {/* Left Column (~60%): Recent Activity Records from Database */}
-        <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-amber-500" />
-              <h3 className="text-xs sm:text-sm font-bold text-zinc-900 tracking-tight">
-                Recent Activity Records
+      {/* ROW 3: SPARE PARTS INVENTORY */}
+      <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+          <div className="flex items-center gap-2">
+            <Package className="w-5 h-5 text-amber-500" />
+            <div>
+              <h3 className="text-sm font-bold text-zinc-900 tracking-tight">
+                Spare Parts Inventory
               </h3>
+              <p className="text-[11px] text-zinc-500 mt-0.5">
+                Live inventory summary from the database
+              </p>
             </div>
-            <Link
-              to="/audit"
-              className="text-xs font-bold text-amber-600 hover:text-amber-700 flex items-center gap-1 transition"
-            >
-              <span>View Activity Log</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
           </div>
 
-          <div className="overflow-x-auto mt-3">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-slate-100 text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
-                  <th className="py-2.5 px-3">Log ID</th>
-                  <th className="py-2.5 px-3">User</th>
-                  <th className="py-2.5 px-3">Action</th>
-                  <th className="py-2.5 px-3">Changed Item</th>
-                  <th className="py-2.5 px-3">Date & Time</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-xs text-zinc-800">
-                {loading ? (
-                  <tr>
-                    <td colSpan={5} className="py-8 text-center text-xs text-zinc-400 font-medium">
-                      Loading audit logs...
-                    </td>
-                  </tr>
-                ) : auditLogs.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="py-8 text-center text-xs text-zinc-400 font-medium">
-                      No audit security logs recorded in database.
-                    </td>
-                  </tr>
-                ) : (
-                  auditLogs.map((log: any) => {
-                    const shortId = typeof log.id === 'string' ? log.id.slice(0, 8) : `LOG-${log.id}`;
-                    const actor = log.performed_by_name || log.performed_by_email || 'System';
-                    const timeStr = log.created_at
-                      ? new Date(log.created_at).toLocaleString([], {
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })
-                      : 'Recent';
+          <span className="text-[10px] font-semibold text-zinc-500 bg-slate-100 px-3 py-1.5 rounded-lg">
+            {plant === 'All Plants' ? 'All Plants Inventory' : `${plant} Inventory`}
+          </span>
+        </div>
 
-                    return (
-                      <tr key={log.id} className="hover:bg-slate-50/70 transition">
-                        <td className="py-3 px-3 font-mono font-bold text-zinc-950">
-                          {shortId}
-                        </td>
-                        <td className="py-3 px-3 font-semibold text-zinc-700">
-                          {actor}
-                        </td>
-                        <td className="py-3 px-3 text-zinc-800 font-medium">
-                          {log.action}
-                        </td>
-                        <td className="py-3 px-3 text-zinc-600 font-mono text-[11px]">
-                          {log.entity_name || 'System'}
-                        </td>
-                        <td className="py-3 px-3 text-zinc-500 text-[11px] font-medium whitespace-nowrap">
-                          {timeStr}
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+        {/* INVENTORY KPI CARDS */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mt-5">
+          <div className="rounded-xl border border-slate-200 p-4 bg-slate-50/70">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-zinc-500">
+                Total Spare Part SKUs
+              </span>
+              <Package className="w-4 h-4 text-blue-600" />
+            </div>
+            <p className="text-2xl font-bold text-zinc-900 mt-3">
+              {loading ? '—' : formatNumber(totalSKUs)}
+            </p>
+            <p className="text-[11px] text-zinc-500 mt-1">
+              Active registered parts
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 p-4 bg-slate-50/70">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-zinc-500">
+                Available Stock
+              </span>
+              <Boxes className="w-4 h-4 text-emerald-600" />
+            </div>
+            <p className="text-2xl font-bold text-emerald-700 mt-3">
+              {loading ? '—' : formatNumber(availableStock)}
+            </p>
+            <p className="text-[11px] text-zinc-500 mt-1">
+              Units available for use
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-amber-200 p-4 bg-amber-50/50">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-zinc-500">
+                Low Stock Items
+              </span>
+              <AlertTriangle className="w-4 h-4 text-amber-600" />
+            </div>
+            <p className="text-2xl font-bold text-amber-700 mt-3">
+              {loading ? '—' : formatNumber(lowStockCount)}
+            </p>
+            <p className="text-[11px] text-zinc-500 mt-1">
+              At or below reorder level
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-red-200 p-4 bg-red-50/50">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-zinc-500">
+                Out of Stock
+              </span>
+              <CircleOff className="w-4 h-4 text-red-600" />
+            </div>
+            <p className="text-2xl font-bold text-red-700 mt-3">
+              {loading ? '—' : formatNumber(outOfStockCount)}
+            </p>
+            <p className="text-[11px] text-zinc-500 mt-1">
+              Items with zero physical stock
+            </p>
           </div>
         </div>
 
-        {/* Right Column (~40%): Active Plants & Shops from Database */}
-        <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-            <div className="flex items-center gap-2">
-              <Building2 className="w-4 h-4 text-amber-500" />
-              <h3 className="text-xs sm:text-sm font-bold text-zinc-900 tracking-tight">
-                Active Plants & Shops
-              </h3>
+        {/* INVENTORY ANALYTICS */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mt-6">
+
+          {/* CATEGORY DISTRIBUTION - RECTANGULAR CATEGORY BLOCKS */}
+          <div className="border border-slate-200 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="text-xs font-bold text-zinc-800">
+                Spare Parts Categories
+              </h4>
+              <span className="text-[10px] text-zinc-400 font-medium">
+                SKU distribution
+              </span>
             </div>
-            <Link
-              to="/machines"
-              className="text-xs font-bold text-amber-600 hover:text-amber-700 flex items-center gap-1 transition"
-            >
-              <span>View Machines</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
+
+            {loading ? (
+              <div className="py-12 text-center text-xs text-zinc-400">
+                Loading categories...
+              </div>
+            ) : inventoryCategories.length === 0 ? (
+              <div className="py-12 text-center text-xs text-zinc-400">
+                No spare part categories found
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {inventoryCategories.map((category: any, index: number) => {
+                  const colors = [
+                    'bg-blue-50 border-blue-200 text-blue-700',
+                    'bg-emerald-50 border-emerald-200 text-emerald-700',
+                    'bg-amber-50 border-amber-200 text-amber-700',
+                    'bg-purple-50 border-purple-200 text-purple-700',
+                    'bg-cyan-50 border-cyan-200 text-cyan-700',
+                    'bg-rose-50 border-rose-200 text-rose-700',
+                  ];
+
+                  return (
+                    <div
+                      key={`${category.category}-${index}`}
+                      className={`rounded-xl border p-4 ${colors[index % colors.length]
+                        }`}
+                    >
+                      <p className="text-xs font-semibold truncate">
+                        {category.category || 'Uncategorized'}
+                      </p>
+                      <p className="text-2xl font-bold mt-3">
+                        {formatNumber(Number(category.part_count ?? 0))}
+                      </p>
+                      <p className="text-[10px] font-medium opacity-75 mt-1">
+                        Spare Part SKUs
+                      </p>
+                      <div className="mt-3 pt-2 border-t border-current/10">
+                        <p className="text-[11px] font-semibold">
+                          {formatNumber(Number(category.available_stock ?? 0))} units available
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
-          <div className="overflow-x-auto mt-3">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-slate-100 text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
-                  <th className="py-2.5 px-3">Plant Location</th>
-                  <th className="py-2.5 px-3">Shops</th>
-                  <th className="py-2.5 px-3">Machines</th>
-                  <th className="py-2.5 px-3">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-xs text-zinc-800">
-                {loading ? (
-                  <tr>
-                    <td colSpan={4} className="py-8 text-center text-xs text-zinc-400 font-medium">
-                      Loading facility network...
-                    </td>
-                  </tr>
-                ) : plantNetwork.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="py-8 text-center text-xs text-zinc-400 font-medium">
-                      No plant facilities registered in database.
-                    </td>
-                  </tr>
-                ) : (
-                  plantNetwork.map((p: any) => (
-                    <tr key={p.id} className="hover:bg-slate-50/70 transition">
-                      <td className="py-3 px-3 font-semibold text-zinc-900">
-                        {p.plant_name}
-                      </td>
-                      <td className="py-3 px-3 text-zinc-600 font-medium">
-                        {p.shop_count} Shops
-                      </td>
-                      <td className="py-3 px-3 font-mono font-bold text-zinc-950">
-                        {p.machine_count}
-                      </td>
-                      <td className="py-3 px-3">
-                        <span
-                          className={`px-2.5 py-0.5 rounded-md text-[11px] font-bold border capitalize ${p.plant_status === 'active'
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            : 'bg-zinc-100 text-zinc-700 border-zinc-200'
-                            }`}
-                        >
-                          {p.plant_status || 'Active'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
+
+          {/* AVAILABLE STOCK BY CATEGORY */}
+          <div className="border border-slate-200 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="text-xs font-bold text-zinc-800">
+                Available Stock by Category
+              </h4>
+              <span className="text-[10px] text-zinc-400 font-medium">
+                Units
+              </span>
+            </div>
+
+            {loading ? (
+              <div className="py-12 text-center text-xs text-zinc-400">
+                Loading category stock...
+              </div>
+            ) : inventoryCategories.length === 0 ? (
+              <div className="py-12 text-center text-xs text-zinc-400">
+                No category inventory data available
+              </div>
+            ) : (
+              <div className="space-y-5">
+                {inventoryCategories.map(
+                  (category: any, index: number) => {
+                    const stock = Number(
+                      category.available_stock ?? 0
+                    );
+                    const percentage =
+                      maxCategoryStock > 0
+                        ? (stock / maxCategoryStock) * 100
+                        : 0;
+
+                    return (
+                      <div key={`${category.category}-${index}`}>
+                        <div className="flex items-center justify-between gap-3 mb-2">
+                          <span className="text-xs font-semibold text-zinc-700 truncate">
+                            {category.category || 'Uncategorized'}
+                          </span>
+                          <span className="text-xs font-bold text-zinc-900 whitespace-nowrap">
+                            {formatNumber(stock)}
+                          </span>
+                        </div>
+
+                        <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-500"
+                            style={{
+                              width: `${percentage}%`,
+                              backgroundColor:
+                                categoryColors[
+                                index % categoryColors.length
+                                ],
+                            }}
+                          />
+                        </div>
+
+                        <div className="flex justify-between mt-1.5">
+                          <span className="text-[10px] text-zinc-400">
+                            {formatNumber(
+                              Number(category.part_count ?? 0)
+                            )}{' '}
+                            SKUs
+                          </span>
+                          <span className="text-[10px] text-zinc-400">
+                            {formatNumber(
+                              Number(category.physical_stock ?? 0)
+                            )}{' '}
+                            physical units
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  }
                 )}
-              </tbody>
-            </table>
+              </div>
+            )}
           </div>
+        </div>
+
+        {/* INVENTORY FOOTER */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-5 pt-4 border-t border-slate-100">
+          <div className="flex items-center justify-between rounded-lg bg-slate-50 px-4 py-3">
+            <span className="text-xs font-medium text-zinc-500">
+              Total Physical Stock
+            </span>
+            <span className="text-sm font-bold text-zinc-900">
+              {loading ? '—' : formatNumber(physicalStock)}
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between rounded-lg bg-slate-50 px-4 py-3">
+            <span className="text-xs font-medium text-zinc-500">
+              Categories Registered
+            </span>
+            <span className="text-sm font-bold text-zinc-900">
+              {loading ? '—' : formatNumber(inventoryCategories.length)}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* ROW 4: ACTIVE PLANTS & SHOPS */}
+      <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs">
+        <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+          <div className="flex items-center gap-2">
+            <Building2 className="w-4 h-4 text-amber-500" />
+            <h3 className="text-xs sm:text-sm font-bold text-zinc-900 tracking-tight">
+              Active Plants & Shops
+            </h3>
+          </div>
+
+          <Link
+            to="/machines"
+            className="text-xs font-bold text-amber-600 hover:text-amber-700 flex items-center gap-1 transition"
+          >
+            <span>View Machines</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+
+        <div className="overflow-x-auto mt-3">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-slate-100 text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
+                <th className="py-2.5 px-3">Plant Location</th>
+                <th className="py-2.5 px-3">Shops</th>
+                <th className="py-2.5 px-3">Machines</th>
+                <th className="py-2.5 px-3">Status</th>
+              </tr>
+            </thead>
+
+            <tbody className="divide-y divide-slate-100 text-xs text-zinc-800">
+              {loading ? (
+                <tr>
+                  <td
+                    colSpan={4}
+                    className="py-8 text-center text-xs text-zinc-400 font-medium"
+                  >
+                    Loading facility network...
+                  </td>
+                </tr>
+              ) : plantNetwork.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={4}
+                    className="py-8 text-center text-xs text-zinc-400 font-medium"
+                  >
+                    No plant facilities registered in database.
+                  </td>
+                </tr>
+              ) : (
+                plantNetwork.map((p: any) => (
+                  <tr
+                    key={p.id}
+                    className="hover:bg-slate-50/70 transition"
+                  >
+                    <td className="py-3 px-3 font-semibold text-zinc-900">
+                      {p.plant_name}
+                    </td>
+
+                    <td className="py-3 px-3 text-zinc-600 font-medium">
+                      {p.shop_count} Shops
+                    </td>
+
+                    <td className="py-3 px-3 font-mono font-bold text-zinc-950">
+                      {p.machine_count}
+                    </td>
+
+                    <td className="py-3 px-3">
+                      <span
+                        className={`px-2.5 py-0.5 rounded-md text-[11px] font-bold border capitalize ${p.plant_status === 'active'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : 'bg-zinc-100 text-zinc-700 border-zinc-200'
+                          }`}
+                      >
+                        {p.plant_status || 'Active'}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

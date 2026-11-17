@@ -26,15 +26,22 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
  * Search and list spare parts catalog with server-side pagination, category filtering,
  * and Trigram / ILIKE search across part number, OEM number, and name.
  */
+
 export const searchParts = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { query: searchQuery, category, page = '1', limit = '50', sort_by = 'part_number', sort_order = 'ASC' } = req.query;
+    const {
+      query: searchQuery,
+      category,
+      page = '1',
+      limit = '50',
+      sort_by = 'part_number',
+      sort_order = 'ASC',
+    } = req.query;
 
     const pageNum = Math.max(1, parseInt(String(page), 10) || 1);
     const limitNum = Math.min(100, Math.max(1, parseInt(String(limit), 10) || 50));
     const offset = (pageNum - 1) * limitNum;
 
-    // Allowed sort columns
     const allowedSortColumns: Record<string, string> = {
       part_number: 'part_number',
       name: 'name',
@@ -44,8 +51,41 @@ export const searchParts = async (req: Request, res: Response, next: NextFunctio
       unit_cost: 'unit_cost',
       created_at: 'created_at',
     };
+
     const sortCol = allowedSortColumns[String(sort_by)] || 'part_number';
     const sortDir = String(sort_order).toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+
+    const callerRole = req.user?.role?.trim().toLowerCase();
+    const callerPlantId = req.user?.plant_id;
+
+    let selectedPlantId: string | null = null;
+
+    if (callerRole === 'admin') {
+      if (req.query.plant_id !== undefined) {
+        if (
+          typeof req.query.plant_id !== 'string' ||
+          !UUID_REGEX.test(req.query.plant_id)
+        ) {
+          res.status(400).json({
+            success: false,
+            message: 'Invalid plant_id. A valid UUID is required.',
+          });
+          return;
+        }
+
+        selectedPlantId = req.query.plant_id;
+      }
+    } else {
+      if (!callerPlantId || !UUID_REGEX.test(callerPlantId)) {
+        res.status(403).json({
+          success: false,
+          message: 'Your account is not assigned to a valid plant.',
+        });
+        return;
+      }
+
+      selectedPlantId = callerPlantId;
+    }
 
     let sql = `
       SELECT id, part_number, oem_part_number, name, description, category, subcategory,
@@ -56,11 +96,16 @@ export const searchParts = async (req: Request, res: Response, next: NextFunctio
       FROM spare_parts
       WHERE status = 'active'
     `;
+
     const params: any[] = [];
 
     if (searchQuery && String(searchQuery).trim()) {
       params.push(`%${String(searchQuery).trim()}%`);
-      sql += ` AND (part_number ILIKE $${params.length} OR name ILIKE $${params.length} OR oem_part_number ILIKE $${params.length})`;
+      sql += ` AND (
+        part_number ILIKE $${params.length}
+        OR name ILIKE $${params.length}
+        OR oem_part_number ILIKE $${params.length}
+      )`;
     }
 
     if (category && String(category).trim() && String(category).trim().toLowerCase() !== 'all') {
@@ -68,15 +113,8 @@ export const searchParts = async (req: Request, res: Response, next: NextFunctio
       sql += ` AND category = $${params.length}`;
     }
 
-    // Multi-Plant Isolation
-    const callerRole = req.user?.role?.trim().toLowerCase();
-    const callerPlantId = req.user?.plant_id;
-
-    if (callerRole !== 'admin' && callerPlantId) {
-      params.push(callerPlantId);
-      sql += ` AND (plant_id = $${params.length} OR plant_id IS NULL)`;
-    } else if (req.query.plant_id && typeof req.query.plant_id === 'string' && UUID_REGEX.test(req.query.plant_id)) {
-      params.push(req.query.plant_id);
+    if (selectedPlantId) {
+      params.push(selectedPlantId);
       sql += ` AND plant_id = $${params.length}`;
     }
 
@@ -85,13 +123,22 @@ export const searchParts = async (req: Request, res: Response, next: NextFunctio
 
     const result = await query(sql, params);
 
-    // Synchronized count query with matching filters
-    let countSql = `SELECT COUNT(*) FROM spare_parts WHERE status = 'active'`;
+    // Count query uses exactly the same filters.
+    let countSql = `
+      SELECT COUNT(*)
+      FROM spare_parts
+      WHERE status = 'active'
+    `;
+
     const countParams: any[] = [];
 
     if (searchQuery && String(searchQuery).trim()) {
       countParams.push(`%${String(searchQuery).trim()}%`);
-      countSql += ` AND (part_number ILIKE $${countParams.length} OR name ILIKE $${countParams.length} OR oem_part_number ILIKE $${countParams.length})`;
+      countSql += ` AND (
+        part_number ILIKE $${countParams.length}
+        OR name ILIKE $${countParams.length}
+        OR oem_part_number ILIKE $${countParams.length}
+      )`;
     }
 
     if (category && String(category).trim() && String(category).trim().toLowerCase() !== 'all') {
@@ -99,11 +146,8 @@ export const searchParts = async (req: Request, res: Response, next: NextFunctio
       countSql += ` AND category = $${countParams.length}`;
     }
 
-    if (callerRole !== 'admin' && callerPlantId) {
-      countParams.push(callerPlantId);
-      countSql += ` AND (plant_id = $${countParams.length} OR plant_id IS NULL)`;
-    } else if (req.query.plant_id && typeof req.query.plant_id === 'string' && UUID_REGEX.test(req.query.plant_id)) {
-      countParams.push(req.query.plant_id);
+    if (selectedPlantId) {
+      countParams.push(selectedPlantId);
       countSql += ` AND plant_id = $${countParams.length}`;
     }
 
@@ -124,6 +168,7 @@ export const searchParts = async (req: Request, res: Response, next: NextFunctio
     next(err);
   }
 };
+
 
 /**
  * Get single spare part by ID with full stock metrics and bin location
@@ -286,16 +331,32 @@ export const reservePartForWorkOrder = async (req: Request, res: Response, next:
  * Create a new spare part master record (Admin and Store Manager).
  * Validates part_number, name, bin_location and numeric bounds.
  */
-export const createSparePart = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+
+/**
+ * Create a new spare part master record (Admin and Store Manager).
+ * Plant assignment is mandatory and validated against active plants.
+ */
+export const createSparePart = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
   try {
     const user = req.user;
+
     if (!user || !user.id) {
-      res.status(401).json({ success: false, message: 'Unauthorized: Authentication required.' });
+      res.status(401).json({
+        success: false,
+        message: 'Unauthorized: Authentication required.',
+      });
       return;
     }
 
     if (!['admin', 'store_manager'].includes(user.role)) {
-      res.status(403).json({ success: false, message: `Forbidden: Role '${user.role}' is not authorized to create spare parts.` });
+      res.status(403).json({
+        success: false,
+        message: `Forbidden: Role '${user.role}' is not authorized to create spare parts.`,
+      });
       return;
     }
 
@@ -315,46 +376,145 @@ export const createSparePart = async (req: Request, res: Response, next: NextFun
       unit_cost = 0,
       supplier_name,
       plant_id,
-    } = req.body;
+    } = req.body || {};
 
-    if (!part_number || typeof part_number !== 'string' || !part_number.trim()) {
-      res.status(400).json({ success: false, message: 'part_number is required.' });
+    // Required field validation
+    if (
+      !part_number ||
+      typeof part_number !== 'string' ||
+      !part_number.trim()
+    ) {
+      res.status(400).json({
+        success: false,
+        message: 'part_number is required.',
+      });
       return;
     }
 
     if (!name || typeof name !== 'string' || !name.trim()) {
-      res.status(400).json({ success: false, message: 'name is required.' });
+      res.status(400).json({
+        success: false,
+        message: 'name is required.',
+      });
       return;
     }
 
-    if (!bin_location || typeof bin_location !== 'string' || !bin_location.trim()) {
-      res.status(400).json({ success: false, message: 'bin_location is required.' });
+    if (
+      !bin_location ||
+      typeof bin_location !== 'string' ||
+      !bin_location.trim()
+    ) {
+      res.status(400).json({
+        success: false,
+        message: 'bin_location is required.',
+      });
       return;
     }
 
-    if (user.role !== 'admin' && plant_id && user.plant_id && plant_id !== user.plant_id) {
-      res.status(403).json({ success: false, message: 'Forbidden: Cannot create spare parts for another plant.' });
-      return;
+    // Resolve plant assignment.
+    // Admin must explicitly select a plant.
+    // Store Manager is restricted to their assigned plant.
+    let assignedPlantId: string;
+
+    if (user.role === 'admin') {
+      if (
+        typeof plant_id !== 'string' ||
+        !UUID_REGEX.test(plant_id.trim())
+      ) {
+        res.status(400).json({
+          success: false,
+          message: 'A valid plant_id is required when creating a spare part.',
+        });
+        return;
+      }
+
+      assignedPlantId = plant_id.trim();
+    } else {
+      if (!user.plant_id || !UUID_REGEX.test(user.plant_id)) {
+        res.status(403).json({
+          success: false,
+          message: 'Your account is not assigned to a valid plant.',
+        });
+        return;
+      }
+
+      if (
+        plant_id !== undefined &&
+        (
+          typeof plant_id !== 'string' ||
+          plant_id.trim() !== user.plant_id
+        )
+      ) {
+        res.status(403).json({
+          success: false,
+          message: 'Forbidden: Cannot create spare parts for another plant.',
+        });
+        return;
+      }
+
+      assignedPlantId = user.plant_id;
     }
 
-    const assignedPlantId = user.role !== 'admin'
-      ? (user.plant_id || plant_id || null)
-      : (plant_id || user.plant_id || null);
+    // Verify that the selected plant exists and is active.
+    const plantResult = await query(
+      `SELECT id, plant_name
+       FROM plants
+       WHERE id = $1
+         AND status = 'active'`,
+      [assignedPlantId]
+    );
+
+    if (plantResult.rows.length === 0) {
+      res.status(400).json({
+        success: false,
+        message: 'Selected plant does not exist or is inactive.',
+      });
+      return;
+    }
 
     const trimmedPartNo = part_number.trim();
     const trimmedName = name.trim();
     const trimmedBin = bin_location.trim();
-    const physicalStockNum = Math.max(0, parseInt(String(current_physical_stock), 10) || 0);
-    const minReorderNum = Math.max(0, parseInt(String(min_reorder_level), 10) || 5);
-    const maxStockNum = Math.max(1, parseInt(String(max_stock_level), 10) || 100);
-    const unitCostNum = Math.max(0, parseFloat(String(unit_cost)) || 0);
+
+    const physicalStockNum = Math.max(
+      0,
+      parseInt(String(current_physical_stock), 10) || 0
+    );
+
+    const minReorderNum = Math.max(
+      0,
+      parseInt(String(min_reorder_level), 10) || 5
+    );
+
+    const maxStockNum = Math.max(
+      1,
+      parseInt(String(max_stock_level), 10) || 100
+    );
+
+    const unitCostNum = Math.max(
+      0,
+      parseFloat(String(unit_cost)) || 0
+    );
 
     const result = await query(
       `INSERT INTO spare_parts (
-        part_number, oem_part_number, name, description, category, subcategory,
-        uom, warehouse_zone, bin_location, current_physical_stock, min_reorder_level,
-        max_stock_level, unit_cost, supplier_name, plant_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        part_number,
+        oem_part_number,
+        name,
+        description,
+        category,
+        subcategory,
+        uom,
+        warehouse_zone,
+        bin_location,
+        current_physical_stock,
+        min_reorder_level,
+        max_stock_level,
+        unit_cost,
+        supplier_name,
+        plant_id
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       RETURNING *`,
       [
         trimmedPartNo,
@@ -377,15 +537,28 @@ export const createSparePart = async (req: Request, res: Response, next: NextFun
 
     const newPart = result.rows[0];
 
-    // If part was created with initial physical stock > 0, log immutable audit transaction
-    if (physicalStockNum > 0 && user?.id) {
+    // Record initial stock transaction when applicable.
+    if (physicalStockNum > 0) {
       try {
         await query(
           `INSERT INTO inventory_transactions (
-            part_id, transaction_type, quantity, source_location, destination_location,
-            performed_by, remarks, created_at
-          ) VALUES ($1, 'STOCK_IN', $2, 'Goods Receiving', $3, $4, 'Initial stock intake upon catalog creation', NOW())`,
-          [newPart.id, physicalStockNum, `Bin: ${trimmedBin}`, user.id]
+            part_id,
+            transaction_type,
+            quantity,
+            source_location,
+            destination_location,
+            performed_by,
+            remarks,
+            created_at
+          )
+          VALUES ($1, 'STOCK_IN', $2, 'Goods Receiving', $3, $4,
+                  'Initial stock intake upon catalog creation', NOW())`,
+          [
+            newPart.id,
+            physicalStockNum,
+            `Bin: ${trimmedBin}`,
+            user.id,
+          ]
         );
       } catch (txErr) {
         console.warn('[Initial Stock Transaction Warning]:', txErr);
@@ -393,24 +566,32 @@ export const createSparePart = async (req: Request, res: Response, next: NextFun
     }
 
     const io = getIo();
+
     if (io) {
       io.emit('inventory:part_created', { part: newPart });
-      io.emit('inventory:stock_adjusted', { partId: newPart.id });
+      io.emit('inventory:stock_adjusted', {
+        partId: newPart.id,
+      });
     }
 
     res.status(201).json({
       success: true,
-      message: `Spare Part ${trimmedPartNo} added to catalog successfully.`,
+      message: `Spare Part ${trimmedPartNo} added to ${plantResult.rows[0].plant_name} catalog successfully.`,
       data: newPart,
     });
   } catch (err: any) {
     if (err.code === '23505') {
-      res.status(409).json({ success: false, message: `Part Number '${req.body.part_number}' already exists in catalog.` });
+      res.status(409).json({
+        success: false,
+        message: `Part Number '${req.body?.part_number}' already exists in catalog.`,
+      });
       return;
     }
+
     next(err);
   }
 };
+
 
 /**
  * Update spare part metadata (Admin and Store Manager).
@@ -711,18 +892,56 @@ export const adjustStock = async (req: Request, res: Response, next: NextFunctio
 /**
  * GET /dashboard - Store Dashboard Summary KPIs & Status
  */
-export const getStoreDashboard = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+
+export const getStoreDashboard = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
   try {
-    const data = await getStoreDashboardService(req.user as AuthenticatedUser);
-    res.json({ success: true, data });
+    const user = req.user as AuthenticatedUser;
+    const rawPlantId = req.query.plant_id;
+
+    let selectedPlantId: string | null = null;
+
+    // Only admins can select a plant from the dashboard.
+    if (user.role === 'admin' && rawPlantId !== undefined) {
+      if (
+        typeof rawPlantId !== 'string' ||
+        !UUID_REGEX.test(rawPlantId)
+      ) {
+        res.status(400).json({
+          success: false,
+          message: 'Invalid plant_id. A valid UUID is required.',
+        });
+        return;
+      }
+
+      selectedPlantId = rawPlantId;
+    }
+
+    const data = await getStoreDashboardService(
+      user,
+      selectedPlantId
+    );
+
+    res.json({
+      success: true,
+      data,
+    });
   } catch (err: any) {
     if (err instanceof InventoryError) {
-      res.status(err.statusCode).json({ success: false, message: err.message });
+      res.status(err.statusCode).json({
+        success: false,
+        message: err.message,
+      });
       return;
     }
+
     next(err);
   }
 };
+
 
 /**
  * GET /alerts/low-stock - Low-stock alerts and reorder recommendations
