@@ -302,6 +302,26 @@ export const AdminDashboard: React.FC = () => {
         }
       />
 
+      {/* COMPACT PLANT FILTER */}
+      <div className="flex items-center justify-center sm:justify-start gap-2 flex-wrap">
+        {hierarchy?.plants?.map((p: any) => {
+          const isSelected = plant === p.plant_name;
+
+          return (
+            <button
+              key={p.id}
+              onClick={() => setPlant(p.plant_name)}
+              className={`px-5 py-2 rounded-full text-xs font-bold border transition-all duration-200 ${isSelected
+                  ? 'bg-amber-400 border-amber-500 text-black shadow-sm'
+                  : 'bg-white border-slate-200 text-zinc-600 hover:border-amber-400 hover:bg-amber-50'
+                }`}
+            >
+              {p.plant_name}
+            </button>
+          );
+        })}
+      </div>
+
       {/* ERROR BANNER */}
       {error && (
         <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-center justify-between text-xs text-red-800">
