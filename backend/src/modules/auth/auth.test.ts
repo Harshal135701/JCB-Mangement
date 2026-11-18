@@ -378,6 +378,11 @@ class MockAuthDatabase {
             u.email.toLowerCase().includes(rawSearch)
         );
       }
+      if (trimmed.includes("role IN ('technician', 'operator', 'store_manager')")) {
+        filtered = filtered.filter((u) =>
+          ['technician', 'operator', 'store_manager'].includes(u.role.toLowerCase())
+        );
+      }
       if (trimmed.includes('role = $')) {
         const roleVal = String(params[paramIdx++] || '').toLowerCase();
         filtered = filtered.filter((u) => u.role.toLowerCase() === roleVal);
@@ -389,6 +394,10 @@ class MockAuthDatabase {
       if (trimmed.includes('plant_id = $')) {
         const plantVal = String(params[paramIdx++] || '');
         filtered = filtered.filter((u) => u.plant_id === plantVal);
+      }
+      if (trimmed.includes('shop_id = $')) {
+        const shopVal = String(params[paramIdx++] || '');
+        filtered = filtered.filter((u) => u.shop_id === shopVal);
       }
 
       return {
@@ -415,6 +424,11 @@ class MockAuthDatabase {
             u.email.toLowerCase().includes(rawSearch)
         );
       }
+      if (trimmed.includes("role IN ('technician', 'operator', 'store_manager')")) {
+        filtered = filtered.filter((u) =>
+          ['technician', 'operator', 'store_manager'].includes(u.role.toLowerCase())
+        );
+      }
       if (trimmed.includes('role = $')) {
         const roleVal = String(params[paramIdx++] || '').toLowerCase();
         filtered = filtered.filter((u) => u.role.toLowerCase() === roleVal);
@@ -426,6 +440,10 @@ class MockAuthDatabase {
       if (trimmed.includes('plant_id = $')) {
         const plantVal = String(params[paramIdx++] || '');
         filtered = filtered.filter((u) => u.plant_id === plantVal);
+      }
+      if (trimmed.includes('shop_id = $')) {
+        const shopVal = String(params[paramIdx++] || '');
+        filtered = filtered.filter((u) => u.shop_id === shopVal);
       }
 
       const limit = params[params.length - 2] || 50;
@@ -1211,7 +1229,7 @@ describe('Authentication & User Governance Module (CMMS Module 0)', () => {
       assert.equal(ctx.res.statusCode, 403);
       assert.equal(
         ctx.res.responseData.message,
-        'Forbidden: Managers are only permitted to create technician and operator accounts.'
+        'Forbidden: Managers are only permitted to create technician, operator, and store_manager accounts.'
       );
     });
 
@@ -1238,11 +1256,11 @@ describe('Authentication & User Governance Module (CMMS Module 0)', () => {
       assert.equal(ctx.res.statusCode, 403);
       assert.equal(
         ctx.res.responseData.message,
-        'Forbidden: Managers are only permitted to create technician and operator accounts.'
+        'Forbidden: Managers are only permitted to create technician, operator, and store_manager accounts.'
       );
     });
 
-    it('19f. Manager cannot create Store Manager (HTTP 403 Forbidden)', async () => {
+    it('19f. Manager can create Store Manager in own assigned plant (HTTP 201 Created)', async () => {
       const managerCaller: AuthenticatedUser = {
         id: 'f0000000-0000-0000-0000-000000000002',
         employee_code: 'EMP-MGR-001',
@@ -1252,9 +1270,9 @@ describe('Authentication & User Governance Module (CMMS Module 0)', () => {
       };
 
       const payload = {
-        employee_code: 'EMP-ILLEGAL-SM',
-        full_name: 'Illegal Store Manager',
-        email: 'illegal.sm@jcb.com',
+        employee_code: 'EMP-MGR-SM-01',
+        full_name: 'Plant Store Manager',
+        email: 'plant.sm@jcb.com',
         role: 'store_manager',
         password: 'ValidPassword123!',
       };
@@ -1262,11 +1280,11 @@ describe('Authentication & User Governance Module (CMMS Module 0)', () => {
       const ctx = createMockContext(payload, {}, {}, {}, managerCaller);
       await createUser(ctx.req, ctx.res, ctx.next);
 
-      assert.equal(ctx.res.statusCode, 403);
-      assert.equal(
-        ctx.res.responseData.message,
-        'Forbidden: Managers are only permitted to create technician and operator accounts.'
-      );
+      assert.equal(ctx.res.statusCode, 201);
+      assert.equal(ctx.res.responseData.success, true);
+      assert.equal(ctx.res.responseData.data.role, 'store_manager');
+      assert.equal(ctx.res.responseData.data.plant_id, managerCaller.plant_id);
+      assert.equal(ctx.res.responseData.data.employee_code, 'EMP-MGR-SM-01');
     });
 
     it('19g. Manager cannot create users in another plant by manipulating plant_id (HTTP 403 Forbidden)', async () => {
@@ -1351,7 +1369,7 @@ describe('Authentication & User Governance Module (CMMS Module 0)', () => {
       );
     });
 
-    it('19j. Manager can view only users belonging to their own assigned plant (GET /auth/users)', async () => {
+    it('19j. Manager can view only permitted roles (technician, operator, store_manager) in own assigned plant (GET /auth/users)', async () => {
       // Add a user in plant 2
       const plant2User: MockUser = {
         id: 'f0000000-0000-0000-0000-000000000050',
@@ -1372,6 +1390,26 @@ describe('Authentication & User Governance Module (CMMS Module 0)', () => {
       };
       mockDb.users.set(plant2User.id, plant2User);
 
+      // Add a Store Manager in plant 1
+      const plant1StoreMgr: MockUser = {
+        id: 'f0000000-0000-0000-0000-000000000051',
+        employee_code: 'EMP-SM-01',
+        full_name: 'Plant 1 Store Mgr',
+        email: 'sm1@jcb.com',
+        phone: null,
+        role: 'store_manager',
+        plant_id: 'b0000000-0000-0000-0000-000000000001', // Plant 1
+        shop_id: null,
+        department: 'Stores',
+        designation: 'Store Manager',
+        shift: 'Shift A',
+        password_hash: 'hash',
+        is_active: true,
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+      mockDb.users.set(plant1StoreMgr.id, plant1StoreMgr);
+
       const managerCaller: AuthenticatedUser = {
         id: 'f0000000-0000-0000-0000-000000000002',
         employee_code: 'EMP-MGR-001',
@@ -1389,7 +1427,12 @@ describe('Authentication & User Governance Module (CMMS Module 0)', () => {
       assert.ok(users.length > 0);
       for (const u of users) {
         assert.equal(u.plant_id, 'b0000000-0000-0000-0000-000000000001');
+        assert.ok(['technician', 'operator', 'store_manager'].includes(u.role));
       }
+      // Manager must NOT see other managers or admins
+      assert.equal(users.some((u: any) => u.role === 'manager'), false);
+      assert.equal(users.some((u: any) => u.role === 'admin'), false);
+      // Manager must NOT see users in other plants
       assert.equal(users.some((u: any) => u.employee_code === 'EMP-PUNE-01'), false);
     });
 
@@ -1462,6 +1505,59 @@ describe('Authentication & User Governance Module (CMMS Module 0)', () => {
       assert.equal(
         deleteCtx.res.responseData.message,
         'Forbidden: Only administrators are permitted to deactivate users.'
+      );
+    });
+
+    it('19m. Manager cannot retrieve other Managers or Admins via role filter (HTTP 403 Forbidden)', async () => {
+      const managerCaller: AuthenticatedUser = {
+        id: 'f0000000-0000-0000-0000-000000000002',
+        employee_code: 'EMP-MGR-001',
+        email: 'manager@jcb.com',
+        role: 'manager',
+        plant_id: 'b0000000-0000-0000-0000-000000000001',
+      };
+
+      // Querying role=manager
+      const ctxMgr = createMockContext({}, {}, { role: 'manager' }, {}, managerCaller);
+      await getUsers(ctxMgr.req, ctxMgr.res, ctxMgr.next);
+      assert.equal(ctxMgr.res.statusCode, 403);
+      assert.equal(
+        ctxMgr.res.responseData.message,
+        'Forbidden: Managers are not permitted to view manager or admin accounts.'
+      );
+
+      // Querying role=admin
+      const ctxAdm = createMockContext({}, {}, { role: 'admin' }, {}, managerCaller);
+      await getUsers(ctxAdm.req, ctxAdm.res, ctxAdm.next);
+      assert.equal(ctxAdm.res.statusCode, 403);
+      assert.equal(
+        ctxAdm.res.responseData.message,
+        'Forbidden: Managers are not permitted to view manager or admin accounts.'
+      );
+    });
+
+    it('19n. Manager cannot access users in another plant by manipulating plant_id query param (HTTP 403 Forbidden)', async () => {
+      const managerCaller: AuthenticatedUser = {
+        id: 'f0000000-0000-0000-0000-000000000002',
+        employee_code: 'EMP-MGR-001',
+        email: 'manager@jcb.com',
+        role: 'manager',
+        plant_id: 'b0000000-0000-0000-0000-000000000001', // Plant 1
+      };
+
+      const ctx = createMockContext(
+        {},
+        {},
+        { plant_id: 'b0000000-0000-0000-0000-000000000002' }, // Plant 2
+        {},
+        managerCaller
+      );
+      await getUsers(ctx.req, ctx.res, ctx.next);
+
+      assert.equal(ctx.res.statusCode, 403);
+      assert.equal(
+        ctx.res.responseData.message,
+        'Forbidden: Managers cannot access users outside their assigned plant.'
       );
     });
   });

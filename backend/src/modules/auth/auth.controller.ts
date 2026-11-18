@@ -406,6 +406,50 @@ export const getUsers = async (
       return;
     }
 
+    // Role-based visibility and scope checks:
+    // Manager can view only: technician, operator, store_manager.
+    // Manager must NOT be able to view or manage: manager, admin.
+    // Managers must only see users belonging to their own assigned plant.
+    const callerRole = req.user?.role?.trim().toLowerCase();
+    const isManager = callerRole === 'manager';
+
+    if (isManager) {
+      if (!req.user?.plant_id) {
+        // Manager with no assigned plant sees empty directory
+        res.json({
+          success: true,
+          data: [],
+          pagination: {
+            page,
+            limit,
+            total: 0,
+            totalPages: 1,
+          },
+        });
+        return;
+      }
+
+      // Reject if manager attempts to query a plant outside their assignment
+      if (req.query.plant_id && req.query.plant_id !== req.user.plant_id) {
+        res.status(403).json({
+          success: false,
+          message: 'Forbidden: Managers cannot access users outside their assigned plant.',
+        });
+        return;
+      }
+
+      // Manager can view and manage only: technician, operator, store_manager
+      // Reject if manager attempts to query other manager or admin accounts
+      const allowedManagerViewRoles = ['technician', 'operator', 'store_manager'];
+      if (role !== undefined && !allowedManagerViewRoles.includes(role)) {
+        res.status(403).json({
+          success: false,
+          message: 'Forbidden: Managers are not permitted to view manager or admin accounts.',
+        });
+        return;
+      }
+    }
+
     const statusParam = req.query.status ?? req.query.is_active;
     let isActiveFilter: boolean | undefined = undefined;
 
@@ -438,6 +482,9 @@ export const getUsers = async (
     if (role) {
       params.push(role);
       whereClauses.push(`role = $${params.length}`);
+    } else if (isManager) {
+      // Unfiltered role query by manager strictly restricts visibility to technician, operator, and store_manager
+      whereClauses.push("role IN ('technician', 'operator', 'store_manager')");
     }
 
     if (isActiveFilter !== undefined) {
@@ -448,29 +495,38 @@ export const getUsers = async (
     // Plant filtering:
     // Managers must only see users belonging to their own assigned plant.
     // Admins can see all plants, or optionally filter by plant_id query parameter.
-    const callerRole = req.user?.role?.trim().toLowerCase();
-    const isManager = callerRole === 'manager';
-
     if (isManager) {
-      if (!req.user?.plant_id) {
-        // Manager with no assigned plant sees empty directory
-        res.json({
-          success: true,
-          data: [],
-          pagination: {
-            page,
-            limit,
-            total: 0,
-            totalPages: 1,
-          },
-        });
-        return;
-      }
-      params.push(req.user.plant_id);
+      params.push(req.user!.plant_id);
       whereClauses.push(`plant_id = $${params.length}`);
     } else if (req.query.plant_id && isUUID(req.query.plant_id as string)) {
       params.push(req.query.plant_id);
       whereClauses.push(`plant_id = $${params.length}`);
+    }
+
+    // Shop filtering:
+    if (req.query.shop_id) {
+      if (!isUUID(req.query.shop_id as string)) {
+        res.status(400).json({
+          success: false,
+          message: 'Invalid shop ID filter.',
+        });
+        return;
+      }
+      if (isManager) {
+        const shopRes = await activeQuery(
+          `SELECT id, plant_id FROM shops WHERE id = $1`,
+          [req.query.shop_id]
+        );
+        if (shopRes.rows.length === 0 || shopRes.rows[0].plant_id !== req.user!.plant_id) {
+          res.status(403).json({
+            success: false,
+            message: 'Forbidden: Shop does not belong to your assigned plant.',
+          });
+          return;
+        }
+      }
+      params.push(req.query.shop_id);
+      whereClauses.push(`shop_id = $${params.length}`);
     }
 
     const whereSql =
@@ -588,11 +644,11 @@ export const createUser = async (
     // Role-based authorization & permission enforcement
     const callerRole = req.user?.role ? req.user.role.trim().toLowerCase() : 'admin';
     if (callerRole === 'manager') {
-      const allowedManagerRoles = ['technician', 'operator'];
+      const allowedManagerRoles = ['technician', 'operator', 'store_manager'];
       if (!allowedManagerRoles.includes(cleanRole)) {
         res.status(403).json({
           success: false,
-          message: 'Forbidden: Managers are only permitted to create technician and operator accounts.',
+          message: 'Forbidden: Managers are only permitted to create technician, operator, and store_manager accounts.',
         });
         return;
       }
