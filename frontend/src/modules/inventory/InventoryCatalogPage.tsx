@@ -735,17 +735,17 @@ export const InventoryCatalogPage: React.FC = () => {
               </span>
             )}
           </div>
-
+{/* 
           <p className="text-xs text-zinc-500 font-medium mt-1">
             Enterprise warehouse stock ledger with real-time allocation logic:{' '}
             <strong className="text-zinc-800">
               Available = Physical - Reserved - Quarantined
             </strong>
-          </p>
+          </p> */}
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
-          {canAccessStoreDashboard && (
+          {/* {canAccessStoreDashboard && (
             <Link
               to="/store/dashboard"
               className="px-3.5 py-2 bg-white hover:bg-slate-50 text-zinc-800 rounded-xl text-xs font-bold transition border border-slate-300 shadow-2xs flex items-center gap-1.5"
@@ -753,7 +753,7 @@ export const InventoryCatalogPage: React.FC = () => {
               <Boxes className="w-4 h-4 text-amber-600" />
               <span>Store Dashboard</span>
             </Link>
-          )}
+          )} */}
 
           <Link
             to="/procurement"

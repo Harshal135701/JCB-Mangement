@@ -572,14 +572,14 @@ export const AdminDashboard: React.FC = () => {
                 : `${plant} Inventory`}
             </span>
 
-            <Link
+            {/* <Link
               to="/inventory"
               className="inline-flex items-center gap-2 px-4 py-2 bg-jcb-yellow hover:bg-amber-400 text-black rounded-xl text-[13px] sm:text-sm font-semibold border border-amber-500 shadow-2xs transition"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Add Spare Part</span>
               <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
+            </Link> */}
           </div>
         </div>
 

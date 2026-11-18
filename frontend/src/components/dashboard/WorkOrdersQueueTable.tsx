@@ -25,12 +25,14 @@ interface WorkOrdersQueueTableProps {
   liveOrders?: any[];
   workOrders?: any[];
   loading?: boolean;
+  showCreateWorkOrder?: boolean;
 }
 
 export const WorkOrdersQueueTable: React.FC<WorkOrdersQueueTableProps> = ({
   liveOrders,
   workOrders,
   loading = false,
+  showCreateWorkOrder = false,
 }) => {
   const [activeTab, setActiveTab] = useState<FilterTab>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
@@ -150,13 +152,15 @@ export const WorkOrdersQueueTable: React.FC<WorkOrdersQueueTableProps> = ({
             </div>
           </div>
 
-          <Link
-            to="/triage"
-            className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-jcb-yellow hover:bg-amber-400 text-black text-[13px] sm:text-sm font-semibold rounded-xl transition border border-amber-500 shadow-2xs self-start sm:self-auto shrink-0"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Create Work Order</span>
-          </Link>
+          {showCreateWorkOrder && (
+            <Link
+              to="/triage"
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-jcb-yellow hover:bg-amber-400 text-black text-[13px] sm:text-sm font-semibold rounded-xl transition border border-amber-500 shadow-2xs self-start sm:self-auto shrink-0"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Create Work Order</span>
+            </Link>
+          )}
         </div>
 
         {/* Tabs & Search Filter Bar */}

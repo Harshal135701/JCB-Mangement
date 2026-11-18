@@ -25,6 +25,7 @@ interface MachineStatusMultiLineChartProps {
   plantId?: string;
   plantName?: string;
   dashboardTimeframe?: string;
+  showAddMachine?: boolean;
 }
 
 interface SeriesConfig {
@@ -70,6 +71,7 @@ export const MachineStatusMultiLineChart: React.FC<MachineStatusMultiLineChartPr
   plantId,
   plantName = 'All Plants',
   dashboardTimeframe,
+  showAddMachine = false,
 }) => {
   const [selectedTimeframe, setSelectedTimeframe] = useState<string>(
     dashboardTimeframe && ['Last 7 Days', 'Last 30 Days', 'Last 90 Days'].includes(dashboardTimeframe)
@@ -253,7 +255,7 @@ export const MachineStatusMultiLineChart: React.FC<MachineStatusMultiLineChartPr
             </h3>
           </div>
 
-          {/* Top-Right: Date-Range Dropdown Filter & Add Machine */}
+          {/* Top-Right: Date-Range Dropdown Filter */}
           <div className="flex items-center gap-2.5 self-start sm:self-auto shrink-0 flex-wrap">
             <div className="relative inline-flex items-center bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-zinc-700 shadow-2xs hover:border-slate-300 transition">
               <Calendar className="w-3.5 h-3.5 text-zinc-500 mr-1.5 shrink-0" />
@@ -270,14 +272,16 @@ export const MachineStatusMultiLineChart: React.FC<MachineStatusMultiLineChartPr
               <ChevronDown className="w-3.5 h-3.5 text-zinc-400 absolute right-2 pointer-events-none" />
             </div>
 
-            <Link
-              to="/machines"
-              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-jcb-yellow hover:bg-amber-400 text-black rounded-xl text-xs font-semibold border border-amber-500 shadow-2xs transition shrink-0"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Add Machine</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
+            {showAddMachine && (
+              <Link
+                to="/machines"
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-jcb-yellow hover:bg-amber-400 text-black rounded-xl text-xs font-semibold border border-amber-500 shadow-2xs transition shrink-0"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Machine</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            )}
           </div>
         </div>
 
