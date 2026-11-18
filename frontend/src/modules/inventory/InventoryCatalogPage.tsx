@@ -683,7 +683,8 @@ export const InventoryCatalogPage: React.FC = () => {
         part_id: prPart.id,
         quantity_required: prQuantity,
         urgency: prUrgency,
-        technical_justification: prJustification.trim() || `Replenishment request for part ${prPart.part_number}`
+        technical_justification: prJustification.trim() || `Replenishment request for part ${prPart.part_number}`,
+        plant_id: prPart.plant_id || userPlantId || (plants.length > 0 ? plants[0].id : undefined),
       });
 
       if (res.data?.success) {

@@ -385,7 +385,7 @@ export async function createPurchaseRequisitionService(
 
     // 1. Verify spare part exists and is active
     const partRes = await client.query(
-      `SELECT id, part_number, name, status, unit_cost, supplier_name, current_physical_stock, available_stock
+      `SELECT id, part_number, name, status, unit_cost, supplier_name, current_physical_stock, available_stock, plant_id
        FROM spare_parts
        WHERE id = $1`,
       [input.part_id]
@@ -503,8 +503,8 @@ export async function createPurchaseRequisitionService(
     if (machinePlantId) {
       effectivePlantId = machinePlantId;
     } else if (user.role === 'admin') {
-      // Enterprise admins can supply explicit plant_id or fallback to their user.plant_id
-      effectivePlantId = suppliedPlantId || user.plant_id || null;
+      // Enterprise admins can supply explicit plant_id, derive from part, or fallback to user.plant_id
+      effectivePlantId = suppliedPlantId || (part.plant_id ? String(part.plant_id) : null) || user.plant_id || null;
     } else {
       // Non-admins must derive from their user.plant_id and cannot specify a different plant
       if (suppliedPlantId && suppliedPlantId !== user.plant_id) {
@@ -513,7 +513,7 @@ export async function createPurchaseRequisitionService(
           403
         );
       }
-      effectivePlantId = user.plant_id || null;
+      effectivePlantId = user.plant_id || (part.plant_id ? String(part.plant_id) : null) || null;
     }
 
     // Prevent creation of unscoped PRs where plant ownership is required

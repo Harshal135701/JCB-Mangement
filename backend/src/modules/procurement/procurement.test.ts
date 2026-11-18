@@ -195,6 +195,7 @@ interface MockSparePart {
   unit_cost: number;
   supplier_name: string;
   status: string;
+  plant_id?: string;
 }
 
 interface MockWorkOrder {
@@ -471,6 +472,22 @@ class MockProcurementDatabase implements DbPoolLike {
         unit_cost: 500.0,
         supplier_name: 'Discontinued Supplier',
         status: 'inactive',
+      },
+      {
+        id: '30000000-0000-0000-0000-000000000004',
+        part_number: 'BLB-FILTER-01',
+        name: 'Ballabgarh Heavy Air Filter',
+        category: 'Filtration',
+        warehouse_zone: 'Main Store',
+        bin_location: 'C-01-01',
+        current_physical_stock: 5,
+        reserved_stock: 0,
+        quarantined_stock: 0,
+        available_stock: 5,
+        unit_cost: 3200.0,
+        supplier_name: 'Donaldson Filters',
+        status: 'active',
+        plant_id: '10000000-0000-0000-0000-000000000002',
       },
     ];
 
@@ -1412,6 +1429,49 @@ describe('Procurement & Purchase Requisition Module (CMMS Module 4)', () => {
       assert.equal(res.statusCode, 400);
       assert.equal(res.responseData.success, false);
       assert.match(res.responseData.message, /Plant ownership is required/i);
+    });
+
+    it('8e. Enterprise Admin creates generic stock PR deriving plant from part catalog when plant_id not explicitly supplied', async () => {
+      const unscopedAdmin = { ...adminUser, plant_id: undefined };
+      const { req, res, next } = createMockContext(
+        {
+          part_id: '30000000-0000-0000-0000-000000000004', // Ballabgarh Heavy Air Filter (belongs to Plant 2)
+          quantity_required: 8,
+          technical_justification: 'Automated stock replenishment for Ballabgarh store',
+        },
+        {},
+        {},
+        {},
+        unscopedAdmin
+      );
+
+      await createPurchaseRequisition(req, res, next);
+      assert.equal(res.statusCode, 201);
+      assert.equal(res.responseData.success, true);
+      assert.equal(res.responseData.data.plant_id, '10000000-0000-0000-0000-000000000002');
+      assert.equal(res.responseData.data.requested_by, unscopedAdmin.id);
+    });
+
+    it('8f. Enterprise Admin creates machine-linked PR and automatically inherits plant from machine', async () => {
+      const unscopedAdmin = { ...adminUser, plant_id: undefined };
+      const { req, res, next } = createMockContext(
+        {
+          part_id: '30000000-0000-0000-0000-000000000001',
+          machine_id: '40000000-0000-0000-0000-000000000001', // Pune Plant 1
+          quantity_required: 3,
+          technical_justification: 'Critical replacement for CNC Mill breakdown',
+        },
+        {},
+        {},
+        {},
+        unscopedAdmin
+      );
+
+      await createPurchaseRequisition(req, res, next);
+      assert.equal(res.statusCode, 201);
+      assert.equal(res.responseData.success, true);
+      assert.equal(res.responseData.data.plant_id, '10000000-0000-0000-0000-000000000001');
+      assert.equal(res.responseData.data.requested_by, unscopedAdmin.id);
     });
   });
 

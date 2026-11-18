@@ -804,6 +804,7 @@ export const StoreManagerDashboard: React.FC = () => {
         quantity_required: Number(prForm.quantity_required),
         urgency: prForm.urgency,
         technical_justification: prForm.technical_justification.trim() || `Automated store reorder trigger: Part ${prForm.part_number} breached minimum safety threshold.`,
+        plant_id: (prForm as any).plant_id || user?.plantId || (user as any)?.plant_id || undefined,
       });
 
       if (res.data?.success) {
