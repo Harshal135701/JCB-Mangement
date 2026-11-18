@@ -15,12 +15,18 @@ import {
   CircleOff,
   ArrowRight,
   Plus,
+  Activity,
+  AlertOctagon,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { DashboardHeader } from '../../components/dashboard/DashboardHeader';
 import { TopKPICard } from '../../components/dashboard/TopKPICard';
 import { UserRoleDonutChart, UserRoleSegment } from '../../components/dashboard/UserRoleDonutChart';
 import { MachineStatusBarChart, MachineStatusBarItem } from '../../components/dashboard/MachineStatusBarChart';
+import { MaintenanceTrendChart, TrendDataPoint } from '../../components/dashboard/MaintenanceTrendChart';
+import { PlantComparisonChart, PlantNetworkItem } from '../../components/dashboard/PlantComparisonChart';
+import { TopDowntimeMachinesCard, DowntimeMachineItem } from '../../components/dashboard/TopDowntimeMachinesCard';
+import { WorkOrdersQueueTable } from '../../components/dashboard/WorkOrdersQueueTable';
 
 export const AdminDashboard: React.FC = () => {
   const { socket } = useSocket();
@@ -31,6 +37,8 @@ export const AdminDashboard: React.FC = () => {
   const [hierarchy, setHierarchy] = useState<any>(null);
   const [kpiStats, setKpiStats] = useState<any>(null);
   const [inventoryStats, setInventoryStats] = useState<any>(null);
+  const [trendData, setTrendData] = useState<TrendDataPoint[]>([]);
+  const [liveWorkOrders, setLiveWorkOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,14 +61,14 @@ export const AdminDashboard: React.FC = () => {
         ? { plant_id: selectedPlantId }
         : {};
 
-      const [usersRes, orgRes, kpiRes, inventoryRes] = await Promise.all([
+      const [usersRes, orgRes, kpiRes, inventoryRes, trendRes, workOrdersRes] = await Promise.all([
         apiClient.get('/auth/users', {
           params: { limit: 100, ...plantParams },
-        }),
+        }).catch(() => ({ data: { data: [] } })),
 
         apiClient.get('/org/hierarchy', {
           params: plantParams,
-        }),
+        }).catch(() => ({ data: { data: null } })),
 
         apiClient.get('/reports/dashboard-kpis', {
           params: {
@@ -71,7 +79,15 @@ export const AdminDashboard: React.FC = () => {
 
         apiClient.get('/inventory/dashboard', {
           params: plantParams,
-        }),
+        }).catch(() => ({ data: { data: null } })),
+
+        apiClient.get('/reports/maintenance-trend', {
+          params: plantParams,
+        }).catch(() => ({ data: { data: [] } })),
+
+        apiClient.get('/work-orders', {
+          params: { limit: 10, ...plantParams },
+        }).catch(() => ({ data: { data: [] } })),
       ]);
 
       let fetchedUsers = usersRes.data?.data || [];
@@ -86,6 +102,8 @@ export const AdminDashboard: React.FC = () => {
       setHierarchy(orgRes.data?.data || null);
       setKpiStats(kpiRes.data?.data || null);
       setInventoryStats(inventoryRes.data?.data || null);
+      setTrendData(trendRes.data?.data || []);
+      setLiveWorkOrders(workOrdersRes.data?.data || []);
     } catch (err: any) {
       console.error('Failed to load admin dashboard:', err);
 
@@ -241,6 +259,40 @@ export const AdminDashboard: React.FC = () => {
       : network;
   }, [kpiStats, selectedPlantId]);
 
+  // Multi-plant comparison data
+  const comparisonPlants: PlantNetworkItem[] = useMemo(() => {
+    const network = Array.isArray(kpiStats?.plant_network)
+      ? kpiStats.plant_network
+      : [];
+
+    return network.map((p: any) => ({
+      id: p.id,
+      plant_code: p.plant_code,
+      plant_name: p.plant_name,
+      city: p.city,
+      state: p.state,
+      plant_status: p.plant_status,
+      shop_count: Number(p.shop_count || 0),
+      machine_count: Number(p.machine_count || 0),
+      active_machines: Number(p.active_machines || 0),
+    }));
+  }, [kpiStats]);
+
+  // Top downtime machines for leaderboard
+  const topDowntimeMachines: DowntimeMachineItem[] = useMemo(() => {
+    const list = Array.isArray(kpiStats?.top_downtime_machines)
+      ? kpiStats.top_downtime_machines
+      : [];
+
+    return list.map((m: any) => ({
+      machine_code: m.machine_code || '—',
+      name: m.name || 'Equipment Unit',
+      shop_name: m.shop_name || 'Production Line',
+      downtime_minutes: Number(m.downtime_minutes || 0),
+      failure_count: Number(m.failure_count || 0),
+    }));
+  }, [kpiStats]);
+
   const totalShops = useMemo(() => {
     const shops = Array.isArray(hierarchy?.shops)
       ? hierarchy.shops
@@ -322,11 +374,10 @@ export const AdminDashboard: React.FC = () => {
             className="flex items-center gap-2 px-3.5 py-2 bg-white border border-slate-200/90 rounded-xl text-[13px] sm:text-sm font-semibold text-zinc-700 hover:bg-slate-50 transition shadow-2xs cursor-pointer"
           >
             <RefreshCw
-              className={`w-3.5 h-3.5 ${
-                loading
+              className={`w-3.5 h-3.5 ${loading
                   ? 'animate-spin text-amber-600'
                   : 'text-zinc-500'
-              }`}
+                }`}
             />
             <span className="hidden sm:inline">Refresh</span>
           </button>
@@ -338,11 +389,10 @@ export const AdminDashboard: React.FC = () => {
         <button
           key="all-plants"
           onClick={() => setPlant('All Plants')}
-          className={`px-4.5 py-1.5 sm:px-5 sm:py-2 rounded-full text-[13px] sm:text-sm font-semibold border transition-all duration-200 ${
-            plant === 'All Plants'
+          className={`px-4.5 py-1.5 sm:px-5 sm:py-2 rounded-full text-[13px] sm:text-sm font-semibold border transition-all duration-200 ${plant === 'All Plants'
               ? 'bg-amber-400 border-amber-500 text-black shadow-sm'
               : 'bg-white border-slate-200 text-zinc-600 hover:border-amber-400 hover:bg-amber-50'
-          }`}
+            }`}
         >
           All Plants
         </button>
@@ -353,11 +403,10 @@ export const AdminDashboard: React.FC = () => {
             <button
               key={p.id}
               onClick={() => setPlant(p.plant_name)}
-              className={`px-4.5 py-1.5 sm:px-5 sm:py-2 rounded-full text-[13px] sm:text-sm font-semibold border transition-all duration-200 ${
-                isSelected
+              className={`px-4.5 py-1.5 sm:px-5 sm:py-2 rounded-full text-[13px] sm:text-sm font-semibold border transition-all duration-200 ${isSelected
                   ? 'bg-amber-400 border-amber-500 text-black shadow-sm'
                   : 'bg-white border-slate-200 text-zinc-600 hover:border-amber-400 hover:bg-amber-50'
-              }`}
+                }`}
             >
               {p.plant_name}
             </button>
@@ -382,8 +431,8 @@ export const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* ROW 1: TOP KPI CARDS */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5 sm:gap-7">
+      {/* ROW 1: EXECUTIVE KPI STRIP (7 CARDS) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-7 gap-3 sm:gap-4">
         <TopKPICard
           icon={Building2}
           iconBgColor="bg-blue-100"
@@ -399,7 +448,7 @@ export const AdminDashboard: React.FC = () => {
           iconColor="text-emerald-800"
           label="Total Shops"
           value={totalShops}
-          subtitle="Registered Shops Across Plants"
+          subtitle="Registered Facilities"
         />
 
         <TopKPICard
@@ -408,18 +457,33 @@ export const AdminDashboard: React.FC = () => {
           iconColor="text-zinc-800"
           label="Total Machines"
           value={totalAssets}
-          subtitle={`${kpiStats?.running_machines ?? 0} Running • ${
-            kpiStats?.breakdown_machines ?? 0
-          } Stopped`}
+          subtitle={`${kpiStats?.running_machines ?? 0} Running • ${kpiStats?.breakdown_machines ?? 0
+            } Down`}
         />
 
         <TopKPICard
-          icon={Users}
-          iconBgColor="bg-amber-100"
-          iconColor="text-amber-800"
-          label="Total Users"
-          value={totalUsers}
-          subtitle={`${techCount} Techs • ${operatorCount} Operators • ${managerCount} Mgrs`}
+          icon={Activity}
+          iconBgColor="bg-emerald-100"
+          iconColor="text-emerald-800"
+          label="Fleet Availability"
+          value={`${kpiStats?.machine_availability_percent ?? 0}%`}
+          subtitle={`${kpiStats?.running_machines ?? 0} Active Running`}
+          trend={Number(kpiStats?.machine_availability_percent ?? 0) >= 85 ? 'Optimal' : 'Caution'}
+        />
+
+        <TopKPICard
+          icon={AlertOctagon}
+          iconBgColor="bg-red-100"
+          iconColor="text-red-700"
+          label="Critical Breakdowns"
+          value={kpiStats?.breakdown_machines ?? 0}
+          subtitle={`${kpiStats?.downtime_rate_percent ?? 0}% Stoppage Rate`}
+          trend={Number(kpiStats?.breakdown_machines ?? 0) > 0 ? 'Action Req.' : 'Nominal'}
+          trendColor={
+            Number(kpiStats?.breakdown_machines ?? 0) > 0
+              ? 'bg-red-50 text-red-600 border border-red-200'
+              : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+          }
         />
 
         <TopKPICard
@@ -428,58 +492,23 @@ export const AdminDashboard: React.FC = () => {
           iconColor="text-purple-800"
           label="Total Work Orders"
           value={kpiStats?.total_work_orders ?? 0}
-          subtitle={`${kpiStats?.active_work_orders ?? 0} Active • ${
-            kpiStats?.completed_work_orders ?? 0
-          } Completed`}
+          subtitle={`${kpiStats?.active_work_orders ?? 0} Active • ${kpiStats?.completed_work_orders ?? 0
+            } Done`}
         />
+
+        <TopKPICard
+          icon={Users}
+          iconBgColor="bg-amber-100"
+          iconColor="text-amber-800"
+          label="Total Users"
+          value={totalUsers}
+          subtitle={`${techCount} Techs • ${operatorCount} Ops`}
+        />
+        
       </div>
 
       {/* ROW 2: USER AND MACHINE ANALYTICS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
-        {/* USER ROLE DISTRIBUTION */}
-        <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-xs flex flex-col justify-between h-full">
-          <div>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
-              <div>
-                <h3 className="text-lg font-semibold text-zinc-900 tracking-tight">
-                  User Role Distribution
-                </h3>
-                <p className="text-xs sm:text-[13px] text-zinc-500 font-normal mt-0.5">
-                  Allocated personnel across active operations
-                </p>
-              </div>
-
-              <Link
-                to="/users"
-                className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-jcb-yellow hover:bg-amber-400 text-black rounded-xl text-[13px] sm:text-sm font-semibold border border-amber-500 shadow-2xs transition shrink-0"
-              >
-                <Users className="w-3.5 h-3.5" />
-                <span>Staff Personnel</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
-            </div>
-
-            <UserRoleDonutChart
-              totalCount={totalUsers}
-              segments={userSegments}
-              emptyMessage="No personnel registered in system"
-              loading={loading}
-            />
-          </div>
-
-          <div className="flex items-center justify-between pt-4 mt-5 border-t border-slate-100 text-[13px]">
-            <span className="text-zinc-500 font-normal">
-              Registered Workforce:{' '}
-              <strong className="text-zinc-900 font-mono font-semibold">
-                {totalUsers} Personnel
-              </strong>
-            </span>
-            <span className="text-emerald-700 font-semibold bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 text-xs">
-              Active Roster
-            </span>
-          </div>
-        </div>
-
         {/* MACHINE STATUS OVERVIEW */}
         <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-xs flex flex-col justify-between h-full">
           <div>
@@ -526,9 +555,87 @@ export const AdminDashboard: React.FC = () => {
             </span>
           </div>
         </div>
+
+        {/* USER ROLE DISTRIBUTION */}
+        <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-xs flex flex-col justify-between h-full">
+          <div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+              <div>
+                <h3 className="text-lg font-semibold text-zinc-900 tracking-tight">
+                  User Role Distribution
+                </h3>
+                <p className="text-xs sm:text-[13px] text-zinc-500 font-normal mt-0.5">
+                  Allocated personnel across active operations
+                </p>
+              </div>
+
+              <Link
+                to="/users"
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-jcb-yellow hover:bg-amber-400 text-black rounded-xl text-[13px] sm:text-sm font-semibold border border-amber-500 shadow-2xs transition shrink-0"
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>Staff Personnel</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+
+            <UserRoleDonutChart
+              totalCount={totalUsers}
+              segments={userSegments}
+              emptyMessage="No personnel registered in system"
+              loading={loading}
+            />
+          </div>
+
+          <div className="flex items-center justify-between pt-4 mt-5 border-t border-slate-100 text-[13px]">
+            <span className="text-zinc-500 font-normal">
+              Registered Workforce:{' '}
+              <strong className="text-zinc-900 font-mono font-semibold">
+                {totalUsers} Personnel
+              </strong>
+            </span>
+            <span className="text-emerald-700 font-semibold bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 text-xs">
+              Active Roster
+            </span>
+          </div>
+        </div>
       </div>
 
-      {/* ROW 3: SPARE PARTS INVENTORY */}
+      {/* ROW 3: OPERATIONAL TRENDS & MULTI-PLANT COMPARISON */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
+        <MaintenanceTrendChart
+          title="Operational Maintenance Trends"
+          subtitle="4-week velocity of Corrective vs. Preventive maintenance work orders"
+          data={trendData}
+          loading={loading}
+        />
+
+        <PlantComparisonChart
+          plants={comparisonPlants}
+          selectedPlant={plant}
+          onSelectPlant={setPlant}
+          loading={loading}
+        />
+      </div>
+
+      {/* ROW 4: EQUIPMENT RISK & WORK ORDER EXECUTION */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+        <div className="lg:col-span-5">
+          <TopDowntimeMachinesCard
+            machines={topDowntimeMachines}
+            loading={loading}
+          />
+        </div>
+
+        <div className="lg:col-span-7">
+          <WorkOrdersQueueTable
+            workOrders={liveWorkOrders}
+            loading={loading}
+          />
+        </div>
+      </div>
+
+      {/* ROW 5: SPARE PARTS INVENTORY */}
       <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
           <div className="flex items-center gap-2">
@@ -660,9 +767,8 @@ export const AdminDashboard: React.FC = () => {
                   return (
                     <div
                       key={`${category.category}-${index}`}
-                      className={`rounded-xl border p-4 ${
-                        colors[index % colors.length]
-                      }`}
+                      className={`rounded-xl border p-4 ${colors[index % colors.length]
+                        }`}
                     >
                       <p className="text-[13px] sm:text-sm font-semibold truncate">
                         {category.category || 'Uncategorized'}
@@ -773,7 +879,7 @@ export const AdminDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* ROW 4: ACTIVE PLANTS & SHOPS */}
+      {/* ROW 6: ACTIVE PLANTS & SHOPS */}
       <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs">
         <div className="flex items-center justify-between pb-4 border-b border-slate-100">
           <div className="flex items-center gap-2">
@@ -842,11 +948,10 @@ export const AdminDashboard: React.FC = () => {
 
                     <td className="py-3 px-3.5">
                       <span
-                        className={`px-2.5 py-0.5 rounded-md text-xs font-semibold border capitalize ${
-                          p.plant_status === 'active'
+                        className={`px-2.5 py-0.5 rounded-md text-xs font-semibold border capitalize ${p.plant_status === 'active'
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                             : 'bg-zinc-100 text-zinc-700 border-zinc-200'
-                        }`}
+                          }`}
                       >
                         {p.plant_status || 'Active'}
                       </span>
