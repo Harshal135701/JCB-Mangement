@@ -50,13 +50,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
       // { name: 'Live Shop Floor', path: '/dashboard', icon: Activity, roles: ['admin'] },
       // { name: 'Factory Structure', path: '/organization/hierarchy', icon: Network, roles: ['admin'] },
       { name: 'Staff Management', path: '/users', icon: Users, roles: ['admin'] },
-      { name: 'Daily AM Checklist', path: '/inspections', icon: ClipboardCheck, roles: ['admin'] },
+      { name: 'Safety Check', path: '/inspections', icon: ClipboardCheck, roles: ['admin'] },
       { name: 'Machines', path: '/machines', icon: Cpu, roles: ['admin'] },
-      { name: 'Maintenance Status', path: '/work-orders', icon: Wrench, roles: ['admin'] },
+      { name: 'Repair Jobs', path: '/work-orders', icon: Wrench, roles: ['admin'] },
       { name: 'Spare Parts', path: '/inventory', icon: Package, roles: ['admin'] },
-      { name: 'Spare Parts Purchase Request', path: '/procurement', icon: ShoppingCart, roles: ['admin'] },
+      { name: 'Purchase Requests', path: '/procurement', icon: ShoppingCart, roles: ['admin'] },
       { name: 'Maintenance Schedule', path: '/pm', icon: Calendar, roles: ['admin'] },
-      { name: 'Machine Status', path: '/downtime', icon: Clock, roles: ['admin'] },
+      { name: 'Machine Downtime', path: '/downtime', icon: Clock, roles: ['admin'] },
       { name: 'Gate Pass', path: '/rdc', icon: FileText, roles: ['admin'] },
       { name: 'Activity Logs', path: '/audit', icon: ShieldCheck, roles: ['admin'] },
       { name: 'Reports', path: '/reports', icon: BarChart3, roles: ['admin'] },
@@ -65,21 +65,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
       { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, roles: ['manager'] },
       // { name: 'Factory Structure', path: '/organization/hierarchy', icon: Network, roles: ['manager'] },
       { name: 'Staff Management', path: '/users', icon: Users, roles: ['manager'] },
-      { name: 'Daily AM Checklist', path: '/inspections', icon: ClipboardCheck, roles: ['manager'] },
+      { name: 'Safety Check', path: '/inspections', icon: ClipboardCheck, roles: ['manager'] },
       { name: 'Fault Reports', path: '/triage', icon: AlertTriangle, roles: ['manager'] },
-      { name: 'Maintenance Status', path: '/work-orders', icon: Wrench, roles: ['manager'] },
+      { name: 'Repair Jobs', path: '/work-orders', icon: Wrench, roles: ['manager'] },
       { name: 'Machines', path: '/machines', icon: Cpu, roles: ['manager'] },
-      { name: 'Spare Parts Purchase Request', path: '/procurement', icon: ShoppingCart, roles: ['manager'] },
+      { name: 'Purchase Requests', path: '/procurement', icon: ShoppingCart, roles: ['manager'] },
       { name: 'Maintenance Schedule', path: '/pm', icon: Calendar, roles: ['manager'] },
-      { name: 'Machine Status', path: '/downtime', icon: Clock, roles: ['manager'] },
+      { name: 'Machine Downtime', path: '/downtime', icon: Clock, roles: ['manager'] },
       { name: 'Gate Pass', path: '/rdc', icon: FileText, roles: ['manager'] },
       { name: 'Activity Logs', path: '/audit', icon: ShieldCheck, roles: ['manager'] },
       { name: 'Reports', path: '/reports', icon: BarChart3, roles: ['manager'] },
     ],
     technician: [
       { name: 'Dashboard', path: '/technician/dashboard', icon: LayoutDashboard, roles: ['technician'] },
-      { name: 'Daily AM Checklist', path: '/inspections', icon: ClipboardCheck, roles: ['technician'] },
-      { name: 'Maintenance Status', path: '/work-orders', icon: Wrench, roles: ['technician'] },
+      { name: 'Safety Check', path: '/inspections', icon: ClipboardCheck, roles: ['technician'] },
+      { name: 'Repair Jobs', path: '/work-orders', icon: Wrench, roles: ['technician'] },
       { name: 'Machines', path: '/machines', icon: Cpu, roles: ['technician'] },
       { name: 'Spare Parts', path: '/inventory', icon: Package, roles: ['technician'] },
       { name: 'Maintenance Schedule', path: '/pm', icon: Calendar, roles: ['technician'] },
@@ -95,9 +95,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
     store_manager: [
       { name: 'Dashboard', path: '/store/dashboard', icon: Boxes, roles: ['store_manager'] },
       { name: 'Spare Parts', path: '/inventory', icon: Package, roles: ['store_manager'] },
-      { name: 'Spare Parts Purchase Request', path: '/procurement', icon: ShoppingCart, roles: ['store_manager'] },
+      { name: 'Purchase Requests', path: '/procurement', icon: ShoppingCart, roles: ['store_manager'] },
       { name: 'Gate Pass', path: '/rdc', icon: FileText, roles: ['store_manager'] },
-      { name: 'Maintenance Status', path: '/work-orders', icon: Wrench, roles: ['store_manager'] },
+      { name: 'Repair Jobs', path: '/work-orders', icon: Wrench, roles: ['store_manager'] },
       { name: 'Activity Logs', path: '/audit', icon: ShieldCheck, roles: ['store_manager'] },
       { name: 'Reports', path: '/reports', icon: BarChart3, roles: ['store_manager'] },
     ],
@@ -144,20 +144,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
               <X className="w-5 h-5" />
             </button>
 
-            {/* Top Branding Section: Sleek compact horizontal banner tightly framed around subject */}
+            {/* Top Branding Section: Sleek compact horizontal banner with full excavator visibility */}
             <Link to="/" className="flex flex-col items-center text-center group w-full">
               <div className="relative w-full max-w-[244px] h-[88px] rounded-xl overflow-hidden bg-[#111d28]/60 shadow-sm flex items-center justify-center">
                 <img
                   src="/images/jcb-login-background.png"
                   alt="JCB Smart Machine Maintenance System"
-                  className="w-full h-full object-cover object-[center_35%] select-none transition-transform duration-300 group-hover:scale-101 filter contrast-[1.05] saturate-[1.08] brightness-[0.98]"
+                  className="w-full h-full object-cover object-[center_65%] scale-[0.92] select-none transition-transform duration-300 group-hover:scale-[0.95] filter contrast-[1.05] saturate-[1.08] brightness-[0.98]"
                 />
-                {/* Seamless dark navy edge blending & feathered gradient scrim */}
+                {/* Clean dark bottom transition & subtle edge blending */}
                 <div
                   className="absolute inset-0 pointer-events-none rounded-xl"
                   style={{
-                    boxShadow: 'inset 0 0 10px 2px #111d28',
-                    background: 'linear-gradient(180deg, transparent 65%, rgba(17, 29, 40, 0.4) 85%, #111d28 100%)',
+                    boxShadow: 'inset 0 0 8px 1px #111d28',
+                    background: 'linear-gradient(180deg, transparent 78%, rgba(17, 29, 40, 0.4) 90%, #111d28 100%)',
                   }}
                 />
               </div>
