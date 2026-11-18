@@ -78,8 +78,8 @@ export const InventoryCatalogPage: React.FC = () => {
   const isAdmin = user?.role === 'admin';
   const isManager = user?.role === 'manager';
   const isStoreManager = user?.role === 'store_manager';
-  const canAdjust = isAdmin || isManager || isStoreManager;
-  const canManageParts = isAdmin || isStoreManager;
+  const canAdjust = !isAdmin && (isManager || isStoreManager);
+  const canManageParts = !isAdmin && (isManager || isStoreManager);
   const canAccessStoreDashboard = isAdmin || isManager || isStoreManager;
 
   const userPlantId = (user as any)?.plant_id as string | undefined;
@@ -87,7 +87,7 @@ export const InventoryCatalogPage: React.FC = () => {
   // Search and filter state
   const [searchInput, setSearchInput] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
-  const [selectedPlantId, setSelectedPlantId] = useState('ALL');
+  const [selectedPlantId, setSelectedPlantId] = useState(isAdmin ? 'ALL' : (userPlantId || ''));
   const [stockStatusFilter, setStockStatusFilter] = useState<StockStatusFilter>('ALL');
   const [sortBy, setSortBy] = useState<SortField>('part_number');
   const [sortOrder, setSortOrder] = useState<SortOrder>('ASC');
@@ -425,10 +425,11 @@ export const InventoryCatalogPage: React.FC = () => {
 
   // Form modals handling
   const openCreateModal = () => {
+    if (isAdmin) return; // Admin cannot create parts
     setEditingPart(null);
     setFormData({
       ...INITIAL_FORM_DATA,
-      plant_id: !isAdmin && userPlantId ? userPlantId : (plants[0]?.id || '')
+      plant_id: userPlantId || (plants[0]?.id || '')
     });
     setModalFeedback(null);
     setIsModalOpen(true);
@@ -721,13 +722,13 @@ export const InventoryCatalogPage: React.FC = () => {
               Spare Part Inventory
             </h1>
 
-            {canManageParts ? (
-              <span className="bg-jcb-yellow text-black text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-amber-500 shadow-2xs">
-                {isAdmin ? 'Admin Full Access (CRUD)' : 'Store Manager Full Access (CRUD)'}
+            {isAdmin ? (
+              <span className="bg-blue-100 text-blue-900 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-blue-300 shadow-2xs">
+                Global Read-Only (ADMIN)
               </span>
-            ) : canAdjust ? (
-              <span className="bg-amber-100 text-amber-900 text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-amber-300">
-                Stock Adjust Access ({user?.role?.toUpperCase()})
+            ) : canManageParts ? (
+              <span className="bg-jcb-yellow text-black text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-amber-500 shadow-2xs">
+                Franchise Management: {plants.find(p => p.id === userPlantId)?.plant_name || user?.role?.toUpperCase()}
               </span>
             ) : (
               <span className="bg-zinc-100 text-zinc-600 text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-zinc-200">
@@ -775,7 +776,7 @@ export const InventoryCatalogPage: React.FC = () => {
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-amber-600' : ''}`} />
           </button>
 
-          {/* {canManageParts && (
+          {canManageParts && (
             <button
               onClick={openCreateModal}
               disabled={plantsLoading || plants.length === 0}
@@ -784,7 +785,7 @@ export const InventoryCatalogPage: React.FC = () => {
               <Plus className="w-4 h-4" />
               <span>{plantsLoading ? 'LOADING PLANTS...' : 'ADD SPARE PART'}</span>
             </button>
-          )} */}
+          )}
         </div>
       </div>
 
@@ -949,6 +950,57 @@ export const InventoryCatalogPage: React.FC = () => {
       </div>
 
       {/* =========================================================================
+          ADMIN: FRANCHISE INVENTORY OVERVIEW
+          ========================================================================= */}
+      {isAdmin && dashboardSummary?.franchise_breakdown && (
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-xs">
+          <h3 className="text-xs font-black text-zinc-900 uppercase tracking-wider mb-3 flex items-center gap-2">
+            <Building2 className="w-4 h-4 text-amber-600" />
+            Franchise Inventory Overview
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {/* All Franchises card */}
+            <div
+              onClick={() => handlePlantChange('ALL')}
+              className={`p-3.5 rounded-xl border cursor-pointer transition-all duration-200 ${
+                selectedPlantId === 'ALL'
+                  ? 'border-amber-400 bg-amber-50/50 ring-2 ring-amber-400/20'
+                  : 'border-slate-200 bg-slate-50/50 hover:border-amber-300 hover:shadow-sm'
+              }`}
+            >
+              <div className="text-xs font-black text-zinc-900 mb-1">All Franchises</div>
+              <div className="text-lg font-black text-amber-700 font-mono">{totalPartsCount}</div>
+              <div className="text-[10px] text-zinc-500 font-medium">Total parts across all plants</div>
+            </div>
+
+            {/* Individual franchise cards */}
+            {(dashboardSummary.franchise_breakdown as any[]).map((franchise: any) => (
+              <div
+                key={franchise.plant_name}
+                onClick={() => {
+                  const matchedPlant = plants.find(p => p.plant_name === franchise.plant_name);
+                  if (matchedPlant) handlePlantChange(matchedPlant.id);
+                }}
+                className={`p-3.5 rounded-xl border cursor-pointer transition-all duration-200 ${
+                  plants.find(p => p.plant_name === franchise.plant_name)?.id === selectedPlantId
+                    ? 'border-amber-400 bg-amber-50/50 ring-2 ring-amber-400/20'
+                    : 'border-slate-200 bg-slate-50/50 hover:border-amber-300 hover:shadow-sm'
+                }`}
+              >
+                <div className="text-xs font-black text-zinc-900 mb-1">{franchise.plant_name}</div>
+                <div className="text-lg font-black text-zinc-800 font-mono">{franchise.total_parts}</div>
+                <div className="flex items-center gap-2 text-[10px] text-zinc-500 font-medium mt-0.5">
+                  <span className="text-emerald-600">✓ {franchise.available_stock} avail</span>
+                  {franchise.low_stock > 0 && <span className="text-amber-600">⚠ {franchise.low_stock} low</span>}
+                  {franchise.out_of_stock > 0 && <span className="text-red-600">✕ {franchise.out_of_stock} out</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
           3. ADVANCED SEARCH, FILTERING & SORTING TOOLBAR
           ========================================================================= */}
       <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-xs space-y-4">
@@ -981,21 +1033,26 @@ export const InventoryCatalogPage: React.FC = () => {
               <MapPin className="w-3.5 h-3.5 text-amber-600 shrink-0" />
               Plant:
             </span>
-            <select
-              value={selectedPlantId}
-              onChange={(e) => handlePlantChange(e.target.value)}
-              disabled={plantsLoading || plants.length === 0 || !isAdmin}
-              className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-zinc-800 focus:outline-none focus:border-amber-400 disabled:bg-slate-100 disabled:cursor-not-allowed shadow-2xs"
-            >
-              {isAdmin && (
-                <option value="ALL">All Plants (Consolidated)</option>
-              )}
-              {plants.map((plant) => (
-                <option key={plant.id} value={plant.id}>
-                  {plant.plant_name} ({plant.plant_code})
-                </option>
-              ))}
-            </select>
+            {isAdmin ? (
+              <select
+                value={selectedPlantId}
+                onChange={(e) => handlePlantChange(e.target.value)}
+                disabled={plantsLoading || plants.length === 0}
+                className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-zinc-800 focus:outline-none focus:border-amber-400 disabled:bg-slate-100 disabled:cursor-not-allowed shadow-2xs"
+              >
+                <option value="ALL">All Plants (Global)</option>
+                {plants.map((plant) => (
+                  <option key={plant.id} value={plant.id}>
+                    {plant.plant_name} ({plant.plant_code})
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs font-bold text-amber-900 shadow-2xs inline-flex items-center gap-1.5">
+                <Building2 className="w-3.5 h-3.5 text-amber-600" />
+                {plants.find(p => p.id === userPlantId)?.plant_name || 'My Franchise'}
+              </span>
+            )}
           </div>
 
           {/* Sorting Dropdown & Order Toggle */}
@@ -1367,7 +1424,7 @@ export const InventoryCatalogPage: React.FC = () => {
                       {/* Actions */}
                       <td className="px-5 py-3.5 text-right">
                         <div className="flex items-center justify-end gap-1">
-                          {/* Quick View Details Button */}
+                          {/* Quick View Details Button — always visible */}
                           <button
                             onClick={() => setViewingPart(part)}
                             className="p-1.5 text-zinc-500 hover:text-black hover:bg-slate-100 rounded-lg transition cursor-pointer"
@@ -1376,16 +1433,18 @@ export const InventoryCatalogPage: React.FC = () => {
                             <Eye className="w-4 h-4" />
                           </button>
 
-                          {/* Raise PR Button */}
-                          <button
-                            onClick={() => openPRModal(part)}
-                            className="p-1.5 text-amber-700 hover:text-black hover:bg-amber-100 rounded-lg transition cursor-pointer"
-                            title="Raise Purchase Requisition (PR)"
-                          >
-                            <ShoppingCart className="w-4 h-4" />
-                          </button>
+                          {/* Raise PR Button — hidden for Admin */}
+                          {!isAdmin && (
+                            <button
+                              onClick={() => openPRModal(part)}
+                              className="p-1.5 text-amber-700 hover:text-black hover:bg-amber-100 rounded-lg transition cursor-pointer"
+                              title="Raise Purchase Requisition (PR)"
+                            >
+                              <ShoppingCart className="w-4 h-4" />
+                            </button>
+                          )}
 
-                          {/* Adjust Stock Button (Manager, Store Manager, Admin) */}
+                          {/* Adjust Stock Button (Manager, Store Manager only — not Admin) */}
                           {canAdjust && (
                             <button
                               onClick={() => openAdjustModal(part)}
@@ -1396,7 +1455,7 @@ export const InventoryCatalogPage: React.FC = () => {
                             </button>
                           )}
 
-                          {/* Edit Part Master (Store Manager, Admin) */}
+                          {/* Edit & Delete Part (Manager, Store Manager only — not Admin) */}
                           {canManageParts && (
                             <>
                               <button
@@ -1628,18 +1687,20 @@ export const InventoryCatalogPage: React.FC = () => {
               </button>
 
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const target = viewingPart;
-                    setViewingPart(null);
-                    openPRModal(target);
-                  }}
-                  className="px-4 py-2 bg-white hover:bg-amber-50 text-amber-900 border border-amber-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
-                >
-                  <ShoppingCart className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Raise PR</span>
-                </button>
+                {!isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const target = viewingPart;
+                      setViewingPart(null);
+                      openPRModal(target);
+                    }}
+                    className="px-4 py-2 bg-white hover:bg-amber-50 text-amber-900 border border-amber-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                  >
+                    <ShoppingCart className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Raise PR</span>
+                  </button>
+                )}
 
                 {canAdjust && (
                   <button
@@ -1732,6 +1793,14 @@ export const InventoryCatalogPage: React.FC = () => {
                       {selectedPlantName(editingPart)}
                       <p className="text-[10px] text-zinc-500 font-medium mt-1">
                         Plant assignment is locked to preserve regulatory asset hierarchy.
+                      </p>
+                    </div>
+                  ) : !isAdmin && userPlantId ? (
+                    <div className="w-full px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                      <Building2 className="w-3.5 h-3.5 text-amber-600" />
+                      {plants.find(p => p.id === userPlantId)?.plant_name || 'My Franchise'}
+                      <p className="text-[10px] text-zinc-500 font-medium ml-2">
+                        (Locked to your franchise)
                       </p>
                     </div>
                   ) : (

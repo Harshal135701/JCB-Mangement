@@ -66,6 +66,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
       // { name: 'Factory Structure', path: '/organization/hierarchy', icon: Network, roles: ['manager'] },
       { name: 'Staff Management', path: '/users', icon: Users, roles: ['manager'] },
       { name: 'Machines Management', path: '/machines', icon: Cpu, roles: ['manager'] },
+      { name: 'Spare Parts Management', path: '/inventory', icon: Package, roles: ['manager'] },
       { name: 'Daily AM Checklist', path: '/inspections', icon: ClipboardCheck, roles: ['manager'] },
       { name: 'Fault Reports', path: '/triage', icon: AlertTriangle, roles: ['manager'] },
       { name: 'Maintenance Status ', path: '/work-orders', icon: Wrench, roles: ['manager'] },

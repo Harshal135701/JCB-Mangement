@@ -61,10 +61,10 @@ export const searchParts = async (req: Request, res: Response, next: NextFunctio
     let selectedPlantId: string | null = null;
 
     if (callerRole === 'admin') {
-      if (req.query.plant_id !== undefined) {
+      if (req.query.plant_id !== undefined && req.query.plant_id !== 'ALL' && String(req.query.plant_id).trim() !== '') {
         if (
           typeof req.query.plant_id !== 'string' ||
-          !UUID_REGEX.test(req.query.plant_id)
+          !UUID_REGEX.test(req.query.plant_id.trim())
         ) {
           res.status(400).json({
             success: false,
@@ -73,13 +73,13 @@ export const searchParts = async (req: Request, res: Response, next: NextFunctio
           return;
         }
 
-        selectedPlantId = req.query.plant_id;
+        selectedPlantId = req.query.plant_id.trim();
       }
     } else {
       if (!callerPlantId || !UUID_REGEX.test(callerPlantId)) {
         res.status(403).json({
           success: false,
-          message: 'Your account is not assigned to a valid plant.',
+          message: 'Your account is not assigned to a valid franchise.',
         });
         return;
       }
@@ -88,13 +88,15 @@ export const searchParts = async (req: Request, res: Response, next: NextFunctio
     }
 
     let sql = `
-      SELECT id, part_number, oem_part_number, name, description, category, subcategory,
-             uom, warehouse_zone, bin_location, rack_number, shelf_number, bin_number,
-             current_physical_stock, reserved_stock, quarantined_stock, available_stock,
-             min_reorder_level, max_stock_level, unit_cost, supplier_name, plant_id, status,
-             created_at, updated_at
-      FROM spare_parts
-      WHERE status = 'active'
+      SELECT sp.id, sp.part_number, sp.oem_part_number, sp.name, sp.description, sp.category, sp.subcategory,
+             sp.uom, sp.warehouse_zone, sp.bin_location, sp.rack_number, sp.shelf_number, sp.bin_number,
+             sp.current_physical_stock, sp.reserved_stock, sp.quarantined_stock, sp.available_stock,
+             sp.min_reorder_level, sp.max_stock_level, sp.unit_cost, sp.supplier_name, sp.plant_id, sp.status,
+             sp.created_at, sp.updated_at,
+             p.plant_name, p.plant_code
+      FROM spare_parts sp
+      LEFT JOIN plants p ON sp.plant_id = p.id
+      WHERE sp.status = 'active'
     `;
 
     const params: any[] = [];
@@ -102,23 +104,23 @@ export const searchParts = async (req: Request, res: Response, next: NextFunctio
     if (searchQuery && String(searchQuery).trim()) {
       params.push(`%${String(searchQuery).trim()}%`);
       sql += ` AND (
-        part_number ILIKE $${params.length}
-        OR name ILIKE $${params.length}
-        OR oem_part_number ILIKE $${params.length}
+        sp.part_number ILIKE $${params.length}
+        OR sp.name ILIKE $${params.length}
+        OR sp.oem_part_number ILIKE $${params.length}
       )`;
     }
 
     if (category && String(category).trim() && String(category).trim().toLowerCase() !== 'all') {
       params.push(String(category).trim());
-      sql += ` AND category = $${params.length}`;
+      sql += ` AND sp.category = $${params.length}`;
     }
 
     if (selectedPlantId) {
       params.push(selectedPlantId);
-      sql += ` AND plant_id = $${params.length}`;
+      sql += ` AND sp.plant_id = $${params.length}`;
     }
 
-    sql += ` ORDER BY ${sortCol} ${sortDir} LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+    sql += ` ORDER BY sp.${sortCol} ${sortDir} LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
     params.push(limitNum, offset);
 
     const result = await query(sql, params);
@@ -126,8 +128,8 @@ export const searchParts = async (req: Request, res: Response, next: NextFunctio
     // Count query uses exactly the same filters.
     let countSql = `
       SELECT COUNT(*)
-      FROM spare_parts
-      WHERE status = 'active'
+      FROM spare_parts sp
+      WHERE sp.status = 'active'
     `;
 
     const countParams: any[] = [];
@@ -135,20 +137,20 @@ export const searchParts = async (req: Request, res: Response, next: NextFunctio
     if (searchQuery && String(searchQuery).trim()) {
       countParams.push(`%${String(searchQuery).trim()}%`);
       countSql += ` AND (
-        part_number ILIKE $${countParams.length}
-        OR name ILIKE $${countParams.length}
-        OR oem_part_number ILIKE $${countParams.length}
+        sp.part_number ILIKE $${countParams.length}
+        OR sp.name ILIKE $${countParams.length}
+        OR sp.oem_part_number ILIKE $${countParams.length}
       )`;
     }
 
     if (category && String(category).trim() && String(category).trim().toLowerCase() !== 'all') {
       countParams.push(String(category).trim());
-      countSql += ` AND category = $${countParams.length}`;
+      countSql += ` AND sp.category = $${countParams.length}`;
     }
 
     if (selectedPlantId) {
       countParams.push(selectedPlantId);
-      countSql += ` AND plant_id = $${countParams.length}`;
+      countSql += ` AND sp.plant_id = $${countParams.length}`;
     }
 
     const countRes = await query(countSql, countParams);
@@ -181,14 +183,19 @@ export const getSparePartById = async (req: Request, res: Response, next: NextFu
       return;
     }
 
+    const callerRole = req.user?.role?.trim().toLowerCase();
+    const callerPlantId = req.user?.plant_id;
+
     const result = await query(
-      `SELECT id, part_number, oem_part_number, name, description, category, subcategory,
-              uom, warehouse_zone, bin_location, rack_number, shelf_number, bin_number,
-              current_physical_stock, reserved_stock, quarantined_stock, available_stock,
-              min_reorder_level, max_stock_level, unit_cost, supplier_name, plant_id, status,
-              created_at, updated_at
-       FROM spare_parts
-       WHERE id = $1`,
+      `SELECT sp.id, sp.part_number, sp.oem_part_number, sp.name, sp.description, sp.category, sp.subcategory,
+              sp.uom, sp.warehouse_zone, sp.bin_location, sp.rack_number, sp.shelf_number, sp.bin_number,
+              sp.current_physical_stock, sp.reserved_stock, sp.quarantined_stock, sp.available_stock,
+              sp.min_reorder_level, sp.max_stock_level, sp.unit_cost, sp.supplier_name, sp.plant_id, sp.status,
+              sp.created_at, sp.updated_at,
+              p.plant_name, p.plant_code
+       FROM spare_parts sp
+       LEFT JOIN plants p ON sp.plant_id = p.id
+       WHERE sp.id = $1`,
       [id]
     );
 
@@ -197,9 +204,22 @@ export const getSparePartById = async (req: Request, res: Response, next: NextFu
       return;
     }
 
+    const part = result.rows[0];
+
+    // Role-based access check: Manager can only view spare parts belonging to their assigned franchise
+    if (callerRole !== 'admin' && callerPlantId) {
+      if (part.plant_id && part.plant_id !== callerPlantId) {
+        res.status(403).json({
+          success: false,
+          message: 'Forbidden: You do not have access to spare parts belonging to another franchise.',
+        });
+        return;
+      }
+    }
+
     res.json({
       success: true,
-      data: result.rows[0],
+      data: part,
     });
   } catch (err) {
     next(err);
@@ -352,7 +372,15 @@ export const createSparePart = async (
       return;
     }
 
-    if (!['admin', 'store_manager'].includes(user.role)) {
+    if (user.role === 'admin') {
+      res.status(403).json({
+        success: false,
+        message: 'Forbidden: Admin has read-only access and cannot create spare parts.',
+      });
+      return;
+    }
+
+    if (!['manager', 'store_manager'].includes(user.role)) {
       res.status(403).json({
         success: false,
         message: `Forbidden: Role '${user.role}' is not authorized to create spare parts.`,
@@ -375,7 +403,6 @@ export const createSparePart = async (
       max_stock_level = 100,
       unit_cost = 0,
       supplier_name,
-      plant_id,
     } = req.body || {};
 
     // Required field validation
@@ -411,49 +438,17 @@ export const createSparePart = async (
       return;
     }
 
-    // Resolve plant assignment.
-    // Admin must explicitly select a plant.
-    // Store Manager is restricted to their assigned plant.
-    let assignedPlantId: string;
-
-    if (user.role === 'admin') {
-      if (
-        typeof plant_id !== 'string' ||
-        !UUID_REGEX.test(plant_id.trim())
-      ) {
-        res.status(400).json({
-          success: false,
-          message: 'A valid plant_id is required when creating a spare part.',
-        });
-        return;
-      }
-
-      assignedPlantId = plant_id.trim();
-    } else {
-      if (!user.plant_id || !UUID_REGEX.test(user.plant_id)) {
-        res.status(403).json({
-          success: false,
-          message: 'Your account is not assigned to a valid plant.',
-        });
-        return;
-      }
-
-      if (
-        plant_id !== undefined &&
-        (
-          typeof plant_id !== 'string' ||
-          plant_id.trim() !== user.plant_id
-        )
-      ) {
-        res.status(403).json({
-          success: false,
-          message: 'Forbidden: Cannot create spare parts for another plant.',
-        });
-        return;
-      }
-
-      assignedPlantId = user.plant_id;
+    // Derive the manager's franchise ID from authenticated user's account
+    // Never trust a franchise ID supplied by the frontend for authorization
+    if (!user.plant_id || !UUID_REGEX.test(user.plant_id)) {
+      res.status(403).json({
+        success: false,
+        message: 'Your account is not assigned to a valid franchise.',
+      });
+      return;
     }
+
+    const assignedPlantId = user.plant_id;
 
     // Verify that the selected plant exists and is active.
     const plantResult = await query(
@@ -467,7 +462,7 @@ export const createSparePart = async (
     if (plantResult.rows.length === 0) {
       res.status(400).json({
         success: false,
-        message: 'Selected plant does not exist or is inactive.',
+        message: 'Assigned franchise does not exist or is inactive.',
       });
       return;
     }
@@ -475,6 +470,19 @@ export const createSparePart = async (
     const trimmedPartNo = part_number.trim();
     const trimmedName = name.trim();
     const trimmedBin = bin_location.trim();
+
+    // Check duplicate part number within this franchise scope
+    const duplicateCheck = await query(
+      `SELECT id FROM spare_parts WHERE part_number = $1 AND plant_id = $2 AND status = 'active'`,
+      [trimmedPartNo, assignedPlantId]
+    );
+    if (duplicateCheck.rows.length > 0) {
+      res.status(409).json({
+        success: false,
+        message: `Part Number '${trimmedPartNo}' already exists in your franchise catalog.`,
+      });
+      return;
+    }
 
     const physicalStockNum = Math.max(
       0,
@@ -606,8 +614,19 @@ export const updateSparePart = async (req: Request, res: Response, next: NextFun
       return;
     }
 
-    if (!['admin', 'store_manager'].includes(user.role)) {
-      res.status(403).json({ success: false, message: `Forbidden: Role '${user.role}' is not authorized to update spare parts.` });
+    if (user.role === 'admin') {
+      res.status(403).json({
+        success: false,
+        message: 'Forbidden: Admin has read-only access and cannot edit spare parts.',
+      });
+      return;
+    }
+
+    if (!['manager', 'store_manager'].includes(user.role)) {
+      res.status(403).json({
+        success: false,
+        message: `Forbidden: Role '${user.role}' is not authorized to update spare parts.`,
+      });
       return;
     }
 
@@ -617,17 +636,18 @@ export const updateSparePart = async (req: Request, res: Response, next: NextFun
       return;
     }
 
-    // Plant isolation check for store manager
-    if (user.role !== 'admin' && user.plant_id) {
-      const partCheck = await query('SELECT id, plant_id FROM spare_parts WHERE id = $1', [id]);
-      if (partCheck.rows.length === 0) {
-        res.status(404).json({ success: false, message: 'Spare part not found.' });
-        return;
-      }
-      if (partCheck.rows[0].plant_id && partCheck.rows[0].plant_id !== user.plant_id) {
-        res.status(403).json({ success: false, message: 'Forbidden: Cannot update spare parts assigned to another plant.' });
-        return;
-      }
+    // Plant isolation check: Manager can only update parts within their assigned franchise
+    const partCheck = await query('SELECT id, plant_id FROM spare_parts WHERE id = $1', [id]);
+    if (partCheck.rows.length === 0) {
+      res.status(404).json({ success: false, message: 'Spare part not found.' });
+      return;
+    }
+    if (user.plant_id && partCheck.rows[0].plant_id && partCheck.rows[0].plant_id !== user.plant_id) {
+      res.status(403).json({
+        success: false,
+        message: 'Forbidden: Cannot update spare parts assigned to another franchise.',
+      });
+      return;
     }
 
     const {
@@ -720,7 +740,15 @@ export const deleteSparePart = async (req: Request, res: Response, next: NextFun
       return;
     }
 
-    if (!['admin', 'store_manager'].includes(user.role)) {
+    if (user.role === 'admin') {
+      res.status(403).json({
+        success: false,
+        message: 'Forbidden: Admin has read-only access and cannot delete spare parts.',
+      });
+      return;
+    }
+
+    if (!['manager', 'store_manager'].includes(user.role)) {
       res.status(403).json({ success: false, message: `Forbidden: Role '${user.role}' is not authorized to delete spare parts.` });
       return;
     }
@@ -738,9 +766,9 @@ export const deleteSparePart = async (req: Request, res: Response, next: NextFun
     }
     const part = partRes.rows[0];
 
-    // Plant isolation check for store manager
-    if (user.role !== 'admin' && user.plant_id && part.plant_id && part.plant_id !== user.plant_id) {
-      res.status(403).json({ success: false, message: 'Forbidden: Cannot delete spare parts assigned to another plant.' });
+    // Plant isolation check: Manager can only delete parts in their assigned franchise
+    if (user.plant_id && part.plant_id && part.plant_id !== user.plant_id) {
+      res.status(403).json({ success: false, message: 'Forbidden: Cannot delete spare parts assigned to another franchise.' });
       return;
     }
 
@@ -821,7 +849,15 @@ export const adjustStock = async (req: Request, res: Response, next: NextFunctio
       return;
     }
 
-    if (!['admin', 'manager', 'store_manager'].includes(user.role)) {
+    if (user.role === 'admin') {
+      res.status(403).json({
+        success: false,
+        message: 'Forbidden: Admin has read-only access and cannot modify stock quantities.',
+      });
+      return;
+    }
+
+    if (!['manager', 'store_manager'].includes(user.role)) {
       res.status(403).json({ success: false, message: `Forbidden: Role '${user.role}' is not authorized to adjust stock.` });
       return;
     }
@@ -842,6 +878,20 @@ export const adjustStock = async (req: Request, res: Response, next: NextFunctio
 
     if (!reason || typeof reason !== 'string' || !reason.trim()) {
       res.status(400).json({ success: false, message: 'Reason for adjustment is mandatory.' });
+      return;
+    }
+
+    // Franchise ownership verification for Manager
+    const partCheck = await query('SELECT id, plant_id FROM spare_parts WHERE id = $1', [part_id.trim()]);
+    if (partCheck.rows.length === 0) {
+      res.status(404).json({ success: false, message: 'Spare part not found.' });
+      return;
+    }
+    if (user.plant_id && partCheck.rows[0].plant_id && partCheck.rows[0].plant_id !== user.plant_id) {
+      res.status(403).json({
+        success: false,
+        message: 'Forbidden: Cannot adjust stock for a spare part belonging to another franchise.',
+      });
       return;
     }
 
@@ -905,10 +955,10 @@ export const getStoreDashboard = async (
     let selectedPlantId: string | null = null;
 
     // Only admins can select a plant from the dashboard.
-    if (user.role === 'admin' && rawPlantId !== undefined) {
+    if (user.role === 'admin' && rawPlantId !== undefined && rawPlantId !== 'ALL' && String(rawPlantId).trim() !== '') {
       if (
         typeof rawPlantId !== 'string' ||
-        !UUID_REGEX.test(rawPlantId)
+        !UUID_REGEX.test(rawPlantId.trim())
       ) {
         res.status(400).json({
           success: false,
@@ -917,7 +967,7 @@ export const getStoreDashboard = async (
         return;
       }
 
-      selectedPlantId = rawPlantId;
+      selectedPlantId = rawPlantId.trim();
     }
 
     const data = await getStoreDashboardService(
