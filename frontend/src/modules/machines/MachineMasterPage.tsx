@@ -220,9 +220,9 @@ export const MachineMasterPage: React.FC = () => {
               </span>
             )}
           </div>
-          <p className="text-xs text-zinc-500 font-medium mt-1">
+          {/* <p className="text-xs text-zinc-500 font-medium mt-1">
             Manage plant machines, locations, QR codes, and maintenance records.
-          </p>
+          </p> */}
         </div>
 
         {/* Header Actions */}

@@ -1278,9 +1278,9 @@ export const ProcurementPage: React.FC = () => {
               Buying Hub
             </span>
           </div>
-          <p className="text-xs text-zinc-500 font-medium mt-1">
+          {/* <p className="text-xs text-zinc-500 font-medium mt-1">
             Manage requests to buy spare parts, purchase orders, and receive materials (GRN).
-          </p>
+          </p> */}
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">

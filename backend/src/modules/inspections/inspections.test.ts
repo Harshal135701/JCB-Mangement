@@ -830,6 +830,24 @@ class MockInspectionDatabase implements DbPoolLike {
         const statusVal = params[paramNum - 1];
         filtered = filtered.filter((r) => r.overall_status.toLowerCase() === statusVal.toLowerCase());
       }
+      if (trimmed.includes('ir.operator_id = $')) {
+        const opParamIndex = trimmed.indexOf('ir.operator_id = $');
+        const paramNum = parseInt(trimmed.substring(opParamIndex + 18, opParamIndex + 21).replace(/[^0-9]/g, ''), 10);
+        const opVal = params[paramNum - 1];
+        filtered = filtered.filter((r) => r.operator_id === opVal);
+      }
+      if (trimmed.includes('ir.created_at >= $')) {
+        const fParamIndex = trimmed.indexOf('ir.created_at >= $');
+        const paramNum = parseInt(trimmed.substring(fParamIndex + 18, fParamIndex + 21).replace(/[^0-9]/g, ''), 10);
+        const fromVal = new Date(params[paramNum - 1]).getTime();
+        filtered = filtered.filter((r) => new Date(r.created_at).getTime() >= fromVal);
+      }
+      if (trimmed.includes('ir.created_at <= $')) {
+        const tParamIndex = trimmed.indexOf('ir.created_at <= $');
+        const paramNum = parseInt(trimmed.substring(tParamIndex + 18, tParamIndex + 21).replace(/[^0-9]/g, ''), 10);
+        const toVal = new Date(params[paramNum - 1]).getTime();
+        filtered = filtered.filter((r) => new Date(r.created_at).getTime() <= toVal);
+      }
       return { rows: [{ total: filtered.length }], rowCount: 1 };
     }
 
@@ -872,6 +890,24 @@ class MockInspectionDatabase implements DbPoolLike {
         const paramNum = parseInt(trimmed.substring(stParamIndex + 28, stParamIndex + 30), 10);
         const statusVal = params[paramNum - 1];
         filtered = filtered.filter((r) => r.overall_status.toLowerCase() === statusVal.toLowerCase());
+      }
+      if (trimmed.includes('ir.operator_id = $')) {
+        const opParamIndex = trimmed.indexOf('ir.operator_id = $');
+        const paramNum = parseInt(trimmed.substring(opParamIndex + 18, opParamIndex + 21).replace(/[^0-9]/g, ''), 10);
+        const opVal = params[paramNum - 1];
+        filtered = filtered.filter((r) => r.operator_id === opVal);
+      }
+      if (trimmed.includes('ir.created_at >= $')) {
+        const fParamIndex = trimmed.indexOf('ir.created_at >= $');
+        const paramNum = parseInt(trimmed.substring(fParamIndex + 18, fParamIndex + 21).replace(/[^0-9]/g, ''), 10);
+        const fromVal = new Date(params[paramNum - 1]).getTime();
+        filtered = filtered.filter((r) => new Date(r.created_at).getTime() >= fromVal);
+      }
+      if (trimmed.includes('ir.created_at <= $')) {
+        const tParamIndex = trimmed.indexOf('ir.created_at <= $');
+        const paramNum = parseInt(trimmed.substring(tParamIndex + 18, tParamIndex + 21).replace(/[^0-9]/g, ''), 10);
+        const toVal = new Date(params[paramNum - 1]).getTime();
+        filtered = filtered.filter((r) => new Date(r.created_at).getTime() <= toVal);
       }
 
       const rows = filtered.map((r) => {
@@ -1464,7 +1500,7 @@ describe('JCB CMMS Module 7 — Inspection Management (Phase 1 & Phase 2)', () =
   // 6. Inspection Template Management & Versioning (Phase 2)
   // -------------------------------------------------------------------------
   describe('6. Inspection Template Management & Versioning (Phase 2)', () => {
-    it('28. Admin can create a new inspection template with version 1 (HTTP 201 Created)', async () => {
+    it('28. Admin cannot create an inspection template (Admin is strictly read-only, HTTP 403 Forbidden)', async () => {
       const newTemplateBody = {
         machine_category: 'Press',
         title: 'Hydraulic Press Pre-Shift Checklist',
@@ -1480,14 +1516,8 @@ describe('JCB CMMS Module 7 — Inspection Management (Phase 1 & Phase 2)', () =
 
       const { req, res, next } = createMockContext(newTemplateBody, {}, {}, {}, adminUser);
       await createInspectionTemplate(req, res, next);
-      assert.equal(res.statusCode, 201);
-      assert.equal(res.responseData.success, true);
-      assert.equal(res.responseData.data.title, 'Hydraulic Press Pre-Shift Checklist');
-      assert.equal(res.responseData.data.machine_category, 'Press');
-      assert.equal(res.responseData.data.version, 1);
-      assert.equal(res.responseData.data.is_active, true);
-      assert.ok(Array.isArray(res.responseData.data.checklist));
-      assert.equal(res.responseData.data.checklist.length, 2);
+      assert.equal(res.statusCode, 403);
+      assert.match(res.responseData.message, /Forbidden.*managers/i);
     });
 
     it('29. Manager with plant context can create an inspection template', async () => {
@@ -1518,12 +1548,12 @@ describe('JCB CMMS Module 7 — Inspection Management (Phase 1 & Phase 2)', () =
       const ctxTech = createMockContext(newTemplateBody, {}, {}, {}, techPune);
       await createInspectionTemplate(ctxTech.req, ctxTech.res, ctxTech.next);
       assert.equal(ctxTech.res.statusCode, 403);
-      assert.match(ctxTech.res.responseData.message, /Forbidden.*admins and managers/i);
+      assert.match(ctxTech.res.responseData.message, /Forbidden.*managers/i);
 
       const ctxOp = createMockContext(newTemplateBody, {}, {}, {}, operatorPune);
       await createInspectionTemplate(ctxOp.req, ctxOp.res, ctxOp.next);
       assert.equal(ctxOp.res.statusCode, 403);
-      assert.match(ctxOp.res.responseData.message, /Forbidden.*admins and managers/i);
+      assert.match(ctxOp.res.responseData.message, /Forbidden.*managers/i);
     });
 
     it('31. Template creation validation: rejects empty title or category with HTTP 400 Bad Request', async () => {
@@ -1532,7 +1562,7 @@ describe('JCB CMMS Module 7 — Inspection Management (Phase 1 & Phase 2)', () =
         title: 'Valid Title',
         checklist: [{ id: 'c1', label: 'Item 1', type: 'boolean' }],
       };
-      const ctx1 = createMockContext(invalidBody1, {}, {}, {}, adminUser);
+      const ctx1 = createMockContext(invalidBody1, {}, {}, {}, managerPune);
       await createInspectionTemplate(ctx1.req, ctx1.res, ctx1.next);
       assert.equal(ctx1.res.statusCode, 400);
       assert.match(ctx1.res.responseData.message, /machine category is required/i);
@@ -1542,7 +1572,7 @@ describe('JCB CMMS Module 7 — Inspection Management (Phase 1 & Phase 2)', () =
         title: '   ',
         checklist: [{ id: 'c1', label: 'Item 1', type: 'boolean' }],
       };
-      const ctx2 = createMockContext(invalidBody2, {}, {}, {}, adminUser);
+      const ctx2 = createMockContext(invalidBody2, {}, {}, {}, managerPune);
       await createInspectionTemplate(ctx2.req, ctx2.res, ctx2.next);
       assert.equal(ctx2.res.statusCode, 400);
       assert.match(ctx2.res.responseData.message, /title is required/i);
@@ -1557,7 +1587,7 @@ describe('JCB CMMS Module 7 — Inspection Management (Phase 1 & Phase 2)', () =
           { id: 'dup-1', label: 'Item 2', type: 'boolean' },
         ],
       };
-      const { req, res, next } = createMockContext(duplicateBody, {}, {}, {}, adminUser);
+      const { req, res, next } = createMockContext(duplicateBody, {}, {}, {}, managerPune);
       await createInspectionTemplate(req, res, next);
       assert.equal(res.statusCode, 400);
       assert.match(res.responseData.message, /Duplicate checklist item ID/i);
@@ -1569,7 +1599,7 @@ describe('JCB CMMS Module 7 — Inspection Management (Phase 1 & Phase 2)', () =
         title: 'Invalid Type Template',
         checklist: [{ id: 'c1', label: 'Item 1', type: 'datetime' as any }],
       };
-      const ctx1 = createMockContext(invalidType, {}, {}, {}, adminUser);
+      const ctx1 = createMockContext(invalidType, {}, {}, {}, managerPune);
       await createInspectionTemplate(ctx1.req, ctx1.res, ctx1.next);
       assert.equal(ctx1.res.statusCode, 400);
       assert.match(ctx1.res.responseData.message, /unsupported type/i);
@@ -1579,7 +1609,7 @@ describe('JCB CMMS Module 7 — Inspection Management (Phase 1 & Phase 2)', () =
         title: 'Inverted Limits Template',
         checklist: [{ id: 'c1', label: 'Pressure', type: 'number', min: 100, max: 50 }],
       };
-      const ctx2 = createMockContext(invertedLimits, {}, {}, {}, adminUser);
+      const ctx2 = createMockContext(invertedLimits, {}, {}, {}, managerPune);
       await createInspectionTemplate(ctx2.req, ctx2.res, ctx2.next);
       assert.equal(ctx2.res.statusCode, 400);
       assert.match(ctx2.res.responseData.message, /min.*cannot be greater than max/i);
@@ -1593,7 +1623,7 @@ describe('JCB CMMS Module 7 — Inspection Management (Phase 1 & Phase 2)', () =
           { id: 'c1', label: 'Pressure', type: 'number', min: 40, max: 60, critical_min: 50 },
         ],
       };
-      const { req, res, next } = createMockContext(invertedCritical, {}, {}, {}, adminUser);
+      const { req, res, next } = createMockContext(invertedCritical, {}, {}, {}, managerPune);
       await createInspectionTemplate(req, res, next);
       assert.equal(res.statusCode, 400);
       assert.match(res.responseData.message, /critical_min.*cannot be greater than.*min/i);
@@ -1674,7 +1704,7 @@ describe('JCB CMMS Module 7 — Inspection Management (Phase 1 & Phase 2)', () =
         { id: '50000000-0000-0000-0000-000000000001' },
         {},
         {},
-        adminUser
+        managerPune
       );
       await toggleInspectionTemplateStatus(ctxDeact.req, ctxDeact.res, ctxDeact.next);
       assert.equal(ctxDeact.res.statusCode, 200);
@@ -1686,11 +1716,101 @@ describe('JCB CMMS Module 7 — Inspection Management (Phase 1 & Phase 2)', () =
         { id: '50000000-0000-0000-0000-000000000001' },
         {},
         {},
-        adminUser
+        managerPune
       );
       await toggleInspectionTemplateStatus(ctxAct.req, ctxAct.res, ctxAct.next);
       assert.equal(ctxAct.res.statusCode, 200);
       assert.equal(ctxAct.res.responseData.data.is_active, true);
+    });
+
+    it('39b. Admin cannot update inspection templates or toggle template status (HTTP 403 Forbidden)', async () => {
+      const ctxUpd = createMockContext(
+        { title: 'Admin Update Attempt', expected_version: 1 },
+        { id: '50000000-0000-0000-0000-000000000001' },
+        {},
+        {},
+        adminUser
+      );
+      await updateInspectionTemplate(ctxUpd.req, ctxUpd.res, ctxUpd.next);
+      assert.equal(ctxUpd.res.statusCode, 403);
+      assert.match(ctxUpd.res.responseData.message, /Forbidden.*managers/i);
+
+      const ctxTog = createMockContext(
+        { is_active: false, expected_version: 1 },
+        { id: '50000000-0000-0000-0000-000000000001' },
+        {},
+        {},
+        adminUser
+      );
+      await toggleInspectionTemplateStatus(ctxTog.req, ctxTog.res, ctxTog.next);
+      assert.equal(ctxTog.res.statusCode, 403);
+      assert.match(ctxTog.res.responseData.message, /Forbidden.*managers/i);
+    });
+
+    it('39c. Manager without plant context can create, update, and toggle template status', async () => {
+      // 1. Create template without plant context
+      const newTpl = {
+        machine_category: 'Paint Booth',
+        title: 'Paint Booth Safety Checklist',
+        checklist: [{ id: 'pb-1', label: 'Air ventilation system operational', type: 'boolean', required: true }],
+      };
+      const ctxCreate = createMockContext(newTpl, {}, {}, {}, userWithoutPlant);
+      await createInspectionTemplate(ctxCreate.req, ctxCreate.res, ctxCreate.next);
+      assert.equal(ctxCreate.res.statusCode, 201);
+      assert.equal(ctxCreate.res.responseData.success, true);
+      const createdId = ctxCreate.res.responseData.data.id;
+
+      // 2. Update template without plant context
+      const ctxUpdate = createMockContext(
+        { title: 'Paint Booth Safety Checklist v2', expected_version: 1 },
+        { id: createdId },
+        {},
+        {},
+        userWithoutPlant
+      );
+      await updateInspectionTemplate(ctxUpdate.req, ctxUpdate.res, ctxUpdate.next);
+      assert.equal(ctxUpdate.res.statusCode, 200);
+      assert.equal(ctxUpdate.res.responseData.data.title, 'Paint Booth Safety Checklist v2');
+
+      // 3. Toggle status without plant context
+      const ctxStatus = createMockContext(
+        { is_active: false, expected_version: 2 },
+        { id: createdId },
+        {},
+        {},
+        userWithoutPlant
+      );
+      await toggleInspectionTemplateStatus(ctxStatus.req, ctxStatus.res, ctxStatus.next);
+      assert.equal(ctxStatus.res.statusCode, 200);
+      assert.equal(ctxStatus.res.responseData.data.is_active, false);
+    });
+
+    it('39d. Technician and Operator cannot update templates or toggle template status (HTTP 403 Forbidden)', async () => {
+      const templateId = '50000000-0000-0000-0000-000000000001';
+
+      // Tech update
+      const ctxTechUpd = createMockContext({ title: 'Hacked Title', expected_version: 1 }, { id: templateId }, {}, {}, techPune);
+      await updateInspectionTemplate(ctxTechUpd.req, ctxTechUpd.res, ctxTechUpd.next);
+      assert.equal(ctxTechUpd.res.statusCode, 403);
+      assert.match(ctxTechUpd.res.responseData.message, /Forbidden.*managers/i);
+
+      // Operator update
+      const ctxOpUpd = createMockContext({ title: 'Hacked Title', expected_version: 1 }, { id: templateId }, {}, {}, operatorPune);
+      await updateInspectionTemplate(ctxOpUpd.req, ctxOpUpd.res, ctxOpUpd.next);
+      assert.equal(ctxOpUpd.res.statusCode, 403);
+      assert.match(ctxOpUpd.res.responseData.message, /Forbidden.*managers/i);
+
+      // Tech toggle status
+      const ctxTechTog = createMockContext({ is_active: false, expected_version: 1 }, { id: templateId }, {}, {}, techPune);
+      await toggleInspectionTemplateStatus(ctxTechTog.req, ctxTechTog.res, ctxTechTog.next);
+      assert.equal(ctxTechTog.res.statusCode, 403);
+      assert.match(ctxTechTog.res.responseData.message, /Forbidden.*managers/i);
+
+      // Operator toggle status
+      const ctxOpTog = createMockContext({ is_active: false, expected_version: 1 }, { id: templateId }, {}, {}, operatorPune);
+      await toggleInspectionTemplateStatus(ctxOpTog.req, ctxOpTog.res, ctxOpTog.next);
+      assert.equal(ctxOpTog.res.statusCode, 403);
+      assert.match(ctxOpTog.res.responseData.message, /Forbidden.*managers/i);
     });
   });
 
@@ -1974,7 +2094,7 @@ describe('JCB CMMS Module 7 — Inspection Management (Phase 1 & Phase 2)', () =
         { id: '50000000-0000-0000-0000-000000000001' },
         {},
         {},
-        adminUser
+        managerPune
       );
       await updateInspectionTemplate(ctxUpd.req, ctxUpd.res, ctxUpd.next);
       assert.equal(ctxUpd.res.statusCode, 200);
@@ -2027,14 +2147,14 @@ describe('JCB CMMS Module 7 — Inspection Management (Phase 1 & Phase 2)', () =
         title: 'Audit Test Press Checklist',
         checklist: [{ id: 'chk-1', label: 'Item 1', type: 'boolean' }],
       };
-      const ctxC = createMockContext(createBody, {}, {}, {}, adminUser);
+      const ctxC = createMockContext(createBody, {}, {}, {}, managerPune);
       await createInspectionTemplate(ctxC.req, ctxC.res, ctxC.next);
       assert.equal(ctxC.res.statusCode, 201);
 
       const templateLog = mockDb.audit_logs.find((l) => l.action === 'CREATE_TEMPLATE');
       assert.ok(templateLog, 'Expected audit log for CREATE_TEMPLATE');
       assert.equal(templateLog.entity_name, 'inspection_templates');
-      assert.equal(templateLog.performed_by, adminUser.id);
+      assert.equal(templateLog.performed_by, managerPune.id);
 
       const submitBody = {
         machine_id: '40000000-0000-0000-0000-000000000001',
@@ -2114,7 +2234,7 @@ describe('JCB CMMS Module 7 — Inspection Management (Phase 1 & Phase 2)', () =
         { id: '50000000-0000-0000-0000-000000000001' },
         {},
         {},
-        adminUser
+        managerPune
       );
       await updateInspectionTemplate(req, res, next);
       assert.equal(res.statusCode, 409);
@@ -2132,7 +2252,7 @@ describe('JCB CMMS Module 7 — Inspection Management (Phase 1 & Phase 2)', () =
         { id: '50000000-0000-0000-0000-000000000001' },
         {},
         {},
-        adminUser
+        managerPune
       );
       await updateInspectionTemplate(req, res, next);
       assert.equal(res.statusCode, 409);
@@ -2150,7 +2270,7 @@ describe('JCB CMMS Module 7 — Inspection Management (Phase 1 & Phase 2)', () =
         { id: '50000000-0000-0000-0000-000000000001' },
         {},
         {},
-        adminUser
+        managerPune
       );
       await updateInspectionTemplate(req, res, next);
       assert.equal(res.statusCode, 200);
@@ -2166,7 +2286,7 @@ describe('JCB CMMS Module 7 — Inspection Management (Phase 1 & Phase 2)', () =
         { id: '50000000-0000-0000-0000-000000000001' },
         {},
         {},
-        adminUser
+        managerPune
       );
       await toggleInspectionTemplateStatus(ctxMissing.req, ctxMissing.res, ctxMissing.next);
       assert.equal(ctxMissing.res.statusCode, 409);
@@ -2179,7 +2299,7 @@ describe('JCB CMMS Module 7 — Inspection Management (Phase 1 & Phase 2)', () =
         { id: '50000000-0000-0000-0000-000000000001' },
         {},
         {},
-        adminUser
+        managerPune
       );
       await toggleInspectionTemplateStatus(ctxStale.req, ctxStale.res, ctxStale.next);
       assert.equal(ctxStale.res.statusCode, 409);
@@ -2192,7 +2312,7 @@ describe('JCB CMMS Module 7 — Inspection Management (Phase 1 & Phase 2)', () =
         { id: '50000000-0000-0000-0000-000000000001' },
         {},
         {},
-        adminUser
+        managerPune
       );
       await toggleInspectionTemplateStatus(ctxValid.req, ctxValid.res, ctxValid.next);
       assert.equal(ctxValid.res.statusCode, 200);
@@ -2209,7 +2329,7 @@ describe('JCB CMMS Module 7 — Inspection Management (Phase 1 & Phase 2)', () =
           vibration: { max: 2.0, critical_max: 4.0, unit: 'mm/s' }, // No min or critical_min
         },
       };
-      const { req, res, next } = createMockContext(oneSidedTemplate, {}, {}, {}, adminUser);
+      const { req, res, next } = createMockContext(oneSidedTemplate, {}, {}, {}, managerPune);
       await createInspectionTemplate(req, res, next);
       assert.equal(res.statusCode, 201);
       assert.equal(res.responseData.data.machine_category, 'Stamping');
@@ -2324,6 +2444,160 @@ describe('JCB CMMS Module 7 — Inspection Management (Phase 1 & Phase 2)', () =
       // Verify machine status updated atomically to 'breakdown'
       const machine = mockDb.machines.find((m) => m.id === '40000000-0000-0000-0000-000000000001');
       assert.equal(machine?.status, 'breakdown');
+    });
+
+    it('66. Admin is strictly read-only: submitInspection rejects Admin submission with HTTP 403 Forbidden', async () => {
+      const submitBody = {
+        machine_id: '40000000-0000-0000-0000-000000000001',
+        shift: 'Shift A',
+        temperature: 21.5,
+        pressure: 50.0,
+        responses: validHmcResponses,
+      };
+
+      const { req, res, next } = createMockContext(submitBody, {}, {}, {}, adminUser);
+      await submitInspection(req, res, next);
+      assert.equal(res.statusCode, 403);
+      assert.equal(res.responseData.success, false);
+      assert.match(res.responseData.message, /Forbidden.*read-only/i);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 10. Advanced Server-Side Record Filtering (operator_id, from_date, to_date)
+  // -------------------------------------------------------------------------
+  describe('10. Advanced Server-Side Record Filtering & Query Engine', () => {
+    it('67. Operator-only filtering: GET /records?operator_id=... filters database before pagination', async () => {
+      const { req, res, next } = createMockContext(
+        {},
+        {},
+        { operator_id: '00000000-0000-0000-0000-000000000005' },
+        {},
+        adminUser
+      );
+      await getInspectionRecords(req, res, next);
+      assert.equal(res.statusCode, 200);
+      assert.equal(res.responseData.success, true);
+      assert.equal(res.responseData.pagination.total, 2);
+      assert.equal(res.responseData.data.length, 2);
+      assert.ok(res.responseData.data.every((r: any) => r.operator_id === '00000000-0000-0000-0000-000000000005'));
+    });
+
+    it('68. Date-only filtering: GET /records?from_date=...&to_date=... filters records by date range', async () => {
+      const fromDate = new Date(Date.now() - 2.5 * 86400000).toISOString();
+      const toDate = new Date(Date.now() - 0.5 * 86400000).toISOString();
+
+      const { req, res, next } = createMockContext(
+        {},
+        {},
+        { from_date: fromDate, to_date: toDate },
+        {},
+        adminUser
+      );
+      await getInspectionRecords(req, res, next);
+      assert.equal(res.statusCode, 200);
+      assert.equal(res.responseData.success, true);
+      // Records created 1 day and 2 days ago are included; 3 days ago is excluded
+      assert.equal(res.responseData.pagination.total, 2);
+      assert.equal(res.responseData.data.length, 2);
+    });
+
+    it('69. Combined date and operator filtering: filters records matching both operator and timestamp range', async () => {
+      const fromDate = new Date(Date.now() - 2.5 * 86400000).toISOString();
+      const toDate = new Date(Date.now() - 0.5 * 86400000).toISOString();
+
+      const { req, res, next } = createMockContext(
+        {},
+        {},
+        {
+          operator_id: '00000000-0000-0000-0000-000000000005',
+          from_date: fromDate,
+          to_date: toDate,
+        },
+        {},
+        adminUser
+      );
+      await getInspectionRecords(req, res, next);
+      assert.equal(res.statusCode, 200);
+      assert.equal(res.responseData.pagination.total, 1);
+      assert.equal(res.responseData.data.length, 1);
+      assert.equal(res.responseData.data[0].id, '60000000-0000-0000-0000-000000000001');
+    });
+
+    it('70. Combined filtering: operator, date range, shift, and status work synergistically', async () => {
+      const fromDate = new Date(Date.now() - 2 * 86400000).toISOString();
+      const toDate = new Date().toISOString();
+
+      const { req, res, next } = createMockContext(
+        {},
+        {},
+        {
+          operator_id: '00000000-0000-0000-0000-000000000006',
+          shift: 'Shift B',
+          overall_status: 'flagged',
+          from_date: fromDate,
+          to_date: toDate,
+        },
+        {},
+        adminUser
+      );
+      await getInspectionRecords(req, res, next);
+      assert.equal(res.statusCode, 200);
+      assert.equal(res.responseData.pagination.total, 1);
+      assert.equal(res.responseData.data.length, 1);
+      assert.equal(res.responseData.data[0].id, '60000000-0000-0000-0000-000000000002');
+    });
+
+    it('71. Validation: Malformed operator_id rejects with HTTP 400 Bad Request', async () => {
+      const { req, res, next } = createMockContext(
+        {},
+        {},
+        { operator_id: 'invalid-not-a-uuid' },
+        {},
+        adminUser
+      );
+      await getInspectionRecords(req, res, next);
+      assert.equal(res.statusCode, 400);
+      assert.equal(res.responseData.success, false);
+      assert.match(res.responseData.message, /Invalid operator ID format/i);
+    });
+
+    it('72. Validation: Malformed from_date or to_date rejects with HTTP 400 Bad Request', async () => {
+      const ctxInvalidFrom = createMockContext(
+        {},
+        {},
+        { from_date: 'not-a-valid-date' },
+        {},
+        adminUser
+      );
+      await getInspectionRecords(ctxInvalidFrom.req, ctxInvalidFrom.res, ctxInvalidFrom.next);
+      assert.equal(ctxInvalidFrom.res.statusCode, 400);
+      assert.match(ctxInvalidFrom.res.responseData.message, /Invalid from_date format/i);
+
+      const ctxInvalidTo = createMockContext(
+        {},
+        {},
+        { to_date: 'invalid-date-string' },
+        {},
+        adminUser
+      );
+      await getInspectionRecords(ctxInvalidTo.req, ctxInvalidTo.res, ctxInvalidTo.next);
+      assert.equal(ctxInvalidTo.res.statusCode, 400);
+      assert.match(ctxInvalidTo.res.responseData.message, /Invalid to_date format/i);
+    });
+
+    it('73. Validation: Inverted date range (from_date > to_date) rejects with HTTP 400 Bad Request', async () => {
+      const { req, res, next } = createMockContext(
+        {},
+        {},
+        { from_date: '2026-11-20', to_date: '2026-11-10' },
+        {},
+        adminUser
+      );
+      await getInspectionRecords(req, res, next);
+      assert.equal(res.statusCode, 400);
+      assert.equal(res.responseData.success, false);
+      assert.match(res.responseData.message, /from_date cannot be greater than to_date/i);
     });
   });
 });

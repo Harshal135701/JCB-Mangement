@@ -212,9 +212,9 @@ export const WorkOrderListPage: React.FC = () => {
               {user?.role === 'technician' ? 'Technician Queue' : 'Plant Operations'}
             </span>
           </div>
-          <p className="text-xs text-zinc-500 font-medium mt-1">
+          {/* <p className="text-xs text-zinc-500 font-medium mt-1">
             Track repair jobs and regular maintenance orders across machines and shops.
-          </p>
+          </p> */}
         </div>
 
         <div className="flex items-center gap-3 self-start sm:self-auto">

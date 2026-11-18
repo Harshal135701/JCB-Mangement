@@ -603,12 +603,12 @@ export async function createInspectionTemplateService(
   input: CreateTemplateInput,
   user: AuthenticatedUser
 ): Promise<any> {
-  if (user.role !== 'admin' && user.role !== 'manager') {
-    throw new InspectionServiceError('Forbidden: Only admins and managers can create inspection templates.', 403);
+  if (user.role !== 'manager') {
+    throw new InspectionServiceError('Forbidden: Only managers can create inspection templates.', 403);
   }
 
-  if (user.role !== 'admin' && (!user.plant_id || !isUUID(user.plant_id))) {
-    throw new InspectionServiceError('Forbidden: Valid plant context is required for non-admin users.', 403);
+  if (user.plant_id && !isUUID(user.plant_id)) {
+    throw new InspectionServiceError('Forbidden: Invalid plant context format.', 403);
   }
 
   const { title, machine_category, envelope } = validateTemplateStructure({
@@ -649,8 +649,8 @@ export async function getInspectionTemplatesListService(
   query: TemplateListQuery,
   user: AuthenticatedUser
 ): Promise<{ data: any[]; pagination: { total: number; page: number; limit: number; totalPages: number } }> {
-  if (user.role !== 'admin' && (!user.plant_id || !isUUID(user.plant_id))) {
-    throw new InspectionServiceError('Forbidden: Valid plant context is required for non-admin users.', 403);
+  if (user.plant_id && !isUUID(user.plant_id)) {
+    throw new InspectionServiceError('Forbidden: Invalid plant context format.', 403);
   }
 
   const db = getInspectionsServiceDb();
@@ -712,8 +712,8 @@ export async function getInspectionTemplateByIdService(
     throw new InspectionServiceError('Invalid template ID format. Must be a valid UUID.', 400);
   }
 
-  if (user.role !== 'admin' && (!user.plant_id || !isUUID(user.plant_id))) {
-    throw new InspectionServiceError('Forbidden: Valid plant context is required for non-admin users.', 403);
+  if (user.plant_id && !isUUID(user.plant_id)) {
+    throw new InspectionServiceError('Forbidden: Invalid plant context format.', 403);
   }
 
   const db = getInspectionsServiceDb();
@@ -737,12 +737,12 @@ export async function updateInspectionTemplateService(
   input: UpdateTemplateInput,
   user: AuthenticatedUser
 ): Promise<any> {
-  if (user.role !== 'admin' && user.role !== 'manager') {
-    throw new InspectionServiceError('Forbidden: Only admins and managers can update inspection templates.', 403);
+  if (user.role !== 'manager') {
+    throw new InspectionServiceError('Forbidden: Only managers can update inspection templates.', 403);
   }
 
-  if (user.role !== 'admin' && (!user.plant_id || !isUUID(user.plant_id))) {
-    throw new InspectionServiceError('Forbidden: Valid plant context is required for non-admin users.', 403);
+  if (user.plant_id && !isUUID(user.plant_id)) {
+    throw new InspectionServiceError('Forbidden: Invalid plant context format.', 403);
   }
 
   if (!isUUID(templateId)) {
@@ -858,12 +858,12 @@ export async function toggleInspectionTemplateStatusService(
   user: AuthenticatedUser,
   expectedVersion?: number
 ): Promise<any> {
-  if (user.role !== 'admin' && user.role !== 'manager') {
-    throw new InspectionServiceError('Forbidden: Only admins and managers can change template status.', 403);
+  if (user.role !== 'manager') {
+    throw new InspectionServiceError('Forbidden: Only managers can change template status.', 403);
   }
 
-  if (user.role !== 'admin' && (!user.plant_id || !isUUID(user.plant_id))) {
-    throw new InspectionServiceError('Forbidden: Valid plant context is required for non-admin users.', 403);
+  if (user.plant_id && !isUUID(user.plant_id)) {
+    throw new InspectionServiceError('Forbidden: Invalid plant context format.', 403);
   }
 
   if (!isUUID(templateId)) {
@@ -1017,6 +1017,10 @@ export async function submitInspectionService(
   input: SubmitInspectionInput,
   user: AuthenticatedUser
 ): Promise<any> {
+  if (user.role === 'admin') {
+    throw new InspectionServiceError('Forbidden: Admin is strictly read-only and cannot submit inspections.', 403);
+  }
+
   const { machine_id } = input;
   if (!machine_id) {
     throw new InspectionServiceError('Machine ID is mandatory.', 400);
@@ -1472,6 +1476,10 @@ export interface GetInspectionRecordsQuery {
   limit?: string | number;
   plant_id?: string;
   shop_id?: string;
+  operator_id?: string;
+  from_date?: string;
+  to_date?: string;
+  date?: string;
 }
 
 /**
@@ -1571,6 +1579,74 @@ export async function getInspectionRecordsService(
   if (queryFilters.overall_status) {
     params.push(queryFilters.overall_status.toLowerCase());
     conditions.push(`LOWER(ir.overall_status) = $${params.length}`);
+  }
+
+  // Operator ID filter
+  if (queryFilters.operator_id) {
+    const cleanOpId = String(queryFilters.operator_id).trim();
+    if (cleanOpId) {
+      if (!isUUID(cleanOpId)) {
+        throw new InspectionServiceError('Invalid operator ID format. Must be a valid UUID.', 400);
+      }
+      params.push(cleanOpId);
+      conditions.push(`ir.operator_id = $${params.length}`);
+    }
+  }
+
+  // Date range filtering (from_date, to_date, and shorthand date)
+  let rawFrom = queryFilters.from_date ? String(queryFilters.from_date).trim() : undefined;
+  let rawTo = queryFilters.to_date ? String(queryFilters.to_date).trim() : undefined;
+
+  // Shorthand support: if single date is provided without from_date or to_date
+  if (!rawFrom && !rawTo && queryFilters.date) {
+    const rawSingle = String(queryFilters.date).trim();
+    if (rawSingle) {
+      rawFrom = rawSingle;
+      rawTo = rawSingle;
+    }
+  }
+
+  let fromDateTimestamp: string | undefined = undefined;
+  let toDateTimestamp: string | undefined = undefined;
+
+  if (rawFrom) {
+    const parsedFrom = Date.parse(rawFrom);
+    if (isNaN(parsedFrom)) {
+      throw new InspectionServiceError('Invalid from_date format. Must be a valid date or timestamp.', 400);
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(rawFrom)) {
+      fromDateTimestamp = `${rawFrom}T00:00:00.000Z`;
+    } else {
+      fromDateTimestamp = new Date(parsedFrom).toISOString();
+    }
+  }
+
+  if (rawTo) {
+    const parsedTo = Date.parse(rawTo);
+    if (isNaN(parsedTo)) {
+      throw new InspectionServiceError('Invalid to_date format. Must be a valid date or timestamp.', 400);
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(rawTo)) {
+      toDateTimestamp = `${rawTo}T23:59:59.999Z`;
+    } else {
+      toDateTimestamp = new Date(parsedTo).toISOString();
+    }
+  }
+
+  if (fromDateTimestamp && toDateTimestamp) {
+    if (new Date(fromDateTimestamp).getTime() > new Date(toDateTimestamp).getTime()) {
+      throw new InspectionServiceError('Invalid date range: from_date cannot be greater than to_date.', 400);
+    }
+  }
+
+  if (fromDateTimestamp) {
+    params.push(fromDateTimestamp);
+    conditions.push(`ir.created_at >= $${params.length}`);
+  }
+
+  if (toDateTimestamp) {
+    params.push(toDateTimestamp);
+    conditions.push(`ir.created_at <= $${params.length}`);
   }
 
   const whereSql = conditions.join(' AND ');

@@ -34,7 +34,7 @@ router.get(
 
 router.post(
   '/templates',
-  requireRoles('admin', 'manager'),
+  requireRoles('manager'),
   createInspectionTemplate
 );
 
@@ -46,20 +46,20 @@ router.get(
 
 router.put(
   '/templates/:id',
-  requireRoles('admin', 'manager'),
+  requireRoles('manager'),
   updateInspectionTemplate
 );
 
 router.patch(
   '/templates/:id/status',
-  requireRoles('admin', 'manager'),
+  requireRoles('manager'),
   toggleInspectionTemplateStatus
 );
 
 // Inspection Execution & Submission (server-side evaluation)
 router.post(
   '/submit',
-  requireRoles('admin', 'manager', 'technician', 'operator'),
+  requireRoles('operator', 'technician', 'manager'),
   submitInspection
 );
 

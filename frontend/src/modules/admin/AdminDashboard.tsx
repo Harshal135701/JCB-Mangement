@@ -171,6 +171,10 @@ export const AdminDashboard: React.FC = () => {
     ? users.filter((u) => u.role === 'operator').length
     : (kpiStats?.operator_count ?? users.filter((u) => u.role === 'operator').length);
 
+  const StoreManagerCount = selectedPlantId
+    ? users.filter((u) => u.role === 'store_manager').length
+    : (kpiStats?.operator_count ?? users.filter((u) => u.role === 'store_manager').length);
+
   const plantsCount = selectedPlantId
     ? 1
     : hierarchy?.plants?.length ?? kpiStats?.total_plants ?? 0;
@@ -183,9 +187,21 @@ export const AdminDashboard: React.FC = () => {
 
     return [
       {
-        label: 'Technicians',
+        label: 'Admin',
+        count: adminCount,
+        percentage: (adminCount / totalUsers) * 100,
+        color: '#18181B',
+      },
+      {
+        label: 'Managers',
+        count: managerCount,
+        percentage: (managerCount / totalUsers) * 100,
+        color: '#3B82F6',
+      },
+      {
+        label: 'Store Managers',
         count: techCount,
-        percentage: (techCount / totalUsers) * 100,
+        percentage: (StoreManagerCount / totalUsers) * 100,
         color: '#10B981',
       },
       {
@@ -195,16 +211,10 @@ export const AdminDashboard: React.FC = () => {
         color: '#F59E0B',
       },
       {
-        label: 'Managers',
-        count: managerCount,
-        percentage: (managerCount / totalUsers) * 100,
-        color: '#3B82F6',
-      },
-      {
-        label: 'System Admins',
-        count: adminCount,
-        percentage: (adminCount / totalUsers) * 100,
-        color: '#18181B',
+        label: 'Technicians',
+        count: techCount,
+        percentage: (techCount / totalUsers) * 100,
+        color: '#eedd45',
       },
     ];
   }, [totalUsers, techCount, operatorCount, managerCount, adminCount]);
@@ -321,7 +331,7 @@ export const AdminDashboard: React.FC = () => {
       {/* TOP HEADER */}
       <DashboardHeader
         title="Admin Dashboard"
-        subtitle="Manage users, plants, machines, and activity across JCB plants"
+        subtitle=""
         badge="Admin"
         plantOptions={plantOptions}
         selectedPlant={plant}
@@ -336,8 +346,8 @@ export const AdminDashboard: React.FC = () => {
           >
             <RefreshCw
               className={`w-3.5 h-3.5 ${loading
-                  ? 'animate-spin text-amber-600'
-                  : 'text-zinc-500'
+                ? 'animate-spin text-amber-600'
+                : 'text-zinc-500'
                 }`}
             />
             <span className="hidden sm:inline">Refresh</span>
@@ -351,8 +361,8 @@ export const AdminDashboard: React.FC = () => {
           key="all-plants"
           onClick={() => setPlant('All Plants')}
           className={`px-4.5 py-1.5 sm:px-5 sm:py-2 rounded-full text-[13px] sm:text-sm font-semibold border transition-all duration-200 ${plant === 'All Plants'
-              ? 'bg-amber-400 border-amber-500 text-black shadow-sm'
-              : 'bg-white border-slate-200 text-zinc-600 hover:border-amber-400 hover:bg-amber-50'
+            ? 'bg-amber-400 border-amber-500 text-black shadow-sm'
+            : 'bg-white border-slate-200 text-zinc-600 hover:border-amber-400 hover:bg-amber-50'
             }`}
         >
           All Plants
@@ -365,8 +375,8 @@ export const AdminDashboard: React.FC = () => {
               key={p.id}
               onClick={() => setPlant(p.plant_name)}
               className={`px-4.5 py-1.5 sm:px-5 sm:py-2 rounded-full text-[13px] sm:text-sm font-semibold border transition-all duration-200 ${isSelected
-                  ? 'bg-amber-400 border-amber-500 text-black shadow-sm'
-                  : 'bg-white border-slate-200 text-zinc-600 hover:border-amber-400 hover:bg-amber-50'
+                ? 'bg-amber-400 border-amber-500 text-black shadow-sm'
+                : 'bg-white border-slate-200 text-zinc-600 hover:border-amber-400 hover:bg-amber-50'
                 }`}
             >
               {p.plant_name}
@@ -465,7 +475,7 @@ export const AdminDashboard: React.FC = () => {
           value={totalUsers}
           subtitle={`${techCount} Techs • ${operatorCount} Ops`}
         />
-        
+
       </div>
 
       {/* ROW 2: USER AND MACHINE ANALYTICS */}
@@ -864,8 +874,8 @@ export const AdminDashboard: React.FC = () => {
                     <td className="py-3 px-3.5">
                       <span
                         className={`px-2.5 py-0.5 rounded-md text-xs font-semibold border capitalize ${p.plant_status === 'active'
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            : 'bg-zinc-100 text-zinc-700 border-zinc-200'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : 'bg-zinc-100 text-zinc-700 border-zinc-200'
                           }`}
                       >
                         {p.plant_status || 'Active'}

@@ -27,8 +27,11 @@ import {
   User,
   RefreshCw,
   FileText,
-  X
+  X,
+  Layers
 } from 'lucide-react';
+import { AdminChecklistRulesView } from './components/AdminChecklistRulesView';
+import { AdminSubmittedRecordsView } from './components/AdminSubmittedRecordsView';
 
 export interface ChecklistItem {
   id: string;
@@ -92,8 +95,20 @@ export const PreShiftInspectionPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { id: routeRecordId } = useParams<{ id?: string }>();
 
-  // Main navigation tabs: 'audit' (Execution) | 'history' (Audit logs)
-  const [activeTab, setActiveTab] = useState<'audit' | 'history'>('audit');
+  const isAdmin = user?.role === 'admin';
+  const isManager = user?.role === 'manager';
+  const isSupervisorOrAdmin = isAdmin || isManager;
+
+  // Main navigation tabs: 'audit' (Execution) | 'history' (Audit logs) | 'rules' (Templates & Rules)
+  const [activeTab, setActiveTab] = useState<'audit' | 'history' | 'rules'>(() => {
+    return isSupervisorOrAdmin ? 'rules' : 'audit';
+  });
+
+  useEffect(() => {
+    if (isSupervisorOrAdmin && activeTab === 'audit') {
+      setActiveTab('rules');
+    }
+  }, [isSupervisorOrAdmin, activeTab]);
 
   // Machine state
   const [machines, setMachines] = useState<any[]>([]);
@@ -659,6 +674,88 @@ export const PreShiftInspectionPage: React.FC = () => {
       openRecordDetail(targetRecordId);
     }
   }, [routeRecordId, searchParams]);
+
+  // Admin & Manager Dedicated Experience (Admin: Read-Only, Manager: Full Control)
+  if (isSupervisorOrAdmin) {
+    return (
+      <div className="space-y-6 max-w-6xl mx-auto pb-16">
+        {/* Top Banner & Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 bg-white rounded-2xl border-2 border-slate-200 shadow-xs">
+          <div>
+            <div className="flex items-center gap-2 mb-1.5">
+              <Link
+                to={isAdmin ? '/admin/dashboard' : '/dashboard'}
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-zinc-500 hover:text-black transition"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>{isAdmin ? 'Admin Dashboard' : 'Manager Dashboard'}</span>
+              </Link>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <h2 className="text-xl font-black text-zinc-950 uppercase tracking-tight">
+                {isAdmin
+                  ? 'Daily AM Checklist & Safety Audits'
+                  : 'Daily AM Checklist & Safety Compliance'}
+              </h2>
+              {isAdmin ? (
+                <span className="bg-zinc-900 text-amber-400 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-zinc-800 shadow-xs">
+                  Admin Console • Read-Only
+                </span>
+              ) : (
+                <span className="bg-jcb-yellow text-zinc-950 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-amber-400 shadow-xs">
+                  Manager Console • Rule Management
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-zinc-500 font-medium mt-1">
+              {isAdmin ? (
+                <>Administrator: <strong className="text-zinc-900">{user?.fullName || 'Administrator'}</strong> • Review configured checklist rules, safety limits, and regulatory audit records across all plant operations.</>
+              ) : (
+                <>Manager: <strong className="text-zinc-900">{user?.fullName || 'Plant Manager'}</strong> ({user?.employeeCode || 'MGR-01'}) • Configure checklist rules, define sensor safety envelopes, and review submitted inspection records.</>
+              )}
+            </p>
+          </div>
+        </div>
+
+        {/* Main Tab Switcher */}
+        <div className="flex items-center gap-2 border-b-2 border-slate-200 pb-2">
+          <button
+            type="button"
+            onClick={() => setActiveTab('rules')}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${
+              activeTab === 'rules'
+                ? 'bg-zinc-950 text-white shadow-xs'
+                : 'bg-white text-zinc-600 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            <Layers className="w-4 h-4 text-jcb-yellow" />
+            <span>Checklist Rules</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('history')}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${
+              activeTab === 'history'
+                ? 'bg-zinc-950 text-white shadow-xs'
+                : 'bg-white text-zinc-600 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            <FileText className="w-4 h-4 text-jcb-yellow" />
+            <span>Submitted Records</span>
+          </button>
+        </div>
+
+        {/* Tab Contents */}
+        {activeTab === 'rules' && <AdminChecklistRulesView isManager={isManager} />}
+        {activeTab === 'history' && (
+          <AdminSubmittedRecordsView
+            initialRecordId={routeRecordId || searchParams.get('record_id') || undefined}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-16">

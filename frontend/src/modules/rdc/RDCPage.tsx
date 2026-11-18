@@ -1130,9 +1130,9 @@ export const RDCPage: React.FC = () => {
                   Gate Security
                 </span>
               </h1>
-              <p className="text-xs text-zinc-500 font-medium">
+              {/* <p className="text-xs text-zinc-500 font-medium">
                 Material movement passes, items sent for repair, and returned spare parts check.
-              </p>
+              </p> */}
             </div>
           </div>
         </div>
