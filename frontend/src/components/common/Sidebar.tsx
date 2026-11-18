@@ -81,7 +81,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
       { name: 'Dashboard', path: '/technician/dashboard', icon: LayoutDashboard, roles: ['technician'] },
       { name: 'Machines Management', path: '/machines', icon: Cpu, roles: ['technician'] },
       { name: 'Spare Parts Management', path: '/inventory', icon: Package, roles: ['technician'] },
-      { name: 'Daily AM Checklist', path: '/inspections', icon: ClipboardCheck, roles: ['technician'] },
+      // { name: 'Daily AM Checklist', path: '/inspections', icon: ClipboardCheck, roles: ['technician'] },
       { name: 'Maintenance Status', path: '/work-orders', icon: Wrench, roles: ['technician'] },
       { name: 'Maintenance Schedule', path: '/pm', icon: Calendar, roles: ['technician'] },
       { name: 'Gate Pass', path: '/rdc', icon: FileText, roles: ['technician'] },

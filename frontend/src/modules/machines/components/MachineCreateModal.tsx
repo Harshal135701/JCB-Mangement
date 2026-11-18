@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import apiClient from '../../../api/client';
+import { useAuth } from '../../../context/AuthContext';
 import { Plant, Shop } from '../types';
 import { X, AlertCircle, CheckCircle2, Building, Wrench, Shield, Layers } from 'lucide-react';
 
@@ -14,6 +15,12 @@ export const MachineCreateModal: React.FC<MachineCreateModalProps> = ({
   onClose,
   onSuccess,
 }) => {
+  const { user } = useAuth();
+  const isManager = user?.role === 'manager';
+  const managerPlantId = user?.plantId || (user as any)?.plant_id || '';
+  const managerShopId = user?.shopId || (user as any)?.shop_id || '';
+  const managerPlantName = user?.plantName || (user as any)?.plant_name || '';
+
   const [plants, setPlants] = useState<Plant[]>([]);
   const [shops, setShops] = useState<Shop[]>([]);
   const [loadingOrg, setLoadingOrg] = useState(false);
@@ -55,9 +62,29 @@ export const MachineCreateModal: React.FC<MachineCreateModalProps> = ({
         setLoadingOrg(true);
         const res = await apiClient.get('/org/plants');
         if (res.data.success && Array.isArray(res.data.data)) {
-          setPlants(res.data.data);
-          if (res.data.data.length > 0) {
-            const firstPlant = res.data.data[0];
+          let plantList: Plant[] = res.data.data;
+          if (managerPlantId) {
+            const matched = plantList.find((p) => p.id === managerPlantId);
+            if (matched) {
+              setPlants([matched]);
+              setSelectedPlantId(matched.id);
+              fetchShops(matched.id);
+              return;
+            } else {
+              const fallbackPlant: Plant = {
+                id: managerPlantId,
+                plant_code: (user as any)?.plant_code || 'PLANT',
+                plant_name: managerPlantName || 'Assigned Plant Facility',
+              } as any;
+              setPlants([fallbackPlant]);
+              setSelectedPlantId(managerPlantId);
+              fetchShops(managerPlantId);
+              return;
+            }
+          }
+          setPlants(plantList);
+          if (plantList.length > 0) {
+            const firstPlant = plantList[0];
             setSelectedPlantId(firstPlant.id);
             fetchShops(firstPlant.id);
           }
@@ -81,7 +108,13 @@ export const MachineCreateModal: React.FC<MachineCreateModalProps> = ({
       if (res.data.success && Array.isArray(res.data.data)) {
         setShops(res.data.data);
         if (res.data.data.length > 0) {
-          setFormData((prev) => ({ ...prev, shop_id: res.data.data[0].id }));
+          const matchedShop = managerShopId
+            ? res.data.data.find((s: Shop) => s.id === managerShopId)
+            : null;
+          setFormData((prev) => ({
+            ...prev,
+            shop_id: matchedShop ? matchedShop.id : res.data.data[0].id,
+          }));
         } else {
           setFormData((prev) => ({ ...prev, shop_id: '' }));
         }
@@ -169,7 +202,7 @@ export const MachineCreateModal: React.FC<MachineCreateModalProps> = ({
     }
   };
 
-  if (!isOpen) return null;
+  if (!isOpen || !isManager) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
@@ -185,7 +218,7 @@ export const MachineCreateModal: React.FC<MachineCreateModalProps> = ({
                 REGISTER NEW INDUSTRIAL MACHINE ASSET
               </h3>
               <p className="text-[11px] text-zinc-500 font-medium">
-                Admin Asset Commissioning & QR UID Generator
+                Manager Asset Commissioning & QR UID Generator
               </p>
             </div>
           </div>
@@ -225,18 +258,37 @@ export const MachineCreateModal: React.FC<MachineCreateModalProps> = ({
                 <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
                   Plant Facility *
                 </label>
-                <select
-                  value={selectedPlantId}
-                  onChange={(e) => handlePlantChange(e.target.value)}
-                  disabled={loadingOrg || submitting}
-                  className="w-full px-3 py-2 bg-white border border-zinc-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
-                >
-                  {plants.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.plant_name} ({p.plant_code})
-                    </option>
-                  ))}
-                </select>
+                {managerPlantId ? (
+                  <div>
+                    <input
+                      type="text"
+                      readOnly
+                      disabled
+                      value={
+                        plants.find((p) => p.id === selectedPlantId)?.plant_name
+                          ? `${plants.find((p) => p.id === selectedPlantId)?.plant_name} (${plants.find((p) => p.id === selectedPlantId)?.plant_code})`
+                          : managerPlantName || 'Assigned Plant'
+                      }
+                      className="w-full px-3 py-2 bg-zinc-100 border border-zinc-300 rounded-lg text-xs font-bold text-zinc-700 cursor-not-allowed"
+                    />
+                    <p className="text-[10px] text-zinc-500 font-medium mt-1">
+                      Locked to your plant governance jurisdiction.
+                    </p>
+                  </div>
+                ) : (
+                  <select
+                    value={selectedPlantId}
+                    onChange={(e) => handlePlantChange(e.target.value)}
+                    disabled={loadingOrg || submitting}
+                    className="w-full px-3 py-2 bg-white border border-zinc-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
+                  >
+                    {plants.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.plant_name} ({p.plant_code})
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               <div>

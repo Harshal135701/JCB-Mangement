@@ -977,9 +977,9 @@ export const StoreManagerDashboard: React.FC = () => {
               {user?.plantName || (user as any)?.plant_name || 'Central Store Hub'}
             </span>
           </div>
-          <p className="text-xs text-zinc-500 font-medium mt-1.5">
+          {/* <p className="text-xs text-zinc-500 font-medium mt-1.5">
             Manage spare parts inventory, stock receiving, bin transfers and job parts issues.
-          </p>
+          </p> */}
         </div>
 
         {/* Global Action Buttons */}

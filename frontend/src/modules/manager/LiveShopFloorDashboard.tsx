@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import apiClient from '../../api/client';
 import { useSocket } from '../../context/SocketContext';
 import {
@@ -11,6 +12,8 @@ import {
   AlertOctagon,
   Package,
   Radio,
+  HardHat,
+  ArrowRight,
 } from 'lucide-react';
 
 // Dashboard Components
@@ -42,6 +45,7 @@ export const LiveShopFloorDashboard: React.FC = () => {
   const [workOrders, setWorkOrders] = useState<any[]>([]);
   const [staffUsers, setStaffUsers] = useState<StaffMember[]>([]);
   const [inventorySummary, setInventorySummary] = useState<SparePartsSummaryData | null>(null);
+  const [pendingOperatorsCount, setPendingOperatorsCount] = useState<number>(0);
 
   // Selected plant ID lookup
   const selectedPlantId = useMemo(() => {
@@ -65,6 +69,7 @@ export const LiveShopFloorDashboard: React.FC = () => {
         workOrdersRes,
         usersRes,
         inventoryRes,
+        pendingRes,
       ] = await Promise.all([
         apiClient.get('/reports/dashboard-kpis', { params: { plant_id: plantParam, timeframe } }),
         apiClient.get('/org/hierarchy'),
@@ -72,7 +77,14 @@ export const LiveShopFloorDashboard: React.FC = () => {
         apiClient.get('/work-orders', { params: { plant_id: plantParam, limit: 10 } }).catch(() => ({ data: { data: [] } })),
         apiClient.get('/auth/users', { params: { plant_id: plantParam, limit: 50 } }).catch(() => ({ data: { data: [] } })),
         apiClient.get('/inventory/dashboard', { params: plantParam ? { plant_id: plantParam } : {} }).catch(() => ({ data: { data: null } })),
+        apiClient.get('/auth/pending-operators').catch(() => ({ data: { data: [] } })),
       ]);
+
+      if (pendingRes.data?.data && Array.isArray(pendingRes.data.data)) {
+        setPendingOperatorsCount(pendingRes.data.data.length);
+      } else {
+        setPendingOperatorsCount(0);
+      }
 
       if (kpiRes.data?.data) {
         setStats(kpiRes.data.data);
@@ -276,6 +288,39 @@ export const LiveShopFloorDashboard: React.FC = () => {
           >
             Retry
           </button>
+        </div>
+      )}
+
+      {/* Operator Registration Request Alert Banner */}
+      {pendingOperatorsCount > 0 && (
+        <div className="bg-amber-500/10 border-2 border-amber-500/40 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm animate-in fade-in">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-amber-500 text-black rounded-xl font-black shadow flex items-center justify-center shrink-0">
+              <HardHat className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-black uppercase tracking-wider text-amber-950">
+                  Action Required: Operator Registration Request
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-red-600 text-white animate-pulse">
+                  {pendingOperatorsCount} Pending
+                </span>
+              </div>
+              <p className="text-xs text-zinc-700 font-medium mt-0.5">
+                {pendingOperatorsCount === 1
+                  ? '1 factory operator has registered and is awaiting your authorization before portal access is granted.'
+                  : `${pendingOperatorsCount} factory operators have registered and are awaiting your authorization before portal access is granted.`}
+              </p>
+            </div>
+          </div>
+          <Link
+            to="/users?tab=pending"
+            className="self-start sm:self-auto px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-black text-xs uppercase tracking-wider rounded-xl shadow transition flex items-center gap-1.5 shrink-0"
+          >
+            <span>Review &amp; Authorize</span>
+            <ArrowRight className="w-4 h-4" />
+          </Link>
         </div>
       )}
 

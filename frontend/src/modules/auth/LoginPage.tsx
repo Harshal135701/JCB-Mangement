@@ -62,11 +62,24 @@ export const LoginPage: React.FC = () => {
 
       navigate(targetRoute, { replace: true });
     } catch (err: any) {
-      setError(
-        err.response?.data?.message ||
-          err.message ||
-          'Invalid credentials. Please verify your Employee ID and password.'
-      );
+      const resp = err.response?.data;
+      if (resp?.approval_status === 'pending') {
+        setError(
+          resp.message ||
+            'Your account registration is pending manager approval. Please contact your plant manager.'
+        );
+      } else if (resp?.approval_status === 'rejected') {
+        setError(
+          resp.message ||
+            'Your account registration has been rejected. Please contact your plant manager or administrator.'
+        );
+      } else {
+        setError(
+          resp?.message ||
+            err.message ||
+            'Invalid credentials. Please verify your Employee ID and password.'
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -285,6 +298,17 @@ export const LoginPage: React.FC = () => {
                 </>
               )}
             </button>
+
+            {/* Operator Self-Registration Link */}
+            <div className="pt-3 border-t border-zinc-100 text-center">
+              <span className="text-xs text-zinc-500">New factory operator? </span>
+              <Link
+                to="/signup"
+                className="text-xs font-bold text-amber-700 hover:text-amber-900 underline underline-offset-2 transition"
+              >
+                Register for portal access
+              </Link>
+            </div>
           </form>
         </div>
       </main>

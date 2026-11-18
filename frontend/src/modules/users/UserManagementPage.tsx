@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import apiClient from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -18,13 +19,35 @@ import {
   Clock,
   Boxes,
   Building2,
+  Users,
+  CheckCircle2,
+  XCircle,
+  UserCheck,
+  UserX,
+  Check,
+  Loader2,
 } from 'lucide-react';
 
 export const UserManagementPage: React.FC = () => {
   const { user } = useAuth();
+  const location = useLocation();
   const isAdmin = user?.role === 'admin';
   const isManager = user?.role === 'manager';
   const canCreate = isAdmin || isManager;
+
+  // Tabs: 'personnel' | 'pending'
+  const [activeTab, setActiveTab] = useState<'personnel' | 'pending'>(
+    location.search.includes('tab=pending') ? 'pending' : 'personnel'
+  );
+
+  // Pending Operator Approvals state
+  const [pendingOperators, setPendingOperators] = useState<any[]>([]);
+  const [loadingPending, setLoadingPending] = useState(false);
+  const [pendingActionId, setPendingActionId] = useState<string | null>(null);
+
+  // Rejection modal state
+  const [rejectingUser, setRejectingUser] = useState<any | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
 
   const [usersList, setUsersList] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -153,13 +176,95 @@ export const UserManagementPage: React.FC = () => {
     }
   };
 
+  const fetchPendingOperators = async () => {
+    try {
+      setLoadingPending(true);
+      const res = await apiClient.get('/auth/pending-operators');
+      if (res.data.success && Array.isArray(res.data.data)) {
+        setPendingOperators(res.data.data);
+      } else {
+        setPendingOperators([]);
+      }
+    } catch (e) {
+      console.warn('Failed to load pending operators:', e);
+      setPendingOperators([]);
+    } finally {
+      setLoadingPending(false);
+    }
+  };
+
+  const handleApproveOperator = async (op: any) => {
+    if (
+      !window.confirm(
+        `Approve operator ${op.full_name} (${op.employee_code})? This will immediately activate their account and grant system access.`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setPendingActionId(op.id);
+      const res = await apiClient.post(`/auth/operators/${op.id}/approve`);
+      if (res.data.success) {
+        setFeedback({
+          type: 'success',
+          text: `Operator ${op.full_name} (${op.employee_code}) approved and activated successfully.`,
+        });
+        fetchPendingOperators();
+        fetchUsers();
+      }
+    } catch (err: any) {
+      setFeedback({
+        type: 'error',
+        text: err.response?.data?.message || 'Failed to approve operator.',
+      });
+    } finally {
+      setPendingActionId(null);
+    }
+  };
+
+  const handleConfirmReject = async () => {
+    if (!rejectingUser) return;
+    try {
+      setPendingActionId(rejectingUser.id);
+      const res = await apiClient.post(`/auth/operators/${rejectingUser.id}/reject`, {
+        rejection_reason: rejectionReason.trim() || undefined,
+      });
+      if (res.data.success) {
+        setFeedback({
+          type: 'success',
+          text: `Registration for ${rejectingUser.full_name} (${rejectingUser.employee_code}) rejected.`,
+        });
+        setRejectingUser(null);
+        setRejectionReason('');
+        fetchPendingOperators();
+      }
+    } catch (err: any) {
+      setFeedback({
+        type: 'error',
+        text: err.response?.data?.message || 'Failed to reject operator.',
+      });
+    } finally {
+      setPendingActionId(null);
+    }
+  };
+
   useEffect(() => {
     fetchPlants();
-  }, []);
+    if (isAdmin || isManager) {
+      fetchPendingOperators();
+    }
+  }, [isAdmin, isManager]);
 
   useEffect(() => {
     fetchUsers();
   }, [selectedPlantId]);
+
+  useEffect(() => {
+    if (location.search.includes('tab=pending')) {
+      setActiveTab('pending');
+    }
+  }, [location.search]);
 
   const openCreateModal = (presetRole: string = 'technician') => {
     setEditingUser(null);
@@ -484,7 +589,45 @@ export const UserManagementPage: React.FC = () => {
         )}
       </div>
 
-      {/* PLANT FILTER - ADMIN ONLY */}
+      {/* TABS: Active Personnel vs Pending Operator Approvals */}
+      <div className="flex items-center gap-2 border-b border-zinc-200 pb-2">
+        <button
+          onClick={() => setActiveTab('personnel')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+            activeTab === 'personnel'
+              ? 'bg-zinc-950 text-white shadow'
+              : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
+          }`}
+        >
+          <Users className="w-4 h-4" />
+          <span>Active Staff Directory ({visibleUsers.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('pending')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+            activeTab === 'pending'
+              ? 'bg-amber-500 text-black shadow'
+              : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
+          }`}
+        >
+          <HardHat className="w-4 h-4" />
+          <span>Pending Operator Approvals</span>
+          {pendingOperators.length > 0 ? (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-red-600 text-white animate-pulse">
+              {pendingOperators.length}
+            </span>
+          ) : (
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-zinc-200 text-zinc-600">
+              0
+            </span>
+          )}
+        </button>
+      </div>
+
+      {activeTab === 'personnel' && (
+        <>
+          {/* PLANT FILTER - ADMIN ONLY */}
       {isAdmin && (
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2">
@@ -775,6 +918,182 @@ export const UserManagementPage: React.FC = () => {
           </table>
         </div>
       </div>
+        </>
+      )}
+
+      {/* PENDING OPERATOR APPROVALS TAB */}
+      {activeTab === 'pending' && (
+        <div className="bg-white rounded-2xl border-2 border-zinc-200 overflow-hidden shadow-sm">
+          {/* PENDING HEADER */}
+          <div className="p-5 border-b border-zinc-200 bg-amber-50/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-amber-500 text-black rounded-xl shadow-sm">
+                <HardHat className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-black text-zinc-950 uppercase tracking-wider">
+                    Pending Operator Registrations
+                  </h3>
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-black bg-amber-200 text-amber-900 border border-amber-300">
+                    {pendingOperators.length} Awaiting Authorization
+                  </span>
+                </div>
+                <p className="text-xs text-zinc-500 font-medium mt-0.5">
+                  {isManager
+                    ? 'Self-registered operators awaiting plant manager authorization before portal access is granted.'
+                    : 'All factory operator registrations awaiting plant authorization.'}
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={fetchPendingOperators}
+              disabled={loadingPending}
+              className="self-start sm:self-auto px-3.5 py-1.5 bg-white hover:bg-zinc-100 text-zinc-700 border border-zinc-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm disabled:opacity-50 cursor-pointer"
+            >
+              {loadingPending ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600" />
+              ) : (
+                <Clock className="w-3.5 h-3.5 text-zinc-500" />
+              )}
+              <span>Refresh List</span>
+            </button>
+          </div>
+
+          {/* PENDING OPERATORS LIST */}
+          {loadingPending ? (
+            <div className="py-16 text-center text-zinc-500 text-xs font-bold flex flex-col items-center justify-center gap-3">
+              <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
+              <span>Loading pending operator registrations...</span>
+            </div>
+          ) : pendingOperators.length === 0 ? (
+            <div className="py-16 text-center text-zinc-500 text-xs flex flex-col items-center justify-center gap-3 bg-zinc-50/50">
+              <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+              <div className="max-w-sm">
+                <p className="font-black text-zinc-900 text-sm">No Pending Registrations</p>
+                <p className="text-zinc-500 text-xs mt-1">
+                  All operator sign-up requests have been reviewed. New operator registrations for your plant facility will appear here in real time.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-zinc-100/80 border-b border-zinc-200 text-zinc-600 uppercase text-[10px] font-black tracking-wider">
+                    <th className="py-3 px-4">Operator Name &amp; ID</th>
+                    <th className="py-3 px-4">Facility &amp; Shop</th>
+                    <th className="py-3 px-4">Shift &amp; Role</th>
+                    <th className="py-3 px-4">Contact Details</th>
+                    <th className="py-3 px-4">Department / Designation</th>
+                    <th className="py-3 px-4">Submission Date</th>
+                    <th className="py-3 px-4 text-right">Approval Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-200">
+                  {pendingOperators.map((op) => (
+                    <tr key={op.id} className="hover:bg-amber-50/30 transition-colors">
+                      <td className="py-3.5 px-4">
+                        <div className="font-black text-zinc-950 text-xs flex items-center gap-2">
+                          <span>{op.full_name}</span>
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                            Pending
+                          </span>
+                        </div>
+                        <div className="text-[11px] font-mono text-zinc-600 font-bold mt-0.5 flex items-center gap-1">
+                          <span>ID: {op.employee_code}</span>
+                        </div>
+                      </td>
+
+                      <td className="py-3.5 px-4">
+                        <div className="font-bold text-zinc-900 text-xs flex items-center gap-1">
+                          <Building2 className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+                          <span>{op.plant_name || 'Assigned Plant'}</span>
+                        </div>
+                        <div className="text-[11px] text-zinc-600 font-medium mt-0.5">
+                          Shop: {op.shop_name || 'Assigned Shop'}
+                        </div>
+                      </td>
+
+                      <td className="py-3.5 px-4">
+                        <span className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 rounded font-bold text-[10px] uppercase border border-blue-200">
+                          {op.shift || 'Shift A'}
+                        </span>
+                      </td>
+
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-center gap-1.5 text-zinc-800 font-medium">
+                          <Mail className="w-3 h-3 text-zinc-400 shrink-0" />
+                          <span className="truncate max-w-[180px]">{op.email}</span>
+                        </div>
+                        {op.phone && (
+                          <div className="flex items-center gap-1.5 text-zinc-600 text-[11px] mt-0.5">
+                            <Phone className="w-3 h-3 text-zinc-400 shrink-0" />
+                            <span>{op.phone}</span>
+                          </div>
+                        )}
+                      </td>
+
+                      <td className="py-3.5 px-4">
+                        <div className="font-bold text-zinc-900">{op.designation || 'Operator'}</div>
+                        <div className="text-[11px] text-zinc-500">{op.department || 'Operations'}</div>
+                      </td>
+
+                      <td className="py-3.5 px-4 text-zinc-600 text-[11px] font-medium">
+                        <div className="flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                          <span>
+                            {op.created_at
+                              ? new Date(op.created_at).toLocaleString('en-IN', {
+                                  dateStyle: 'short',
+                                  timeStyle: 'short',
+                                })
+                              : 'Recent'}
+                          </span>
+                        </div>
+                      </td>
+
+                      <td className="py-3.5 px-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => handleApproveOperator(op)}
+                            disabled={pendingActionId === op.id}
+                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-sm disabled:opacity-50 cursor-pointer"
+                            title="Approve & Activate Operator"
+                          >
+                            {pendingActionId === op.id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <UserCheck className="w-3.5 h-3.5" />
+                            )}
+                            <span>Approve</span>
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              setRejectingUser(op);
+                              setRejectionReason('');
+                            }}
+                            disabled={pendingActionId === op.id}
+                            className="px-3 py-1.5 bg-zinc-100 hover:bg-rose-50 text-rose-700 hover:text-rose-800 border border-zinc-300 hover:border-rose-300 rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-sm disabled:opacity-50 cursor-pointer"
+                            title="Reject Registration"
+                          >
+                            <UserX className="w-3.5 h-3.5" />
+                            <span>Reject</span>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ENROLL / EDIT PERSONNEL MODAL */}
       {isModalOpen && (
@@ -1166,6 +1485,75 @@ export const UserManagementPage: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* REJECTION REASON MODAL */}
+      {rejectingUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="p-5 bg-rose-50 border-b border-rose-200 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-rose-900">
+                <AlertCircle className="w-5 h-5 text-rose-600" />
+                <h3 className="text-sm font-black uppercase tracking-wider">
+                  Reject Operator Registration
+                </h3>
+              </div>
+              <button
+                onClick={() => setRejectingUser(null)}
+                className="text-zinc-400 hover:text-zinc-800 p-1 rounded-lg transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <p className="text-xs text-zinc-700 leading-relaxed">
+                You are about to reject the registration request for{' '}
+                <strong className="text-zinc-950 font-black">
+                  {rejectingUser.full_name} ({rejectingUser.employee_code})
+                </strong>
+                . Their account will remain deactivated and portal access will be denied.
+              </p>
+
+              <div>
+                <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
+                  Reason for Rejection (Optional)
+                </label>
+                <textarea
+                  rows={3}
+                  value={rejectionReason}
+                  onChange={(e) => setRejectionReason(e.target.value)}
+                  placeholder="e.g., Invalid employee code, not found on plant roster, incorrect plant selection..."
+                  className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-xl text-xs font-medium text-zinc-900 focus:outline-none focus:border-rose-500"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-zinc-200 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setRejectingUser(null)}
+                  disabled={pendingActionId === rejectingUser.id}
+                  className="px-4 py-2 border border-zinc-300 text-zinc-700 rounded-xl text-xs font-bold hover:bg-zinc-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmReject}
+                  disabled={pendingActionId === rejectingUser.id}
+                  className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow transition disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {pendingActionId === rejectingUser.id ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <UserX className="w-4 h-4" />
+                  )}
+                  <span>Confirm Rejection</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

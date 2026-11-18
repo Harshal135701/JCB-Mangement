@@ -27,8 +27,8 @@ router.get('/qr/:uid', getMachineByQR);
 router.get('/:id/history', getMachineHistory);
 router.get('/:id', getMachineById);
 
-// Admin-only asset registration and decommissioning/deletion
-router.post('/', requireRoles('admin'), createMachine);
+// Manager-only asset registration; Admin-only decommissioning/deletion
+router.post('/', requireRoles('manager'), createMachine);
 router.delete('/:id', requireRoles('admin'), deleteMachine);
 
 // Asset updates permitted for Admin and Manager roles within authorized facility scope

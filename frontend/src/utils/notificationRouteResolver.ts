@@ -220,10 +220,15 @@ export function resolveNotificationRoute(
     return fallbackHome;
   }
 
-  // 10. USER MANAGEMENT / DIRECTORY
-  if (path === '/users' || path.startsWith('/users/')) {
-    if (userRole === 'admin') {
-      return '/users';
+  // 10. USER MANAGEMENT / DIRECTORY & OPERATOR APPROVALS
+  if (
+    path === '/users' ||
+    path.startsWith('/users/') ||
+    entityType === 'user_approval' ||
+    entityType === 'users'
+  ) {
+    if (userRole === 'admin' || userRole === 'manager') {
+      return path.includes('tab=pending') ? '/users?tab=pending' : '/users';
     }
     return fallbackHome;
   }
