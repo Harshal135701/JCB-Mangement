@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, Clock, ArrowRight, Cpu, Wrench } from 'lucide-react';
+import { AlertTriangle, Clock, ArrowRight, Wrench } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export interface DowntimeMachineItem {
@@ -19,7 +19,7 @@ interface TopDowntimeMachinesCardProps {
 export const TopDowntimeMachinesCard: React.FC<TopDowntimeMachinesCardProps> = ({
   machines = [],
   loading = false,
-  emptyMessage = 'No machine downtime incidents recorded for this period',
+  emptyMessage = 'Zero equipment stoppage incidents recorded',
 }) => {
   const maxDowntime = Math.max(
     ...machines.map((m) => Number(m.downtime_minutes || 0)),
@@ -30,97 +30,95 @@ export const TopDowntimeMachinesCard: React.FC<TopDowntimeMachinesCardProps> = (
     const mins = Number(minutes) || 0;
     if (mins >= 60) {
       const hrs = (mins / 60).toFixed(1);
-      return `${hrs} hrs`;
+      return `${hrs}h`;
     }
-    return `${mins} mins`;
+    return `${mins}m`;
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-xs flex flex-col justify-between h-full">
+    <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs flex flex-col justify-between h-full overflow-hidden">
       <div>
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
-          <div className="flex items-center gap-2.5">
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <div className="flex items-center gap-2 min-w-0">
             <div className="w-8 h-8 rounded-xl bg-red-50 border border-red-200 flex items-center justify-center shrink-0">
               <AlertTriangle className="w-4 h-4 text-red-600" />
             </div>
-            <div>
-              <h3 className="text-lg font-semibold text-zinc-900 tracking-tight">
-                Critical Equipment Downtime Leaderboard
+            <div className="min-w-0">
+              <h3 className="text-sm sm:text-base font-bold text-zinc-900 tracking-tight truncate">
+                Equipment Downtime
               </h3>
+              <p className="text-[11px] text-zinc-500 font-normal truncate">
+                Top impacted assets by stoppage time
+              </p>
             </div>
           </div>
 
           <Link
             to="/machines"
-            className="inline-flex items-center gap-1.5 text-[13px] sm:text-sm font-semibold text-amber-600 hover:text-amber-700 transition shrink-0"
+            className="inline-flex items-center gap-1 text-xs font-semibold text-amber-600 hover:text-amber-700 transition shrink-0"
           >
-            <span>View All Assets</span>
-            <ArrowRight className="w-3.5 h-3.5" />
+            <span>Assets</span>
+            <ArrowRight className="w-3 h-3" />
           </Link>
         </div>
 
         {/* Content */}
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-16 text-zinc-400">
-            <div className="w-8 h-8 border-3 border-amber-500 border-t-transparent rounded-full animate-spin mb-3" />
-            <span className="text-[13px] text-zinc-500 font-medium">Loading downtime telemetry...</span>
+          <div className="flex items-center justify-center py-10 text-xs text-zinc-400 font-medium">
+            <div className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mr-2" />
+            Loading downtime records...
           </div>
         ) : machines.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-14 border border-dashed border-slate-200 rounded-2xl bg-slate-50/50 text-center">
-            <span className="text-[13px] text-zinc-500 font-normal">{emptyMessage}</span>
+          <div className="py-8 text-center border border-dashed border-slate-200 rounded-xl bg-slate-50/50 my-1">
+            <span className="text-xs text-zinc-500 font-normal">{emptyMessage}</span>
           </div>
         ) : (
-          <div className="space-y-3.5">
-            {machines.map((item, idx) => {
+          <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-0.5">
+            {machines.slice(0, 4).map((item, idx) => {
               const mins = Number(item.downtime_minutes || 0);
               const barWidth = (mins / maxDowntime) * 100;
 
               return (
                 <div
                   key={`${item.machine_code}-${idx}`}
-                  className="p-3.5 rounded-xl border border-slate-200/80 bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300 transition-all duration-200"
+                  className="p-2.5 rounded-xl border border-slate-200/80 bg-slate-50/50 hover:bg-slate-50 transition-all"
                 >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
                     {/* Rank & Machine Info */}
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <span className="w-6 h-6 rounded-lg bg-zinc-900 text-white font-mono text-xs font-bold flex items-center justify-center shrink-0">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="w-5 h-5 rounded-md bg-zinc-900 text-white font-mono text-[10px] font-bold flex items-center justify-center shrink-0">
                         #{idx + 1}
                       </span>
                       <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[13px] sm:text-sm font-bold font-mono text-zinc-950 truncate">
-                            {item.machine_code}
-                          </span>
-                          <span className="text-xs text-zinc-500 font-normal truncate hidden sm:inline">
-                            • {item.name}
-                          </span>
-                        </div>
-                        <span className="text-xs text-zinc-500 font-normal block truncate">
+                        <span className="text-xs font-bold font-mono text-zinc-950 truncate block">
+                          {item.machine_code}
+                        </span>
+                        <span className="text-[10px] text-zinc-400 font-normal truncate block">
                           {item.shop_name}
                         </span>
                       </div>
                     </div>
 
                     {/* Stoppage Stats */}
-                    <div className="flex items-center gap-3 shrink-0 self-end sm:self-auto">
-                      <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 flex items-center gap-1">
-                        <Wrench className="w-3 h-3 text-amber-600" />
-                        {item.failure_count} {item.failure_count === 1 ? 'incident' : 'incidents'}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 flex items-center gap-1">
+                        <Wrench className="w-2.5 h-2.5 text-amber-600" />
+                        {item.failure_count} {item.failure_count === 1 ? 'halt' : 'halts'}
                       </span>
 
-                      <span className="text-[13px] sm:text-sm font-bold font-mono text-red-600 flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5 text-red-500" />
+                      <span className="text-xs font-bold font-mono text-red-600 flex items-center gap-1">
+                        <Clock className="w-3 h-3 text-red-500" />
                         {formatHours(mins)}
                       </span>
                     </div>
                   </div>
 
                   {/* Downtime Severity Bar */}
-                  <div className="w-full h-2 bg-slate-200/70 rounded-full overflow-hidden">
+                  <div className="w-full h-1.5 bg-slate-200/70 rounded-full overflow-hidden">
                     <div
-                      className="h-full rounded-full bg-gradient-to-r from-amber-500 to-red-600 transition-all duration-500"
-                      style={{ width: `${Math.max(barWidth, 3)}%` }}
+                      className="h-full rounded-full bg-gradient-to-r from-amber-500 to-red-600 transition-all duration-300"
+                      style={{ width: `${Math.max(barWidth, 4)}%` }}
                     />
                   </div>
                 </div>
@@ -131,13 +129,10 @@ export const TopDowntimeMachinesCard: React.FC<TopDowntimeMachinesCardProps> = (
       </div>
 
       {/* Footer */}
-      <div className="flex items-center justify-between pt-4 mt-5 border-t border-slate-100 text-[13px]">
-        <span className="text-zinc-500 font-normal">
-          Top 5 Impacted Units
-        </span>
-        <span className="text-amber-800 font-semibold bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200 text-xs flex items-center gap-1.5">
-          <Cpu className="w-3.5 h-3.5 text-amber-600" />
-          Prioritize Root-Cause Analysis
+      <div className="pt-2.5 mt-2 border-t border-slate-100 flex items-center justify-between text-xs text-zinc-500">
+        <span>Impact Ranking</span>
+        <span className="text-zinc-700 font-semibold text-[11px]">
+          {machines.length} Units Tracked
         </span>
       </div>
     </div>
