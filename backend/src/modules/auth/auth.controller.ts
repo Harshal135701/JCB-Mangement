@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt, { JwtPayload, SignOptions } from 'jsonwebtoken';
 import { query as defaultQuery, pool as defaultPool } from '../../config/db';
 import { config } from '../../config/env';
+import { createAndSendNotification } from '../notifications/notifications.service';
 
 export const isUUID = (value: unknown): value is string =>
   typeof value === 'string' &&
@@ -139,7 +140,7 @@ export const login = async (
     const result = await activeQuery(
       `SELECT id, employee_code, full_name, email, phone, role,
               plant_id, shop_id, department, designation, shift,
-              password_hash, is_active
+              password_hash, is_active, approval_status, rejection_reason
        FROM users
        WHERE LOWER(email) = LOWER($1)
           OR UPPER(employee_code) = UPPER($1)`,
@@ -156,8 +157,10 @@ export const login = async (
 
     const dbUser = result.rows[0];
 
-    // Reject inactive accounts with consistent 401 response
-    if (!dbUser.is_active) {
+    // Password verification using bcrypt
+    const isMatch = await bcrypt.compare(password, dbUser.password_hash);
+
+    if (!isMatch) {
       res.status(401).json({
         success: false,
         message: 'Invalid credentials or inactive account.',
@@ -165,10 +168,30 @@ export const login = async (
       return;
     }
 
-    // Password verification using bcrypt
-    const isMatch = await bcrypt.compare(password, dbUser.password_hash);
+    // Newly registered Operator must not be able to log in until approved by Manager (Requirement 4)
+    const approvalStatus = (dbUser.approval_status || 'approved').toLowerCase();
+    if (approvalStatus === 'pending') {
+      res.status(403).json({
+        success: false,
+        approval_status: 'pending',
+        message: 'Your registration is pending approval by your Plant Manager. You will be able to log in once approved.',
+      });
+      return;
+    }
 
-    if (!isMatch) {
+    if (approvalStatus === 'rejected') {
+      res.status(403).json({
+        success: false,
+        approval_status: 'rejected',
+        message: dbUser.rejection_reason
+          ? `Your registration was rejected by your Plant Manager. Reason: ${dbUser.rejection_reason}`
+          : 'Your registration has been rejected. Please contact your plant manager or administrator.',
+      });
+      return;
+    }
+
+    // Reject inactive accounts with consistent 401 response
+    if (!dbUser.is_active) {
       res.status(401).json({
         success: false,
         message: 'Invalid credentials or inactive account.',
@@ -1340,6 +1363,572 @@ export const deleteUser = async (
       success: true,
       message: `User ${deactivatedRow.full_name} deactivated successfully.`,
       data: deactivatedRow,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// =====================================================================
+// OPERATOR SIGN-UP & MANAGER APPROVAL WORKFLOW
+// =====================================================================
+
+/**
+ * Public registration options: returns active plants and active shops
+ */
+export const getRegistrationOptions = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const plantsRes = await activeQuery(
+      `SELECT id, plant_code, plant_name, city, state 
+       FROM plants 
+       WHERE status = 'active' OR status IS NULL
+       ORDER BY plant_name ASC`
+    );
+
+    const shopsRes = await activeQuery(
+      `SELECT s.id, s.plant_id, s.shop_code, s.shop_name 
+       FROM shops s
+       JOIN plants p ON s.plant_id = p.id
+       WHERE (s.status = 'active' OR s.status IS NULL)
+         AND (p.status = 'active' OR p.status IS NULL)
+       ORDER BY s.shop_name ASC`
+    );
+
+    res.json({
+      success: true,
+      data: {
+        plants: plantsRes.rows,
+        shops: shopsRes.rows,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getRegistrationPlants = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const result = await activeQuery(
+      `SELECT id, plant_code, plant_name, city, state 
+       FROM plants 
+       WHERE status = 'active' OR status IS NULL
+       ORDER BY plant_name ASC`
+    );
+    res.json({
+      success: true,
+      data: result.rows,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getRegistrationShops = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { plantId } = req.params;
+    if (!plantId || !isUUID(plantId)) {
+      res.status(400).json({
+        success: false,
+        message: 'Valid plant ID is required.',
+      });
+      return;
+    }
+
+    const result = await activeQuery(
+      `SELECT id, plant_id, shop_code, shop_name 
+       FROM shops 
+       WHERE plant_id = $1 AND (status = 'active' OR status IS NULL)
+       ORDER BY shop_name ASC`,
+      [plantId]
+    );
+
+    res.json({
+      success: true,
+      data: result.rows,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Public Operator Self-Registration
+ * Creates an operator account in 'pending' status and is_active = false.
+ * Role is strictly locked to 'operator'. Notifies managers of the assigned plant.
+ */
+export const registerOperator = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const {
+      employee_code,
+      full_name,
+      email,
+      phone,
+      plant_id,
+      shop_id,
+      department,
+      designation,
+      shift = 'Shift A',
+      password,
+    } = req.body || {};
+
+    if (
+      !isNonEmptyString(employee_code) ||
+      !isNonEmptyString(full_name) ||
+      !isNonEmptyString(email) ||
+      !isNonEmptyString(plant_id) ||
+      !isNonEmptyString(shop_id) ||
+      typeof password !== 'string' ||
+      password.length === 0
+    ) {
+      res.status(400).json({
+        success: false,
+        message: 'employee_code, full_name, email, plant_id, shop_id, and password are required.',
+      });
+      return;
+    }
+
+    const cleanEmployeeCode = employee_code.trim().toUpperCase();
+    const cleanFullName = full_name.trim();
+    const cleanEmail = email.trim().toLowerCase();
+
+    if (
+      cleanEmployeeCode.length > 50 ||
+      cleanFullName.length > 255 ||
+      cleanEmail.length > 255 ||
+      !isValidEmail(cleanEmail)
+    ) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid employee code, name, or email format.',
+      });
+      return;
+    }
+
+    if (password.length < 8 || password.length > 128) {
+      res.status(400).json({
+        success: false,
+        message: 'Password must be between 8 and 128 characters.',
+      });
+      return;
+    }
+
+    if (!isUUID(plant_id)) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid plant facility ID.',
+      });
+      return;
+    }
+
+    if (!isUUID(shop_id)) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid shop floor ID.',
+      });
+      return;
+    }
+
+    // Verify plant exists
+    const plantCheck = await activeQuery(
+      `SELECT id, plant_name, plant_code FROM plants WHERE id = $1`,
+      [plant_id]
+    );
+    if (plantCheck.rows.length === 0) {
+      res.status(404).json({
+        success: false,
+        message: 'Specified plant facility does not exist.',
+      });
+      return;
+    }
+    const dbPlant = plantCheck.rows[0];
+
+    // Verify shop exists and belongs to plant
+    const shopCheck = await activeQuery(
+      `SELECT id, plant_id, shop_name, shop_code FROM shops WHERE id = $1`,
+      [shop_id]
+    );
+    if (shopCheck.rows.length === 0) {
+      res.status(404).json({
+        success: false,
+        message: 'Specified shop floor does not exist.',
+      });
+      return;
+    }
+    const dbShop = shopCheck.rows[0];
+    if (dbShop.plant_id !== plant_id) {
+      res.status(400).json({
+        success: false,
+        message: 'Selected shop does not belong to the selected plant facility.',
+      });
+      return;
+    }
+
+    // Check unique employee code
+    const existingCode = await activeQuery(
+      `SELECT id FROM users WHERE UPPER(employee_code) = UPPER($1)`,
+      [cleanEmployeeCode]
+    );
+    if (existingCode.rows.length > 0) {
+      res.status(409).json({
+        success: false,
+        message: 'An account with this Employee ID already exists.',
+      });
+      return;
+    }
+
+    // Check unique email
+    const existingEmail = await activeQuery(
+      `SELECT id FROM users WHERE LOWER(email) = LOWER($1)`,
+      [cleanEmail]
+    );
+    if (existingEmail.rows.length > 0) {
+      res.status(409).json({
+        success: false,
+        message: 'An account with this email address already exists.',
+      });
+      return;
+    }
+
+    const cleanPhone = phone ? String(phone).trim() : null;
+    const cleanDept = department ? String(department).trim() : 'Production';
+    const cleanDesig = designation ? String(designation).trim() : 'Machine Operator';
+    const cleanShift = shift ? String(shift).trim() : 'Shift A';
+
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    // Insert new operator with approval_status = 'pending' and is_active = false
+    const insertRes = await activeQuery(
+      `INSERT INTO users (
+        employee_code, full_name, email, phone, role,
+        plant_id, shop_id, department, designation, shift,
+        password_hash, is_active, approval_status, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, 'operator', $5, $6, $7, $8, $9, $10, FALSE, 'pending', NOW(), NOW())
+      RETURNING id, employee_code, full_name, email, phone, role, plant_id, shop_id, department, designation, shift, is_active, approval_status, created_at`,
+      [
+        cleanEmployeeCode,
+        cleanFullName,
+        cleanEmail,
+        cleanPhone,
+        plant_id,
+        shop_id,
+        cleanDept,
+        cleanDesig,
+        cleanShift,
+        passwordHash,
+      ]
+    );
+
+    const newUser = insertRes.rows[0];
+
+    // Notify Managers assigned to this plant
+    try {
+      const managersRes = await activeQuery(
+        `SELECT id, email, full_name FROM users WHERE role = 'manager' AND plant_id = $1 AND is_active = TRUE`,
+        [plant_id]
+      );
+
+      for (const mgr of managersRes.rows) {
+        await createAndSendNotification({
+          recipientId: mgr.id,
+          title: 'Operator Registration Pending Approval',
+          message: `New Operator ${cleanFullName} (${cleanEmployeeCode}) has registered for ${dbShop.shop_name} at ${dbPlant.plant_name} and is awaiting your approval.`,
+          type: 'approval',
+          entityType: 'user_approval',
+          entityId: newUser.id,
+          linkUrl: '/users?tab=pending',
+          plantId: plant_id,
+          shopId: shop_id,
+        });
+      }
+    } catch (notifErr: any) {
+      console.warn('[Operator Registration Notification Warning]:', notifErr.message);
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Operator registration submitted successfully. Your account is pending manager approval.',
+      data: newUser,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Get Pending Operator Registrations
+ * Managers see pending operators for their plant. Admins see all or can filter by plant_id.
+ */
+export const getPendingOperators = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const callerRole = req.user?.role?.trim().toLowerCase();
+    const isManager = callerRole === 'manager';
+
+    const whereClauses: string[] = ["u.role = 'operator'", "u.approval_status = 'pending'"];
+    const params: any[] = [];
+
+    if (isManager) {
+      if (!req.user?.plant_id) {
+        res.json({
+          success: true,
+          data: [],
+          count: 0,
+        });
+        return;
+      }
+      params.push(req.user.plant_id);
+      whereClauses.push(`u.plant_id = $${params.length}`);
+    } else if (req.query.plant_id && isUUID(String(req.query.plant_id))) {
+      params.push(String(req.query.plant_id));
+      whereClauses.push(`u.plant_id = $${params.length}`);
+    }
+
+    const whereSql = whereClauses.join(' AND ');
+
+    const result = await activeQuery(
+      `SELECT u.id, u.employee_code, u.full_name, u.email, u.phone, u.role,
+              u.plant_id, u.shop_id, u.department, u.designation, u.shift,
+              u.approval_status, u.is_active, u.created_at,
+              p.plant_name, p.plant_code,
+              s.shop_name, s.shop_code
+       FROM users u
+       LEFT JOIN plants p ON u.plant_id = p.id
+       LEFT JOIN shops s ON u.shop_id = s.id
+       WHERE ${whereSql}
+       ORDER BY u.created_at DESC`,
+      params
+    );
+
+    res.json({
+      success: true,
+      data: result.rows,
+      count: result.rows.length,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Approve Operator Registration
+ * Activates account (is_active = true, approval_status = 'approved') and notifies operator.
+ */
+export const approveOperator = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    if (!id || !isUUID(id)) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid operator user ID.',
+      });
+      return;
+    }
+
+    const userRes = await activeQuery(
+      `SELECT id, employee_code, full_name, email, role, plant_id, shop_id, approval_status, is_active
+       FROM users WHERE id = $1`,
+      [id]
+    );
+
+    if (userRes.rows.length === 0) {
+      res.status(404).json({
+        success: false,
+        message: 'User account not found.',
+      });
+      return;
+    }
+
+    const targetUser = userRes.rows[0];
+
+    if (targetUser.role !== 'operator') {
+      res.status(400).json({
+        success: false,
+        message: 'Only operator registrations can be processed through operator approval.',
+      });
+      return;
+    }
+
+    if (targetUser.approval_status === 'approved' && targetUser.is_active) {
+      res.status(400).json({
+        success: false,
+        message: 'Operator account is already approved and active.',
+      });
+      return;
+    }
+
+    const callerRole = req.user?.role?.trim().toLowerCase();
+    if (callerRole === 'manager') {
+      if (!req.user?.plant_id || targetUser.plant_id !== req.user.plant_id) {
+        res.status(403).json({
+          success: false,
+          message: 'Forbidden: Managers can only approve operators assigned to their own plant facility.',
+        });
+        return;
+      }
+    }
+
+    const updateRes = await activeQuery(
+      `UPDATE users
+       SET approval_status = 'approved',
+           is_active = TRUE,
+           approved_by = $1,
+           approved_at = NOW(),
+           rejection_reason = NULL,
+           updated_at = NOW()
+       WHERE id = $2
+       RETURNING id, employee_code, full_name, email, phone, role, plant_id, shop_id, approval_status, is_active, approved_at`,
+      [req.user?.id || null, id]
+    );
+
+    const approvedUser = updateRes.rows[0];
+
+    // Notify Operator
+    try {
+      const approverTitle = (req.user as any)?.full_name || (req.user?.employee_code ? `Plant Manager (${req.user.employee_code})` : 'Plant Manager');
+      await createAndSendNotification({
+        recipientId: approvedUser.id,
+        title: 'Operator Account Approved',
+        message: `Welcome to JCB Smart CMMS! Your operator account has been approved by ${approverTitle}. You can now sign in to your dashboard.`,
+        type: 'info',
+        entityType: 'user_approval',
+        entityId: approvedUser.id,
+        linkUrl: '/login',
+        plantId: approvedUser.plant_id,
+        shopId: approvedUser.shop_id,
+      });
+    } catch (notifErr: any) {
+      console.warn('[Operator Approval Notification Warning]:', notifErr.message);
+    }
+
+    res.json({
+      success: true,
+      message: `Operator ${approvedUser.full_name} (${approvedUser.employee_code}) approved and activated successfully.`,
+      data: approvedUser,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Reject Operator Registration
+ * Sets approval_status = 'rejected', is_active = false, records reason, and notifies operator.
+ */
+export const rejectOperator = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { rejection_reason } = req.body || {};
+
+    if (!id || !isUUID(id)) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid operator user ID.',
+      });
+      return;
+    }
+
+    const userRes = await activeQuery(
+      `SELECT id, employee_code, full_name, email, role, plant_id, shop_id, approval_status, is_active
+       FROM users WHERE id = $1`,
+      [id]
+    );
+
+    if (userRes.rows.length === 0) {
+      res.status(404).json({
+        success: false,
+        message: 'User account not found.',
+      });
+      return;
+    }
+
+    const targetUser = userRes.rows[0];
+
+    if (targetUser.role !== 'operator') {
+      res.status(400).json({
+        success: false,
+        message: 'Only operator registrations can be processed through operator approval.',
+      });
+      return;
+    }
+
+    const callerRole = req.user?.role?.trim().toLowerCase();
+    if (callerRole === 'manager') {
+      if (!req.user?.plant_id || targetUser.plant_id !== req.user.plant_id) {
+        res.status(403).json({
+          success: false,
+          message: 'Forbidden: Managers can only reject operators assigned to their own plant facility.',
+        });
+        return;
+      }
+    }
+
+    const cleanReason = rejection_reason && typeof rejection_reason === 'string'
+      ? rejection_reason.trim()
+      : 'Registration request rejected by plant manager.';
+
+    const updateRes = await activeQuery(
+      `UPDATE users
+       SET approval_status = 'rejected',
+           is_active = FALSE,
+           approved_by = $1,
+           approved_at = NOW(),
+           rejection_reason = $2,
+           updated_at = NOW()
+       WHERE id = $3
+       RETURNING id, employee_code, full_name, email, phone, role, plant_id, shop_id, approval_status, is_active, rejection_reason`,
+      [req.user?.id || null, cleanReason, id]
+    );
+
+    const rejectedUser = updateRes.rows[0];
+
+    // Notify Operator
+    try {
+      await createAndSendNotification({
+        recipientId: rejectedUser.id,
+        title: 'Operator Registration Update',
+        message: `Your operator registration was not approved. Reason: ${cleanReason}`,
+        type: 'warning',
+        entityType: 'user_approval',
+        entityId: rejectedUser.id,
+        linkUrl: '/login',
+        plantId: rejectedUser.plant_id,
+        shopId: rejectedUser.shop_id,
+      });
+    } catch (notifErr: any) {
+      console.warn('[Operator Rejection Notification Warning]:', notifErr.message);
+    }
+
+    res.json({
+      success: true,
+      message: `Operator registration for ${rejectedUser.full_name} (${rejectedUser.employee_code}) rejected.`,
+      data: rejectedUser,
     });
   } catch (err) {
     next(err);

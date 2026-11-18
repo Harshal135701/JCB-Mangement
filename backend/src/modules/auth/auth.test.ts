@@ -22,6 +22,13 @@ import {
   createUser,
   updateUser,
   deleteUser,
+  registerOperator,
+  getRegistrationOptions,
+  getRegistrationPlants,
+  getRegistrationShops,
+  getPendingOperators,
+  approveOperator,
+  rejectOperator,
   setAuthDb,
   resetAuthDb,
   signAccessToken,
@@ -120,6 +127,10 @@ interface MockUser {
   shift: string | null;
   password_hash: string;
   is_active: boolean;
+  approval_status?: string;
+  approved_by?: string | null;
+  approved_at?: Date | null;
+  rejection_reason?: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -201,6 +212,7 @@ class MockAuthDatabase {
       shift: 'Shift A',
       password_hash: knownHash,
       is_active: true,
+      approval_status: 'approved',
       created_at: new Date('2026-01-01T00:00:00Z'),
       updated_at: new Date('2026-01-01T00:00:00Z'),
     };
@@ -219,6 +231,7 @@ class MockAuthDatabase {
       shift: 'Shift A',
       password_hash: knownHash,
       is_active: true,
+      approval_status: 'approved',
       created_at: new Date('2026-01-02T00:00:00Z'),
       updated_at: new Date('2026-01-02T00:00:00Z'),
     };
@@ -237,6 +250,7 @@ class MockAuthDatabase {
       shift: 'Shift B',
       password_hash: knownHash,
       is_active: true,
+      approval_status: 'approved',
       created_at: new Date('2026-01-03T00:00:00Z'),
       updated_at: new Date('2026-01-03T00:00:00Z'),
     };
@@ -255,6 +269,7 @@ class MockAuthDatabase {
       shift: 'Shift A',
       password_hash: knownHash,
       is_active: false,
+      approval_status: 'approved',
       created_at: new Date('2026-01-04T00:00:00Z'),
       updated_at: new Date('2026-01-04T00:00:00Z'),
     };
@@ -294,7 +309,7 @@ class MockAuthDatabase {
     }
 
     // 3. User profile with JOIN plants and shops
-    if (trimmed.includes('FROM users u') && trimmed.includes('LEFT JOIN plants p')) {
+    if (trimmed.includes('WHERE u.id = $1') && trimmed.includes('FROM users u') && trimmed.includes('LEFT JOIN plants p')) {
       const userId = params[0];
       const match = this.users.get(userId);
       if (!match || !match.is_active) {
@@ -326,22 +341,162 @@ class MockAuthDatabase {
     }
 
     // 4. Plant lookup
-    if (trimmed.startsWith('SELECT id FROM plants WHERE id = $1')) {
+    if (trimmed.includes('FROM plants') && trimmed.includes('WHERE id = $1')) {
       const plantId = params[0];
       const plant = this.plants.get(plantId);
       return {
-        rows: plant ? [{ id: plant.id }] : [],
+        rows: plant ? [{ id: plant.id, plant_name: plant.plant_name, plant_code: plant.plant_code }] : [],
         rowCount: plant ? 1 : 0,
+      };
+    }
+    if (trimmed.includes('FROM plants')) {
+      const allPlants = Array.from(this.plants.values()).map((p) => ({
+        id: p.id,
+        plant_code: p.plant_code,
+        plant_name: p.plant_name,
+        city: 'Ballabgarh',
+        state: 'Haryana',
+      }));
+      return {
+        rows: allPlants,
+        rowCount: allPlants.length,
       };
     }
 
     // 5. Shop lookup
-    if (trimmed.includes('FROM shops WHERE id = $1')) {
+    if (trimmed.includes('FROM shops') && trimmed.includes('WHERE id = $1')) {
       const shopId = params[0];
       const shop = this.shops.get(shopId);
       return {
-        rows: shop ? [{ id: shop.id, plant_id: shop.plant_id }] : [],
+        rows: shop ? [{ id: shop.id, plant_id: shop.plant_id, shop_name: shop.shop_name, shop_code: shop.shop_code }] : [],
         rowCount: shop ? 1 : 0,
+      };
+    }
+    if (trimmed.includes('FROM shops') && trimmed.includes('WHERE plant_id = $1')) {
+      const plantId = params[0];
+      const shops = Array.from(this.shops.values()).filter((s) => s.plant_id === plantId);
+      return {
+        rows: shops,
+        rowCount: shops.length,
+      };
+    }
+    if (trimmed.includes('FROM shops s') && trimmed.includes('JOIN plants p')) {
+      return {
+        rows: Array.from(this.shops.values()),
+        rowCount: this.shops.size,
+      };
+    }
+
+    // 5b. Operator registration lookup queries
+    if (trimmed.includes('FROM users WHERE UPPER(employee_code) = UPPER($1)')) {
+      const code = String(params[0] || '').trim().toUpperCase();
+      const match = Array.from(this.users.values()).find(
+        (u) => u.employee_code.toUpperCase() === code
+      );
+      return {
+        rows: match ? [{ id: match.id }] : [],
+        rowCount: match ? 1 : 0,
+      };
+    }
+
+    if (trimmed.includes('FROM users WHERE LOWER(email) = LOWER($1)')) {
+      const email = String(params[0] || '').trim().toLowerCase();
+      const match = Array.from(this.users.values()).find(
+        (u) => u.email.toLowerCase() === email
+      );
+      return {
+        rows: match ? [{ id: match.id }] : [],
+        rowCount: match ? 1 : 0,
+      };
+    }
+
+    if (trimmed.includes("role = 'manager' AND plant_id = $1")) {
+      const plantId = params[0];
+      const mgrs = Array.from(this.users.values()).filter(
+        (u) => u.role === 'manager' && u.plant_id === plantId && u.is_active
+      );
+      return {
+        rows: mgrs.map((m) => ({ id: m.id, email: m.email, full_name: m.full_name })),
+        rowCount: mgrs.length,
+      };
+    }
+
+    if (trimmed.includes("u.role = 'operator'") && trimmed.includes("u.approval_status = 'pending'")) {
+      let pending = Array.from(this.users.values()).filter(
+        (u) => u.role === 'operator' && u.approval_status === 'pending'
+      );
+      if (trimmed.includes('u.plant_id = $')) {
+        const plantId = params[0];
+        pending = pending.filter((u) => u.plant_id === plantId);
+      }
+      return {
+        rows: pending.map((u) => {
+          const plant = u.plant_id ? this.plants.get(u.plant_id) : undefined;
+          const shop = u.shop_id ? this.shops.get(u.shop_id) : undefined;
+          return {
+            id: u.id,
+            employee_code: u.employee_code,
+            full_name: u.full_name,
+            email: u.email,
+            phone: u.phone,
+            role: u.role,
+            plant_id: u.plant_id,
+            shop_id: u.shop_id,
+            department: u.department,
+            designation: u.designation,
+            shift: u.shift,
+            approval_status: u.approval_status,
+            is_active: u.is_active,
+            created_at: u.created_at,
+            plant_name: plant?.plant_name ?? 'Ballabgarh Plant',
+            plant_code: plant?.plant_code ?? 'PLANT-BLB-01',
+            shop_name: shop?.shop_name ?? 'Fabrication Shop',
+            shop_code: shop?.shop_code ?? 'SHOP-FAB-01',
+          };
+        }),
+        rowCount: pending.length,
+      };
+    }
+
+    if (trimmed.startsWith('UPDATE users') && trimmed.includes("SET approval_status = 'approved'")) {
+      const approvedBy = params[0];
+      const userId = params[1];
+      const u = this.users.get(userId);
+      if (u) {
+        u.approval_status = 'approved';
+        u.is_active = true;
+        u.approved_by = approvedBy;
+        u.approved_at = new Date();
+        u.rejection_reason = null;
+      }
+      return {
+        rows: u ? [{ ...u }] : [],
+        rowCount: u ? 1 : 0,
+      };
+    }
+
+    if (trimmed.startsWith('UPDATE users') && trimmed.includes("SET approval_status = 'rejected'")) {
+      const approvedBy = params[0];
+      const reason = params[1];
+      const userId = params[2];
+      const u = this.users.get(userId);
+      if (u) {
+        u.approval_status = 'rejected';
+        u.is_active = false;
+        u.approved_by = approvedBy;
+        u.approved_at = new Date();
+        u.rejection_reason = reason;
+      }
+      return {
+        rows: u ? [{ ...u }] : [],
+        rowCount: u ? 1 : 0,
+      };
+    }
+
+    if (trimmed.startsWith('INSERT INTO notifications')) {
+      return {
+        rows: [{ id: 'notif-' + Math.random().toString(36).substring(2, 9) }],
+        rowCount: 1,
       };
     }
 
@@ -461,19 +616,45 @@ class MockAuthDatabase {
 
     // 9. INSERT INTO users
     if (trimmed.startsWith('INSERT INTO users')) {
-      const [
-        employee_code,
-        full_name,
-        email,
-        phone,
-        role,
-        plant_id,
-        shop_id,
-        department,
-        designation,
-        shift,
-        password_hash,
-      ] = params;
+      const isPendingOperator = trimmed.includes("'pending'");
+      let employee_code: string;
+      let full_name: string;
+      let email: string;
+      let phone: string | null;
+      let role = 'operator';
+      let plant_id: string | null = null;
+      let shop_id: string | null = null;
+      let department: string | null = null;
+      let designation: string | null = null;
+      let shift: string | null = null;
+      let password_hash: string;
+
+      if (isPendingOperator) {
+        // params: [employee_code, full_name, email, phone, plant_id, shop_id, department, designation, shift, password_hash]
+        employee_code = params[0];
+        full_name = params[1];
+        email = params[2];
+        phone = params[3];
+        plant_id = params[4];
+        shop_id = params[5];
+        department = params[6];
+        designation = params[7];
+        shift = params[8];
+        password_hash = params[9];
+        role = 'operator';
+      } else {
+        employee_code = params[0];
+        full_name = params[1];
+        email = params[2];
+        phone = params[3];
+        role = params[4];
+        plant_id = params[5];
+        shop_id = params[6];
+        department = params[7];
+        designation = params[8];
+        shift = params[9];
+        password_hash = params[10];
+      }
 
       // Unique constraint check
       for (const u of this.users.values()) {
@@ -501,7 +682,8 @@ class MockAuthDatabase {
         designation,
         shift,
         password_hash,
-        is_active: true,
+        is_active: !isPendingOperator,
+        approval_status: isPendingOperator ? 'pending' : 'approved',
         created_at: new Date(),
         updated_at: new Date(),
       };
@@ -1884,6 +2066,364 @@ describe('Authentication & User Governance Module (CMMS Module 0)', () => {
         ctx.res.responseData.message,
         'You do not have permission to perform this action.'
       );
+    });
+  });
+
+  // ==========================================
+  // SECTION I: OPERATOR SIGN-UP & MANAGER APPROVAL WORKFLOW
+  // ==========================================
+  describe('I. Operator Sign-Up & Manager Approval Workflow', () => {
+    const plant1Id = 'b0000000-0000-0000-0000-000000000001';
+    const shop1Id = 'c0000000-0000-0000-0000-000000000001';
+    const plant2Id = 'b0000000-0000-0000-0000-000000000002';
+    const shop2Id = 'c0000000-0000-0000-0000-000000000002';
+
+    const plant1Manager: AuthenticatedUser = {
+      id: 'f0000000-0000-0000-0000-000000000002',
+      employee_code: 'EMP-MGR-001',
+      email: 'manager@jcb.com',
+      role: 'manager',
+      plant_id: plant1Id,
+      shop_id: shop1Id,
+    };
+
+    const plant2Manager: AuthenticatedUser = {
+      id: 'f0000000-0000-0000-0000-000000000077',
+      employee_code: 'EMP-MGR-002',
+      email: 'manager.pune@jcb.com',
+      role: 'manager',
+      plant_id: plant2Id,
+      shop_id: shop2Id,
+    };
+
+    const adminUserContext: AuthenticatedUser = {
+      id: 'f0000000-0000-0000-0000-000000000001',
+      employee_code: 'EMP-ADM-001',
+      email: 'admin@jcb.com',
+      role: 'admin',
+      plant_id: plant1Id,
+    };
+
+    it('32. Operator self-registration with valid data creates pending, inactive account and returns HTTP 201', async () => {
+      const regPayload = {
+        employee_code: 'JCB-OPR-501',
+        full_name: 'Ramesh Operator',
+        email: 'ramesh.operator@jcb.com',
+        phone: '+91 9123456789',
+        plant_id: plant1Id,
+        shop_id: shop1Id,
+        department: 'Fabrication',
+        designation: 'CNC Machine Operator',
+        shift: 'Shift A',
+        password: 'ValidPassword123!',
+      };
+
+      const ctx = createMockContext(regPayload);
+      await registerOperator(ctx.req, ctx.res, ctx.next);
+
+      assert.equal(ctx.res.statusCode, 201);
+      assert.equal(ctx.res.responseData.success, true);
+      assert.equal(ctx.res.responseData.data.role, 'operator');
+      assert.equal(ctx.res.responseData.data.approval_status, 'pending');
+      assert.equal(ctx.res.responseData.data.is_active, false);
+      assert.ok(ctx.res.responseData.message.includes('pending manager approval'));
+    });
+
+    it('33. Operator registration with missing required fields returns HTTP 400 Bad Request', async () => {
+      // Missing password
+      let ctx = createMockContext({
+        employee_code: 'JCB-OPR-502',
+        full_name: 'Test Name',
+        email: 'test@jcb.com',
+        plant_id: plant1Id,
+        shop_id: shop1Id,
+      });
+      await registerOperator(ctx.req, ctx.res, ctx.next);
+      assert.equal(ctx.res.statusCode, 400);
+
+      // Missing plant_id
+      ctx = createMockContext({
+        employee_code: 'JCB-OPR-502',
+        full_name: 'Test Name',
+        email: 'test@jcb.com',
+        shop_id: shop1Id,
+        password: 'ValidPassword123!',
+      });
+      await registerOperator(ctx.req, ctx.res, ctx.next);
+      assert.equal(ctx.res.statusCode, 400);
+
+      // Missing shop_id
+      ctx = createMockContext({
+        employee_code: 'JCB-OPR-502',
+        full_name: 'Test Name',
+        email: 'test@jcb.com',
+        plant_id: plant1Id,
+        password: 'ValidPassword123!',
+      });
+      await registerOperator(ctx.req, ctx.res, ctx.next);
+      assert.equal(ctx.res.statusCode, 400);
+    });
+
+    it('34. Operator registration with duplicate employee_code or email returns HTTP 409 Conflict', async () => {
+      // First registration
+      const ctx1 = createMockContext({
+        employee_code: 'JCB-OPR-503',
+        full_name: 'Unique User',
+        email: 'unique.user@jcb.com',
+        plant_id: plant1Id,
+        shop_id: shop1Id,
+        password: 'ValidPassword123!',
+      });
+      await registerOperator(ctx1.req, ctx1.res, ctx1.next);
+      assert.equal(ctx1.res.statusCode, 201);
+
+      // Duplicate employee code attempt
+      const ctx2 = createMockContext({
+        employee_code: 'JCB-OPR-503',
+        full_name: 'Duplicate Code User',
+        email: 'diff.email@jcb.com',
+        plant_id: plant1Id,
+        shop_id: shop1Id,
+        password: 'ValidPassword123!',
+      });
+      await registerOperator(ctx2.req, ctx2.res, ctx2.next);
+      assert.equal(ctx2.res.statusCode, 409);
+      assert.ok(ctx2.res.responseData.message.includes('Employee ID already exists'));
+
+      // Duplicate email attempt
+      const ctx3 = createMockContext({
+        employee_code: 'JCB-OPR-504',
+        full_name: 'Duplicate Email User',
+        email: 'unique.user@jcb.com',
+        plant_id: plant1Id,
+        shop_id: shop1Id,
+        password: 'ValidPassword123!',
+      });
+      await registerOperator(ctx3.req, ctx3.res, ctx3.next);
+      assert.equal(ctx3.res.statusCode, 409);
+      assert.ok(ctx3.res.responseData.message.includes('email address already exists'));
+    });
+
+    it('35. Operator registration with non-existent plant or mismatched shop returns HTTP 404 / 400', async () => {
+      // Non-existent plant
+      const nonExistentPlantId = 'b0000000-0000-0000-0000-999999999999';
+      let ctx = createMockContext({
+        employee_code: 'JCB-OPR-505',
+        full_name: 'Mismatch User',
+        email: 'mismatch1@jcb.com',
+        plant_id: nonExistentPlantId,
+        shop_id: shop1Id,
+        password: 'ValidPassword123!',
+      });
+      await registerOperator(ctx.req, ctx.res, ctx.next);
+      assert.equal(ctx.res.statusCode, 404);
+
+      // Mismatched shop (shop2 belongs to plant2, but plant1 specified)
+      ctx = createMockContext({
+        employee_code: 'JCB-OPR-506',
+        full_name: 'Mismatch User 2',
+        email: 'mismatch2@jcb.com',
+        plant_id: plant1Id,
+        shop_id: shop2Id,
+        password: 'ValidPassword123!',
+      });
+      await registerOperator(ctx.req, ctx.res, ctx.next);
+      assert.equal(ctx.res.statusCode, 400);
+      assert.ok(ctx.res.responseData.message.includes('does not belong'));
+    });
+
+    it('36. Registration options endpoint returns public active plants and shops', async () => {
+      const ctx = createMockContext();
+      await getRegistrationOptions(ctx.req, ctx.res, ctx.next);
+
+      assert.equal(ctx.res.statusCode, 200);
+      assert.equal(ctx.res.responseData.success, true);
+      assert.ok(Array.isArray(ctx.res.responseData.data.plants));
+      assert.ok(Array.isArray(ctx.res.responseData.data.shops));
+      assert.ok(ctx.res.responseData.data.plants.length > 0);
+      assert.ok(ctx.res.responseData.data.shops.length > 0);
+    });
+
+    it('37. Newly registered Operator in pending status cannot log in (HTTP 403 Forbidden with clear status message)', async () => {
+      // Register pending operator
+      const regCtx = createMockContext({
+        employee_code: 'JCB-OPR-701',
+        full_name: 'Pending Operator',
+        email: 'pending.opr@jcb.com',
+        plant_id: plant1Id,
+        shop_id: shop1Id,
+        password: 'ValidPassword123!',
+      });
+      await registerOperator(regCtx.req, regCtx.res, regCtx.next);
+      assert.equal(regCtx.res.statusCode, 201);
+
+      // Attempt login with valid password
+      const loginCtx = createMockContext({
+        identifier: 'JCB-OPR-701',
+        password: 'ValidPassword123!',
+      });
+      await login(loginCtx.req, loginCtx.res, loginCtx.next);
+
+      assert.equal(loginCtx.res.statusCode, 403);
+      assert.equal(loginCtx.res.responseData.success, false);
+      assert.equal(loginCtx.res.responseData.approval_status, 'pending');
+      assert.ok(loginCtx.res.responseData.message.includes('pending approval by your Plant Manager'));
+    });
+
+    it('38. Manager can retrieve list of pending operator registrations for their assigned plant facility', async () => {
+      const ctx = createMockContext({}, {}, {}, {}, plant1Manager);
+      await getPendingOperators(ctx.req, ctx.res, ctx.next);
+
+      assert.equal(ctx.res.statusCode, 200);
+      assert.equal(ctx.res.responseData.success, true);
+      assert.ok(Array.isArray(ctx.res.responseData.data));
+      // All pending operators in the list must belong to plant1
+      for (const op of ctx.res.responseData.data) {
+        assert.equal(op.plant_id, plant1Id);
+        assert.equal(op.approval_status, 'pending');
+      }
+    });
+
+    it('39. Manager from Plant 2 cannot view or approve Operator registered for Plant 1 (HTTP 403 Forbidden)', async () => {
+      // Create pending operator in Plant 1
+      const regCtx = createMockContext({
+        employee_code: 'JCB-OPR-702',
+        full_name: 'Plant 1 Pending Operator',
+        email: 'p1.pending@jcb.com',
+        plant_id: plant1Id,
+        shop_id: shop1Id,
+        password: 'ValidPassword123!',
+      });
+      await registerOperator(regCtx.req, regCtx.res, regCtx.next);
+      const newOpId = regCtx.res.responseData.data.id;
+
+      // Plant 2 Manager attempts to approve Plant 1 Operator
+      const approveCtx = createMockContext({}, { id: newOpId }, {}, {}, plant2Manager);
+      await approveOperator(approveCtx.req, approveCtx.res, approveCtx.next);
+
+      assert.equal(approveCtx.res.statusCode, 403);
+      assert.equal(approveCtx.res.responseData.success, false);
+      assert.ok(approveCtx.res.responseData.message.includes('assigned to their own plant facility'));
+    });
+
+    it('40. Non-manager/non-admin role cannot approve or reject operators (requireRoles blocks with HTTP 403)', () => {
+      const technicianUserContext: AuthenticatedUser = {
+        id: 'f0000000-0000-0000-0000-000000000003',
+        employee_code: 'EMP-TCH-001',
+        email: 'technician@jcb.com',
+        role: 'technician',
+      };
+
+      const ctx = createMockContext({}, { id: 'some-id' }, {}, {}, technicianUserContext);
+      const guard = requireRoles('manager', 'admin');
+      guard(ctx.req, ctx.res, ctx.next);
+
+      assert.equal(ctx.res.statusCode, 403);
+      assert.equal(
+        ctx.res.responseData.message,
+        'You do not have permission to perform this action.'
+      );
+    });
+
+    it('41. Manager approves Operator: account activated, approval_status set to approved, and operator can now log in', async () => {
+      // 1. Register operator
+      const regCtx = createMockContext({
+        employee_code: 'JCB-OPR-703',
+        full_name: 'Approve Me Operator',
+        email: 'approve.me@jcb.com',
+        plant_id: plant1Id,
+        shop_id: shop1Id,
+        password: 'ValidPassword123!',
+      });
+      await registerOperator(regCtx.req, regCtx.res, regCtx.next);
+      const newOpId = regCtx.res.responseData.data.id;
+
+      // 2. Plant 1 Manager approves
+      const approveCtx = createMockContext({}, { id: newOpId }, {}, {}, plant1Manager);
+      await approveOperator(approveCtx.req, approveCtx.res, approveCtx.next);
+
+      assert.equal(approveCtx.res.statusCode, 200);
+      assert.equal(approveCtx.res.responseData.success, true);
+      assert.equal(approveCtx.res.responseData.data.approval_status, 'approved');
+      assert.equal(approveCtx.res.responseData.data.is_active, true);
+
+      // 3. Newly approved Operator logs in
+      const loginCtx = createMockContext({
+        identifier: 'JCB-OPR-703',
+        password: 'ValidPassword123!',
+      });
+      await login(loginCtx.req, loginCtx.res, loginCtx.next);
+
+      assert.equal(loginCtx.res.statusCode, 200);
+      assert.equal(loginCtx.res.responseData.success, true);
+      assert.ok(loginCtx.res.responseData.data.token);
+      assert.equal(loginCtx.res.responseData.data.user.role, 'operator');
+    });
+
+    it('42. Manager rejects Operator: account marked rejected with reason, and rejected operator cannot log in (HTTP 403)', async () => {
+      // 1. Register operator
+      const regCtx = createMockContext({
+        employee_code: 'JCB-OPR-704',
+        full_name: 'Reject Me Operator',
+        email: 'reject.me@jcb.com',
+        plant_id: plant1Id,
+        shop_id: shop1Id,
+        password: 'ValidPassword123!',
+      });
+      await registerOperator(regCtx.req, regCtx.res, regCtx.next);
+      const newOpId = regCtx.res.responseData.data.id;
+
+      // 2. Plant 1 Manager rejects with reason
+      const rejectReason = 'Employee ID does not match factory HR badge register.';
+      const rejectCtx = createMockContext({ rejection_reason: rejectReason }, { id: newOpId }, {}, {}, plant1Manager);
+      await rejectOperator(rejectCtx.req, rejectCtx.res, rejectCtx.next);
+
+      assert.equal(rejectCtx.res.statusCode, 200);
+      assert.equal(rejectCtx.res.responseData.success, true);
+      assert.equal(rejectCtx.res.responseData.data.approval_status, 'rejected');
+      assert.equal(rejectCtx.res.responseData.data.is_active, false);
+
+      // 3. Rejected Operator attempts login
+      const loginCtx = createMockContext({
+        identifier: 'JCB-OPR-704',
+        password: 'ValidPassword123!',
+      });
+      await login(loginCtx.req, loginCtx.res, loginCtx.next);
+
+      assert.equal(loginCtx.res.statusCode, 403);
+      assert.equal(loginCtx.res.responseData.success, false);
+      assert.equal(loginCtx.res.responseData.approval_status, 'rejected');
+      assert.ok(loginCtx.res.responseData.message.includes(rejectReason));
+    });
+
+    it('43. Enterprise Admin can view pending operators across all plants and approve registrations', async () => {
+      // 1. Register operator in plant 2
+      mockDb.plants.set(plant2Id, { id: plant2Id, plant_code: 'PLANT-PUN-02', plant_name: 'Pune Plant' });
+      mockDb.shops.set(shop2Id, { id: shop2Id, plant_id: plant2Id, shop_code: 'SHOP-ASSY-02', shop_name: 'Assembly Shop Pune' });
+
+      const regCtx = createMockContext({
+        employee_code: 'JCB-OPR-705',
+        full_name: 'Pune Operator',
+        email: 'pune.opr@jcb.com',
+        plant_id: plant2Id,
+        shop_id: shop2Id,
+        password: 'ValidPassword123!',
+      });
+      await registerOperator(regCtx.req, regCtx.res, regCtx.next);
+      const opId = regCtx.res.responseData.data.id;
+
+      // 2. Admin views pending
+      const adminListCtx = createMockContext({}, {}, {}, {}, adminUserContext);
+      await getPendingOperators(adminListCtx.req, adminListCtx.res, adminListCtx.next);
+      assert.equal(adminListCtx.res.statusCode, 200);
+      assert.ok(adminListCtx.res.responseData.data.some((u: any) => u.id === opId));
+
+      // 3. Admin approves
+      const adminApproveCtx = createMockContext({}, { id: opId }, {}, {}, adminUserContext);
+      await approveOperator(adminApproveCtx.req, adminApproveCtx.res, adminApproveCtx.next);
+      assert.equal(adminApproveCtx.res.statusCode, 200);
+      assert.equal(adminApproveCtx.res.responseData.data.approval_status, 'approved');
+      assert.equal(adminApproveCtx.res.responseData.data.is_active, true);
     });
   });
 });
