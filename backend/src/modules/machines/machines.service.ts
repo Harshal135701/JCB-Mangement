@@ -268,8 +268,29 @@ export class MachinesService {
    * facility isolation, and audit logging.
    */
   async createMachine(input: CreateMachineInput, user: AuthenticatedUser, ipAddress?: string): Promise<MachineRow> {
-    if (!user) {
+    if (!user || !user.role) {
       throw new MachineServiceError('Authentication required.', 401);
+    }
+
+    // Role-based access control: Only users with the manager role can create machines
+    const callerRole = user.role.trim().toLowerCase();
+    if (callerRole !== 'manager') {
+      throw new MachineServiceError(
+        `Forbidden: Role '${user.role}' is not authorized to create machines. Only managers can register new machine assets.`,
+        403
+      );
+    }
+
+    if (!user.plant_id || !isUUID(user.plant_id)) {
+      throw new MachineServiceError('Forbidden: Manager must be assigned to a valid plant facility.', 403);
+    }
+
+    // Do not trust plant_id supplied by frontend: if plant_id is sent in request body, verify it matches manager's plant
+    if ((input as any).plant_id && (input as any).plant_id !== user.plant_id) {
+      throw new MachineServiceError(
+        'Forbidden: Cannot create machine for a plant facility outside your authorized scope.',
+        403
+      );
     }
 
     // 1. Mandatory Fields Validation
@@ -301,6 +322,14 @@ export class MachinesService {
     const shop = await machinesRepository.verifyShop(activeQuery, input.shop_id);
     if (!shop) {
       throw new MachineServiceError(`Shop with ID '${input.shop_id}' not found.`, 404);
+    }
+
+    // Ensure the shop belongs to the manager's authorized plant
+    if (shop.plant_id !== user.plant_id) {
+      throw new MachineServiceError(
+        'Forbidden: Machine belongs to another plant facility outside your authorized scope.',
+        403
+      );
     }
 
     // Check facility scope for the creating user
