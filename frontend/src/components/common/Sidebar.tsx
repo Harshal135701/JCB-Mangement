@@ -161,7 +161,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
           <nav className="p-3 space-y-2 overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
             {navItems.map((item) => {
               const Icon = item.icon;
-              const isActive = location.pathname === item.path;
+              // Cleanly normalize trailing slashes
+              const currentPath = location.pathname.length > 1 && location.pathname.endsWith('/')
+                ? location.pathname.slice(0, -1)
+                : location.pathname;
+              const itemPath = item.path.length > 1 && item.path.endsWith('/')
+                ? item.path.slice(0, -1)
+                : item.path;
+
+              // Active when route matches exactly OR when on any nested child route (e.g. /work-orders/:id)
+              const isActive =
+                currentPath === itemPath ||
+                (itemPath !== '/' && currentPath.startsWith(`${itemPath}/`)) ||
+                (itemPath === '/inspections/run' && (currentPath === '/inspections' || currentPath.startsWith('/inspections/')));
+
               return (
                 <Link
                   key={item.path + item.name}
