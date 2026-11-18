@@ -707,13 +707,13 @@ export const PreShiftInspectionPage: React.FC = () => {
                 </span>
               )}
             </div>
-            <p className="text-xs text-zinc-500 font-medium mt-1">
+            {/* <p className="text-xs text-zinc-500 font-medium mt-1">
               {isAdmin ? (
                 <>Administrator: <strong className="text-zinc-900">{user?.fullName || 'Administrator'}</strong> • Review configured checklist rules, safety limits, and regulatory audit records across all plant operations.</>
               ) : (
                 <>Manager: <strong className="text-zinc-900">{user?.fullName || 'Plant Manager'}</strong> ({user?.employeeCode || 'MGR-01'}) • Configure checklist rules, define sensor safety envelopes, and review submitted inspection records.</>
               )}
-            </p>
+            </p> */}
           </div>
         </div>
 

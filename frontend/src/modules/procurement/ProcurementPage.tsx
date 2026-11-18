@@ -1270,7 +1270,7 @@ export const ProcurementPage: React.FC = () => {
           <div className="flex items-center gap-3">
             <div className="bg-jcb-yellow text-black font-black text-xl px-2.5 py-1 rounded-lg border border-amber-500 shadow-sm">
               JCB
-            </div>
+            </div>dministrator: JCB Administrator • Review configured checklist rule
             <h1 className="text-xl sm:text-2xl font-black text-zinc-950 tracking-tight">
               BUYING &amp; RECEIVING (PR / PO / GRN)
             </h1>
