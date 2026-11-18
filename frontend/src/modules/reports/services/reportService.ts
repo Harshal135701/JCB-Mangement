@@ -90,6 +90,100 @@ export interface AuditReportItem {
   created_at: string;
 }
 
+export interface MachineSummary {
+  id: string;
+  machine_code: string;
+  name: string;
+  category: string;
+  oem_manufacturer: string;
+  model_number?: string | null;
+  serial_number?: string | null;
+  bay_line_location?: string | null;
+  criticality: string;
+  status: string;
+  operating_hours: number | string;
+  maintenance_frequency_days?: number | string;
+  qr_code_uid: string;
+  created_at?: string;
+  shop_name?: string | null;
+  plant_name?: string | null;
+  bay_name?: string | null;
+  line_name?: string | null;
+}
+
+export interface MachineReportData {
+  machine: any;
+  operator: any;
+  personnel: any;
+  activeIssues: {
+    breakdown?: any;
+    workOrder?: any;
+    hasActiveStoppage: boolean;
+  };
+  pmPlans: any[];
+  workOrders: any[];
+  breakdowns: any[];
+  partsConsumed: any[];
+  stats: {
+    totalBreakdowns: number;
+    totalWorkOrders: number;
+    completedWorkOrders: number;
+    activeWorkOrders: number;
+    totalInspections: number;
+    totalPmPlans: number;
+    totalPartsConsumed: number;
+    totalDowntimeMinutes: number;
+    totalDowntimeHours: number;
+    avgMTTRMinutes: number;
+    operatingHours: number;
+    availabilityPercent: number;
+  };
+}
+
+/**
+ * Fetch available machines list for report selection
+ */
+export async function fetchMachines(search?: string, plantId?: string): Promise<MachineSummary[]> {
+  try {
+    const params: Record<string, any> = { limit: 100 };
+    if (search && search.trim()) {
+      params.search = search.trim();
+    }
+    if (plantId) {
+      params.plant_id = plantId;
+    }
+    const res = await apiClient.get('/machines', { params });
+    return res.data?.data || [];
+  } catch (err) {
+    console.error('Error fetching machines for report:', err);
+    return [];
+  }
+}
+
+/**
+ * Fetch Machine Summary Report Data
+ */
+export async function fetchMachineReportData(
+  machineId: string,
+  startDate?: string,
+  endDate?: string
+): Promise<MachineReportData> {
+  try {
+    const params: Record<string, any> = {};
+    if (startDate) params.startDate = startDate;
+    if (endDate) params.endDate = endDate;
+
+    const res = await apiClient.get(`/reports/machine-summary/${machineId}`, { params });
+    if (res.data?.success && res.data?.data) {
+      return res.data.data;
+    }
+    throw new Error(res.data?.message || 'Failed to fetch machine summary report data');
+  } catch (err) {
+    console.error('Error fetching machine report data:', err);
+    throw err;
+  }
+}
+
 /**
  * Fetch users by role (technician, operator, manager, store_manager)
  */

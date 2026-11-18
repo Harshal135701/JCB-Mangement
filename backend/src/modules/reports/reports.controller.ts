@@ -501,3 +501,340 @@ export const getGovernanceTrend = async (req: Request, res: Response, next: Next
     next(err);
   }
 };
+
+/**
+ * GET /api/v1/reports/machine-summary/:id
+ * Dedicated machine summary report endpoint consolidating:
+ * - Machine master details (identification, specs, registration)
+ * - Plant/shop/bay/line location hierarchy
+ * - Operational assignment (latest operator & inspecting operator, responsible technician/manager)
+ * - Current machine condition (status, criticality, active breakdown/repair)
+ * - Maintenance history & PM schedule
+ * - Breakdown and work order history with downtime & MTTR
+ * - Spare parts consumed & outstanding issues
+ */
+export const getMachineReportSummary = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { startDate, endDate } = req.query as Record<string, string | undefined>;
+    const user = req.user;
+
+    if (!id || !UUID_REGEX.test(id)) {
+      res.status(400).json({ success: false, message: 'Invalid machine ID. Must be a valid UUID.' });
+      return;
+    }
+
+    // 1. Fetch Machine Master with Plant, Shop, Bay, Line
+    const machineRes = await query(`
+      SELECT 
+        m.id, m.shop_id, m.machine_code, m.name, m.category, m.oem_manufacturer,
+        m.model_number, m.serial_number, m.bay_line_location, m.bay_id, m.production_line_id,
+        m.criticality, m.status, m.operating_hours, m.maintenance_frequency_days,
+        m.qr_code_uid, m.manual_url, m.description, m.created_at, m.updated_at,
+        m.designated_technician_id,
+        s.shop_name, s.shop_code, s.plant_id,
+        p.plant_name, p.plant_code,
+        b.bay_name, b.bay_code,
+        pl.line_name, pl.line_code,
+        dtech.full_name as designated_technician_name, dtech.employee_code as designated_technician_code
+      FROM machines m
+      JOIN shops s ON m.shop_id = s.id
+      JOIN plants p ON s.plant_id = p.id
+      LEFT JOIN bays b ON m.bay_id = b.id
+      LEFT JOIN production_lines pl ON m.production_line_id = pl.id
+      LEFT JOIN users dtech ON m.designated_technician_id = dtech.id
+      WHERE m.id = $1
+    `, [id]);
+
+    if (machineRes.rows.length === 0) {
+      res.status(404).json({ success: false, message: 'Machine asset not found.' });
+      return;
+    }
+
+    const machine = machineRes.rows[0];
+
+    // Facility Scope Enforcement for non-admins
+    if (user && user.role !== 'admin') {
+      if (user.plant_id && user.plant_id !== machine.plant_id) {
+        res.status(403).json({ success: false, message: 'Access denied: Machine belongs to another plant facility.' });
+        return;
+      }
+      if (user.shop_id && user.role !== 'manager' && user.shop_id !== machine.shop_id) {
+        res.status(403).json({ success: false, message: 'Access denied: Machine belongs to another shop floor.' });
+        return;
+      }
+    }
+
+    // 2. Fetch Latest Inspecting / Operating Personnel Assignment
+    const operatorRes = await query(`
+      SELECT 
+        u.id, u.full_name, u.employee_code, u.email, u.shift,
+        ir.created_at as last_inspection_date, ir.overall_status as last_inspection_status,
+        ir.shift as inspection_shift
+      FROM inspection_records ir
+      JOIN users u ON ir.operator_id = u.id
+      WHERE ir.machine_id = $1
+      ORDER BY ir.created_at DESC
+      LIMIT 1
+    `, [id]);
+    const operator = operatorRes.rows[0] || null;
+
+    // 3. Fetch Assigned / Responsible Technician & Manager
+    const personnelRes = await query(`
+      SELECT 
+        tech.id as technician_id, tech.full_name as technician_name, tech.employee_code as technician_code,
+        mgr.id as manager_id, mgr.full_name as manager_name, mgr.employee_code as manager_code
+      FROM work_orders wo
+      LEFT JOIN users tech ON wo.assigned_technician_id = tech.id
+      LEFT JOIN users mgr ON wo.assigned_manager_id = mgr.id
+      WHERE wo.machine_id = $1 AND (wo.assigned_technician_id IS NOT NULL OR wo.assigned_manager_id IS NOT NULL)
+      ORDER BY wo.created_at DESC
+      LIMIT 1
+    `, [id]);
+    let personnel = personnelRes.rows[0] || null;
+    if (!personnel && machine.designated_technician_id && machine.designated_technician_name) {
+      personnel = {
+        technician_id: machine.designated_technician_id,
+        technician_name: machine.designated_technician_name,
+        technician_code: machine.designated_technician_code,
+        manager_id: null,
+        manager_name: null,
+        manager_code: null,
+      };
+    }
+
+    // 4. Active Issues / Outstanding Stoppage
+    // complaint_status enum values: 'new', 'pending_review', 'approved', 'rejected', 'work_order_created', 'closed'
+    // Active breakdowns are those not yet closed or rejected. Cast status::text to prevent invalid enum casting errors.
+    const activeBreakdownRes = await query(`
+      SELECT id, complaint_number, problem_title, issue_category, priority, status, breakdown_occurred_at
+      FROM maintenance_requests
+      WHERE machine_id = $1 AND status::text NOT IN ('closed', 'rejected')
+      ORDER BY breakdown_occurred_at DESC
+      LIMIT 1
+    `, [id]);
+
+    // work_order_status enum values: 'assigned', 'accepted', 'scheduled', 'under_diagnosis', 'in_progress',
+    // 'waiting_for_parts', 'waiting_for_approval', 'on_hold', 'submitted_verification', 'rework_required',
+    // 'completed', 'verified_closed', 'reopened'
+    // Note: work_orders table does not store problem_title directly; it is joined from maintenance_requests via complaint_id.
+    const activeWorkOrderRes = await query(`
+      SELECT 
+        wo.id, wo.wo_number,
+        COALESCE(r.problem_title, wo.work_instructions, wo.diagnosis, 'Maintenance Inspection') as problem_title,
+        wo.status, wo.priority, wo.work_started_time
+      FROM work_orders wo
+      LEFT JOIN maintenance_requests r ON wo.complaint_id = r.id
+      WHERE wo.machine_id = $1 AND wo.status::text NOT IN ('verified_closed', 'completed')
+      ORDER BY wo.created_at DESC
+      LIMIT 1
+    `, [id]);
+
+    // Friendly display status mapping helpers for presentation layer
+    const formatComplaintStatus = (status: string | null | undefined): string => {
+      if (!status) return 'Unknown';
+      switch (status.toLowerCase()) {
+        case 'closed':
+          return 'Resolved';
+        case 'work_order_created':
+          return 'Work Order Created';
+        case 'pending_review':
+          return 'Pending Review';
+        case 'approved':
+          return 'Approved';
+        case 'rejected':
+          return 'Rejected';
+        case 'new':
+          return 'New';
+        default:
+          return status.replace(/_/g, ' ');
+      }
+    };
+
+    const formatWorkOrderStatus = (status: string | null | undefined): string => {
+      if (!status) return 'Unknown';
+      switch (status.toLowerCase()) {
+        case 'verified_closed':
+          return 'Verified Closed';
+        case 'submitted_verification':
+          return 'Submitted for Verification';
+        case 'waiting_for_parts':
+          return 'Waiting for Parts';
+        case 'waiting_for_approval':
+          return 'Waiting for Approval';
+        case 'under_diagnosis':
+          return 'Under Diagnosis';
+        case 'in_progress':
+          return 'In Progress';
+        case 'rework_required':
+          return 'Rework Required';
+        case 'completed':
+          return 'Completed';
+        default:
+          return status.replace(/_/g, ' ');
+      }
+    };
+
+    const activeBreakdown = activeBreakdownRes.rows[0]
+      ? {
+          ...activeBreakdownRes.rows[0],
+          display_status: formatComplaintStatus(activeBreakdownRes.rows[0].status),
+        }
+      : null;
+
+    const activeWorkOrder = activeWorkOrderRes.rows[0]
+      ? {
+          ...activeWorkOrderRes.rows[0],
+          display_status: formatWorkOrderStatus(activeWorkOrderRes.rows[0].status),
+        }
+      : null;
+
+    // 5. Preventive Maintenance Plans
+    const pmRes = await query(`
+      SELECT id, plan_code, title, frequency, interval_days, operating_hour_threshold,
+             last_pm_date, next_pm_date, is_active, created_at
+      FROM pm_plans
+      WHERE machine_id = $1
+      ORDER BY next_pm_date ASC NULLS LAST, id ASC
+      LIMIT 10
+    `, [id]);
+    const pmPlans = pmRes.rows;
+
+    // 6. Work Orders History (with date filter if supplied)
+    const woParams: any[] = [id];
+    let woWhere = 'wo.machine_id = $1';
+    if (startDate) {
+      woParams.push(startDate);
+      woWhere += ` AND wo.created_at >= $${woParams.length}`;
+    }
+    if (endDate) {
+      woParams.push(endDate);
+      woWhere += ` AND wo.created_at <= $${woParams.length}`;
+    }
+    const woHistoryRes = await query(`
+      SELECT 
+        wo.id, wo.wo_number, wo.status, wo.priority, wo.classification,
+        COALESCE(r.problem_title, wo.work_instructions, wo.diagnosis, 'Maintenance Inspection') as problem_title,
+        wo.diagnosis, wo.root_cause_analysis, wo.corrective_action,
+        wo.total_downtime_minutes, wo.active_repair_minutes, wo.created_at,
+        wo.repair_completed_time,
+        tech.full_name as assigned_technician_name, tech.employee_code as assigned_technician_code
+      FROM work_orders wo
+      LEFT JOIN maintenance_requests r ON wo.complaint_id = r.id
+      LEFT JOIN users tech ON wo.assigned_technician_id = tech.id
+      WHERE ${woWhere}
+      ORDER BY wo.created_at DESC
+      LIMIT 20
+    `, woParams);
+    const workOrders = woHistoryRes.rows.map((wo: any) => ({
+      ...wo,
+      display_status: formatWorkOrderStatus(wo.status),
+    }));
+
+    // 7. Breakdown History (with date filter if supplied)
+    const bdParams: any[] = [id];
+    let bdWhere = 'mr.machine_id = $1';
+    if (startDate) {
+      bdParams.push(startDate);
+      bdWhere += ` AND mr.breakdown_occurred_at >= $${bdParams.length}`;
+    }
+    if (endDate) {
+      bdParams.push(endDate);
+      bdWhere += ` AND mr.breakdown_occurred_at <= $${bdParams.length}`;
+    }
+    const bdHistoryRes = await query(`
+      SELECT 
+        mr.id, mr.complaint_number, mr.problem_title, mr.issue_category, mr.priority,
+        mr.status, mr.breakdown_occurred_at, mr.created_at,
+        u.full_name as reported_by_name, u.employee_code as reported_by_code
+      FROM maintenance_requests mr
+      LEFT JOIN users u ON mr.reported_by_id = u.id
+      WHERE ${bdWhere}
+      ORDER BY mr.breakdown_occurred_at DESC
+      LIMIT 20
+    `, bdParams);
+    const breakdowns = bdHistoryRes.rows.map((bd: any) => ({
+      ...bd,
+      display_status: formatComplaintStatus(bd.status),
+    }));
+
+    // 8. Spare Parts Consumed
+    const partsRes = await query(`
+      SELECT 
+        wpc.id, wo.wo_number, sp.part_number, sp.name as part_name,
+        wpc.quantity_requested, wpc.quantity_issued, wpc.quantity_installed,
+        wpc.serial_number_installed, wpc.created_at
+      FROM wo_parts_consumed wpc
+      JOIN work_orders wo ON wpc.work_order_id = wo.id
+      JOIN spare_parts sp ON wpc.part_id = sp.id
+      WHERE wo.machine_id = $1
+      ORDER BY wpc.created_at DESC
+      LIMIT 20
+    `, [id]);
+    const partsConsumed = partsRes.rows;
+
+    // 9. Aggregates and Performance Metrics
+    const aggRes = await query(`
+      SELECT 
+        (SELECT COUNT(*)::int FROM maintenance_requests WHERE machine_id = $1) as total_breakdowns,
+        (SELECT COUNT(*)::int FROM work_orders WHERE machine_id = $1) as total_work_orders,
+        (SELECT COUNT(*)::int FROM work_orders WHERE machine_id = $1 AND status::text IN ('verified_closed', 'completed')) as completed_work_orders,
+        (SELECT COUNT(*)::int FROM work_orders WHERE machine_id = $1 AND status::text NOT IN ('verified_closed', 'completed')) as active_work_orders,
+        (SELECT COUNT(*)::int FROM inspection_records WHERE machine_id = $1) as total_inspections,
+        (SELECT COUNT(*)::int FROM pm_plans WHERE machine_id = $1) as total_pm_plans,
+        (SELECT COALESCE(SUM(total_downtime_minutes), 0)::int FROM work_orders WHERE machine_id = $1) as total_downtime_minutes,
+        (SELECT COALESCE(SUM(active_repair_minutes), 0)::int FROM work_orders WHERE machine_id = $1) as active_repair_minutes,
+        (SELECT COUNT(*)::int FROM wo_parts_consumed wpc JOIN work_orders wo ON wpc.work_order_id = wo.id WHERE wo.machine_id = $1) as total_parts_consumed
+    `, [id]);
+    const agg = aggRes.rows[0] || {};
+
+    const totalDowntimeMinutes = agg.total_downtime_minutes || 0;
+    const totalDowntimeHours = parseFloat((totalDowntimeMinutes / 60.0).toFixed(1));
+    const completedWOs = agg.completed_work_orders || 0;
+    const avgMTTRMinutes = completedWOs > 0 ? Math.round(totalDowntimeMinutes / completedWOs) : 0;
+    const operatingHours = Number(machine.operating_hours || 0);
+
+    // Calculate Availability %
+    let availabilityPercent = 100;
+    if (operatingHours > 0 || totalDowntimeHours > 0) {
+      const totalOperationalBase = operatingHours + totalDowntimeHours;
+      availabilityPercent = totalOperationalBase > 0 
+        ? parseFloat(((operatingHours / totalOperationalBase) * 100).toFixed(1)) 
+        : 100;
+    }
+
+    res.json({
+      success: true,
+      data: {
+        machine,
+        operator,
+        personnel,
+        activeIssues: {
+          breakdown: activeBreakdown,
+          workOrder: activeWorkOrder,
+          hasActiveStoppage: Boolean(activeBreakdown || activeWorkOrder),
+        },
+        pmPlans,
+        workOrders,
+        breakdowns,
+        partsConsumed,
+        stats: {
+          totalBreakdowns: agg.total_breakdowns || 0,
+          totalWorkOrders: agg.total_work_orders || 0,
+          completedWorkOrders: completedWOs,
+          activeWorkOrders: agg.active_work_orders || 0,
+          totalInspections: agg.total_inspections || 0,
+          totalPmPlans: agg.total_pm_plans || 0,
+          totalPartsConsumed: agg.total_parts_consumed || 0,
+          totalDowntimeMinutes,
+          totalDowntimeHours,
+          avgMTTRMinutes,
+          operatingHours,
+          availabilityPercent,
+        },
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};

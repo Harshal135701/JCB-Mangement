@@ -3,7 +3,6 @@ import { useAuth } from '../../context/AuthContext';
 import {
   FileText,
   Download,
-  Calendar,
   RefreshCw,
   Wrench,
   ClipboardCheck,
@@ -17,7 +16,7 @@ import {
   XCircle,
   Filter,
   BarChart3,
-  Layers,
+  Cpu,
   Factory,
   Building2,
   Check,
@@ -30,7 +29,10 @@ import {
   fetchManagerReportData,
   fetchStoreManagerReportData,
   fetchAdminReportData,
+  fetchMachines,
+  fetchMachineReportData,
   UserSummary,
+  MachineSummary,
 } from './services/reportService';
 import {
   generateReportPDF,
@@ -39,6 +41,7 @@ import {
 } from './utils/generateReportPDF';
 import { ReportSummaryCards, ReportCardItem } from './components/ReportSummaryCards';
 import { ReportUserSelector } from './components/ReportUserSelector';
+import { ReportMachineSelector } from './components/ReportMachineSelector';
 
 export const ReportsPage: React.FC = () => {
   const { user } = useAuth();
@@ -48,15 +51,20 @@ export const ReportsPage: React.FC = () => {
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
 
-  // State: Tab Selection (Default to personal overview for manager/admin)
+  // State: Tab Selection (Default to enterprise overview for admin, my_report for manager)
   const [activeTab, setActiveTab] = useState<string>(
     userRole === 'admin' ? 'enterprise' : userRole === 'manager' ? 'my_report' : 'personal'
   );
 
-  // State: Users Directory for Selection (Empty by default)
+  // State: Users Directory for Selection
   const [availableUsers, setAvailableUsers] = useState<UserSummary[]>([]);
   const [selectedUser, setSelectedUser] = useState<UserSummary | null>(null);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+
+  // State: Machines Directory for Selection
+  const [availableMachines, setAvailableMachines] = useState<MachineSummary[]>([]);
+  const [selectedMachine, setSelectedMachine] = useState<MachineSummary | null>(null);
+  const [isLoadingMachines, setIsLoadingMachines] = useState(false);
 
   // State: Report Data & Status
   const [reportData, setReportData] = useState<any>(null);
@@ -75,14 +83,32 @@ export const ReportsPage: React.FC = () => {
     }
   }, [userRole]);
 
-  // Load User Directory when tab changes for Manager or Admin
-  // Crucial: Never preselect any employee by default!
+  // Load Directory when tab changes (Users or Machines)
+  // Crucial: Never preselect any item by default!
   useEffect(() => {
     const loadDirectory = async () => {
       setSelectedUser(null);
+      setSelectedMachine(null);
       setReportData(null);
       setErrorMsg(null);
 
+      // 1. Machine Reports Tab
+      if (activeTab === 'machines') {
+        setIsLoadingMachines(true);
+        try {
+          const managerPlantId = userRole === 'manager' ? (user?.plantId || (user as any)?.plant_id) : undefined;
+          const list = await fetchMachines(undefined, managerPlantId);
+          setAvailableMachines(list);
+        } catch (err) {
+          console.error('Failed to load machinery directory:', err);
+          setAvailableMachines([]);
+        } finally {
+          setIsLoadingMachines(false);
+        }
+        return;
+      }
+
+      // 2. Subordinate Personnel Tabs
       const isSubordinateTab = ['technicians', 'operators', 'managers', 'store_managers'].includes(activeTab);
       if (!isSubordinateTab) return;
 
@@ -117,6 +143,19 @@ export const ReportsPage: React.FC = () => {
     setErrorMsg(null);
 
     try {
+      // 1. Machine Report
+      if (activeTab === 'machines') {
+        if (!selectedMachine) {
+          setReportData(null);
+          setIsGenerating(false);
+          return;
+        }
+        const data = await fetchMachineReportData(selectedMachine.id, startDate, endDate);
+        setReportData(data);
+        return;
+      }
+
+      // 2. Role-Based Employee Reports
       if (userRole === 'technician') {
         const data = await fetchTechnicianReportData(user.id, startDate, endDate);
         setReportData(data);
@@ -191,9 +230,9 @@ export const ReportsPage: React.FC = () => {
     } finally {
       setIsGenerating(false);
     }
-  }, [user, userRole, activeTab, selectedUser, startDate, endDate]);
+  }, [user, userRole, activeTab, selectedUser, selectedMachine, startDate, endDate]);
 
-  // Trigger report fetch when on self tabs or when selectedUser is chosen
+  // Trigger report fetch when on self tabs or when an item is selected
   useEffect(() => {
     if (userRole === 'technician' || userRole === 'operator' || userRole === 'store_manager') {
       handleGenerateReport();
@@ -204,10 +243,12 @@ export const ReportsPage: React.FC = () => {
       handleGenerateReport();
     } else if (selectedUser) {
       handleGenerateReport();
+    } else if (activeTab === 'machines' && selectedMachine) {
+      handleGenerateReport();
     }
-  }, [userRole, activeTab, selectedUser, handleGenerateReport]);
+  }, [userRole, activeTab, selectedUser, selectedMachine, handleGenerateReport]);
 
-  // Algorithmic summary paragraph generator strictly using real system records
+  // Algorithmic summary paragraph generator strictly using verified system records
   const generateOverallSummary = (role: string, targetName: string, stats: any): string => {
     const s = stats || {};
     if (role === 'technician') {
@@ -256,17 +297,170 @@ export const ReportsPage: React.FC = () => {
     setIsDownloading(true);
 
     try {
+      // 1. MACHINE REPORT PDF EXPORT
+      if (activeTab === 'machines') {
+        if (!selectedMachine || !reportData.machine) return;
+        const m = reportData.machine;
+        const s = reportData.stats || {};
+        const op = reportData.operator;
+        const pers = reportData.personnel;
+        const activeIssues = reportData.activeIssues;
+
+        const reportTitle = 'Machine Asset Profile & Operational Maintenance Summary';
+        const metrics: PDFReportMetric[] = [
+          { label: 'Operating Hours', value: `${s.operatingHours || 0} hrs` },
+          { label: 'Current Status', value: (m.status || 'running').toUpperCase(), highlight: true },
+          { label: 'Breakdowns', value: s.totalBreakdowns ?? 0 },
+          { label: 'Work Orders', value: s.totalWorkOrders ?? 0 },
+          { label: 'Downtime Resolved', value: `${s.totalDowntimeHours || 0} hrs` },
+          { label: 'Availability', value: `${s.availabilityPercent ?? 100}%`, highlight: true },
+        ];
+
+        const executiveSummary =
+          `Machinery asset ${m.name} (${m.machine_code}, ${m.category} manufactured by ${m.oem_manufacturer || 'OEM'}) is assigned to ` +
+          `${m.shop_name || 'Production Shop'} at ${m.plant_name || 'JCB Works'}. The asset currently records a cumulative lifetime reading of ` +
+          `${s.operatingHours || 0} operating hours with an operational availability rate of ${s.availabilityPercent ?? 100}%. System records ` +
+          `document ${s.totalBreakdowns || 0} total breakdown incidents and ${s.totalWorkOrders || 0} work orders (${s.completedWorkOrders || 0} ` +
+          `verified and closed), accounting for ${s.totalDowntimeHours || 0} hours of resolved stoppage and ${s.totalPartsConsumed || 0} replacement ` +
+          `components consumed. The machine status is currently recorded as ${(m.status || 'running').toUpperCase()} with ` +
+          `${activeIssues?.hasActiveStoppage ? 'active maintenance attention required.' : 'no active breakdown stoppage recorded.'}`;
+
+        // Block 1: Condition & Preventive Maintenance
+        const nextPm = reportData.pmPlans?.[0];
+        const nextPmText = nextPm?.next_pm_date ? new Date(nextPm.next_pm_date).toLocaleDateString('en-IN') : 'Not Scheduled';
+        const lastPmText = nextPm?.last_pm_date ? new Date(nextPm.last_pm_date).toLocaleDateString('en-IN') : 'Not Available';
+
+        const summaryBlocks: PDFSummaryBlock[] = [
+          {
+            title: 'Machine Condition & Preventive Maintenance Schedule',
+            tableHead: ['Maintenance Parameter', 'Specification / Schedule', 'Current Operational State', 'Compliance / Action'],
+            tableRows: [
+              ['Machine Criticality', m.criticality ? m.criticality.toUpperCase().replace(/_/g, ' ') : 'CLASS B', 'Plant Production Asset', 'Priority Monitored'],
+              ['Operational Condition', (m.status || 'running').toUpperCase(), activeIssues?.hasActiveStoppage ? 'Active Stoppage Flagged' : 'Normal Operation', activeIssues?.hasActiveStoppage ? 'Repair Ongoing' : 'Certified Running'],
+              ['Maintenance Frequency', m.maintenance_frequency_days ? `Every ${m.maintenance_frequency_days} Days` : '30-Day Periodic Cycle', 'Preventive Standard Active', 'Compliant'],
+              ['Last Maintenance Action', lastPmText, 'Documented in CMMS', lastPmText !== 'Not Available' ? 'Verified Done' : 'Standard Routine'],
+              ['Next Scheduled Maintenance', nextPmText, nextPm ? nextPm.title || nextPm.plan_code : 'Periodic PM Routine', nextPmText !== 'Not Scheduled' ? 'Scheduled On-Time' : 'Ad-hoc PM'],
+              ['Active Stoppage Status', activeIssues?.breakdown ? `Complaint: ${activeIssues.breakdown.complaint_number}` : activeIssues?.workOrder ? `WO: ${activeIssues.workOrder.wo_number}` : 'None', activeIssues?.hasActiveStoppage ? 'Field Work Required' : 'Zero Active Faults', activeIssues?.hasActiveStoppage ? 'Under Active Repair' : 'No Action Required'],
+            ],
+          },
+        ];
+
+        // Block 2: Work Orders & Breakdown History
+        if (reportData.workOrders && reportData.workOrders.length > 0) {
+          const woRows = reportData.workOrders.slice(0, 5).map((w: any) => [
+            w.wo_number || 'N/A',
+            w.problem_title || w.diagnosis || 'Maintenance Inspection',
+            w.assigned_technician_name || 'Assigned Crew',
+            w.total_downtime_minutes ? `${w.total_downtime_minutes} mins` : '0 mins',
+            (w.status || 'COMPLETED').toUpperCase().replace(/_/g, ' '),
+          ]);
+          summaryBlocks.push({
+            title: 'Breakdown & Work Order Execution History',
+            tableHead: ['WO / Ticket #', 'Problem / Diagnosis', 'Assigned Tech', 'Downtime', 'Status'],
+            tableRows: woRows,
+          });
+        } else {
+          summaryBlocks.push({
+            title: 'Breakdown & Work Order Execution History',
+            tableHead: ['Maintenance History', 'Operational Record', 'Benchmark Status'],
+            tableRows: [
+              ['Work Order History', 'Zero recent repair tickets logged during period', 'Asset Running to Operational Standard'],
+              ['Breakdown Invocations', 'Zero active breakdown incidents', 'Optimal Reliability Achieved'],
+            ],
+          });
+        }
+
+        // Block 3: Spare Parts Consumed
+        if (reportData.partsConsumed && reportData.partsConsumed.length > 0) {
+          const partsRows = reportData.partsConsumed.slice(0, 5).map((p: any) => [
+            p.part_name || 'Spare Part Item',
+            p.part_number || 'SKU-000',
+            `${p.quantity_installed || p.quantity_issued || 1} units`,
+            p.wo_number || 'WO-Record',
+            'Installed & Verified',
+          ]);
+          summaryBlocks.push({
+            title: 'Spare Parts Consumed & Material Replacement Summary',
+            tableHead: ['Part Description', 'Part Number / SKU', 'Qty Installed', 'Work Order #', 'Installation Status'],
+            tableRows: partsRows,
+          });
+        } else {
+          summaryBlocks.push({
+            title: 'Spare Parts Consumed & Material Replacement Summary',
+            tableHead: ['Material Requisition', 'Consumption Volume', 'Inventory Governance'],
+            tableRows: [
+              ['Spare Parts Consumption', 'Zero replacement components required during period', 'OEM Parts Preserved in Store'],
+            ],
+          });
+        }
+
+        generateReportPDF({
+          reportTitle,
+          role: 'machine',
+          machineSubject: {
+            name: m.name,
+            machineCode: m.machine_code,
+            category: m.category,
+            oemManufacturer: m.oem_manufacturer,
+            modelNumber: m.model_number || 'Not Available',
+            serialNumber: m.serial_number || 'Not Available',
+            criticality: m.criticality,
+            status: m.status,
+            plantName: m.plant_name || user?.plantName || 'JCB Ballabgarh Works',
+            shopName: m.shop_name || 'Main Production Shop',
+            bayLineLocation: m.bay_line_location || m.bay_name || m.line_name || 'Standard Line',
+            operatingHours: s.operatingHours || m.operating_hours || 0,
+            commissionDate: m.created_at ? new Date(m.created_at).toLocaleDateString('en-IN') : 'Not Available',
+            assignedOperator: op?.full_name || 'Shift Operator Pool',
+            operatorCode: op?.employee_code,
+            responsiblePerson: pers?.technician_name ? `${pers.technician_name} (Tech)` : pers?.manager_name ? `${pers.manager_name} (Mgr)` : 'Shop Maintenance Lead',
+            assignmentStatus: activeIssues?.hasActiveStoppage ? 'Under Active Repair' : 'Normal Operating Assignment',
+          },
+          generatedBy: `${user?.fullName || 'User'} (${userRole.toUpperCase()})`,
+          dateRange: {
+            startDate: startDate || undefined,
+            endDate: endDate || undefined,
+          },
+          metrics,
+          executiveSummary,
+          summaryBlocks,
+        });
+        return;
+      }
+
+      // 2. EMPLOYEE REPORT PDF EXPORT
       const isViewingOther =
         (userRole === 'manager' || userRole === 'admin') &&
         ['technicians', 'operators', 'managers', 'store_managers'].includes(activeTab) &&
         selectedUser;
 
-      // Determine subject: Selected employee if viewing subordinate, otherwise logged-in user
+      const targetRole = isViewingOther && selectedUser ? selectedUser.role : userRole;
+
+      // Role-specific department and responsibility mappings
+      const getRoleDepartment = (role: string) => {
+        if (role === 'technician') return 'Plant Mechanical & Electrical Engineering';
+        if (role === 'operator') return 'Plant Production & Machine Operations';
+        if (role === 'store_manager') return 'Central Stores & Inventory Warehouse';
+        if (role === 'manager') return 'Plant Engineering & Maintenance Command';
+        return 'CMMS Enterprise Governance & Compliance';
+      };
+
+      const getRoleResponsibilities = (role: string) => {
+        if (role === 'technician') return 'Corrective repair, preventive maintenance execution, equipment troubleshooting, and parts installation.';
+        if (role === 'operator') return 'Shift pre-start safety checklist verification, machine operation, and immediate breakdown reporting.';
+        if (role === 'store_manager') return 'Spare parts catalog inventory control, stock issues/receipts, safety buffers, and purchase requisitions.';
+        if (role === 'manager') return 'Breakdown triage dispatch, technician assignment governance, work order sign-off, and plant maintenance compliance.';
+        return 'Enterprise-wide maintenance governance, cross-plant administration, user security, and audit verification.';
+      };
+
       const targetUser = isViewingOther && selectedUser
         ? {
             name: selectedUser.full_name,
             employeeCode: selectedUser.employee_code,
             designation: selectedUser.designation || selectedUser.role.toUpperCase(),
+            department: selectedUser.department || getRoleDepartment(targetRole),
+            responsibilities: getRoleResponsibilities(targetRole),
+            status: selectedUser.is_active ? 'Active / On-Duty' : 'Inactive',
             plantName: (selectedUser as any).plant_name || user?.plantName || 'JCB Ballabgarh Works',
             shopName: (selectedUser as any).shop_name || 'Assigned Plant Facilities',
             email: selectedUser.email,
@@ -275,14 +469,15 @@ export const ReportsPage: React.FC = () => {
             name: user?.fullName || (user as any)?.name || user?.email || 'Authenticated Personnel',
             employeeCode: user?.employeeCode || (user as any)?.employee_code,
             designation: user?.designation || userRole.toUpperCase(),
+            department: (user as any)?.department || getRoleDepartment(targetRole),
+            responsibilities: getRoleResponsibilities(targetRole),
+            status: 'Active / Verified On-Duty',
             plantName: user?.plantName || 'JCB Ballabgarh Works',
             shopName: user?.shopName || 'All Plant Facilities',
             email: user?.email,
           };
 
-      const targetRole = isViewingOther && selectedUser ? selectedUser.role : userRole;
       const stats = reportData.stats || {};
-
       let reportTitle = 'Operational Performance & Activity Summary';
       let metrics: PDFReportMetric[] = [];
       let summaryBlocks: PDFSummaryBlock[] = [];
@@ -491,6 +686,26 @@ export const ReportsPage: React.FC = () => {
     const s = reportData.stats || {};
     let cards: ReportCardItem[] = [];
 
+    // Machine Reports KPI cards
+    if (activeTab === 'machines' && reportData.machine) {
+      const m = reportData.machine;
+      const status = (m.status || 'running').toLowerCase();
+      cards = [
+        { label: 'Operating Hours', value: `${s.operatingHours || 0} hrs`, icon: Clock },
+        {
+          label: 'Current Status',
+          value: (m.status || 'running').toUpperCase().replace(/_/g, ' '),
+          icon: Cpu,
+          variant: status === 'running' ? 'green' : status === 'breakdown' ? 'red' : 'amber',
+        },
+        { label: 'Total Breakdowns', value: s.totalBreakdowns ?? 0, icon: AlertTriangle, variant: 'red' },
+        { label: 'Total Work Orders', value: s.totalWorkOrders ?? 0, icon: Wrench, variant: 'blue' },
+        { label: 'Machine Downtime', value: `${s.totalDowntimeHours || 0} hrs`, icon: Clock, variant: 'amber' },
+        { label: 'Availability Rate', value: `${s.availabilityPercent ?? 100}%`, icon: CheckCircle2, variant: 'green' },
+      ];
+      return <ReportSummaryCards cards={cards} />;
+    }
+
     const isViewingSubordinate =
       (userRole === 'manager' || userRole === 'admin') &&
       ['technicians', 'operators', 'managers', 'store_managers'].includes(activeTab);
@@ -550,6 +765,8 @@ export const ReportsPage: React.FC = () => {
     (userRole === 'manager' || userRole === 'admin') &&
     ['technicians', 'operators', 'managers', 'store_managers'].includes(activeTab);
 
+  const isMachineTab = activeTab === 'machines';
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
       {/* 1. Header Banner */}
@@ -564,7 +781,7 @@ export const ReportsPage: React.FC = () => {
                 JCB CMMS
               </span>
               <h1 className="text-xl font-black text-zinc-950 tracking-tight uppercase">
-                Role-Based Reports & PDF Generator
+                Role & Asset Reports Generator
               </h1>
             </div>
             <p className="text-xs text-zinc-500 mt-0.5">
@@ -578,7 +795,7 @@ export const ReportsPage: React.FC = () => {
           <button
             type="button"
             onClick={handleGenerateReport}
-            disabled={isGenerating || (isSubordinateTab && !selectedUser)}
+            disabled={isGenerating || (isSubordinateTab && !selectedUser) || (isMachineTab && !selectedMachine)}
             className="px-4 py-2 bg-zinc-900 text-white rounded-xl text-xs font-bold hover:bg-black transition flex items-center gap-2 shadow-xs disabled:opacity-50 cursor-pointer"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isGenerating ? 'animate-spin' : ''}`} />
@@ -588,7 +805,12 @@ export const ReportsPage: React.FC = () => {
           <button
             type="button"
             onClick={handleDownloadPDF}
-            disabled={!reportData || isDownloading || (isSubordinateTab && !selectedUser)}
+            disabled={
+              !reportData ||
+              isDownloading ||
+              (isSubordinateTab && !selectedUser) ||
+              (isMachineTab && !selectedMachine)
+            }
             className="px-4 py-2 bg-amber-500 text-black rounded-xl text-xs font-black uppercase tracking-wider hover:bg-amber-400 transition flex items-center gap-2 shadow-xs disabled:opacity-50 cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" />
@@ -611,6 +833,18 @@ export const ReportsPage: React.FC = () => {
           >
             <UserCheck className="w-3.5 h-3.5" />
             My Manager Report
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('machines')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+              activeTab === 'machines'
+                ? 'bg-amber-500 text-black shadow-xs font-black'
+                : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50'
+            }`}
+          >
+            <Cpu className="w-3.5 h-3.5" />
+            Machine Reports
           </button>
           <button
             type="button"
@@ -652,6 +886,18 @@ export const ReportsPage: React.FC = () => {
           >
             <ShieldCheck className="w-3.5 h-3.5" />
             Enterprise Overview & KPIs
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('machines')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+              activeTab === 'machines'
+                ? 'bg-amber-500 text-black shadow-xs font-black'
+                : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50'
+            }`}
+          >
+            <Cpu className="w-3.5 h-3.5" />
+            Machine Reports
           </button>
           <button
             type="button"
@@ -750,7 +996,16 @@ export const ReportsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* 4. User Selector Dropdown (When Manager/Admin views subordinate personnel) */}
+      {/* 4. Selector Section (Machine Selector or User Selector) */}
+      {isMachineTab && (
+        <ReportMachineSelector
+          machines={availableMachines}
+          selectedMachine={selectedMachine}
+          onSelectMachine={(m) => setSelectedMachine(m)}
+          isLoading={isLoadingMachines}
+        />
+      )}
+
       {isSubordinateTab && (
         <ReportUserSelector
           roleLabel={
@@ -777,8 +1032,20 @@ export const ReportsPage: React.FC = () => {
         </div>
       )}
 
-      {/* 5. Instruction Card when Subordinate tab has no employee selected */}
-      {isSubordinateTab && !selectedUser ? (
+      {/* 5. Instruction Card when an item is not selected */}
+      {isMachineTab && !selectedMachine ? (
+        <div className="bg-white border-2 border-dashed border-zinc-300 rounded-2xl p-12 text-center space-y-3">
+          <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center mx-auto shadow-2xs">
+            <Cpu className="w-7 h-7" />
+          </div>
+          <h3 className="text-base font-black text-zinc-950 uppercase tracking-tight">
+            Please Select a Machine Asset to Generate Report
+          </h3>
+          <p className="text-xs text-zinc-500 max-w-md mx-auto leading-relaxed">
+            Search and select an active plant machinery asset from the selector above to inspect its real-time operating metrics, maintenance lifecycle, and download its official summary PDF report.
+          </p>
+        </div>
+      ) : isSubordinateTab && !selectedUser ? (
         <div className="bg-white border-2 border-dashed border-zinc-300 rounded-2xl p-12 text-center space-y-3">
           <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center mx-auto shadow-2xs">
             <UserCheck className="w-7 h-7" />
@@ -795,14 +1062,14 @@ export const ReportsPage: React.FC = () => {
           {/* 6. Live Summary KPI Cards */}
           {renderKPICards()}
 
-          {/* 7. Concise Activity Summaries (Management Summary Tables) */}
+          {/* 7. Concise Activity Summaries (Management Summary Tables / Breakdown) */}
           {reportData && (
             <div className="bg-white border-2 border-zinc-200 rounded-2xl p-5 space-y-4 shadow-xs">
               <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
                 <div className="flex items-center gap-2">
                   <BarChart3 className="w-4 h-4 text-amber-500" />
                   <h3 className="text-sm font-black text-zinc-950 uppercase tracking-tight">
-                    Operational Activity Breakdown
+                    {isMachineTab ? 'Machinery Asset Lifecycle Breakdown' : 'Operational Activity Breakdown'}
                   </h3>
                 </div>
                 <span className="text-[10px] font-mono font-bold bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded border border-zinc-200">
@@ -810,59 +1077,147 @@ export const ReportsPage: React.FC = () => {
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                {/* Metric Summary Box 1 */}
-                <div className="bg-zinc-50 p-4 rounded-xl border border-zinc-200 space-y-2">
-                  <span className="text-[11px] font-black uppercase tracking-wider text-zinc-500 block">
-                    Execution & Lifecycle Health
-                  </span>
-                  <div className="space-y-1.5 text-zinc-700">
-                    <div className="flex justify-between">
-                      <span className="font-medium">Verified / Completed Actions:</span>
-                      <span className="font-bold text-emerald-700">
-                        {reportData.stats?.verifiedAndClosed ?? reportData.stats?.passed ?? reportData.stats?.completedWorkOrders ?? 0}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="font-medium">Active / In-Progress Tickets:</span>
-                      <span className="font-bold text-amber-700">
-                        {reportData.stats?.acceptedOrInProgress ?? reportData.stats?.workOrdersActive ?? reportData.stats?.activeWorkOrders ?? 0}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="font-medium">Attention Required / Pending:</span>
-                      <span className="font-bold text-zinc-900">
-                        {reportData.stats?.waitingForParts ?? reportData.stats?.requiringAttention ?? reportData.stats?.pendingBreakdowns ?? 0}
-                      </span>
+              {isMachineTab && reportData.machine ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                  {/* Machine Specifications & Facility Location */}
+                  <div className="bg-zinc-50 p-4 rounded-xl border border-zinc-200 space-y-2">
+                    <span className="text-[11px] font-black uppercase tracking-wider text-zinc-500 block">
+                      Asset Specifications & Operating Location
+                    </span>
+                    <div className="space-y-1.5 text-zinc-700">
+                      <div className="flex justify-between">
+                        <span className="font-medium">Category / Type:</span>
+                        <span className="font-bold text-zinc-950">{reportData.machine.category || 'Standard Equipment'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-medium">OEM Manufacturer:</span>
+                        <span className="font-bold text-zinc-950">{reportData.machine.oem_manufacturer || 'OEM Partner'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-medium">Model & Serial:</span>
+                        <span className="font-mono text-zinc-900">
+                          {reportData.machine.model_number || 'N/A'} • {reportData.machine.serial_number || 'N/A'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-medium">Plant & Shop:</span>
+                        <span className="font-bold text-zinc-950">
+                          {reportData.machine.plant_name || 'Plant'} • {reportData.machine.shop_name || 'Shop'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-medium">Bay / Line Location:</span>
+                        <span className="font-medium text-zinc-700">
+                          {reportData.machine.bay_line_location || reportData.machine.bay_name || reportData.machine.line_name || 'Standard Line'}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Metric Summary Box 2 */}
-                <div className="bg-zinc-50 p-4 rounded-xl border border-zinc-200 space-y-2">
-                  <span className="text-[11px] font-black uppercase tracking-wider text-zinc-500 block">
-                    Facility & Equipment Compliance
-                  </span>
-                  <div className="space-y-1.5 text-zinc-700">
-                    <div className="flex justify-between">
-                      <span className="font-medium">Equipment Units Addressed:</span>
-                      <span className="font-bold text-zinc-900">
-                        {reportData.stats?.machinesOperatedCount ?? reportData.stats?.totalMachines ?? 'Assigned Machinery'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="font-medium">Quality Defects / Rework:</span>
-                      <span className="font-bold text-emerald-700">
-                        {reportData.stats?.reworkCount ?? reportData.stats?.reworkCases ?? 0} (0% Target Met)
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="font-medium">Official Documentation:</span>
-                      <span className="font-bold text-zinc-900">100% Verified DB Records</span>
+                  {/* Assignment & Maintenance Status */}
+                  <div className="bg-zinc-50 p-4 rounded-xl border border-zinc-200 space-y-2">
+                    <span className="text-[11px] font-black uppercase tracking-wider text-zinc-500 block">
+                      Operational Assignment & Maintenance Condition
+                    </span>
+                    <div className="space-y-1.5 text-zinc-700">
+                      <div className="flex justify-between">
+                        <span className="font-medium">Assigned Operator:</span>
+                        <span className="font-bold text-zinc-950">
+                          {reportData.operator ? `${reportData.operator.full_name} (${reportData.operator.employee_code || 'OP'})` : 'Shift Operator Pool'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-medium">Responsible Lead / Tech:</span>
+                        <span className="font-bold text-zinc-950">
+                          {reportData.personnel?.technician_name
+                            ? `${reportData.personnel.technician_name} (Tech)`
+                            : reportData.personnel?.manager_name
+                            ? `${reportData.personnel.manager_name} (Mgr)`
+                            : 'Shop Maintenance Lead'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-medium">Active Breakdown / Stoppage:</span>
+                        <span className={`font-bold ${reportData.activeIssues?.hasActiveStoppage ? 'text-rose-700' : 'text-emerald-700'}`}>
+                          {reportData.activeIssues?.breakdown
+                            ? `Complaint ${reportData.activeIssues.breakdown.complaint_number}`
+                            : reportData.activeIssues?.workOrder
+                            ? `WO ${reportData.activeIssues.workOrder.wo_number}`
+                            : 'Zero Active Stoppage'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-medium">Next Scheduled Maintenance:</span>
+                        <span className="font-mono text-zinc-900">
+                          {reportData.pmPlans?.[0]?.next_pm_date
+                            ? new Date(reportData.pmPlans[0].next_pm_date).toLocaleDateString('en-IN')
+                            : 'Routine Periodic Cycle'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-medium">Spare Parts Consumed:</span>
+                        <span className="font-bold text-zinc-950">
+                          {reportData.stats?.totalPartsConsumed ?? 0} components installed
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                  {/* Metric Summary Box 1 */}
+                  <div className="bg-zinc-50 p-4 rounded-xl border border-zinc-200 space-y-2">
+                    <span className="text-[11px] font-black uppercase tracking-wider text-zinc-500 block">
+                      Execution & Lifecycle Health
+                    </span>
+                    <div className="space-y-1.5 text-zinc-700">
+                      <div className="flex justify-between">
+                        <span className="font-medium">Verified / Completed Actions:</span>
+                        <span className="font-bold text-emerald-700">
+                          {reportData.stats?.verifiedAndClosed ?? reportData.stats?.passed ?? reportData.stats?.completedWorkOrders ?? 0}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-medium">Active / In-Progress Tickets:</span>
+                        <span className="font-bold text-amber-700">
+                          {reportData.stats?.acceptedOrInProgress ?? reportData.stats?.workOrdersActive ?? reportData.stats?.activeWorkOrders ?? 0}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-medium">Attention Required / Pending:</span>
+                        <span className="font-bold text-zinc-900">
+                          {reportData.stats?.waitingForParts ?? reportData.stats?.requiringAttention ?? reportData.stats?.pendingBreakdowns ?? 0}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Metric Summary Box 2 */}
+                  <div className="bg-zinc-50 p-4 rounded-xl border border-zinc-200 space-y-2">
+                    <span className="text-[11px] font-black uppercase tracking-wider text-zinc-500 block">
+                      Facility & Personnel Compliance
+                    </span>
+                    <div className="space-y-1.5 text-zinc-700">
+                      <div className="flex justify-between">
+                        <span className="font-medium">Equipment Units Addressed:</span>
+                        <span className="font-bold text-zinc-900">
+                          {reportData.stats?.machinesOperatedCount ?? reportData.stats?.totalMachines ?? 'Assigned Machinery'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-medium">Quality Defects / Rework:</span>
+                        <span className="font-bold text-emerald-700">
+                          {reportData.stats?.reworkCount ?? reportData.stats?.reworkCases ?? 0} (0% Target Met)
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-medium">Official Documentation:</span>
+                        <span className="font-bold text-zinc-900">100% Verified DB Records</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </>
