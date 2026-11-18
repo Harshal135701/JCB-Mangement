@@ -14,8 +14,17 @@ import {
 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 
+interface Plant {
+  id: string;
+  plant_name: string;
+  plant_code?: string;
+  status?: string;
+}
+
 export const WorkOrderListPage: React.FC = () => {
   const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+  const userPlantId = user?.plantId || (user as any)?.plant_id || '';
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Active query parameters derived from URL searchParams
@@ -32,6 +41,7 @@ export const WorkOrderListPage: React.FC = () => {
   const searchParam = useMemo(() => searchParams.get('search') || '', [searchParams]);
   const statusFilter = useMemo(() => searchParams.get('status') || '', [searchParams]);
   const priorityFilter = useMemo(() => searchParams.get('priority') || '', [searchParams]);
+  const plantFilter = useMemo(() => searchParams.get('plant_id') || searchParams.get('plant') || '', [searchParams]);
   const sortBy = useMemo(() => searchParams.get('sortBy') || searchParams.get('sort_by') || 'created_at', [searchParams]);
   const sortOrder = useMemo<'ASC' | 'DESC'>(() => {
     const so = (searchParams.get('sortOrder') || searchParams.get('sort_order') || 'DESC').toUpperCase();
@@ -47,10 +57,35 @@ export const WorkOrderListPage: React.FC = () => {
   }, [searchParam]);
 
   const [workOrders, setWorkOrders] = useState<any[]>([]);
+  const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+
+  // Fetch available plants from Plants API
+  useEffect(() => {
+    let isMounted = true;
+    const fetchPlants = async () => {
+      try {
+        const res = await apiClient.get('/org/plants');
+        if (isMounted && res.data?.success) {
+          const plantList = Array.isArray(res.data.data)
+            ? res.data.data
+            : Array.isArray(res.data.plants)
+            ? res.data.plants
+            : [];
+          setPlants(plantList.filter((p: any) => p.status !== 'inactive'));
+        }
+      } catch (err) {
+        console.error('Failed to load plants for filter:', err);
+      }
+    };
+    fetchPlants();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Update URL helper that preserves other params and handles page resets
   const updateParams = useCallback((newParams: Record<string, string | null>) => {
@@ -84,6 +119,7 @@ export const WorkOrderListPage: React.FC = () => {
       if (searchParam.trim()) params.search = searchParam.trim();
       if (statusFilter) params.status = statusFilter;
       if (priorityFilter) params.priority = priorityFilter;
+      if (plantFilter) params.plant_id = plantFilter;
 
       const res = await apiClient.get('/work-orders', { params });
       if (res.data?.success) {
@@ -98,7 +134,7 @@ export const WorkOrderListPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, limit, searchParam, statusFilter, priorityFilter, sortBy, sortOrder]);
+  }, [page, limit, searchParam, statusFilter, priorityFilter, plantFilter, sortBy, sortOrder]);
 
   // Single effect triggers API call whenever URL params change
   useEffect(() => {
@@ -109,6 +145,14 @@ export const WorkOrderListPage: React.FC = () => {
     e.preventDefault();
     updateParams({
       search: searchInput.trim() || null,
+      page: '1',
+    });
+  };
+
+  const handlePlantChange = (newPlant: string) => {
+    updateParams({
+      plant_id: newPlant || null,
+      plant: null,
       page: '1',
     });
   };
@@ -153,7 +197,7 @@ export const WorkOrderListPage: React.FC = () => {
     setSearchParams({});
   };
 
-  const hasActiveFilters = Boolean(searchParam || statusFilter || priorityFilter || sortBy !== 'created_at' || sortOrder !== 'DESC');
+  const hasActiveFilters = Boolean(searchParam || statusFilter || priorityFilter || plantFilter || sortBy !== 'created_at' || sortOrder !== 'DESC');
 
   return (
     <div className="space-y-6 min-h-full">
@@ -223,6 +267,23 @@ export const WorkOrderListPage: React.FC = () => {
           </div>
 
           <div className="flex flex-wrap sm:flex-nowrap gap-2">
+            {/* Plant Filter */}
+            <select
+              value={plantFilter}
+              onChange={(e) => handlePlantChange(e.target.value)}
+              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-zinc-800 focus:outline-none focus:border-jcb-yellow cursor-pointer"
+            >
+              <option value="">All Plants</option>
+              {plants.map((p) => {
+                const isRestricted = !isAdmin && userPlantId && p.id !== userPlantId;
+                return (
+                  <option key={p.id} value={p.id} disabled={Boolean(isRestricted)}>
+                    {p.plant_name}
+                  </option>
+                );
+              })}
+            </select>
+
             {/* Status Filter: includes all backend supported statuses */}
             <select
               value={statusFilter}
