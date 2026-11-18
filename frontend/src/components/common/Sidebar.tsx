@@ -53,7 +53,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
       { name: 'Machines Management', path: '/machines', icon: Cpu, roles: ['admin'] },
       { name: 'Spare Parts Management', path: '/inventory', icon: Package, roles: ['admin'] },
       { name: 'Daily AM Checklist', path: '/inspections', icon: ClipboardCheck, roles: ['admin'] },
-      { name: 'Repair Jobs', path: '/work-orders', icon: Wrench, roles: ['admin'] },
+      { name: 'Maintenance Status', path: '/work-orders', icon: Wrench, roles: ['admin'] },
       { name: 'Spare Parts Purchase Request', path: '/procurement', icon: ShoppingCart, roles: ['admin'] },
       { name: 'Maintenance Schedule', path: '/pm', icon: Calendar, roles: ['admin'] },
       { name: 'Machine Status', path: '/downtime', icon: Clock, roles: ['admin'] },
@@ -144,29 +144,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
               <X className="w-5 h-5" />
             </button>
 
-            {/* Top Branding Section: Sleek compact horizontal banner with full excavator visibility */}
-            <Link to="/" className="flex flex-col items-center text-center group w-full">
-              <div className="relative w-full max-w-[244px] h-[88px] rounded-xl overflow-hidden bg-[#111d28]/60 shadow-sm flex items-center justify-center">
+            {/* Top Branding Section: Compact centered JCB logo */}
+            <Link to="/" className="flex flex-col items-center justify-center text-center group w-full py-0.5">
+              <div className="w-[115px] h-[50px] flex items-center justify-center">
                 <img
                   src="/images/jcb-official-logo.png"
-                  alt="JCB Smart Machine Maintenance System"
-                  className="w-full h-full object-cover object-[center_65%] scale-[0.92] select-none transition-transform duration-300 group-hover:scale-[0.95] filter contrast-[1.05] saturate-[1.08] brightness-[0.98]"
-                />
-                {/* Clean dark bottom transition & subtle edge blending */}
-                <div
-                  className="absolute inset-0 pointer-events-none rounded-xl"
-                  style={{
-                    boxShadow: 'inset 0 0 8px 1px #111d28',
-                    background: 'linear-gradient(180deg, transparent 78%, rgba(17, 29, 40, 0.4) 90%, #111d28 100%)',
-                  }}
+                  alt="JCB"
+                  className="max-w-full max-h-full object-contain select-none transition-transform duration-200 group-hover:scale-105 drop-shadow-md"
                 />
               </div>
 
-              {/* Plant Name: Clean, sharp uppercase typography */}
+              {/* Plant Name: Centered and clearly readable directly below the logo */}
               <div className="mt-2 flex items-center justify-center gap-1.5 px-1 w-full">
-                <span className="w-1.5 h-1.5 rounded-full bg-jcb-yellow shrink-0 shadow-2xs" />
+                <span className="w-1.5 h-1.5 rounded-full bg-jcb-yellow shrink-0 shadow-[0_0_6px_rgba(249,177,1,0.6)]" />
                 <p className="text-[11px] sm:text-xs font-black text-white tracking-widest uppercase truncate drop-shadow-md">
-                  PLANT: TALEGAON DABHADE
+                  Plant: Talegaon Dabhade
                 </p>
               </div>
             </Link>

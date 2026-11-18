@@ -775,7 +775,7 @@ export const InventoryCatalogPage: React.FC = () => {
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-amber-600' : ''}`} />
           </button>
 
-          {canManageParts && (
+          {/* {canManageParts && (
             <button
               onClick={openCreateModal}
               disabled={plantsLoading || plants.length === 0}
@@ -784,7 +784,7 @@ export const InventoryCatalogPage: React.FC = () => {
               <Plus className="w-4 h-4" />
               <span>{plantsLoading ? 'LOADING PLANTS...' : 'ADD SPARE PART'}</span>
             </button>
-          )}
+          )} */}
         </div>
       </div>
 
