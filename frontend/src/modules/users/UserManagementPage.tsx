@@ -164,13 +164,14 @@ export const UserManagementPage: React.FC = () => {
   const openCreateModal = (presetRole: string = 'technician') => {
     setEditingUser(null);
 
-    // Managers can create only technicians and operators.
+    // Managers can create technicians, operators, and store managers.
     let safeRole = presetRole;
 
     if (
       isManager &&
       safeRole !== 'technician' &&
-      safeRole !== 'operator'
+      safeRole !== 'operator' &&
+      safeRole !== 'store_manager'
     ) {
       safeRole = 'technician';
     }
@@ -378,7 +379,12 @@ export const UserManagementPage: React.FC = () => {
     }
   };
 
-  const filtered = usersList.filter((u) => {
+  // Visibility restriction: Managers can only view and manage technician, operator, and store_manager
+  const visibleUsers = isManager
+    ? usersList.filter((u) => u.role !== 'manager' && u.role !== 'admin')
+    : usersList;
+
+  const filtered = visibleUsers.filter((u) => {
     const searchTerm = search.toLowerCase();
 
     const matchesSearch =
@@ -393,11 +399,11 @@ export const UserManagementPage: React.FC = () => {
     return matchesSearch && matchesRole;
   });
 
-  const techCount = usersList.filter(
+  const techCount = visibleUsers.filter(
     (u) => u.role === 'technician'
   ).length;
 
-  const oprCount = usersList.filter(
+  const oprCount = visibleUsers.filter(
     (u) => u.role === 'operator'
   ).length;
 
@@ -405,7 +411,7 @@ export const UserManagementPage: React.FC = () => {
     (u) => u.role === 'manager'
   ).length;
 
-  const storeMgrCount = usersList.filter(
+  const storeMgrCount = visibleUsers.filter(
     (u) => u.role === 'store_manager'
   ).length;
 
@@ -448,7 +454,7 @@ export const UserManagementPage: React.FC = () => {
               </button>
             )}
 
-            {isAdmin && (
+            {(isAdmin || isManager) && (
               <button
                 onClick={() => openCreateModal('store_manager')}
                 className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-black px-3.5 py-2.5 rounded-xl shadow transition-all flex items-center gap-1.5"
@@ -518,13 +524,13 @@ export const UserManagementPage: React.FC = () => {
       )}
 
       {/* METRICS BAR */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+      <div className={`grid grid-cols-2 ${isAdmin ? 'sm:grid-cols-5' : 'sm:grid-cols-4'} gap-3`}>
         <div className="p-4 bg-white rounded-xl border-2 border-zinc-200 shadow-sm">
           <div className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
             Total Users
           </div>
           <div className="text-2xl font-black text-zinc-950 mt-1">
-            {usersList.length}
+            {visibleUsers.length}
           </div>
         </div>
 
@@ -546,14 +552,16 @@ export const UserManagementPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="p-4 bg-white rounded-xl border-2 border-purple-200 bg-purple-50/20 shadow-sm">
-          <div className="text-xs font-bold text-purple-800 uppercase tracking-wider">
-            Managers
+        {isAdmin && (
+          <div className="p-4 bg-white rounded-xl border-2 border-purple-200 bg-purple-50/20 shadow-sm">
+            <div className="text-xs font-bold text-purple-800 uppercase tracking-wider">
+              Managers
+            </div>
+            <div className="text-2xl font-black text-zinc-950 mt-1">
+              {mgrCount}
+            </div>
           </div>
-          <div className="text-2xl font-black text-zinc-950 mt-1">
-            {mgrCount}
-          </div>
-        </div>
+        )}
 
         <div className="p-4 bg-white rounded-xl border-2 border-emerald-300 bg-emerald-50/20 shadow-sm">
           <div className="text-xs font-bold text-emerald-800 uppercase tracking-wider">
@@ -580,14 +588,10 @@ export const UserManagementPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          {[
-            'all',
-            'technician',
-            'operator',
-            'manager',
-            'store_manager',
-            'admin',
-          ].map((role) => (
+          {(isManager
+            ? ['all', 'technician', 'operator', 'store_manager']
+            : ['all', 'technician', 'operator', 'manager', 'store_manager', 'admin']
+          ).map((role) => (
             <button
               key={role}
               onClick={() => setSelectedRole(role)}
@@ -821,6 +825,60 @@ export const UserManagementPage: React.FC = () => {
                   <span>{feedback.text}</span>
                 </div>
               )}
+
+              {/* SYSTEM ROLE SELECTION */}
+              <div>
+                <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
+                  System Role *
+                </label>
+                <select
+                  disabled={Boolean(editingUser)}
+                  value={formData.role}
+                  onChange={(e) => {
+                    const newRole = e.target.value;
+                    const prefixes: Record<string, string> = {
+                      technician: 'TCH',
+                      operator: 'OPR',
+                      manager: 'MGR',
+                      store_manager: 'STR',
+                      admin: 'ADM',
+                    };
+                    const oldPrefix = prefixes[formData.role] || 'EMP';
+                    const newPrefix = prefixes[newRole] || 'EMP';
+                    let newCode = formData.employee_code;
+                    if (newCode.startsWith(`JCB-${oldPrefix}-`)) {
+                      newCode = newCode.replace(`JCB-${oldPrefix}-`, `JCB-${newPrefix}-`);
+                    }
+                    setFormData({
+                      ...formData,
+                      role: newRole,
+                      employee_code: newCode,
+                    });
+                  }}
+                  className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow disabled:bg-zinc-100 disabled:cursor-not-allowed"
+                >
+                  {isManager ? (
+                    <>
+                      <option value="technician">Technician</option>
+                      <option value="operator">Operator</option>
+                      <option value="store_manager">Store Manager</option>
+                    </>
+                  ) : (
+                    <>
+                      <option value="technician">Technician</option>
+                      <option value="operator">Operator</option>
+                      <option value="store_manager">Store Manager</option>
+                      <option value="manager">Plant Manager</option>
+                      <option value="admin">System Administrator</option>
+                    </>
+                  )}
+                </select>
+                <span className="text-[10px] text-zinc-500 font-medium">
+                  {isManager
+                    ? 'Permitted governance roles: Technician, Operator, Store Manager.'
+                    : 'System authorization role.'}
+                </span>
+              </div>
 
               {/* EMPLOYEE ID AND NAME */}
               <div className="grid grid-cols-2 gap-4">
