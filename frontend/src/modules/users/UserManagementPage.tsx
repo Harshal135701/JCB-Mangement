@@ -431,7 +431,7 @@ export const UserManagementPage: React.FC = () => {
           </div>
 
           <p className="text-xs text-zinc-500 font-medium mt-1">
-            Manage technicians, operators, managers, and store personnel.
+           
           </p>
         </div>
 

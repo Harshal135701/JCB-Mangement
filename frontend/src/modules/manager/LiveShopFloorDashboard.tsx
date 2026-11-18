@@ -1,48 +1,78 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import apiClient from '../../api/client';
 import { useSocket } from '../../context/SocketContext';
-import { 
-  Truck, 
-  CheckCircle2, 
-  Wrench, 
-  ClipboardList, 
-  Clock, 
+import {
+  CheckCircle2,
+  Wrench,
+  ClipboardList,
+  Clock,
   RefreshCw,
-  AlertCircle
+  AlertCircle,
+  AlertOctagon,
+  Package,
+  Radio,
 } from 'lucide-react';
+
+// Dashboard Components
 import { DashboardHeader } from '../../components/dashboard/DashboardHeader';
 import { TopKPICard } from '../../components/dashboard/TopKPICard';
+import { CriticalAlertsBanner } from '../../components/dashboard/CriticalAlertsBanner';
 import { MachineStatusDonut } from '../../components/dashboard/MachineStatusDonut';
 import { MaintenanceTrendChart, TrendDataPoint } from '../../components/dashboard/MaintenanceTrendChart';
-import { DowntimeAnalysisCard } from '../../components/dashboard/DowntimeAnalysisCard';
-import { RecentMaintenanceRequestsTable, MaintenanceRequestItem } from '../../components/dashboard/RecentMaintenanceRequestsTable';
-import { UpcomingPMTable, PMTableItem } from '../../components/dashboard/UpcomingPMTable';
+import { WorkOrderStatusDonut } from '../../components/dashboard/WorkOrderStatusDonut';
+import { TopDowntimeMachinesCard, DowntimeMachineItem } from '../../components/dashboard/TopDowntimeMachinesCard';
+import { StaffAvailabilityCard, StaffMember } from '../../components/dashboard/StaffAvailabilityCard';
+import { SparePartsSummaryCard, SparePartsSummaryData } from '../../components/dashboard/SparePartsSummaryCard';
+import { WorkOrdersQueueTable } from '../../components/dashboard/WorkOrdersQueueTable';
 
 export const LiveShopFloorDashboard: React.FC = () => {
-  const { socket } = useSocket();
+  const { socket, isConnected } = useSocket();
+
+  // Filters
   const [plant, setPlant] = useState('All Plants');
   const [timeframe, setTimeframe] = useState('Last 30 Days');
+
+  // Loading & Error States
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Live Telemetry Data
   const [stats, setStats] = useState<any>(null);
   const [hierarchy, setHierarchy] = useState<any>(null);
   const [trendData, setTrendData] = useState<TrendDataPoint[]>([]);
-  const [recentRequests, setRecentRequests] = useState<MaintenanceRequestItem[]>([]);
-  const [upcomingPMs, setUpcomingPMs] = useState<PMTableItem[]>([]);
+  const [workOrders, setWorkOrders] = useState<any[]>([]);
+  const [staffUsers, setStaffUsers] = useState<StaffMember[]>([]);
+  const [inventorySummary, setInventorySummary] = useState<SparePartsSummaryData | null>(null);
 
-  const fetchData = async () => {
+  // Selected plant ID lookup
+  const selectedPlantId = useMemo(() => {
+    if (plant === 'All Plants') return undefined;
+    const selected = hierarchy?.plants?.find((p: any) => p.plant_name === plant);
+    return selected?.id || plant;
+  }, [plant, hierarchy]);
+
+  // Fetch telemetry from real backend APIs
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const plantParam = plant !== 'All Plants' ? plant : undefined;
+      const plantParam = selectedPlantId;
 
-      const [kpiRes, breakdownsRes, pmRes, orgRes, trendRes] = await Promise.all([
+      const [
+        kpiRes,
+        orgRes,
+        trendRes,
+        workOrdersRes,
+        usersRes,
+        inventoryRes,
+      ] = await Promise.all([
         apiClient.get('/reports/dashboard-kpis', { params: { plant_id: plantParam, timeframe } }),
-        apiClient.get('/breakdowns', { params: { plant_id: plantParam, limit: 5 } }),
-        apiClient.get('/pm/upcoming', { params: { plant_id: plantParam, windowDays: 30 } }),
         apiClient.get('/org/hierarchy'),
         apiClient.get('/reports/maintenance-trend', { params: { plant_id: plantParam, timeframe } }),
+        apiClient.get('/work-orders', { params: { plant_id: plantParam, limit: 10 } }).catch(() => ({ data: { data: [] } })),
+        apiClient.get('/auth/users', { params: { plant_id: plantParam, limit: 50 } }).catch(() => ({ data: { data: [] } })),
+        apiClient.get('/inventory/dashboard', { params: plantParam ? { plant_id: plantParam } : {} }).catch(() => ({ data: { data: null } })),
       ]);
 
       if (kpiRes.data?.data) {
@@ -50,55 +80,39 @@ export const LiveShopFloorDashboard: React.FC = () => {
       }
       setHierarchy(orgRes.data?.data || null);
       setTrendData(trendRes.data?.data || []);
+      setWorkOrders(workOrdersRes.data?.data || []);
 
-      // Real breakdown requests mapping
-      if (breakdownsRes.data?.data && Array.isArray(breakdownsRes.data.data)) {
-        const mapped = breakdownsRes.data.data.map((b: any) => ({
-          id: b.complaint_number || (typeof b.id === 'string' ? b.id.slice(0, 8) : `CMP-${b.id}`),
-          machine: b.machine_code || b.machine?.code || b.machine?.name || 'Machinery Asset',
-          issue: b.problem_title || b.description || 'Stoppage Alert',
-          priority: b.priority ? b.priority.charAt(0).toUpperCase() + b.priority.slice(1) : 'Medium',
-          status:
-            b.status === 'work_order_created'
-              ? 'In Progress'
-              : b.status === 'acknowledged'
-              ? 'Approved'
-              : b.status === 'new'
-              ? 'Pending'
-              : b.status === 'closed'
-              ? 'Resolved'
-              : b.status || 'Pending',
-          date: b.created_at
-            ? new Date(b.created_at).toLocaleDateString([], {
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-              })
-            : 'N/A',
+      // Staff users mapping
+      if (usersRes.data?.data && Array.isArray(usersRes.data.data)) {
+        const mappedStaff: StaffMember[] = usersRes.data.data.map((u: any) => ({
+          id: u.id,
+          fullName: u.full_name || u.fullName || 'Staff Member',
+          employeeCode: u.employee_code || u.employeeCode || '—',
+          email: u.email || '',
+          role: u.role || 'technician',
+          isActive: u.is_active ?? true,
+          department: u.department,
+          designation: u.designation,
+          shift: u.shift,
+          plantName: u.plant_name || u.plantName,
+          shopName: u.shop_name || u.shopName,
         }));
-        setRecentRequests(mapped);
+        setStaffUsers(mappedStaff);
       } else {
-        setRecentRequests([]);
+        setStaffUsers([]);
       }
 
-      // Real PM records mapping
-      if (pmRes.data?.data && Array.isArray(pmRes.data.data)) {
-        const mappedPM = pmRes.data.data.map((p: any) => ({
-          machine: p.machine_code || p.machine?.code || p.machine_name || 'Machinery Asset',
-          activity: p.title || p.task_name || 'Preventive Maintenance',
-          dueDate: p.next_pm_date
-            ? new Date(p.next_pm_date).toLocaleDateString([], {
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric',
-              })
-            : 'Scheduled',
-          status: p.status === 'overdue' ? 'Overdue' : 'Scheduled',
-        }));
-        setUpcomingPMs(mappedPM);
-      } else {
-        setUpcomingPMs([]);
+      // Spare parts inventory mapping
+      if (inventoryRes.data?.data?.summary) {
+        setInventorySummary(inventoryRes.data.data.summary);
+      } else if (kpiRes.data?.data) {
+        setInventorySummary({
+          total_parts: kpiRes.data.data.total_parts ?? 0,
+          total_available_stock: kpiRes.data.data.total_available_stock ?? 0,
+          low_stock_items_count: kpiRes.data.data.low_stock_items_count ?? 0,
+          out_of_stock_count: kpiRes.data.data.out_of_stock_count ?? 0,
+          total_reserved_stock: kpiRes.data.data.total_reserved_parts ?? 0,
+        });
       }
     } catch (err: any) {
       console.error('Failed to load manager dashboard:', err);
@@ -109,11 +123,11 @@ export const LiveShopFloorDashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [plant, timeframe, selectedPlantId]);
 
   useEffect(() => {
     fetchData();
-  }, [plant, timeframe]);
+  }, [fetchData]);
 
   // Real-time Socket.IO auto-refresh for live shop floor operations
   useEffect(() => {
@@ -121,6 +135,7 @@ export const LiveShopFloorDashboard: React.FC = () => {
     const handleRefresh = () => {
       fetchData();
     };
+
     socket.on('complaint:created', handleRefresh);
     socket.on('complaint:critical', handleRefresh);
     socket.on('work_order:accepted', handleRefresh);
@@ -138,7 +153,7 @@ export const LiveShopFloorDashboard: React.FC = () => {
       socket.off('work_order:closed', handleRefresh);
       socket.off('notification:new', handleRefresh);
     };
-  }, [socket, plant, timeframe]);
+  }, [socket, fetchData]);
 
   // Dynamic Plant Options from real database hierarchy
   const plantOptions = useMemo(() => {
@@ -161,13 +176,27 @@ export const LiveShopFloorDashboard: React.FC = () => {
   const maintenanceMachines = stats?.maintenance_machines ?? 0;
   const pendingRequests = stats?.pending_requests ?? 0;
   const activeWorkOrders = stats?.active_work_orders ?? 0;
+  const overdueWorkOrders = stats?.overdue_work_orders ?? 0;
+  const completedWorkOrders = stats?.completed_work_orders ?? 0;
+  const openWorkOrders = stats?.open_work_orders ?? 0;
 
   // Real downtime metrics
-  const downtimeRatePercent = stats?.downtime_rate_percent ?? 0;
-  const totalDowntimeHours = stats?.total_downtime_hours ?? 0;
+  const machineAvailabilityPercent = stats?.machine_availability_percent ?? (totalMachines > 0 ? parseFloat((((runningMachines + idleMachines) / totalMachines) * 100).toFixed(1)) : 0);
   const avgMTTRMinutes = stats?.avg_mttr_minutes ?? 0;
 
-  // Machine status segments dynamically calculated with plain English labels
+  // Real top downtime machines for leaderboard
+  const topDowntimeMachines: DowntimeMachineItem[] = useMemo(() => {
+    const list = Array.isArray(stats?.top_downtime_machines) ? stats.top_downtime_machines : [];
+    return list.map((m: any) => ({
+      machine_code: m.machine_code || '—',
+      name: m.name || 'Equipment Unit',
+      shop_name: m.shop_name || 'Production Line',
+      downtime_minutes: Number(m.downtime_minutes || 0),
+      failure_count: Number(m.failure_count || 0),
+    }));
+  }, [stats]);
+
+  // Machine status segments dynamically calculated
   const statusSegments = useMemo(() => {
     if (totalMachines === 0) return [];
     return [
@@ -198,170 +227,251 @@ export const LiveShopFloorDashboard: React.FC = () => {
     ];
   }, [totalMachines, runningMachines, idleMachines, breakdownMachines, maintenanceMachines]);
 
+  const lowStockCount =
+    inventorySummary?.low_stock_items_count ?? stats?.low_stock_items_count ?? 0;
+
   return (
-    <div className="space-y-6 min-h-full pb-8">
+    <div className="space-y-4 sm:space-y-5 min-h-full pb-8">
       {/* =========================================================================
-          TOP HEADER: Manager Dashboard & Dropdowns
+          TOP HEADER: Clean, Compact Manager Header & Controls
           ========================================================================= */}
       <DashboardHeader
         title="Manager Dashboard"
-        subtitle="Real-time view of shop floor machines, active repairs, and maintenance work"
+        subtitle="Shop floor operations & equipment telemetry"
+        badge="Plant Operations"
         plantOptions={plantOptions}
         selectedPlant={plant}
         onPlantChange={setPlant}
         selectedTimeframe={timeframe}
         onTimeframeChange={setTimeframe}
         actions={
-          <button
-            onClick={fetchData}
-            disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200/90 rounded-xl text-xs font-bold text-zinc-700 hover:bg-slate-50 transition shadow-2xs cursor-pointer"
-            title="Refresh shop floor telemetry"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-amber-600' : 'text-zinc-500'}`} />
-            <span className="hidden sm:inline">Refresh</span>
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Live Socket Status Pill */}
+            <div
+              className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold border ${
+                isConnected !== false
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                  : 'bg-amber-50 text-amber-800 border-amber-200'
+              }`}
+            >
+              <Radio
+                className={`w-3 h-3 ${
+                  isConnected !== false ? 'text-emerald-600 animate-pulse' : 'text-amber-600'
+                }`}
+              />
+              <span>{isConnected !== false ? 'Live Telemetry' : 'Synced'}</span>
+            </div>
+
+            {/* Manual Refresh Button */}
+            <button
+              onClick={fetchData}
+              disabled={loading}
+              className="flex items-center gap-1 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-zinc-700 hover:bg-slate-50 transition shadow-2xs cursor-pointer"
+              title="Refresh telemetry"
+            >
+              <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin text-amber-600' : 'text-zinc-500'}`} />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
+          </div>
         }
       />
 
       {/* Error Banner with Retry */}
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-center justify-between text-xs text-red-800">
+        <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-center justify-between text-xs text-red-800 shadow-2xs">
           <div className="flex items-center gap-2">
             <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
             <span>{error}</span>
           </div>
           <button
             onClick={fetchData}
-            className="px-3 py-1 bg-white border border-red-300 text-red-700 rounded-lg font-bold hover:bg-red-100 transition"
+            className="px-2.5 py-0.5 bg-white border border-red-300 text-red-700 rounded-lg font-bold hover:bg-red-100 transition cursor-pointer text-xs"
           >
             Retry
           </button>
         </div>
       )}
 
+      {/* Critical Alerts Banner (Compact single-line notice) */}
+      <CriticalAlertsBanner
+        breakdownCount={breakdownMachines}
+        pendingRequestsCount={pendingRequests}
+        overdueWorkOrdersCount={overdueWorkOrders}
+        lowStockPartsCount={lowStockCount}
+      />
+
       {/* =========================================================================
-          ROW 1: 4 TOP KPI METRIC CARDS (Focused Factory Operations)
+          ROW 1: COMPACT KPI STRIP (6 Metrics in a single balanced row)
           ========================================================================= */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
-        {/* Card 1: Machines Working */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+        {/* Card 1: Machines Operating */}
         <TopKPICard
           icon={CheckCircle2}
           iconBgColor="bg-emerald-100"
           iconColor="text-emerald-800"
-          label="Machines Working"
+          label="Fleet Running"
           value={runningMachines}
-          subtitle={`of ${totalMachines} Machines (${totalMachines > 0 ? ((runningMachines / totalMachines) * 100).toFixed(0) : 0}% Active)`}
+          subtitle={`of ${totalMachines} Machines`}
+          trend={`${machineAvailabilityPercent}%`}
+          isPositiveTrend={machineAvailabilityPercent >= 75}
         />
 
         {/* Card 2: Breakdown Machines */}
         <TopKPICard
-          icon={Wrench}
+          icon={AlertOctagon}
           iconBgColor="bg-red-100"
           iconColor="text-red-800"
-          label="Breakdown Machines"
+          label="Breakdowns"
           value={breakdownMachines}
-          subtitle={breakdownMachines > 0 ? `${breakdownMachines} Need Urgent Action` : 'Zero Stoppages'}
+          subtitle={breakdownMachines > 0 ? 'Urgent Action' : 'Zero Halts'}
+          trend={breakdownMachines > 0 ? `${breakdownMachines} Down` : 'Nominal'}
+          trendColor={
+            breakdownMachines > 0
+              ? 'bg-red-50 text-red-700 border-red-200'
+              : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+          }
         />
 
-        {/* Card 3: New Problem Reports */}
+        {/* Card 3: Pending Problem Reports */}
         <TopKPICard
           icon={ClipboardList}
           iconBgColor="bg-amber-100"
           iconColor="text-amber-800"
-          label="New Problem Reports"
+          label="Pending Triage"
           value={pendingRequests}
-          subtitle="Waiting for Assignment"
+          subtitle="Needs Technician"
+          trend={pendingRequests > 0 ? 'Action' : 'Clear'}
+          trendColor="bg-amber-50 text-amber-800 border-amber-200"
         />
 
         {/* Card 4: Active Repair Jobs */}
         <TopKPICard
-          icon={Clock}
+          icon={Wrench}
           iconBgColor="bg-blue-100"
           iconColor="text-blue-800"
-          label="Active Repair Jobs"
+          label="Active Repairs"
           value={activeWorkOrders}
-          subtitle={`${stats?.overdue_work_orders ?? 0} Overdue`}
+          subtitle={`${overdueWorkOrders} Overdue`}
+          trend={overdueWorkOrders > 0 ? 'SLA Alert' : 'On Track'}
+          trendColor={
+            overdueWorkOrders > 0
+              ? 'bg-red-50 text-red-700 border-red-200'
+              : 'bg-blue-50 text-blue-700 border-blue-200'
+          }
+        />
+
+        {/* Card 5: Mean Time to Repair (MTTR) */}
+        <TopKPICard
+          icon={Clock}
+          iconBgColor="bg-purple-100"
+          iconColor="text-purple-800"
+          label="Avg MTTR"
+          value={`${avgMTTRMinutes}m`}
+          subtitle="Fix Velocity"
+          trend="Telemetry"
+          trendColor="bg-purple-50 text-purple-700 border-purple-200"
+        />
+
+        {/* Card 6: Spare Parts Alert */}
+        <TopKPICard
+          icon={Package}
+          iconBgColor={lowStockCount > 0 ? 'bg-amber-100' : 'bg-slate-100'}
+          iconColor={lowStockCount > 0 ? 'text-amber-800' : 'text-zinc-800'}
+          label="Low Spares"
+          value={lowStockCount}
+          subtitle="At Reorder Point"
+          trend={lowStockCount > 0 ? 'Restock' : 'Buffer OK'}
+          trendColor={
+            lowStockCount > 0
+              ? 'bg-amber-50 text-amber-800 border-amber-200'
+              : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+          }
         />
       </div>
 
       {/* =========================================================================
-          ROW 2: 3 MIDDLE ANALYTICS CARDS (Real Operational Metrics)
+          ROW 2: CORE TELEMETRY CHARTS (Balanced 3-Column Grid)
           ========================================================================= */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {/* Card 1: Machine Status Donut */}
-        <MachineStatusDonut
-          title="Machine Status Overview"
-          totalLabel="Total"
-          totalCount={totalMachines}
-          segments={statusSegments}
-          emptyMessage="No machine assets registered in scope"
-          loading={loading}
-        />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-stretch">
+        {/* Chart 1: Interactive Machine Status Donut */}
+        <div className="h-full">
+          <MachineStatusDonut
+            title="Machine Status"
+            totalLabel="Total Fleet"
+            totalCount={totalMachines}
+            segments={statusSegments}
+            emptyMessage="No machine assets registered"
+            loading={loading}
+          />
+        </div>
 
-        {/* Card 2: Maintenance Trend Spline Chart */}
-        <MaintenanceTrendChart
-          title="Maintenance Trend"
-          series1Name="Breakdown Repairs"
-          series2Name="Regular Maintenance"
-          series1Color="#18181B"
-          series2Color="#EAB308"
-          data={trendData}
-          loading={loading}
-          emptyMessage="No maintenance repair jobs recorded in period"
-        />
+        {/* Chart 2: Fixed Maintenance Velocity Trend Spline Chart */}
+        <div className="h-full">
+          <MaintenanceTrendChart
+            title="Maintenance Velocity"
+            subtitle="4-week corrective vs preventive trend"
+            series1Name="Corrective"
+            series2Name="Preventive"
+            series1Color="#18181B"
+            series2Color="#EAB308"
+            data={trendData}
+            loading={loading}
+            emptyMessage="No maintenance trend recorded"
+          />
+        </div>
 
-        {/* Card 3: Downtime Analysis Gauge Card */}
-        <DowntimeAnalysisCard
-          title="Machine Stopped Time"
-          rateValue={`${downtimeRatePercent}%`}
-          rateLabel="Stopped Time Rate"
-          percentage={downtimeRatePercent}
-          gaugeColor="#F59E0B"
-          loading={loading}
-          emptyMessage="Zero machine stopped time recorded"
-          metrics={[
-            {
-              icon: Clock,
-              label: 'Total Stopped Time',
-              value: `${totalDowntimeHours} Hrs`,
-              change: totalDowntimeHours > 0 ? 'Recorded' : 'Zero Halts',
-              isPositiveChange: totalDowntimeHours === 0,
-            },
-            {
-              icon: Clock,
-              label: 'Average Fix Time',
-              value: `${avgMTTRMinutes} Mins`,
-              change: avgMTTRMinutes > 0 ? 'Avg Fix' : 'No Outages',
-              isPositiveChange: true,
-            },
-          ]}
-        />
+        {/* Chart 3: Work Order Lifecycle Donut */}
+        <div className="h-full">
+          <WorkOrderStatusDonut
+            totalCount={activeWorkOrders + completedWorkOrders}
+            openCount={openWorkOrders}
+            inProgressCount={activeWorkOrders - openWorkOrders > 0 ? activeWorkOrders - openWorkOrders : activeWorkOrders}
+            completedCount={completedWorkOrders}
+            overdueCount={overdueWorkOrders}
+            loading={loading}
+          />
+        </div>
       </div>
 
       {/* =========================================================================
-          ROW 3: BOTTOM ROW 2-COLUMN SPLIT (~60% Left, ~40% Right)
+          ROW 3: OPERATIONAL READINESS & RELIABILITY (Balanced 3-Column Grid)
           ========================================================================= */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-        {/* Left Column (~60%): Recent Maintenance Requests */}
-        <div className="lg:col-span-7">
-          <RecentMaintenanceRequestsTable
-            title="Recent Problem Reports"
-            viewAllLink="/triage"
-            requests={recentRequests}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-stretch">
+        {/* Column 1: Equipment Downtime Leaderboard */}
+        <div className="h-full">
+          <TopDowntimeMachinesCard
+            machines={topDowntimeMachines}
             loading={loading}
+            emptyMessage="Zero machine downtime incidents recorded"
           />
         </div>
 
-        {/* Right Column (~40%): Upcoming Preventive Maintenance */}
-        <div className="lg:col-span-5">
-          <UpcomingPMTable
-            title="Upcoming Regular Maintenance"
-            viewCalendarLink="/pm"
-            activities={upcomingPMs}
+        {/* Column 2: Staff on Shift & Availability */}
+        <div className="h-full">
+          <StaffAvailabilityCard
+            users={staffUsers}
+            loading={loading}
+            emptyMessage="No personnel registered for this plant"
+          />
+        </div>
+
+        {/* Column 3: Spare Parts & Stock Buffer */}
+        <div className="h-full">
+          <SparePartsSummaryCard
+            summary={inventorySummary}
             loading={loading}
           />
         </div>
+      </div>
+
+      {/* =========================================================================
+          ROW 4: LIVE WORK ORDERS & REPAIR QUEUE TABLE (Full Width)
+          ========================================================================= */}
+      <div className="w-full">
+        <WorkOrdersQueueTable
+          workOrders={workOrders}
+          loading={loading}
+        />
       </div>
     </div>
   );

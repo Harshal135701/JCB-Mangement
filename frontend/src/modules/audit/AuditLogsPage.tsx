@@ -224,7 +224,7 @@ export const AuditLogsPage: React.FC = () => {
                   Security &amp; Activity
                 </span>
                 <span className="text-xs text-zinc-400 font-medium">
-                  Complete record of user actions and system changes
+                 
                 </span>
               </div>
             </div>

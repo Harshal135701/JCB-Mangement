@@ -785,7 +785,7 @@ export const ReportsPage: React.FC = () => {
               </h1>
             </div>
             <p className="text-xs text-zinc-500 mt-0.5">
-              Generate concise, executive summary reports directly from authentic operational records.
+              
             </p>
           </div>
         </div>

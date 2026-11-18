@@ -345,7 +345,7 @@ export const PMCalendarPage: React.FC = () => {
               </span>
             </div>
             <p className="text-xs text-zinc-500 font-medium mt-0.5">
-              Machine service plans, calendar matrix, technician checklist execution, and manager quality sign-off.
+              
             </p>
           </div>
         </div>

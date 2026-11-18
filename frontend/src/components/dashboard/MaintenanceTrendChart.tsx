@@ -22,26 +22,26 @@ interface MaintenanceTrendChartProps {
 }
 
 export const MaintenanceTrendChart: React.FC<MaintenanceTrendChartProps> = ({
-  title = 'Operational Maintenance Trends',
-  subtitle = '4-week velocity of Corrective vs. Preventive maintenance work orders',
-  series1Name = 'Corrective Work Orders',
-  series2Name = 'Preventive Work Orders',
+  title = 'Maintenance Velocity',
+  subtitle = '4-week corrective vs preventive trend',
+  series1Name = 'Corrective',
+  series2Name = 'Preventive',
   series1Color = '#18181B', // Dark charcoal
   series2Color = '#F59E0B', // JCB Yellow/Amber
   data = [],
   maxY,
   loading = false,
-  emptyMessage = 'No maintenance trend data recorded for this period',
+  emptyMessage = 'No maintenance trend recorded',
 }) => {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
-  // SVG Canvas dimensions
-  const width = 480;
-  const height = 180;
-  const paddingLeft = 36;
-  const paddingRight = 24;
-  const paddingTop = 20;
-  const paddingBottom = 30;
+  // SVG Canvas dimensions (clean compact ratio)
+  const width = 380;
+  const height = 150;
+  const paddingLeft = 30;
+  const paddingRight = 16;
+  const paddingTop = 16;
+  const paddingBottom = 26;
 
   const chartWidth = width - paddingLeft - paddingRight;
   const chartHeight = height - paddingTop - paddingBottom;
@@ -51,7 +51,7 @@ export const MaintenanceTrendChart: React.FC<MaintenanceTrendChartProps> = ({
     (acc, curr) => Math.max(acc, curr.series1 || 0, curr.series2 || 0),
     0
   );
-  const effectiveMaxY = maxY || Math.max(5, Math.ceil(maxDataVal * 1.3) || 5);
+  const effectiveMaxY = maxY || Math.max(4, Math.ceil(maxDataVal * 1.25) || 4);
 
   // Scale functions
   const getX = (index: number) => {
@@ -95,77 +95,78 @@ export const MaintenanceTrendChart: React.FC<MaintenanceTrendChartProps> = ({
       ? `${pathSeries2} L ${getX(data.length - 1)} ${paddingTop + chartHeight} L ${getX(0)} ${paddingTop + chartHeight} Z`
       : '';
 
-  // Generate 4-step tick markers
-  const tickStep = Math.max(1, Math.ceil(effectiveMaxY / 4));
-  const yTicks = [0, tickStep, tickStep * 2, tickStep * 3, effectiveMaxY];
+  // 3-step tick markers
+  const tickStep = Math.max(1, Math.ceil(effectiveMaxY / 3));
+  const yTicks = [0, tickStep, tickStep * 2, effectiveMaxY];
 
   const hasData = data.length > 0;
-
   const totalCorrective = data.reduce((acc, curr) => acc + (curr.series1 || 0), 0);
   const totalPreventive = data.reduce((acc, curr) => acc + (curr.series2 || 0), 0);
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-xs flex flex-col justify-between h-full">
-      {/* Header & Legend */}
+    <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs flex flex-col justify-between h-full overflow-hidden">
+      {/* Header with Title and Legend stacked/wrapped cleanly */}
       <div>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-          <div className="flex items-center gap-2.5">
+        <div className="flex items-center justify-between gap-2 mb-1.5">
+          <div className="flex items-center gap-2 min-w-0">
             <div className="w-8 h-8 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0">
               <TrendingUp className="w-4 h-4 text-amber-600" />
             </div>
-            <div>
-              <h3 className="text-lg font-semibold text-zinc-900 tracking-tight">
+            <div className="min-w-0">
+              <h3 className="text-sm sm:text-base font-bold text-zinc-900 tracking-tight truncate">
                 {title}
               </h3>
-              <p className="text-xs sm:text-[13px] text-zinc-500 font-normal mt-0.5">
+              <p className="text-[11px] text-zinc-500 font-normal truncate">
                 {subtitle}
               </p>
             </div>
           </div>
-
-          {/* Legend */}
-          <div className="flex items-center gap-4 text-xs sm:text-[13px] font-semibold text-zinc-600 shrink-0">
-            <div className="flex items-center gap-1.5">
-              <span
-                className="w-3 h-3 rounded-full inline-block shrink-0"
-                style={{ backgroundColor: series1Color }}
-              />
-              <span>{series1Name}</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span
-                className="w-3 h-3 rounded-full inline-block shrink-0"
-                style={{ backgroundColor: series2Color }}
-              />
-              <span>{series2Name}</span>
-            </div>
-          </div>
         </div>
 
+        {/* Legend Pills Bar (Always neatly separated below title to prevent any overlap) */}
+        <div className="flex items-center justify-between gap-2 pt-2 pb-1 border-t border-slate-100 text-xs">
+          <div className="flex items-center gap-3 text-[11px] font-medium text-zinc-600">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: series1Color }} />
+              <span>{series1Name}</span>
+              <strong className="text-zinc-900 font-mono">({totalCorrective})</strong>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: series2Color }} />
+              <span>{series2Name}</span>
+              <strong className="text-zinc-900 font-mono">({totalPreventive})</strong>
+            </span>
+          </div>
+
+          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider hidden sm:inline">
+            4-Wk
+          </span>
+        </div>
+
+        {/* Chart Visualization Area */}
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-16 text-zinc-400">
-            <div className="w-8 h-8 border-3 border-amber-500 border-t-transparent rounded-full animate-spin mb-3" />
-            <span className="text-[13px] text-zinc-500 font-medium">Loading trend records...</span>
+          <div className="flex items-center justify-center py-10 text-xs text-zinc-400 font-medium">
+            <div className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mr-2" />
+            Loading trend...
           </div>
         ) : !hasData ? (
-          <div className="flex flex-col items-center justify-center py-14 border border-dashed border-slate-200 rounded-2xl bg-slate-50/50 text-center">
-            <span className="text-[13px] text-zinc-500 font-normal">{emptyMessage}</span>
+          <div className="flex items-center justify-center py-8 text-center border border-dashed border-slate-200 rounded-xl bg-slate-50/50 my-1">
+            <span className="text-xs text-zinc-400 font-medium">{emptyMessage}</span>
           </div>
         ) : (
-          /* SVG Spline Chart */
-          <div className="w-full mt-2 relative">
+          <div className="w-full relative mt-1 select-none">
             <svg
               viewBox={`0 0 ${width} ${height}`}
               className="w-full h-auto overflow-visible select-none"
             >
               <defs>
-                <linearGradient id="trendAreaGradient" x1="0" y1="0" x2="0" y2="1">
+                <linearGradient id="trendAreaGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={series2Color} stopOpacity="0.25" />
                   <stop offset="100%" stopColor={series2Color} stopOpacity="0.02" />
                 </linearGradient>
               </defs>
 
-              {/* Horizontal Gridlines & Y-axis labels */}
+              {/* Gridlines & Y-axis numbers */}
               {yTicks.map((val) => {
                 const yPos = getY(val);
                 return (
@@ -175,15 +176,15 @@ export const MaintenanceTrendChart: React.FC<MaintenanceTrendChartProps> = ({
                       y1={yPos}
                       x2={width - paddingRight}
                       y2={yPos}
-                      stroke="#E2E8F0"
+                      stroke="#F1F5F9"
                       strokeWidth="1"
-                      strokeDasharray={val === 0 ? undefined : '3 3'}
+                      strokeDasharray={val === 0 ? undefined : '2 2'}
                     />
                     <text
-                      x={paddingLeft - 8}
-                      y={yPos + 4}
+                      x={paddingLeft - 6}
+                      y={yPos + 3.5}
                       textAnchor="end"
-                      className="text-[11px] fill-zinc-400 font-mono font-medium"
+                      className="text-[9px] fill-zinc-400 font-mono font-medium"
                     >
                       {val}
                     </text>
@@ -191,34 +192,34 @@ export const MaintenanceTrendChart: React.FC<MaintenanceTrendChartProps> = ({
                 );
               })}
 
-              {/* Area Fill for Series 2 (Preventive) */}
-              {areaSeries2 && <path d={areaSeries2} fill="url(#trendAreaGradient)" />}
+              {/* Preventive Area Fill */}
+              {areaSeries2 && <path d={areaSeries2} fill="url(#trendAreaGrad)" />}
 
-              {/* Smooth Spline for Series 1 (Charcoal Corrective) */}
+              {/* Corrective Spline (Dark Charcoal) */}
               {pathSeries1 && (
                 <path
                   d={pathSeries1}
                   fill="none"
                   stroke={series1Color}
-                  strokeWidth="2.5"
+                  strokeWidth="2.2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 />
               )}
 
-              {/* Smooth Spline for Series 2 (JCB Yellow Preventive) */}
+              {/* Preventive Spline (JCB Amber) */}
               {pathSeries2 && (
                 <path
                   d={pathSeries2}
                   fill="none"
                   stroke={series2Color}
-                  strokeWidth="2.5"
+                  strokeWidth="2.2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 />
               )}
 
-              {/* Interactive Column Guidelines & Markers */}
+              {/* Interactive Points */}
               {data.map((item, idx) => {
                 const xPos = getX(idx);
                 const yPos1 = getY(item.series1 || 0);
@@ -232,47 +233,44 @@ export const MaintenanceTrendChart: React.FC<MaintenanceTrendChartProps> = ({
                     onMouseEnter={() => setHoveredIdx(idx)}
                     onMouseLeave={() => setHoveredIdx(null)}
                   >
-                    {/* Vertical guideline on hover */}
                     {isHovered && (
                       <line
                         x1={xPos}
                         y1={paddingTop}
                         x2={xPos}
                         y2={paddingTop + chartHeight}
-                        stroke="#94A3B8"
+                        stroke="#CBD5E1"
                         strokeWidth="1"
                         strokeDasharray="2 2"
                       />
                     )}
 
-                    {/* Point Series 1 */}
+                    {/* Point 1 */}
                     <circle
                       cx={xPos}
                       cy={yPos1}
-                      r={isHovered ? 5.5 : 4}
+                      r={isHovered ? 4.5 : 3.5}
                       fill={series1Color}
                       stroke="#FFFFFF"
-                      strokeWidth="2"
-                      className="transition-all duration-200"
+                      strokeWidth="1.5"
                     />
 
-                    {/* Point Series 2 */}
+                    {/* Point 2 */}
                     <circle
                       cx={xPos}
                       cy={yPos2}
-                      r={isHovered ? 5.5 : 4}
+                      r={isHovered ? 4.5 : 3.5}
                       fill={series2Color}
                       stroke="#FFFFFF"
-                      strokeWidth="2"
-                      className="transition-all duration-200"
+                      strokeWidth="1.5"
                     />
 
                     {/* X-Axis Label */}
                     <text
                       x={xPos}
-                      y={height - 8}
+                      y={height - 6}
                       textAnchor="middle"
-                      className={`text-[11px] font-medium transition-colors ${
+                      className={`text-[9.5px] font-medium transition-colors ${
                         isHovered ? 'fill-zinc-950 font-bold' : 'fill-zinc-500'
                       }`}
                     >
@@ -283,30 +281,20 @@ export const MaintenanceTrendChart: React.FC<MaintenanceTrendChartProps> = ({
               })}
             </svg>
 
-            {/* Hover Tooltip Popup */}
+            {/* Hover Tooltip Popup - safely clamped */}
             {hoveredIdx !== null && data[hoveredIdx] && (
               <div
-                className="absolute top-2 bg-zinc-900 text-white rounded-xl px-3 py-2 text-xs shadow-lg pointer-events-none transform -translate-x-1/2 z-10"
+                className="absolute top-1 bg-zinc-900/95 text-white rounded-lg px-2.5 py-1 text-[11px] shadow-md pointer-events-none transform -translate-x-1/2 z-10"
                 style={{
-                  left: `${(getX(hoveredIdx) / width) * 100}%`,
+                  left: `${Math.max(15, Math.min(85, (getX(hoveredIdx) / width) * 100))}%`,
                 }}
               >
-                <div className="font-semibold text-zinc-300 border-b border-zinc-700 pb-1 mb-1">
+                <div className="font-semibold text-zinc-300 border-b border-zinc-700/80 pb-0.5 mb-0.5 text-[10px]">
                   {data[hoveredIdx].label} {data[hoveredIdx].dateLabel ? `(${data[hoveredIdx].dateLabel})` : ''}
                 </div>
-                <div className="flex items-center justify-between gap-3 text-zinc-100">
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: series1Color }} />
-                    Corrective:
-                  </span>
-                  <span className="font-mono font-bold">{data[hoveredIdx].series1}</span>
-                </div>
-                <div className="flex items-center justify-between gap-3 text-zinc-100">
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: series2Color }} />
-                    Preventive:
-                  </span>
-                  <span className="font-mono font-bold">{data[hoveredIdx].series2}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-zinc-300">Corr: <strong className="text-white">{data[hoveredIdx].series1}</strong></span>
+                  <span className="text-zinc-300">• Prev: <strong className="text-amber-400">{data[hoveredIdx].series2}</strong></span>
                 </div>
               </div>
             )}
@@ -314,14 +302,15 @@ export const MaintenanceTrendChart: React.FC<MaintenanceTrendChartProps> = ({
         )}
       </div>
 
-      {/* Footer */}
-      <div className="flex items-center justify-between pt-4 mt-5 border-t border-slate-100 text-[13px]">
-        <div className="flex items-center gap-4 text-zinc-500 font-normal">
-          <span>Corrective Total: <strong className="text-zinc-900 font-mono font-semibold">{totalCorrective}</strong></span>
-          <span>Preventive Total: <strong className="text-zinc-900 font-mono font-semibold">{totalPreventive}</strong></span>
-        </div>
+      {/* Compact Clean Footer */}
+      <div className="pt-2.5 mt-2 border-t border-slate-100 flex items-center justify-between text-xs text-zinc-500">
+        <span>Velocity Ratio</span>
+        <span className="font-semibold text-zinc-800 font-mono">
+          {totalCorrective + totalPreventive > 0
+            ? `${Math.round((totalPreventive / (totalCorrective + totalPreventive)) * 100)}% PM Share`
+            : 'Nominal'}
+        </span>
       </div>
     </div>
   );
 };
-
