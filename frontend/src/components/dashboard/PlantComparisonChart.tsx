@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Building2, BarChart2, CheckCircle2 } from 'lucide-react';
+import { Building2, BarChart2 } from 'lucide-react';
 
 export interface PlantNetworkItem {
   id: string;
@@ -48,9 +48,6 @@ export const PlantComparisonChart: React.FC<PlantComparisonChartProps> = ({
               <h3 className="text-lg font-semibold text-zinc-900 tracking-tight">
                 Plant Fleet & Capacity Comparison
               </h3>
-              <p className="text-xs sm:text-[13px] text-zinc-500 font-normal mt-0.5">
-                Comparative equipment fleet and active operational status across plants
-              </p>
             </div>
           </div>
 
@@ -174,10 +171,6 @@ export const PlantComparisonChart: React.FC<PlantComparisonChartProps> = ({
       <div className="flex items-center justify-between pt-4 mt-5 border-t border-slate-100 text-[13px]">
         <span className="text-zinc-500 font-normal">
           Facility Network: <strong className="text-zinc-900 font-mono font-semibold">{plants.length} Plants</strong>
-        </span>
-        <span className="text-blue-700 font-semibold bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200 text-xs flex items-center gap-1.5">
-          <CheckCircle2 className="w-3.5 h-3.5" />
-          Cross-Plant Telemetry Live
         </span>
       </div>
     </div>

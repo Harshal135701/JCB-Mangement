@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { TrendingUp, Activity } from 'lucide-react';
+import { TrendingUp } from 'lucide-react';
 
 export interface TrendDataPoint {
   label: string;
@@ -320,10 +320,6 @@ export const MaintenanceTrendChart: React.FC<MaintenanceTrendChartProps> = ({
           <span>Corrective Total: <strong className="text-zinc-900 font-mono font-semibold">{totalCorrective}</strong></span>
           <span>Preventive Total: <strong className="text-zinc-900 font-mono font-semibold">{totalPreventive}</strong></span>
         </div>
-        <span className="text-emerald-700 font-semibold bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 text-xs flex items-center gap-1.5">
-          <Activity className="w-3.5 h-3.5" />
-          Real Maintenance Logs
-        </span>
       </div>
     </div>
   );

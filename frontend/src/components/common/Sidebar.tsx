@@ -50,13 +50,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
       // { name: 'Live Shop Floor', path: '/dashboard', icon: Activity, roles: ['admin'] },
       // { name: 'Factory Structure', path: '/organization/hierarchy', icon: Network, roles: ['admin'] },
       { name: 'Staff Management', path: '/users', icon: Users, roles: ['admin'] },
-      { name: 'Safety Check', path: '/inspections', icon: ClipboardCheck, roles: ['admin'] },
+      { name: 'Daily AM Checklist', path: '/inspections', icon: ClipboardCheck, roles: ['admin'] },
       { name: 'Machines', path: '/machines', icon: Cpu, roles: ['admin'] },
-      { name: 'Repair Jobs', path: '/work-orders', icon: Wrench, roles: ['admin'] },
+      { name: 'Maintenance Status', path: '/work-orders', icon: Wrench, roles: ['admin'] },
       { name: 'Spare Parts', path: '/inventory', icon: Package, roles: ['admin'] },
-      { name: 'Purchase Requests', path: '/procurement', icon: ShoppingCart, roles: ['admin'] },
+      { name: 'Spare Parts Purchase Request', path: '/procurement', icon: ShoppingCart, roles: ['admin'] },
       { name: 'Maintenance Schedule', path: '/pm', icon: Calendar, roles: ['admin'] },
-      { name: 'Machine Downtime', path: '/downtime', icon: Clock, roles: ['admin'] },
+      { name: 'Machine Status', path: '/downtime', icon: Clock, roles: ['admin'] },
       { name: 'Gate Pass', path: '/rdc', icon: FileText, roles: ['admin'] },
       { name: 'Activity Logs', path: '/audit', icon: ShieldCheck, roles: ['admin'] },
       { name: 'Reports', path: '/reports', icon: BarChart3, roles: ['admin'] },
@@ -65,21 +65,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
       { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, roles: ['manager'] },
       // { name: 'Factory Structure', path: '/organization/hierarchy', icon: Network, roles: ['manager'] },
       { name: 'Staff Management', path: '/users', icon: Users, roles: ['manager'] },
-      { name: 'Safety Check', path: '/inspections', icon: ClipboardCheck, roles: ['manager'] },
+      { name: 'Daily AM Checklist', path: '/inspections', icon: ClipboardCheck, roles: ['manager'] },
       { name: 'Fault Reports', path: '/triage', icon: AlertTriangle, roles: ['manager'] },
-      { name: 'Repair Jobs', path: '/work-orders', icon: Wrench, roles: ['manager'] },
+      { name: 'Maintenance Status', path: '/work-orders', icon: Wrench, roles: ['manager'] },
       { name: 'Machines', path: '/machines', icon: Cpu, roles: ['manager'] },
-      { name: 'Purchase Requests', path: '/procurement', icon: ShoppingCart, roles: ['manager'] },
+      { name: 'Spare Parts Purchase Request', path: '/procurement', icon: ShoppingCart, roles: ['manager'] },
       { name: 'Maintenance Schedule', path: '/pm', icon: Calendar, roles: ['manager'] },
-      { name: 'Machine Downtime', path: '/downtime', icon: Clock, roles: ['manager'] },
+      { name: 'Machine Status', path: '/downtime', icon: Clock, roles: ['manager'] },
       { name: 'Gate Pass', path: '/rdc', icon: FileText, roles: ['manager'] },
       { name: 'Activity Logs', path: '/audit', icon: ShieldCheck, roles: ['manager'] },
       { name: 'Reports', path: '/reports', icon: BarChart3, roles: ['manager'] },
     ],
     technician: [
       { name: 'Dashboard', path: '/technician/dashboard', icon: LayoutDashboard, roles: ['technician'] },
-      { name: 'Safety Check', path: '/inspections', icon: ClipboardCheck, roles: ['technician'] },
-      { name: 'Repair Jobs', path: '/work-orders', icon: Wrench, roles: ['technician'] },
+      { name: 'Daily AM Checklist', path: '/inspections', icon: ClipboardCheck, roles: ['technician'] },
+      { name: 'Maintenance Status', path: '/work-orders', icon: Wrench, roles: ['technician'] },
       { name: 'Machines', path: '/machines', icon: Cpu, roles: ['technician'] },
       { name: 'Spare Parts', path: '/inventory', icon: Package, roles: ['technician'] },
       { name: 'Maintenance Schedule', path: '/pm', icon: Calendar, roles: ['technician'] },
@@ -95,9 +95,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
     store_manager: [
       { name: 'Dashboard', path: '/store/dashboard', icon: Boxes, roles: ['store_manager'] },
       { name: 'Spare Parts', path: '/inventory', icon: Package, roles: ['store_manager'] },
-      { name: 'Purchase Requests', path: '/procurement', icon: ShoppingCart, roles: ['store_manager'] },
+      { name: 'Spare Parts Purchase Request', path: '/procurement', icon: ShoppingCart, roles: ['store_manager'] },
       { name: 'Gate Pass', path: '/rdc', icon: FileText, roles: ['store_manager'] },
-      { name: 'Repair Jobs', path: '/work-orders', icon: Wrench, roles: ['store_manager'] },
+      { name: 'Maintenance Status', path: '/work-orders', icon: Wrench, roles: ['store_manager'] },
       { name: 'Activity Logs', path: '/audit', icon: ShieldCheck, roles: ['store_manager'] },
       { name: 'Reports', path: '/reports', icon: BarChart3, roles: ['store_manager'] },
     ],
@@ -134,27 +134,42 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
             ========================================================================= */}
         <div className="relative z-10 flex flex-col flex-1 min-h-0">
           {/* Brand Header */}
-          <div className="px-4 py-4 flex items-center justify-between border-b border-white/10 bg-black/25 backdrop-blur-xs shrink-0">
-            <Link to="/" className="flex items-center gap-3 group">
-              <div className="bg-jcb-yellow text-black font-black text-xl px-2.5 py-0.5 rounded shadow-md tracking-widest flex items-center justify-center border border-jcb-yellowDark group-hover:scale-105 transition-transform">
-                JCB
-              </div>
-              <div className="min-w-0">
-                <h1 className="font-black text-sm tracking-wider text-white">SMART CMMS</h1>
-                <p className="text-xs text-zinc-300 font-semibold truncate max-w-[150px]">
-                  {user?.plantName || 'Plant 1: Ballabgarh'}
-                </p>
-              </div>
-            </Link>
-
+          <div className="relative px-3 pt-3 pb-2.5 flex flex-col items-center justify-center border-b border-white/10 bg-[#111d28]/70 backdrop-blur-md shrink-0">
             {/* Mobile Close Button */}
             <button
               onClick={onMobileClose}
-              className="lg:hidden p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition cursor-pointer"
+              className="lg:hidden absolute top-2 right-2 p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition cursor-pointer z-30"
               aria-label="Close menu"
             >
               <X className="w-5 h-5" />
             </button>
+
+            {/* Top Branding Section: Sleek compact horizontal banner tightly framed around subject */}
+            <Link to="/" className="flex flex-col items-center text-center group w-full">
+              <div className="relative w-full max-w-[244px] h-[88px] rounded-xl overflow-hidden bg-[#111d28]/60 shadow-sm flex items-center justify-center">
+                <img
+                  src="/images/jcb-login-background.png"
+                  alt="JCB Smart Machine Maintenance System"
+                  className="w-full h-full object-cover object-[center_35%] select-none transition-transform duration-300 group-hover:scale-101 filter contrast-[1.05] saturate-[1.08] brightness-[0.98]"
+                />
+                {/* Seamless dark navy edge blending & feathered gradient scrim */}
+                <div
+                  className="absolute inset-0 pointer-events-none rounded-xl"
+                  style={{
+                    boxShadow: 'inset 0 0 10px 2px #111d28',
+                    background: 'linear-gradient(180deg, transparent 65%, rgba(17, 29, 40, 0.4) 85%, #111d28 100%)',
+                  }}
+                />
+              </div>
+
+              {/* Plant Name: Clean, sharp uppercase typography */}
+              <div className="mt-2 flex items-center justify-center gap-1.5 px-1 w-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-jcb-yellow shrink-0 shadow-2xs" />
+                <p className="text-[11px] sm:text-xs font-black text-white tracking-widest uppercase truncate drop-shadow-md">
+                  PLANT: TALEGAON DABHADE
+                </p>
+              </div>
+            </Link>
           </div>
 
           {/* Navigation Links: Increased vertical spacing between items with comfortable padding */}

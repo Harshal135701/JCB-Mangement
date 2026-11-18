@@ -147,9 +147,6 @@ export const WorkOrdersQueueTable: React.FC<WorkOrdersQueueTableProps> = ({
               <h3 className="text-lg font-semibold text-zinc-900 tracking-tight">
                 Live Work Orders & Maintenance Queue
               </h3>
-              <p className="text-xs sm:text-[13px] text-zinc-500 font-normal mt-0.5">
-                Active shop floor work assignments and real-time technician progress
-              </p>
             </div>
           </div>
 

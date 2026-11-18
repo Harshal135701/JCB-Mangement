@@ -462,6 +462,195 @@ export const getMaintenanceTrend = async (req: Request, res: Response, next: Nex
 };
 
 /**
+ * GET /api/v1/reports/machine-status-trend
+ * Historical machine status multi-line trend across operational, under_maintenance, breakdown, and idle.
+ * Respects plant filter and RBAC scoping.
+ */
+export const getMachineStatusTrend = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { plant_id, timeframe = 'Last 30 Days' } = req.query as Record<string, string | undefined>;
+    const user = req.user;
+
+    const where: string[] = ['1=1'];
+    const params: any[] = [];
+
+    let effectivePlant = plant_id;
+    if (!effectivePlant && user && user.role !== 'admin' && user.plant_id) {
+      effectivePlant = user.plant_id;
+    }
+    if (effectivePlant && effectivePlant !== 'All Plants') {
+      if (UUID_REGEX.test(effectivePlant)) {
+        params.push(effectivePlant);
+        where.push(`s.plant_id = $${params.length}`);
+      } else {
+        params.push(`%${effectivePlant}%`);
+        const pIdx = params.length;
+        where.push(`(pl.plant_name ILIKE $${pIdx} OR pl.plant_code ILIKE $${pIdx})`);
+      }
+    }
+
+    // Determine interval and step based on timeframe
+    let intervalStr = '30 days';
+    let stepStr = '3 days';
+
+    const tf = (timeframe || '').trim().toLowerCase();
+    if (tf.includes('7')) {
+      intervalStr = '7 days';
+      stepStr = '1 day';
+    } else if (tf.includes('90')) {
+      intervalStr = '90 days';
+      stepStr = '7 days';
+    } else {
+      intervalStr = '30 days';
+      stepStr = '3 days';
+    }
+
+    const trendRes = await query(
+      `
+      WITH date_series AS (
+        SELECT generate_series(
+          CURRENT_DATE - INTERVAL '${intervalStr}',
+          CURRENT_DATE,
+          '${stepStr}'::interval
+        )::date as point_date
+      ),
+      all_machines AS (
+        SELECT 
+          m.id,
+          m.status as current_status,
+          m.created_at,
+          m.updated_at,
+          s.plant_id
+        FROM machines m
+        JOIN shops s ON m.shop_id = s.id
+        JOIN plants pl ON s.plant_id = pl.id
+        WHERE ${where.join(' AND ')}
+      ),
+      active_incidents AS (
+        SELECT 
+          mr.machine_id,
+          mr.breakdown_occurred_at,
+          COALESCE(wo.created_at, mr.created_at) as maintenance_start_time,
+          wo.machine_restored_time,
+          wo.repair_completed_time,
+          mr.status as complaint_status,
+          wo.status as wo_status
+        FROM maintenance_requests mr
+        LEFT JOIN work_orders wo ON wo.complaint_id = mr.id
+      )
+      SELECT 
+        d.point_date,
+        to_char(d.point_date, 'Mon DD') as date_label,
+        COUNT(CASE WHEN m.created_at::date <= d.point_date THEN m.id END)::int as total_fleet,
+        
+        -- Breakdown count at this date
+        COUNT(CASE 
+          WHEN m.created_at::date <= d.point_date
+           AND (
+             (d.point_date = CURRENT_DATE AND m.current_status::text = 'breakdown')
+             OR (
+               EXISTS (
+                 SELECT 1 FROM active_incidents ai 
+                 WHERE ai.machine_id = m.id 
+                   AND ai.breakdown_occurred_at::date <= d.point_date
+                   AND (ai.maintenance_start_time IS NULL OR ai.maintenance_start_time::date > d.point_date)
+                   AND (ai.machine_restored_time IS NULL OR ai.machine_restored_time::date > d.point_date)
+               )
+             )
+           )
+          THEN 1 
+        END)::int as breakdown,
+
+        -- Under Maintenance count at this date
+        COUNT(CASE 
+          WHEN m.created_at::date <= d.point_date
+           AND (
+             (d.point_date = CURRENT_DATE AND m.current_status::text IN ('under_maintenance', 'awaiting_parts'))
+             OR (
+               EXISTS (
+                 SELECT 1 FROM active_incidents ai 
+                 WHERE ai.machine_id = m.id 
+                   AND ai.maintenance_start_time::date <= d.point_date
+                   AND (ai.machine_restored_time IS NULL OR ai.machine_restored_time::date > d.point_date)
+               )
+             )
+           )
+          THEN 1 
+        END)::int as under_maintenance,
+
+        -- Idle count at this date
+        COUNT(CASE 
+          WHEN m.created_at::date <= d.point_date
+           AND (
+             (d.point_date = CURRENT_DATE AND m.current_status::text = 'idle')
+             OR (
+               m.current_status::text = 'idle'
+               AND NOT EXISTS (
+                 SELECT 1 FROM active_incidents ai 
+                 WHERE ai.machine_id = m.id 
+                   AND ai.breakdown_occurred_at::date <= d.point_date
+                   AND (ai.machine_restored_time IS NULL OR ai.machine_restored_time::date > d.point_date)
+               )
+             )
+           )
+          THEN 1 
+        END)::int as idle,
+
+        -- Operational / Running count at this date
+        COUNT(CASE 
+          WHEN m.created_at::date <= d.point_date
+           AND (
+             (d.point_date = CURRENT_DATE AND m.current_status::text = 'running')
+             OR (
+               d.point_date < CURRENT_DATE
+               AND m.current_status::text NOT IN ('idle')
+               AND NOT EXISTS (
+                 SELECT 1 FROM active_incidents ai 
+                 WHERE ai.machine_id = m.id 
+                   AND ai.breakdown_occurred_at::date <= d.point_date
+                   AND (ai.machine_restored_time IS NULL OR ai.machine_restored_time::date > d.point_date)
+               )
+             )
+           )
+          THEN 1 
+        END)::int as operational
+
+      FROM date_series d
+      LEFT JOIN all_machines m ON m.created_at::date <= d.point_date
+      GROUP BY d.point_date
+      ORDER BY d.point_date ASC;
+    `,
+      params
+    );
+
+    const rows = trendRes.rows || [];
+    const latestRow = rows[rows.length - 1] || {};
+
+    res.json({
+      success: true,
+      data: rows.map((r: any) => ({
+        point_date: r.point_date,
+        date_label: r.date_label,
+        operational: r.operational ?? 0,
+        under_maintenance: r.under_maintenance ?? 0,
+        breakdown: r.breakdown ?? 0,
+        idle: r.idle ?? 0,
+        total_fleet: r.total_fleet ?? 0,
+      })),
+      summary: {
+        current_operational: latestRow.operational ?? 0,
+        current_under_maintenance: latestRow.under_maintenance ?? 0,
+        current_breakdown: latestRow.breakdown ?? 0,
+        current_idle: latestRow.idle ?? 0,
+        total_machines: latestRow.total_fleet ?? 0,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
  * GET /api/v1/reports/governance-trend
  * Returns real 4-week trend of Auth Events vs Audit Logs from audit_logs
  */

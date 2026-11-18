@@ -48,9 +48,6 @@ export const TopDowntimeMachinesCard: React.FC<TopDowntimeMachinesCardProps> = (
               <h3 className="text-lg font-semibold text-zinc-900 tracking-tight">
                 Critical Equipment Downtime Leaderboard
               </h3>
-              <p className="text-xs sm:text-[13px] text-zinc-500 font-normal mt-0.5">
-                Highest production impact assets ranked by cumulative stoppage hours
-              </p>
             </div>
           </div>
 

@@ -22,7 +22,7 @@ import { Link } from 'react-router-dom';
 import { DashboardHeader } from '../../components/dashboard/DashboardHeader';
 import { TopKPICard } from '../../components/dashboard/TopKPICard';
 import { UserRoleDonutChart, UserRoleSegment } from '../../components/dashboard/UserRoleDonutChart';
-import { MachineStatusBarChart, MachineStatusBarItem } from '../../components/dashboard/MachineStatusBarChart';
+import { MachineStatusMultiLineChart } from '../../components/dashboard/MachineStatusMultiLineChart';
 import { MaintenanceTrendChart, TrendDataPoint } from '../../components/dashboard/MaintenanceTrendChart';
 import { PlantComparisonChart, PlantNetworkItem } from '../../components/dashboard/PlantComparisonChart';
 import { TopDowntimeMachinesCard, DowntimeMachineItem } from '../../components/dashboard/TopDowntimeMachinesCard';
@@ -208,45 +208,6 @@ export const AdminDashboard: React.FC = () => {
       },
     ];
   }, [totalUsers, techCount, operatorCount, managerCount, adminCount]);
-
-  // Machine status breakdown for horizontal bar chart
-  const machineStatusItems: MachineStatusBarItem[] = useMemo(() => [
-    {
-      statusKey: 'running',
-      label: 'Running',
-      count: Number(kpiStats?.running_machines ?? 0),
-      color: '#16A34A',
-      description: 'Active & operating on the production line',
-    },
-    {
-      statusKey: 'idle',
-      label: 'Idle / Not Working',
-      count: Number(kpiStats?.idle_machines ?? 0),
-      color: '#64748B',
-      description: 'Standby mode with no active production task',
-    },
-    {
-      statusKey: 'breakdown',
-      label: 'Breakdown',
-      count: Number(kpiStats?.breakdown_machines ?? 0),
-      color: '#DC2626',
-      description: 'Critical stoppage requiring immediate technician action',
-    },
-    {
-      statusKey: 'maintenance',
-      label: 'Under Maintenance',
-      count: Number(kpiStats?.maintenance_machines ?? 0),
-      color: '#F59E0B',
-      description: 'Scheduled preventive or corrective maintenance underway',
-    },
-    {
-      statusKey: 'awaiting_parts',
-      label: 'Awaiting Parts',
-      count: Number(kpiStats?.awaiting_parts_machines ?? 0),
-      color: '#2563EB',
-      description: 'Repairs on hold pending spare parts fulfillment',
-    },
-  ], [kpiStats]);
 
   // Plant network
   const plantNetwork = useMemo(() => {
@@ -510,51 +471,11 @@ export const AdminDashboard: React.FC = () => {
       {/* ROW 2: USER AND MACHINE ANALYTICS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
         {/* MACHINE STATUS OVERVIEW */}
-        <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-xs flex flex-col justify-between h-full">
-          <div>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
-              <div>
-                <h3 className="text-lg font-semibold text-zinc-900 tracking-tight">
-                  Machine Status Overview
-                </h3>
-                <p className="text-xs sm:text-[13px] text-zinc-500 font-normal mt-0.5">
-                  Live operating condition of all factory assets
-                </p>
-              </div>
-
-              <Link
-                to="/machines"
-                className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-jcb-yellow hover:bg-amber-400 text-black rounded-xl text-[13px] sm:text-sm font-semibold border border-amber-500 shadow-2xs transition shrink-0"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Add Machine</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
-            </div>
-
-            <MachineStatusBarChart
-              totalCount={totalAssets}
-              items={machineStatusItems}
-              loading={loading}
-              emptyMessage="No machines registered in the selected plant"
-            />
-          </div>
-
-          <div className="flex items-center justify-between pt-4 mt-5 border-t border-slate-100 text-[13px]">
-            <span className="text-zinc-500 font-normal">
-              Total Factory Fleet:{' '}
-              <strong className="text-zinc-900 font-mono font-semibold">
-                {totalAssets} Machines
-              </strong>
-            </span>
-            <span className="text-blue-700 font-semibold bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200 text-xs">
-              {totalAssets > 0
-                ? ((Number(kpiStats?.running_machines ?? 0) / totalAssets) * 100).toFixed(0)
-                : 0}
-              % Operational
-            </span>
-          </div>
-        </div>
+        <MachineStatusMultiLineChart
+          plantId={selectedPlantId}
+          plantName={plant}
+          dashboardTimeframe={timeframe}
+        />
 
         {/* USER ROLE DISTRIBUTION */}
         <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-xs flex flex-col justify-between h-full">
@@ -564,9 +485,6 @@ export const AdminDashboard: React.FC = () => {
                 <h3 className="text-lg font-semibold text-zinc-900 tracking-tight">
                   User Role Distribution
                 </h3>
-                <p className="text-xs sm:text-[13px] text-zinc-500 font-normal mt-0.5">
-                  Allocated personnel across active operations
-                </p>
               </div>
 
               <Link
@@ -605,7 +523,7 @@ export const AdminDashboard: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
         <MaintenanceTrendChart
           title="Operational Maintenance Trends"
-          subtitle="4-week velocity of Corrective vs. Preventive maintenance work orders"
+          subtitle=""
           data={trendData}
           loading={loading}
         />
@@ -644,9 +562,6 @@ export const AdminDashboard: React.FC = () => {
               <h3 className="text-lg font-semibold text-zinc-900 tracking-tight">
                 Spare Parts Inventory
               </h3>
-              <p className="text-xs sm:text-[13px] text-zinc-500 font-normal mt-0.5">
-                Live inventory summary from the database
-              </p>
             </div>
           </div>
 
