@@ -6,6 +6,7 @@ import {
   Users,
   Building2,
   Cpu,
+  Wrench,
   RefreshCw,
   AlertCircle,
   Package,
@@ -18,7 +19,8 @@ import {
 import { Link } from 'react-router-dom';
 import { DashboardHeader } from '../../components/dashboard/DashboardHeader';
 import { TopKPICard } from '../../components/dashboard/TopKPICard';
-import { MachineStatusDonut } from '../../components/dashboard/MachineStatusDonut';
+import { UserRoleDonutChart, UserRoleSegment } from '../../components/dashboard/UserRoleDonutChart';
+import { MachineStatusBarChart, MachineStatusBarItem } from '../../components/dashboard/MachineStatusBarChart';
 
 export const AdminDashboard: React.FC = () => {
   const { socket } = useSocket();
@@ -135,19 +137,21 @@ export const AdminDashboard: React.FC = () => {
   }, [hierarchy]);
 
   // User and machine KPIs
-  const totalUsers = kpiStats?.total_users ?? users.length;
-  const adminCount =
-    kpiStats?.admin_count ??
-    users.filter((u) => u.role === 'admin').length;
-  const managerCount =
-    kpiStats?.manager_count ??
-    users.filter((u) => u.role === 'manager').length;
-  const techCount =
-    kpiStats?.technician_count ??
-    users.filter((u) => u.role === 'technician').length;
-  const operatorCount =
-    kpiStats?.operator_count ??
-    users.filter((u) => u.role === 'operator').length;
+  const totalUsers = selectedPlantId
+    ? users.length
+    : (kpiStats?.total_users ?? users.length);
+  const adminCount = selectedPlantId
+    ? users.filter((u) => u.role === 'admin').length
+    : (kpiStats?.admin_count ?? users.filter((u) => u.role === 'admin').length);
+  const managerCount = selectedPlantId
+    ? users.filter((u) => u.role === 'manager').length
+    : (kpiStats?.manager_count ?? users.filter((u) => u.role === 'manager').length);
+  const techCount = selectedPlantId
+    ? users.filter((u) => u.role === 'technician').length
+    : (kpiStats?.technician_count ?? users.filter((u) => u.role === 'technician').length);
+  const operatorCount = selectedPlantId
+    ? users.filter((u) => u.role === 'operator').length
+    : (kpiStats?.operator_count ?? users.filter((u) => u.role === 'operator').length);
 
   const plantsCount = selectedPlantId
     ? 1
@@ -156,7 +160,7 @@ export const AdminDashboard: React.FC = () => {
   const totalAssets = kpiStats?.total_machines ?? 0;
 
   // User role distribution
-  const userSegments = useMemo(() => {
+  const userSegments: UserRoleSegment[] = useMemo(() => {
     if (totalUsers === 0) return [];
 
     return [
@@ -186,6 +190,45 @@ export const AdminDashboard: React.FC = () => {
       },
     ];
   }, [totalUsers, techCount, operatorCount, managerCount, adminCount]);
+
+  // Machine status breakdown for horizontal bar chart
+  const machineStatusItems: MachineStatusBarItem[] = useMemo(() => [
+    {
+      statusKey: 'running',
+      label: 'Running',
+      count: Number(kpiStats?.running_machines ?? 0),
+      color: '#16A34A',
+      description: 'Active & operating on the production line',
+    },
+    {
+      statusKey: 'idle',
+      label: 'Idle / Not Working',
+      count: Number(kpiStats?.idle_machines ?? 0),
+      color: '#64748B',
+      description: 'Standby mode with no active production task',
+    },
+    {
+      statusKey: 'breakdown',
+      label: 'Breakdown',
+      count: Number(kpiStats?.breakdown_machines ?? 0),
+      color: '#DC2626',
+      description: 'Critical stoppage requiring immediate technician action',
+    },
+    {
+      statusKey: 'maintenance',
+      label: 'Under Maintenance',
+      count: Number(kpiStats?.maintenance_machines ?? 0),
+      color: '#F59E0B',
+      description: 'Scheduled preventive or corrective maintenance underway',
+    },
+    {
+      statusKey: 'awaiting_parts',
+      label: 'Awaiting Parts',
+      count: Number(kpiStats?.awaiting_parts_machines ?? 0),
+      color: '#2563EB',
+      description: 'Repairs on hold pending spare parts fulfillment',
+    },
+  ], [kpiStats]);
 
   // Plant network
   const plantNetwork = useMemo(() => {
@@ -276,7 +319,7 @@ export const AdminDashboard: React.FC = () => {
           <button
             onClick={fetchData}
             disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200/90 rounded-xl text-xs font-bold text-zinc-700 hover:bg-slate-50 transition shadow-2xs cursor-pointer"
+            className="flex items-center gap-2 px-3.5 py-2 bg-white border border-slate-200/90 rounded-xl text-[13px] sm:text-sm font-semibold text-zinc-700 hover:bg-slate-50 transition shadow-2xs cursor-pointer"
           >
             <RefreshCw
               className={`w-3.5 h-3.5 ${
@@ -292,6 +335,17 @@ export const AdminDashboard: React.FC = () => {
 
       {/* COMPACT PLANT FILTER */}
       <div className="flex items-center justify-center sm:justify-start gap-2 flex-wrap">
+        <button
+          key="all-plants"
+          onClick={() => setPlant('All Plants')}
+          className={`px-4.5 py-1.5 sm:px-5 sm:py-2 rounded-full text-[13px] sm:text-sm font-semibold border transition-all duration-200 ${
+            plant === 'All Plants'
+              ? 'bg-amber-400 border-amber-500 text-black shadow-sm'
+              : 'bg-white border-slate-200 text-zinc-600 hover:border-amber-400 hover:bg-amber-50'
+          }`}
+        >
+          All Plants
+        </button>
         {hierarchy?.plants?.map((p: any) => {
           const isSelected = plant === p.plant_name;
 
@@ -299,7 +353,7 @@ export const AdminDashboard: React.FC = () => {
             <button
               key={p.id}
               onClick={() => setPlant(p.plant_name)}
-              className={`px-5 py-2 rounded-full text-xs font-bold border transition-all duration-200 ${
+              className={`px-4.5 py-1.5 sm:px-5 sm:py-2 rounded-full text-[13px] sm:text-sm font-semibold border transition-all duration-200 ${
                 isSelected
                   ? 'bg-amber-400 border-amber-500 text-black shadow-sm'
                   : 'bg-white border-slate-200 text-zinc-600 hover:border-amber-400 hover:bg-amber-50'
@@ -313,7 +367,7 @@ export const AdminDashboard: React.FC = () => {
 
       {/* ERROR BANNER */}
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-center justify-between text-xs text-red-800">
+        <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-center justify-between text-xs sm:text-[13px] text-red-800">
           <div className="flex items-center gap-2">
             <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
             <span>{error}</span>
@@ -321,7 +375,7 @@ export const AdminDashboard: React.FC = () => {
 
           <button
             onClick={fetchData}
-            className="px-3 py-1 bg-white border border-red-300 text-red-700 rounded-lg font-bold hover:bg-red-100 transition"
+            className="px-3 py-1 bg-white border border-red-300 text-red-700 rounded-lg text-xs font-semibold hover:bg-red-100 transition"
           >
             Retry
           </button>
@@ -329,7 +383,7 @@ export const AdminDashboard: React.FC = () => {
       )}
 
       {/* ROW 1: TOP KPI CARDS */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5 sm:gap-7">
         <TopKPICard
           icon={Building2}
           iconBgColor="bg-blue-100"
@@ -367,88 +421,110 @@ export const AdminDashboard: React.FC = () => {
           value={totalUsers}
           subtitle={`${techCount} Techs • ${operatorCount} Operators • ${managerCount} Mgrs`}
         />
+
+        <TopKPICard
+          icon={Wrench}
+          iconBgColor="bg-purple-100"
+          iconColor="text-purple-800"
+          label="Total Work Orders"
+          value={kpiStats?.total_work_orders ?? 0}
+          subtitle={`${kpiStats?.active_work_orders ?? 0} Active • ${
+            kpiStats?.completed_work_orders ?? 0
+          } Completed`}
+        />
       </div>
 
       {/* ROW 2: USER AND MACHINE ANALYTICS */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
         {/* USER ROLE DISTRIBUTION */}
-        <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-            <h3 className="text-sm font-bold text-zinc-900 tracking-tight">
-              User Role Distribution
-            </h3>
+        <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-xs flex flex-col justify-between h-full">
+          <div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+              <div>
+                <h3 className="text-lg font-semibold text-zinc-900 tracking-tight">
+                  User Role Distribution
+                </h3>
+                <p className="text-xs sm:text-[13px] text-zinc-500 font-normal mt-0.5">
+                  Allocated personnel across active operations
+                </p>
+              </div>
 
-            <Link
-              to="/users"
-              className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-jcb-yellow hover:bg-amber-400 text-black rounded-xl text-xs font-bold border border-amber-500 shadow-2xs transition"
-            >
-              <Users className="w-3.5 h-3.5" />
-              <span>Staff Personnel</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
+              <Link
+                to="/users"
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-jcb-yellow hover:bg-amber-400 text-black rounded-xl text-[13px] sm:text-sm font-semibold border border-amber-500 shadow-2xs transition shrink-0"
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>Staff Personnel</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+
+            <UserRoleDonutChart
+              totalCount={totalUsers}
+              segments={userSegments}
+              emptyMessage="No personnel registered in system"
+              loading={loading}
+            />
           </div>
 
-          <MachineStatusDonut
-            title=""
-            totalLabel="Users"
-            totalCount={totalUsers}
-            segments={userSegments}
-            emptyMessage="No personnel registered in system"
-            loading={loading}
-          />
+          <div className="flex items-center justify-between pt-4 mt-5 border-t border-slate-100 text-[13px]">
+            <span className="text-zinc-500 font-normal">
+              Registered Workforce:{' '}
+              <strong className="text-zinc-900 font-mono font-semibold">
+                {totalUsers} Personnel
+              </strong>
+            </span>
+            <span className="text-emerald-700 font-semibold bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 text-xs">
+              Active Roster
+            </span>
+          </div>
         </div>
 
         {/* MACHINE STATUS OVERVIEW */}
-        <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-            <h3 className="text-sm font-bold text-zinc-900 tracking-tight">
-              Machine Status Overview
-            </h3>
+        <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-xs flex flex-col justify-between h-full">
+          <div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+              <div>
+                <h3 className="text-lg font-semibold text-zinc-900 tracking-tight">
+                  Machine Status Overview
+                </h3>
+                <p className="text-xs sm:text-[13px] text-zinc-500 font-normal mt-0.5">
+                  Live operating condition of all factory assets
+                </p>
+              </div>
 
-            <Link
-              to="/machines"
-              className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-jcb-yellow hover:bg-amber-400 text-black rounded-xl text-xs font-bold border border-amber-500 shadow-2xs transition"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Add Machine</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
+              <Link
+                to="/machines"
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-jcb-yellow hover:bg-amber-400 text-black rounded-xl text-[13px] sm:text-sm font-semibold border border-amber-500 shadow-2xs transition shrink-0"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Machine</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+
+            <MachineStatusBarChart
+              totalCount={totalAssets}
+              items={machineStatusItems}
+              loading={loading}
+              emptyMessage="No machines registered in the selected plant"
+            />
           </div>
 
-          <MachineStatusDonut
-            title=""
-            totalLabel="Machines"
-            totalCount={Number(kpiStats?.total_machines ?? 0)}
-            segments={[
-              {
-                label: 'Running',
-                count: Number(kpiStats?.running_machines ?? 0),
-                color: '#16A34A',
-              },
-              {
-                label: 'Idle / Not Working',
-                count: Number(kpiStats?.idle_machines ?? 0),
-                color: '#64748B',
-              },
-              {
-                label: 'Breakdown',
-                count: Number(kpiStats?.breakdown_machines ?? 0),
-                color: '#DC2626',
-              },
-              {
-                label: 'Under Maintenance',
-                count: Number(kpiStats?.maintenance_machines ?? 0),
-                color: '#EAB308',
-              },
-              {
-                label: 'Awaiting Parts',
-                count: Number(kpiStats?.awaiting_parts_machines ?? 0),
-                color: '#2563EB',
-              },
-            ]}
-            loading={loading}
-            emptyMessage="No machines registered in the selected plant"
-          />
+          <div className="flex items-center justify-between pt-4 mt-5 border-t border-slate-100 text-[13px]">
+            <span className="text-zinc-500 font-normal">
+              Total Factory Fleet:{' '}
+              <strong className="text-zinc-900 font-mono font-semibold">
+                {totalAssets} Machines
+              </strong>
+            </span>
+            <span className="text-blue-700 font-semibold bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200 text-xs">
+              {totalAssets > 0
+                ? ((Number(kpiStats?.running_machines ?? 0) / totalAssets) * 100).toFixed(0)
+                : 0}
+              % Operational
+            </span>
+          </div>
         </div>
       </div>
 
@@ -458,17 +534,17 @@ export const AdminDashboard: React.FC = () => {
           <div className="flex items-center gap-2">
             <Package className="w-5 h-5 text-amber-500" />
             <div>
-              <h3 className="text-sm font-bold text-zinc-900 tracking-tight">
+              <h3 className="text-lg font-semibold text-zinc-900 tracking-tight">
                 Spare Parts Inventory
               </h3>
-              <p className="text-[11px] text-zinc-500 mt-0.5">
+              <p className="text-xs sm:text-[13px] text-zinc-500 font-normal mt-0.5">
                 Live inventory summary from the database
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[10px] font-semibold text-zinc-500 bg-slate-100 px-3 py-1.5 rounded-lg">
+            <span className="text-xs font-semibold text-zinc-600 bg-slate-100 px-3 py-1.5 rounded-lg">
               {plant === 'All Plants'
                 ? 'All Plants Inventory'
                 : `${plant} Inventory`}
@@ -476,7 +552,7 @@ export const AdminDashboard: React.FC = () => {
 
             <Link
               to="/inventory"
-              className="inline-flex items-center gap-2 px-4 py-2 bg-jcb-yellow hover:bg-amber-400 text-black rounded-xl text-xs font-bold border border-amber-500 shadow-2xs transition"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-jcb-yellow hover:bg-amber-400 text-black rounded-xl text-[13px] sm:text-sm font-semibold border border-amber-500 shadow-2xs transition"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Add Spare Part</span>
@@ -489,60 +565,60 @@ export const AdminDashboard: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mt-5">
           <div className="rounded-xl border border-slate-200 p-4 bg-slate-50/70">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-zinc-500">
+              <span className="text-[13px] sm:text-sm font-semibold text-zinc-600 truncate">
                 Total Spare Part SKUs
               </span>
-              <Package className="w-4 h-4 text-blue-600" />
+              <Package className="w-4 h-4 text-blue-600 shrink-0" />
             </div>
-            <p className="text-2xl font-bold text-zinc-900 mt-3">
+            <p className="text-[28px] sm:text-3xl font-bold font-mono text-zinc-900 mt-3 leading-tight">
               {loading ? '—' : formatNumber(totalSKUs)}
             </p>
-            <p className="text-[11px] text-zinc-500 mt-1">
+            <p className="text-xs text-zinc-500 font-normal mt-1 truncate">
               Active registered parts
             </p>
           </div>
 
           <div className="rounded-xl border border-slate-200 p-4 bg-slate-50/70">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-zinc-500">
+              <span className="text-[13px] sm:text-sm font-semibold text-zinc-600 truncate">
                 Available Stock
               </span>
-              <Boxes className="w-4 h-4 text-emerald-600" />
+              <Boxes className="w-4 h-4 text-emerald-600 shrink-0" />
             </div>
-            <p className="text-2xl font-bold text-emerald-700 mt-3">
+            <p className="text-[28px] sm:text-3xl font-bold font-mono text-emerald-700 mt-3 leading-tight">
               {loading ? '—' : formatNumber(availableStock)}
             </p>
-            <p className="text-[11px] text-zinc-500 mt-1">
+            <p className="text-xs text-zinc-500 font-normal mt-1 truncate">
               Units available for use
             </p>
           </div>
 
           <div className="rounded-xl border border-amber-200 p-4 bg-amber-50/50">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-zinc-500">
+              <span className="text-[13px] sm:text-sm font-semibold text-zinc-600 truncate">
                 Low Stock Items
               </span>
-              <AlertTriangle className="w-4 h-4 text-amber-600" />
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
             </div>
-            <p className="text-2xl font-bold text-amber-700 mt-3">
+            <p className="text-[28px] sm:text-3xl font-bold font-mono text-amber-700 mt-3 leading-tight">
               {loading ? '—' : formatNumber(lowStockCount)}
             </p>
-            <p className="text-[11px] text-zinc-500 mt-1">
+            <p className="text-xs text-zinc-500 font-normal mt-1 truncate">
               At or below reorder level
             </p>
           </div>
 
           <div className="rounded-xl border border-red-200 p-4 bg-red-50/50">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-zinc-500">
+              <span className="text-[13px] sm:text-sm font-semibold text-zinc-600 truncate">
                 Out of Stock
               </span>
-              <CircleOff className="w-4 h-4 text-red-600" />
+              <CircleOff className="w-4 h-4 text-red-600 shrink-0" />
             </div>
-            <p className="text-2xl font-bold text-red-700 mt-3">
+            <p className="text-[28px] sm:text-3xl font-bold font-mono text-red-700 mt-3 leading-tight">
               {loading ? '—' : formatNumber(outOfStockCount)}
             </p>
-            <p className="text-[11px] text-zinc-500 mt-1">
+            <p className="text-xs text-zinc-500 font-normal mt-1 truncate">
               Items with zero physical stock
             </p>
           </div>
@@ -553,20 +629,20 @@ export const AdminDashboard: React.FC = () => {
           {/* CATEGORY DISTRIBUTION */}
           <div className="border border-slate-200 rounded-xl p-4">
             <div className="flex items-center justify-between mb-4">
-              <h4 className="text-xs font-bold text-zinc-800">
+              <h4 className="text-[15px] sm:text-base font-semibold text-zinc-800">
                 Spare Parts Categories
               </h4>
-              <span className="text-[10px] text-zinc-400 font-medium">
+              <span className="text-xs text-zinc-500 font-normal">
                 SKU distribution
               </span>
             </div>
 
             {loading ? (
-              <div className="py-12 text-center text-xs text-zinc-400">
+              <div className="py-12 text-center text-[13px] text-zinc-400 font-normal">
                 Loading categories...
               </div>
             ) : inventoryCategories.length === 0 ? (
-              <div className="py-12 text-center text-xs text-zinc-400">
+              <div className="py-12 text-center text-[13px] text-zinc-400 font-normal">
                 No spare part categories found
               </div>
             ) : (
@@ -588,17 +664,17 @@ export const AdminDashboard: React.FC = () => {
                         colors[index % colors.length]
                       }`}
                     >
-                      <p className="text-xs font-semibold truncate">
+                      <p className="text-[13px] sm:text-sm font-semibold truncate">
                         {category.category || 'Uncategorized'}
                       </p>
-                      <p className="text-2xl font-bold mt-3">
+                      <p className="text-2xl font-bold font-mono mt-2 leading-none">
                         {formatNumber(Number(category.part_count ?? 0))}
                       </p>
-                      <p className="text-[10px] font-medium opacity-75 mt-1">
+                      <p className="text-xs font-normal opacity-85 mt-1">
                         Spare Part SKUs
                       </p>
                       <div className="mt-3 pt-2 border-t border-current/10">
-                        <p className="text-[11px] font-semibold">
+                        <p className="text-xs font-semibold">
                           {formatNumber(Number(category.available_stock ?? 0))} units available
                         </p>
                       </div>
@@ -612,20 +688,20 @@ export const AdminDashboard: React.FC = () => {
           {/* AVAILABLE STOCK BY CATEGORY */}
           <div className="border border-slate-200 rounded-xl p-4">
             <div className="flex items-center justify-between mb-4">
-              <h4 className="text-xs font-bold text-zinc-800">
+              <h4 className="text-[15px] sm:text-base font-semibold text-zinc-800">
                 Available Stock by Category
               </h4>
-              <span className="text-[10px] text-zinc-400 font-medium">
+              <span className="text-xs text-zinc-500 font-normal">
                 Units
               </span>
             </div>
 
             {loading ? (
-              <div className="py-12 text-center text-xs text-zinc-400">
+              <div className="py-12 text-center text-[13px] text-zinc-400 font-normal">
                 Loading category stock...
               </div>
             ) : inventoryCategories.length === 0 ? (
-              <div className="py-12 text-center text-xs text-zinc-400">
+              <div className="py-12 text-center text-[13px] text-zinc-400 font-normal">
                 No category inventory data available
               </div>
             ) : (
@@ -640,10 +716,10 @@ export const AdminDashboard: React.FC = () => {
                   return (
                     <div key={`${category.category}-${index}`}>
                       <div className="flex items-center justify-between gap-3 mb-2">
-                        <span className="text-xs font-semibold text-zinc-700 truncate">
+                        <span className="text-[13px] sm:text-sm font-semibold text-zinc-700 truncate">
                           {category.category || 'Uncategorized'}
                         </span>
-                        <span className="text-xs font-bold text-zinc-900 whitespace-nowrap">
+                        <span className="text-[13px] sm:text-sm font-bold font-mono text-zinc-900 whitespace-nowrap">
                           {formatNumber(stock)}
                         </span>
                       </div>
@@ -660,10 +736,10 @@ export const AdminDashboard: React.FC = () => {
                       </div>
 
                       <div className="flex justify-between mt-1.5">
-                        <span className="text-[10px] text-zinc-400">
+                        <span className="text-xs text-zinc-500">
                           {formatNumber(Number(category.part_count ?? 0))} SKUs
                         </span>
-                        <span className="text-[10px] text-zinc-400">
+                        <span className="text-xs text-zinc-500">
                           {formatNumber(Number(category.physical_stock ?? 0))} physical units
                         </span>
                       </div>
@@ -678,19 +754,19 @@ export const AdminDashboard: React.FC = () => {
         {/* INVENTORY FOOTER */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-5 pt-4 border-t border-slate-100">
           <div className="flex items-center justify-between rounded-lg bg-slate-50 px-4 py-3">
-            <span className="text-xs font-medium text-zinc-500">
+            <span className="text-[13px] font-normal text-zinc-500">
               Total Physical Stock
             </span>
-            <span className="text-sm font-bold text-zinc-900">
+            <span className="text-sm font-bold font-mono text-zinc-900">
               {loading ? '—' : formatNumber(physicalStock)}
             </span>
           </div>
 
           <div className="flex items-center justify-between rounded-lg bg-slate-50 px-4 py-3">
-            <span className="text-xs font-medium text-zinc-500">
+            <span className="text-[13px] font-normal text-zinc-500">
               Categories Registered
             </span>
-            <span className="text-sm font-bold text-zinc-900">
+            <span className="text-sm font-bold font-mono text-zinc-900">
               {loading ? '—' : formatNumber(inventoryCategories.length)}
             </span>
           </div>
@@ -702,14 +778,14 @@ export const AdminDashboard: React.FC = () => {
         <div className="flex items-center justify-between pb-4 border-b border-slate-100">
           <div className="flex items-center gap-2">
             <Building2 className="w-4 h-4 text-amber-500" />
-            <h3 className="text-xs sm:text-sm font-bold text-zinc-900 tracking-tight">
+            <h3 className="text-lg font-semibold text-zinc-900 tracking-tight">
               Active Plants & Shops
             </h3>
           </div>
 
           <Link
             to="/machines"
-            className="text-xs font-bold text-amber-600 hover:text-amber-700 flex items-center gap-1 transition"
+            className="text-[13px] sm:text-sm font-semibold text-amber-600 hover:text-amber-700 flex items-center gap-1 transition"
           >
             <span>View Machines</span>
             <ArrowRight className="w-3.5 h-3.5" />
@@ -719,20 +795,20 @@ export const AdminDashboard: React.FC = () => {
         <div className="overflow-x-auto mt-3">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b border-slate-100 text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
-                <th className="py-2.5 px-3">Plant Location</th>
-                <th className="py-2.5 px-3">Shops</th>
-                <th className="py-2.5 px-3">Machines</th>
-                <th className="py-2.5 px-3">Status</th>
+              <tr className="border-b border-slate-200/80 text-[13px] font-semibold text-zinc-600">
+                <th className="py-3 px-3.5">Plant Location</th>
+                <th className="py-3 px-3.5">Shops</th>
+                <th className="py-3 px-3.5">Machines</th>
+                <th className="py-3 px-3.5">Status</th>
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-slate-100 text-xs text-zinc-800">
+            <tbody className="divide-y divide-slate-100 text-sm text-zinc-800">
               {loading ? (
                 <tr>
                   <td
                     colSpan={4}
-                    className="py-8 text-center text-xs text-zinc-400 font-medium"
+                    className="py-8 text-center text-[13px] text-zinc-400 font-normal"
                   >
                     Loading facility network...
                   </td>
@@ -741,7 +817,7 @@ export const AdminDashboard: React.FC = () => {
                 <tr>
                   <td
                     colSpan={4}
-                    className="py-8 text-center text-xs text-zinc-400 font-medium"
+                    className="py-8 text-center text-[13px] text-zinc-400 font-normal"
                   >
                     No plant facilities registered in database.
                   </td>
@@ -752,21 +828,21 @@ export const AdminDashboard: React.FC = () => {
                     key={p.id}
                     className="hover:bg-slate-50/70 transition"
                   >
-                    <td className="py-3 px-3 font-semibold text-zinc-900">
+                    <td className="py-3 px-3.5 font-semibold text-zinc-900">
                       {p.plant_name}
                     </td>
 
-                    <td className="py-3 px-3 text-zinc-600 font-medium">
+                    <td className="py-3 px-3.5 text-zinc-600 font-normal">
                       {p.shop_count} Shops
                     </td>
 
-                    <td className="py-3 px-3 font-mono font-bold text-zinc-950">
+                    <td className="py-3 px-3.5 font-mono font-semibold text-zinc-950">
                       {p.machine_count}
                     </td>
 
-                    <td className="py-3 px-3">
+                    <td className="py-3 px-3.5">
                       <span
-                        className={`px-2.5 py-0.5 rounded-md text-[11px] font-bold border capitalize ${
+                        className={`px-2.5 py-0.5 rounded-md text-xs font-semibold border capitalize ${
                           p.plant_status === 'active'
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                             : 'bg-zinc-100 text-zinc-700 border-zinc-200'

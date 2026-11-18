@@ -443,7 +443,7 @@ export const UserManagementPage: React.FC = () => {
                 onClick={() => openCreateModal('manager')}
                 className="bg-purple-700 hover:bg-purple-800 text-white text-xs font-black px-3.5 py-2.5 rounded-xl shadow transition-all flex items-center gap-1.5"
               >
-                <Briefcase className="w-4 h-4" />
+                {/* <Briefcase className="w-4 h-4" /> */}
                 <span>+ Add Manager</span>
               </button>
             )}
@@ -453,7 +453,7 @@ export const UserManagementPage: React.FC = () => {
                 onClick={() => openCreateModal('store_manager')}
                 className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-black px-3.5 py-2.5 rounded-xl shadow transition-all flex items-center gap-1.5"
               >
-                <Boxes className="w-4 h-4" />
+                {/* <Boxes className="w-4 h-4" /> */}
                 <span>+ Add Store Manager</span>
               </button>
             )}
@@ -462,7 +462,7 @@ export const UserManagementPage: React.FC = () => {
               onClick={() => openCreateModal('operator')}
               className="bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-black px-3.5 py-2.5 rounded-xl shadow transition-all flex items-center gap-1.5"
             >
-              <HardHat className="w-4 h-4" />
+              {/* <HardHat className="w-4 h-4" /> */}
               <span>+ Add Operator</span>
             </button>
 
@@ -470,7 +470,7 @@ export const UserManagementPage: React.FC = () => {
               onClick={() => openCreateModal('technician')}
               className="bg-jcb-yellow hover:bg-jcb-yellowDark text-black text-xs font-black px-3.5 py-2.5 rounded-xl shadow transition-all flex items-center gap-1.5 border border-amber-500"
             >
-              <UserPlus className="w-4 h-4" />
+              {/* <UserPlus className="w-4 h-4" /> */}
               <span>+ Add Technician</span>
             </button>
 
