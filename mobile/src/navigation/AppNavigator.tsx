@@ -195,6 +195,10 @@ const MainTabNavigator = ({ navigation }: any) => {
     : 'ShopfloorTab';
   const [activeTab, setActiveTab] = React.useState(defaultTab);
 
+  React.useEffect(() => {
+    setActiveTab(defaultTab);
+  }, [defaultTab]);
+
   // Android system navigation bar clearance
   const safeBottom = Math.max(insets.bottom, Platform.OS === 'android' ? 22 : 12);
 
@@ -367,7 +371,7 @@ const MainTabNavigator = ({ navigation }: any) => {
     <View style={navStyles.container}>
       {/* Screen Area: strictly render the selected active tab */}
       <View style={navStyles.screensArea}>
-        {tabs.find((tab) => tab.id === activeTab)?.component}
+        {(tabs.find((tab) => tab.id === activeTab) || tabs[0])?.component}
       </View>
 
       {/* JCB Bottom Tab Bar */}

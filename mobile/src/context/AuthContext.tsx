@@ -35,22 +35,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const loadStoredSession = async () => {
+    const startTime = Date.now();
     try {
-      // 500ms safety timeout to prevent black screen if AsyncStorage takes time to respond
-      const timeout = new Promise((resolve) => setTimeout(resolve, 500));
-      const readStorage = (async () => {
-        const storedToken = await AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
-        const storedUser = await AsyncStorage.getItem(STORAGE_KEYS.USER_PROFILE);
-        if (storedToken && storedUser) {
-          setToken(storedToken);
-          setUser(JSON.parse(storedUser));
-        }
-      })();
-      await Promise.race([readStorage, timeout]);
+      const storedToken = await AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+      const storedUser = await AsyncStorage.getItem(STORAGE_KEYS.USER_PROFILE);
+      if (storedToken && storedUser) {
+        setToken(storedToken);
+        setUser(JSON.parse(storedUser));
+      }
     } catch (e) {
       console.warn('[Session Load Error]:', e);
     } finally {
-      setIsLoading(false);
+      const elapsed = Date.now() - startTime;
+      const minDuration = 400; // ultra responsive 400ms smooth transition
+      if (elapsed < minDuration) {
+        setTimeout(() => setIsLoading(false), minDuration - elapsed);
+      } else {
+        setIsLoading(false);
+      }
     }
   };
 

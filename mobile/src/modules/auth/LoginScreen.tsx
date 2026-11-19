@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -16,75 +16,40 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../context/AuthContext';
-import { COLORS } from '../../config/constants';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const JCB_OFFICIAL_BADGE = require('../../assets/jcb_official_badge.png');
 const JCB_MACHINE_HERO = require('../../assets/jcb_backhoe_loader.webp');
+const RIGHT_SIDE_WAVE = require('../../assets/right_side_wave.png');
+const TOP_LEFT_ACCENT = require('../../assets/top_left_accent.png');
 
-type RoleType = 'admin' | 'manager' | 'operator' | 'technician';
-
-interface RoleItem {
-  id: RoleType;
-  label: string;
-  roleTitle: string;
-  icon: string;
-  email: string;
-}
-
-const ROLES: RoleItem[] = [
-  {
-    id: 'admin',
-    label: 'Admin',
-    roleTitle: 'Full Plant Control',
-    icon: 'shield-crown',
-    email: 'admin@jcb.com',
-  },
-  {
-    id: 'manager',
-    label: 'Manager',
-    roleTitle: 'Operations & Shift',
-    icon: 'clipboard-account',
-    email: 'manager@jcb.com',
-  },
-  {
-    id: 'operator',
-    label: 'Operator',
-    roleTitle: 'Machine Operator',
-    icon: 'hard-hat',
-    email: 'operator@jcb.com',
-  },
-  {
-    id: 'technician',
-    label: 'Technician',
-    roleTitle: 'Maintenance Technician',
-    icon: 'wrench-cog',
-    email: 'technician@jcb.com',
-  },
-];
+const SAVED_IDENTIFIER_KEY = '@jcb_saved_identifier';
 
 export const LoginScreen = () => {
   const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
   const { login } = useAuth();
 
-  const [selectedRole, setSelectedRole] = useState<RoleType>('admin');
-  const [identifier, setIdentifier] = useState('admin@jcb.com');
-  const [password, setPassword] = useState('ValidPassword123!');
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const [focusedField, setFocusedField] = useState<'identifier' | 'password' | null>(null);
 
-  const activeRoleData = ROLES.find((r) => r.id === selectedRole) || ROLES[0];
-
-  const handleSelectRole = (role: RoleItem) => {
-    setSelectedRole(role.id);
-    setIdentifier(role.email);
-    setPassword('ValidPassword123!');
-  };
+  useEffect(() => {
+    AsyncStorage.getItem(SAVED_IDENTIFIER_KEY)
+      .then((saved) => {
+        if (saved) {
+          setIdentifier(saved);
+          setRememberMe(true);
+        }
+      })
+      .catch(() => { });
+  }, []);
 
   const handleLogin = async () => {
     if (!identifier.trim() || !password) {
@@ -94,23 +59,19 @@ export const LoginScreen = () => {
 
     try {
       setLoading(true);
+
+      if (rememberMe) {
+        await AsyncStorage.setItem(SAVED_IDENTIFIER_KEY, identifier.trim());
+      } else {
+        await AsyncStorage.removeItem(SAVED_IDENTIFIER_KEY);
+      }
+
       await login(identifier.trim(), password);
     } catch (err: any) {
       Alert.alert('Login Failed', err.message || 'Invalid credentials or server unavailable.');
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleBiometricAuth = () => {
-    Alert.alert(
-      'Biometric Sign In',
-      `Logging in with stored credentials for ${activeRoleData.label} (${identifier})...`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Authenticate', onPress: () => handleLogin() },
-      ]
-    );
   };
 
   const scrollToInput = () => {
@@ -121,7 +82,30 @@ export const LoginScreen = () => {
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" translucent={false} />
+      <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" translucent={false} />
+
+      {/* Decorative Side Accents from JCB Brand System */}
+      <View style={styles.backgroundAccentsContainer} pointerEvents="none">
+        {/* 1. Top-Left Corner Geometric Accent */}
+        <Image
+          source={TOP_LEFT_ACCENT}
+          style={styles.topLeftCorner}
+          resizeMode="contain"
+        />
+
+        {/* 2. Right-Side Smooth Organic Yellow Wave Curve */}
+        <Image
+          source={RIGHT_SIDE_WAVE}
+          style={styles.rightSideWave}
+          resizeMode="stretch"
+        />
+
+        {/* 3. Bottom-Right Corner Geometric Accent */}
+        <View style={styles.bottomRightCorner}>
+          <View style={styles.bottomRightYellowRibbon} />
+          <View style={styles.bottomRightBlackWedge} />
+        </View>
+      </View>
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -135,8 +119,8 @@ export const LoginScreen = () => {
           bounces={false}
         >
           {/* Clean Industrial Top Header */}
-          <View style={[styles.heroHeader, { paddingTop: Math.max(insets.top, 14) }]}>
-            {/* Top Navigation Row: Official JCB Badge & Plant Info */}
+          <View style={[styles.heroHeader, { paddingTop: Math.max(insets.top + 34, 48) }]}>
+            {/* Top Navigation Row: Official JCB Badge & Tagline */}
             <View style={styles.topNavRow}>
               <View style={styles.logoBadgeContainer}>
                 <Image
@@ -145,11 +129,7 @@ export const LoginScreen = () => {
                   resizeMode="contain"
                 />
               </View>
-
-              <View style={styles.plantInfoBox}>
-                <Text style={styles.plantNameText}>BALLABGARH PLANT</Text>
-                <Text style={styles.plantSubText}>Smart CMMS Portal</Text>
-              </View>
+              <Text style={styles.brandTagline}>Keep Your Machine Unstoppable</Text>
             </View>
 
             {/* JCB Machine Showcase */}
@@ -163,61 +143,13 @@ export const LoginScreen = () => {
             </View>
           </View>
 
-          {/* Clean Elevated White Login Sheet */}
+          {/* Floating White Login Card with Rounded Side Curves */}
           <View style={styles.cardContainer}>
             {/* Card Header */}
             <View style={styles.sheetHeader}>
-              <View>
-                <Text style={styles.sheetTitle}>Sign In</Text>
-                <Text style={styles.sheetSubtitle}>
-                  Select your role to access maintenance portal
-                </Text>
-              </View>
+              <Text style={styles.sheetTitle}>Sign In</Text>
               <View style={styles.securitySeal}>
                 <MaterialCommunityIcons name="shield-check" size={20} color="#000000" />
-              </View>
-            </View>
-
-            {/* Role Quick Selector */}
-            <View style={styles.roleSelectionBox}>
-              <Text style={styles.roleSectionTitle}>SELECT PROFILE</Text>
-
-              <View style={styles.roleGrid}>
-                {ROLES.map((role) => {
-                  const isActive = selectedRole === role.id;
-                  return (
-                    <TouchableOpacity
-                      key={role.id}
-                      style={[
-                        styles.roleCard,
-                        isActive ? styles.roleCardActive : styles.roleCardInactive,
-                      ]}
-                      onPress={() => handleSelectRole(role)}
-                      activeOpacity={0.8}
-                    >
-                      <View
-                        style={[
-                          styles.roleIconCircle,
-                          isActive ? styles.roleIconCircleActive : styles.roleIconCircleInactive,
-                        ]}
-                      >
-                        <MaterialCommunityIcons
-                          name={role.icon}
-                          size={18}
-                          color={isActive ? '#000000' : '#475569'}
-                        />
-                      </View>
-                      <Text
-                        style={[
-                          styles.roleName,
-                          isActive ? styles.roleNameActive : styles.roleNameInactive,
-                        ]}
-                      >
-                        {role.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
               </View>
             </View>
 
@@ -225,7 +157,10 @@ export const LoginScreen = () => {
             <View style={styles.formContainer}>
               {/* Employee ID / Email */}
               <View style={styles.fieldGroup}>
-                <Text style={styles.inputLabel}>EMPLOYEE ID / EMAIL</Text>
+                <View style={styles.labelRow}>
+                  <Text style={styles.inputLabel}>EMPLOYEE ID / EMAIL</Text>
+                  {focusedField === 'identifier' && <View style={styles.activeLabelPip} />}
+                </View>
                 <View
                   style={[
                     styles.inputField,
@@ -239,9 +174,9 @@ export const LoginScreen = () => {
                     ]}
                   >
                     <MaterialCommunityIcons
-                      name="badge-account-horizontal-outline"
+                      name="badge-account-outline"
                       size={20}
-                      color={focusedField === 'identifier' ? '#000000' : '#64748B'}
+                      color={focusedField === 'identifier' ? '#000000' : '#475569'}
                     />
                   </View>
                   <TextInput
@@ -262,8 +197,9 @@ export const LoginScreen = () => {
                     <TouchableOpacity
                       onPress={() => setIdentifier('')}
                       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      style={styles.clearBtn}
                     >
-                      <MaterialCommunityIcons name="close-circle" size={17} color="#CBD5E1" />
+                      <MaterialCommunityIcons name="close-circle" size={18} color="#94A3B8" />
                     </TouchableOpacity>
                   )}
                 </View>
@@ -271,7 +207,10 @@ export const LoginScreen = () => {
 
               {/* Password */}
               <View style={styles.fieldGroup}>
-                <Text style={styles.inputLabel}>PASSWORD</Text>
+                <View style={styles.labelRow}>
+                  <Text style={styles.inputLabel}>PASSWORD</Text>
+                  {focusedField === 'password' && <View style={styles.activeLabelPip} />}
+                </View>
                 <View
                   style={[
                     styles.inputField,
@@ -287,7 +226,7 @@ export const LoginScreen = () => {
                     <MaterialCommunityIcons
                       name="lock-outline"
                       size={20}
-                      color={focusedField === 'password' ? '#000000' : '#64748B'}
+                      color={focusedField === 'password' ? '#000000' : '#475569'}
                     />
                   </View>
                   <TextInput
@@ -306,17 +245,18 @@ export const LoginScreen = () => {
                   <TouchableOpacity
                     onPress={() => setShowPassword(!showPassword)}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    style={styles.eyeBtn}
                   >
                     <MaterialCommunityIcons
                       name={showPassword ? 'eye-outline' : 'eye-off-outline'}
-                      size={20}
-                      color="#64748B"
+                      size={19}
+                      color={showPassword ? '#0F172A' : '#94A3B8'}
                     />
                   </TouchableOpacity>
                 </View>
               </View>
 
-              {/* Remember Me & Help Options */}
+              {/* Remember Password Option */}
               <View style={styles.metaRow}>
                 <TouchableOpacity
                   style={styles.checkboxContainer}
@@ -328,61 +268,30 @@ export const LoginScreen = () => {
                       <MaterialCommunityIcons name="check-bold" size={12} color="#000000" />
                     )}
                   </View>
-                  <Text style={styles.checkboxLabel}>Save on this terminal</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  onPress={() =>
-                    Alert.alert(
-                      'Plant IT Helpdesk',
-                      'Contact Ballabgarh Works IT Support:\n📞 Ext: 4021 / 4022\n📧 support.cmms@jcb.com\n🏢 Bay-4 IT Control Center'
-                    )
-                  }
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.forgotPassLink}>Need Help?</Text>
+                  <Text style={styles.checkboxLabel}>Remember this password</Text>
                 </TouchableOpacity>
               </View>
 
-              {/* Action Buttons: Sign In + Biometrics */}
-              <View style={styles.actionButtonsRow}>
-                <TouchableOpacity
-                  style={styles.primaryLoginBtn}
-                  onPress={handleLogin}
-                  disabled={loading}
-                  activeOpacity={0.88}
-                >
-                  {loading ? (
-                    <ActivityIndicator color="#000000" size="small" />
-                  ) : (
-                    <View style={styles.primaryLoginBtnContent}>
-                      <Text style={styles.primaryLoginBtnText}>SIGN IN</Text>
-                      <View style={styles.arrowIconBubble}>
-                        <MaterialCommunityIcons name="arrow-right-bold" size={16} color="#F9B101" />
-                      </View>
-                    </View>
-                  )}
-                </TouchableOpacity>
+              {/* Full-width Sign In Action Button */}
+              <TouchableOpacity
+                style={styles.primaryLoginBtn}
+                onPress={handleLogin}
+                disabled={loading}
+                activeOpacity={0.88}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#000000" size="small" />
+                ) : (
+                  <Text style={styles.primaryLoginBtnText}>SIGN IN</Text>
+                )}
+              </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={styles.biometricBtn}
-                  onPress={handleBiometricAuth}
-                  activeOpacity={0.75}
-                >
-                  <MaterialCommunityIcons name="fingerprint" size={26} color="#0F172A" />
-                </TouchableOpacity>
+              {/* Bottom Brand Divider */}
+              <View style={styles.cardFooterDivider}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.cardFooterText}>JCB India</Text>
+                <View style={styles.dividerLine} />
               </View>
-            </View>
-
-            {/* Industrial Plant Trust Badge Footer */}
-            <View style={styles.sheetFooter}>
-              <View style={styles.trustBadge}>
-                <MaterialCommunityIcons name="shield-check" size={14} color="#166534" />
-                <Text style={styles.trustBadgeText}>JCB Enterprise Network</Text>
-              </View>
-              <Text style={styles.legalNotice}>
-                Authorized personnel only. All access is logged.
-              </Text>
             </View>
           </View>
         </ScrollView>
@@ -394,108 +303,152 @@ export const LoginScreen = () => {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8FAFC',
   },
   keyboardContainer: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'transparent',
   },
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF',
+    paddingBottom: 0,
   },
 
-  /* Clean Industrial Header (Pure White Background behind JCB) */
+  /* Decorative Side Accents System */
+  backgroundAccentsContainer: {
+    ...StyleSheet.absoluteFillObject,
+    overflow: 'hidden',
+  },
+
+  /* 1. Top-Left Corner Geometric Accent */
+  topLeftCorner: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: 145,
+    height: 135,
+  },
+
+  /* 2. Right-Side Smooth Organic Yellow Wave Curve */
+  rightSideWave: {
+    position: 'absolute',
+    right: 0,
+    top: 155,
+    width: 82,
+    height: 195,
+  },
+
+  /* 3. Bottom-Right Corner Geometric Accent */
+  bottomRightCorner: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 160,
+    height: 100,
+    overflow: 'hidden',
+  },
+  bottomRightYellowRibbon: {
+    position: 'absolute',
+    bottom: -15,
+    right: -20,
+    width: 180,
+    height: 65,
+    backgroundColor: '#F9B101',
+    transform: [{ rotate: '-30deg' }],
+  },
+  bottomRightBlackWedge: {
+    position: 'absolute',
+    bottom: -22,
+    right: -20,
+    width: 110,
+    height: 48,
+    backgroundColor: '#111827',
+    transform: [{ rotate: '-30deg' }],
+  },
+
+  /* Clean Industrial Header */
   heroHeader: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'transparent',
     paddingHorizontal: 16,
-    paddingBottom: 10,
+    paddingBottom: 2,
   },
   topNavRow: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 6,
+    justifyContent: 'center',
+    marginTop: 12,
+    marginBottom: 0,
   },
   logoBadgeContainer: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 4,
+    backgroundColor: 'transparent',
+    paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 8,
+    marginBottom: 4,
   },
   officialBadge: {
-    width: 90,
-    height: 34,
+    width: 150,
+    height: 49,
   },
-  plantInfoBox: {
-    alignItems: 'flex-end',
-  },
-  plantNameText: {
-    fontSize: 11,
-    fontWeight: '900',
+  brandTagline: {
+    fontSize: 13,
+    fontWeight: '800',
     color: '#0F172A',
-    letterSpacing: 0.5,
-  },
-  plantSubText: {
-    fontSize: 9.5,
-    fontWeight: '700',
-    color: '#D97706',
+    letterSpacing: 0.3,
+    textAlign: 'center',
+    marginTop: 2,
+    marginBottom: 0,
   },
 
-  /* Machine Showcase (Pure White Background behind JCB) */
+  /* Machine Showcase */
   machineStageContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 6,
-    backgroundColor: '#FFFFFF',
+    marginTop: -14,
+    backgroundColor: 'transparent',
   },
   machineImage: {
-    width: SCREEN_WIDTH * 0.92,
-    height: 152,
+    width: SCREEN_WIDTH * 0.94,
+    height: 182,
   },
   groundPlatformShadow: {
-    width: SCREEN_WIDTH * 0.76,
-    height: 7,
-    borderRadius: 3.5,
+    width: SCREEN_WIDTH * 0.82,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: 'rgba(15, 23, 42, 0.08)',
-    marginTop: -4,
+    marginTop: -6,
     marginBottom: 4,
   },
 
-  /* Elevated Modern Login Card */
+  /* Elevated Modern Login Sheet (Full Width, Flat Bottom, Rounded Top) */
   cardContainer: {
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 22,
-    borderTopWidth: 1.5,
-    borderTopColor: '#F1F5F9',
-    shadowColor: '#000000',
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    paddingHorizontal: 22,
+    paddingTop: 22,
+    paddingBottom: Platform.OS === 'android' ? 24 : 34,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 6,
   },
   sheetHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 14,
+    marginBottom: 16,
   },
   sheetTitle: {
     fontSize: 22,
     fontWeight: '900',
     color: '#0F172A',
     letterSpacing: -0.4,
-  },
-  sheetSubtitle: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#64748B',
-    marginTop: 2,
   },
   securitySeal: {
     width: 38,
@@ -506,88 +459,31 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  /* Role Selection */
-  roleSelectionBox: {
-    marginBottom: 16,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  roleSectionTitle: {
-    fontSize: 10.5,
-    fontWeight: '800',
-    color: '#475569',
-    letterSpacing: 0.6,
-    marginBottom: 8,
-    paddingHorizontal: 2,
-  },
-  roleGrid: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  roleCard: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 6,
-    borderRadius: 10,
-    gap: 5,
-  },
-  roleCardActive: {
-    backgroundColor: '#F9B101',
-    shadowColor: '#F9B101',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.35,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  roleCardInactive: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  roleIconCircle: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  roleIconCircleActive: {
-    backgroundColor: 'rgba(0, 0, 0, 0.12)',
-  },
-  roleIconCircleInactive: {
-    backgroundColor: '#F1F5F9',
-  },
-  roleName: {
-    fontSize: 11,
-  },
-  roleNameActive: {
-    fontWeight: '900',
-    color: '#000000',
-  },
-  roleNameInactive: {
-    fontWeight: '700',
-    color: '#475569',
-  },
-
   /* Form Fields */
   formContainer: {
-    marginBottom: 6,
+    marginBottom: 4,
   },
   fieldGroup: {
-    marginBottom: 12,
+    marginBottom: 16,
+  },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 7,
+    paddingHorizontal: 2,
   },
   inputLabel: {
     fontSize: 10.5,
     fontWeight: '800',
-    color: '#334155',
-    letterSpacing: 0.5,
-    marginBottom: 6,
+    color: '#475569',
+    letterSpacing: 0.6,
+  },
+  activeLabelPip: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#F9B101',
   },
   inputField: {
     flexDirection: 'row',
@@ -595,56 +491,67 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
     borderWidth: 1.5,
     borderColor: '#E2E8F0',
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    height: 48,
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    height: 52,
   },
   inputFieldFocused: {
     borderColor: '#F9B101',
     backgroundColor: '#FFFFFF',
     shadowColor: '#F9B101',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.22,
+    shadowRadius: 5,
+    elevation: 3,
   },
   fieldIconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     backgroundColor: '#EDF2F7',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
   },
   fieldIconBoxFocused: {
-    backgroundColor: '#FEF9C3',
+    backgroundColor: '#F9B101',
   },
   textInput: {
     flex: 1,
-    fontSize: 13.5,
+    fontSize: 14,
     fontWeight: '700',
     color: '#0F172A',
     paddingVertical: 0,
+  },
+  clearBtn: {
+    padding: 4,
+  },
+  eyeBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F1F5F9',
   },
 
   /* Meta Options */
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
+    justifyContent: 'flex-start',
+    marginBottom: 18,
     marginTop: 2,
   },
   checkboxContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 9,
   },
   checkbox: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
+    width: 19,
+    height: 19,
+    borderRadius: 4.5,
     borderWidth: 1.5,
     borderColor: '#94A3B8',
     backgroundColor: '#FFFFFF',
@@ -656,92 +563,51 @@ const styles = StyleSheet.create({
     borderColor: '#F9B101',
   },
   checkboxLabel: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '600',
     color: '#475569',
   },
-  forgotPassLink: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#D97706',
-  },
 
-  /* Action Buttons */
-  actionButtonsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
+  /* Full Width Action Button */
   primaryLoginBtn: {
-    flex: 1,
+    width: '100%',
     backgroundColor: '#F9B101',
-    borderRadius: 12,
-    height: 50,
+    borderRadius: 16,
+    height: 52,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#F9B101',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  primaryLoginBtnContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
+    shadowRadius: 8,
+    elevation: 4,
   },
   primaryLoginBtnText: {
-    fontSize: 13.5,
+    fontSize: 16,
     fontWeight: '900',
     color: '#000000',
-    letterSpacing: 0.6,
-  },
-  arrowIconBubble: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#000000',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  biometricBtn: {
-    width: 50,
-    height: 50,
-    borderRadius: 12,
-    backgroundColor: '#F1F5F9',
-    borderWidth: 1.5,
-    borderColor: '#CBD5E1',
-    alignItems: 'center',
-    justifyContent: 'center',
+    letterSpacing: 1,
+    textAlign: 'center',
   },
 
-  /* Sheet Footer */
-  sheetFooter: {
-    marginTop: 18,
-    alignItems: 'center',
-  },
-  trustBadge: {
+  /* Card Footer Divider */
+  cardFooterDivider: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1,
-    borderColor: '#DCFCE7',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-    gap: 6,
-    marginBottom: 6,
+    justifyContent: 'center',
+    marginTop: 18,
+    marginBottom: 4,
+    gap: 10,
   },
-  trustBadgeText: {
-    fontSize: 10.5,
-    fontWeight: '800',
-    color: '#166534',
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E2E8F0',
   },
-  legalNotice: {
-    fontSize: 9.5,
-    fontWeight: '500',
+  cardFooterText: {
+    fontSize: 11.5,
+    fontWeight: '700',
     color: '#94A3B8',
-    textAlign: 'center',
+    letterSpacing: 0.5,
   },
 });

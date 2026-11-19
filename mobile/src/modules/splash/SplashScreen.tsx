@@ -5,55 +5,34 @@ import {
   StyleSheet,
   Image,
   Animated,
-  Easing,
   Dimensions,
   StatusBar,
+  ActivityIndicator,
 } from 'react-native';
-import { COLORS } from '../../config/constants';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-const JCB_LOGO = require('../../assets/jcb_logo.png');
+const JCB_OFFICIAL_BADGE = require('../../assets/jcb_official_badge.png');
 const JCB_MACHINE_HERO = require('../../assets/jcb_backhoe_loader.webp');
 
 export const SplashScreen = () => {
-  const pulseAnim = useRef(new Animated.Value(0.3)).current;
-  const barAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.96)).current;
 
   useEffect(() => {
-    // Subtle breathing pulse for loading text
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 900,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 0.3,
-          duration: 900,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
-
-    // Smooth horizontal progress bar sweep
-    Animated.loop(
-      Animated.timing(barAnim, {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 1800,
-        easing: Easing.inOut(Easing.cubic),
-        useNativeDriver: false,
-      })
-    ).start();
-  }, [pulseAnim, barAnim]);
-
-  const progressWidth = barAnim.interpolate({
-    inputRange: [0, 0.5, 1],
-    outputRange: ['10%', '75%', '100%'],
-  });
+        duration: 350,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [fadeAnim, scaleAnim]);
 
   return (
     <View style={styles.container}>
@@ -63,24 +42,29 @@ export const SplashScreen = () => {
       <View style={styles.topAccentBar} />
 
       {/* Main Content Core */}
-      <View style={styles.centerBox}>
-        {/* Official JCB Logo */}
-        <View style={styles.logoContainer}>
+      <Animated.View
+        style={[
+          styles.centerBox,
+          {
+            opacity: fadeAnim,
+            transform: [{ scale: scaleAnim }],
+          },
+        ]}
+      >
+        {/* Official JCB Badge */}
+        <View style={styles.logoBadgeContainer}>
           <Image
-            source={JCB_LOGO}
-            style={styles.logoImage}
+            source={JCB_OFFICIAL_BADGE}
+            style={styles.logoBadge}
             resizeMode="contain"
           />
         </View>
 
         {/* System Title */}
         <Text style={styles.mainTitle}>SMART CMMS</Text>
-        <Text style={styles.subTitle}>Plant Maintenance & Asset Reliability</Text>
-
-        {/* Yellow Brand Accent Divider */}
         <View style={styles.accentDivider} />
 
-        {/* JCB Machine Hero Showcase */}
+        {/* JCB Backhoe Machine Graphic */}
         <View style={styles.machineContainer}>
           <Image
             source={JCB_MACHINE_HERO}
@@ -90,28 +74,21 @@ export const SplashScreen = () => {
           <View style={styles.groundShadow} />
         </View>
 
-        {/* Sleek Enterprise Loading Progress */}
+        {/* Sleek Loading Indicator */}
         <View style={styles.loaderContainer}>
-          <View style={styles.progressBarTrack}>
-            <Animated.View style={[styles.progressBarFill, { width: progressWidth }]} />
-          </View>
-          <Animated.Text style={[styles.loadingText, { opacity: pulseAnim }]}>
-            INITIALIZING PLANT OPERATIONS...
-          </Animated.Text>
+          <ActivityIndicator size="small" color="#F9B101" />
+          <Text style={styles.loadingText}>INITIALIZING...</Text>
         </View>
-      </View>
+      </Animated.View>
 
       {/* Clean Industrial Footer */}
       <View style={styles.footer}>
         <View style={styles.plantRow}>
-          <Text style={styles.plantText}>BALLABGARH</Text>
+          <Text style={styles.plantText}>BALLABGARH WORKS</Text>
           <Text style={styles.dot}>•</Text>
-          <Text style={styles.plantText}>PUNE</Text>
-          <Text style={styles.dot}>•</Text>
-          <Text style={styles.plantText}>JAIPUR</Text>
+          <Text style={styles.plantText}>JCB INDIA</Text>
         </View>
-        <Text style={styles.certText}>ISO 9001:2015 Industrial Platform</Text>
-        <Text style={styles.versionText}>v1.0.0 Enterprise Release</Text>
+        <Text style={styles.versionText}>Enterprise Connected Operations</Text>
       </View>
 
       {/* Bottom JCB Brand Accent Strip */}
@@ -130,120 +107,102 @@ const styles = StyleSheet.create({
   topAccentBar: {
     width: '100%',
     height: 4,
-    backgroundColor: COLORS.primary,
+    backgroundColor: '#F9B101',
   },
   bottomAccentBar: {
     width: '100%',
     height: 4,
-    backgroundColor: COLORS.primary,
+    backgroundColor: '#F9B101',
   },
   centerBox: {
-    flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
-    width: '100%',
+    justifyContent: 'center',
     paddingHorizontal: 20,
-    marginTop: -10,
+    width: '100%',
   },
-  logoContainer: {
-    marginBottom: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
+  logoBadgeContainer: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginBottom: 8,
   },
-  logoImage: {
+  logoBadge: {
     width: 140,
     height: 45,
   },
   mainTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '900',
     color: '#0F172A',
-    letterSpacing: 1.5,
+    letterSpacing: 2,
     textAlign: 'center',
   },
   subTitle: {
-    fontSize: 12.5,
+    fontSize: 12,
     fontWeight: '600',
     color: '#64748B',
     textAlign: 'center',
-    marginTop: 3,
-    letterSpacing: 0.2,
+    marginTop: 2,
   },
   accentDivider: {
-    width: 44,
-    height: 3.5,
-    backgroundColor: COLORS.primary,
-    borderRadius: 2,
-    marginTop: 10,
-    marginBottom: 12,
+    width: 36,
+    height: 3,
+    backgroundColor: '#F9B101',
+    borderRadius: 1.5,
+    marginTop: 8,
+    marginBottom: 10,
   },
   machineContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginVertical: 10,
+    marginVertical: 8,
     width: '100%',
   },
   machineImage: {
-    width: SCREEN_WIDTH * 0.88,
-    height: 170,
+    width: Math.min(SCREEN_WIDTH * 0.75, 280),
+    height: 120,
   },
   groundShadow: {
-    width: SCREEN_WIDTH * 0.72,
-    height: 7,
-    borderRadius: 3.5,
+    width: Math.min(SCREEN_WIDTH * 0.65, 230),
+    height: 6,
+    borderRadius: 3,
     backgroundColor: 'rgba(15, 23, 42, 0.08)',
     marginTop: -4,
   },
   loaderContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 22,
-    width: '100%',
-  },
-  progressBarTrack: {
-    width: 160,
-    height: 4,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: COLORS.primary,
-    borderRadius: 2,
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 18,
   },
   loadingText: {
-    fontSize: 10,
+    fontSize: 10.5,
     fontWeight: '800',
-    color: '#475569',
-    letterSpacing: 1,
-    marginTop: 8,
+    color: '#64748B',
+    letterSpacing: 1.2,
   },
   footer: {
-    paddingBottom: 20,
+    paddingBottom: 16,
     alignItems: 'center',
   },
   plantRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 5,
+    marginBottom: 3,
   },
   plantText: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '900',
     color: '#334155',
-    letterSpacing: 1.2,
+    letterSpacing: 1,
   },
   dot: {
-    color: COLORS.primary,
+    color: '#F9B101',
     fontSize: 10,
     fontWeight: '900',
-  },
-  certText: {
-    fontSize: 10.5,
-    color: '#64748B',
-    fontWeight: '600',
-    marginBottom: 2,
   },
   versionText: {
     fontSize: 9.5,
