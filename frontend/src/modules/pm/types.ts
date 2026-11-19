@@ -42,6 +42,9 @@ export interface PMPlan {
   is_active: boolean;
   next_pm_date?: string;
   schedule_status?: PMScheduleStatus;
+  eligible_machine_count?: number;
+  latest_execution_status?: string | null;
+  eligible_machines?: any[];
   created_at: string;
   updated_at?: string;
   statistics?: {

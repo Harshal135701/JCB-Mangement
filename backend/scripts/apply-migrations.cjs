@@ -42,6 +42,12 @@ async function applyMigrations() {
     await client.query(m17Sql);
     console.log('Migration 017 applied successfully.');
 
+    console.log('\n--- Applying Migration 018 ---');
+    const m18Path = path.join(__dirname, '../../database/migrations/018_pm_plan_machines_and_execution.sql');
+    const m18Sql = fs.readFileSync(m18Path, 'utf8');
+    await client.query(m18Sql);
+    console.log('Migration 018 applied successfully.');
+
     console.log('\n--- Verifying Schema ---');
     const omaCheck = await client.query(`
       SELECT column_name, data_type, is_nullable 

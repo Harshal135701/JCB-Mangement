@@ -299,6 +299,12 @@ export async function createPMPlanService(
 
   const plan = insertRes.rows[0];
 
+  // 5b. Associate machine in pm_plan_machines junction table
+  await db.query(
+    `INSERT INTO pm_plan_machines (plan_id, machine_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+    [plan.id, machine_id]
+  );
+
   // 6. Audit Trail & Notification
   await recordPMAuditLog(db, plan.id, 'CREATE_PM_PLAN', user.id, null, {
     plan_code,
@@ -443,7 +449,22 @@ export async function getPMPlansService(
         WHEN CURRENT_DATE > (p.next_pm_date + (p.grace_period_days || ' days')::interval) THEN 'overdue'
         WHEN p.next_pm_date <= CURRENT_DATE THEN 'due'
         ELSE 'upcoming'
-      END as schedule_status
+      END as schedule_status,
+      (
+        SELECT COUNT(DISTINCT sub_m.machine_id)
+        FROM (
+          SELECT machine_id FROM pm_plan_machines WHERE plan_id = p.id
+          UNION
+          SELECT p.machine_id
+        ) sub_m
+      )::int as eligible_machine_count,
+      (
+        SELECT wo.status
+        FROM work_orders wo
+        WHERE (wo.pm_plan_id = p.id OR (wo.classification = 'regular_maintenance' AND (wo.work_instructions LIKE '%' || p.plan_code || '%' OR wo.work_instructions LIKE '%' || p.id || '%')))
+        ORDER BY wo.created_at DESC
+        LIMIT 1
+      ) as latest_execution_status
     FROM pm_plans p
     JOIN machines m ON p.machine_id = m.id
     JOIN shops s ON m.shop_id = s.id
@@ -463,6 +484,8 @@ export async function getPMPlansService(
       current_machine_hours: parseFloat(row.current_machine_hours || '0'),
       operating_hour_threshold: row.operating_hour_threshold ? parseFloat(row.operating_hour_threshold) : null,
       checklist_template: typeof row.checklist_template === 'string' ? JSON.parse(row.checklist_template) : (row.checklist_template || []),
+      eligible_machine_count: parseInt(row.eligible_machine_count || '1', 10),
+      latest_execution_status: row.latest_execution_status || null,
     })),
     pagination: {
       total,
@@ -529,9 +552,21 @@ export async function getPMPlanByIdService(id: string, user: AuthenticatedUser):
        COUNT(CASE WHEN status = 'verified_closed' THEN 1 END) as completed_work_orders,
        COUNT(CASE WHEN status NOT IN ('verified_closed', 'completed') THEN 1 END) as open_work_orders
      FROM work_orders
-     WHERE machine_id = $1 AND classification = 'regular_maintenance'
-       AND (work_instructions LIKE '%' || $2 || '%' OR work_instructions LIKE '%' || $3 || '%')`,
+     WHERE (pm_plan_id = $3 OR (machine_id = $1 AND classification = 'regular_maintenance'
+       AND (work_instructions LIKE '%' || $2 || '%' OR work_instructions LIKE '%' || $3 || '%')))`,
     [plan.machine_id, plan.plan_code, plan.id]
+  );
+
+  const eligibleMachinesRes = await db.query(
+    `SELECT DISTINCT m.id, m.machine_code, m.name as machine_name, m.status as machine_status, m.bay_line_location, m.operating_hours,
+            s.shop_name, pl.plant_name
+     FROM machines m
+     JOIN shops s ON m.shop_id = s.id
+     JOIN plants pl ON s.plant_id = pl.id
+     WHERE (m.id IN (SELECT machine_id FROM pm_plan_machines WHERE plan_id = $1) OR m.id = $2)
+       AND m.status != 'decommissioned'
+     ORDER BY m.machine_code ASC`,
+    [id, plan.machine_id]
   );
 
   return {
@@ -541,6 +576,8 @@ export async function getPMPlanByIdService(id: string, user: AuthenticatedUser):
     current_machine_hours: parseFloat(plan.current_machine_hours || '0'),
     operating_hour_threshold: plan.operating_hour_threshold ? parseFloat(plan.operating_hour_threshold) : null,
     checklist_template: typeof plan.checklist_template === 'string' ? JSON.parse(plan.checklist_template) : (plan.checklist_template || []),
+    eligible_machines: eligibleMachinesRes.rows,
+    eligible_machine_count: eligibleMachinesRes.rows.length,
     statistics: {
       total_work_orders: parseInt(woStats.rows[0]?.total_work_orders || '0', 10),
       completed_work_orders: parseInt(woStats.rows[0]?.completed_work_orders || '0', 10),
@@ -2009,4 +2046,600 @@ export async function getPMByShopService(filters: any, user: AuthenticatedUser):
       compliance_percentage: compliance,
     };
   });
+}
+
+// ---------------------------------------------------------------------------
+// 12. Plan-Based PM Execution for Technicians
+// ---------------------------------------------------------------------------
+export async function getPMPlanEligibleMachinesService(
+  planId: string,
+  user: AuthenticatedUser
+): Promise<any> {
+  if (!isUUID(planId)) throw new PMServiceError('Invalid PM plan ID format.', 400);
+
+  const db = getPmServiceDb();
+
+  // 1. Fetch Plan details
+  const planRes = await db.query(
+    `SELECT p.*, s.id as shop_id, s.plant_id
+     FROM pm_plans p
+     JOIN machines m ON p.machine_id = m.id
+     JOIN shops s ON m.shop_id = s.id
+     WHERE p.id = $1`,
+    [planId]
+  );
+
+  if (planRes.rows.length === 0) {
+    throw new PMServiceError('PM plan not found.', 404);
+  }
+
+  const plan = planRes.rows[0];
+
+  if (!plan.is_active) {
+    throw new PMServiceError('PM Plan is inactive or draft. Only deployed active plans can be executed.', 400);
+  }
+
+  // 2. Query eligible machines associated with this plan
+  let machineQuery = `
+    SELECT DISTINCT 
+      m.id, 
+      m.machine_code, 
+      m.name as machine_name, 
+      m.category, 
+      m.status as machine_status, 
+      m.bay_line_location, 
+      m.operating_hours,
+      m.criticality,
+      s.id as shop_id, 
+      s.shop_name, 
+      pl.id as plant_id, 
+      pl.plant_name,
+      (
+        SELECT wo.id 
+        FROM work_orders wo 
+        WHERE (wo.pm_plan_id = $1 OR (wo.classification = 'regular_maintenance' AND (wo.work_instructions LIKE '%' || $2 || '%' OR wo.work_instructions LIKE '%' || $1 || '%')))
+          AND wo.machine_id = m.id 
+          AND wo.status NOT IN ('verified_closed', 'completed') 
+        ORDER BY wo.created_at DESC 
+        LIMIT 1
+      ) as active_execution_id,
+      (
+        SELECT wo.wo_number 
+        FROM work_orders wo 
+        WHERE (wo.pm_plan_id = $1 OR (wo.classification = 'regular_maintenance' AND (wo.work_instructions LIKE '%' || $2 || '%' OR wo.work_instructions LIKE '%' || $1 || '%')))
+          AND wo.machine_id = m.id 
+          AND wo.status NOT IN ('verified_closed', 'completed') 
+        ORDER BY wo.created_at DESC 
+        LIMIT 1
+      ) as active_execution_wo_number,
+      (
+        SELECT wo.status 
+        FROM work_orders wo 
+        WHERE (wo.pm_plan_id = $1 OR (wo.classification = 'regular_maintenance' AND (wo.work_instructions LIKE '%' || $2 || '%' OR wo.work_instructions LIKE '%' || $1 || '%')))
+          AND wo.machine_id = m.id 
+          AND wo.status NOT IN ('verified_closed', 'completed') 
+        ORDER BY wo.created_at DESC 
+        LIMIT 1
+      ) as active_execution_status,
+      (
+        SELECT wo.assigned_technician_id 
+        FROM work_orders wo 
+        WHERE (wo.pm_plan_id = $1 OR (wo.classification = 'regular_maintenance' AND (wo.work_instructions LIKE '%' || $2 || '%' OR wo.work_instructions LIKE '%' || $1 || '%')))
+          AND wo.machine_id = m.id 
+          AND wo.status NOT IN ('verified_closed', 'completed') 
+        ORDER BY wo.created_at DESC 
+        LIMIT 1
+      ) as active_assigned_technician_id
+    FROM machines m
+    JOIN shops s ON m.shop_id = s.id
+    JOIN plants pl ON s.plant_id = pl.id
+    WHERE (
+      m.id IN (SELECT machine_id FROM pm_plan_machines WHERE plan_id = $1)
+      OR m.id = $3
+    )
+    AND m.status != 'decommissioned'
+  `;
+
+  const params: any[] = [plan.id, plan.plan_code, plan.machine_id];
+
+  if (user.role !== 'admin') {
+    if (user.plant_id) {
+      params.push(user.plant_id);
+      machineQuery += ` AND pl.id = $${params.length}`;
+    }
+    if (user.shop_id) {
+      params.push(user.shop_id);
+      machineQuery += ` AND s.id = $${params.length}`;
+    }
+  }
+
+  machineQuery += ` ORDER BY m.machine_code ASC`;
+
+  const machinesRes = await db.query(machineQuery, params);
+
+  return {
+    plan: {
+      id: plan.id,
+      plan_code: plan.plan_code,
+      title: plan.title,
+      frequency: plan.frequency,
+      interval_days: parseInt(plan.interval_days || '30', 10),
+      operating_hour_threshold: plan.operating_hour_threshold ? parseFloat(plan.operating_hour_threshold) : null,
+      checklist_template: typeof plan.checklist_template === 'string' ? JSON.parse(plan.checklist_template) : (plan.checklist_template || []),
+      is_active: plan.is_active,
+      next_pm_date: plan.next_pm_date,
+      last_pm_date: plan.last_pm_date,
+    },
+    eligible_machines: machinesRes.rows,
+    total_eligible: machinesRes.rows.length,
+  };
+}
+
+export interface ExecutePMPlanInput {
+  machine_id: string;
+  checklist_responses: Array<{
+    item?: string;
+    task?: string;
+    status: 'pass' | 'fail' | 'na';
+    notes?: string;
+    reading?: string | number;
+  }>;
+  overall_status?: 'pass' | 'fail';
+  work_performed: string;
+  technician_remarks?: string;
+  parts_used?: Array<{ part_id: string; quantity: number }>;
+}
+
+export async function executePMPlanService(
+  planId: string,
+  input: ExecutePMPlanInput,
+  user: AuthenticatedUser
+): Promise<any> {
+  if (!['admin', 'manager', 'technician'].includes(user.role)) {
+    throw new PMServiceError(`Forbidden: Role '${user.role}' cannot execute PM plans.`, 403);
+  }
+
+  if (!isUUID(planId)) throw new PMServiceError('Invalid PM plan ID format.', 400);
+
+  const { machine_id, checklist_responses, overall_status, work_performed, technician_remarks, parts_used } = input;
+
+  if (!machine_id || !isUUID(machine_id)) {
+    throw new PMServiceError('Valid machine_id is required for PM execution.', 400);
+  }
+
+  if (!work_performed || typeof work_performed !== 'string' || work_performed.trim().length === 0) {
+    throw new PMServiceError('Details of work performed are required.', 400);
+  }
+
+  const db = getPmServiceDb();
+
+  // 1. Fetch Plan details
+  const planRes = await db.query(
+    `SELECT p.*, s.id as shop_id, s.plant_id
+     FROM pm_plans p
+     JOIN machines m ON p.machine_id = m.id
+     JOIN shops s ON m.shop_id = s.id
+     WHERE p.id = $1`,
+    [planId]
+  );
+
+  if (planRes.rows.length === 0) {
+    throw new PMServiceError('PM plan not found.', 404);
+  }
+
+  const plan = planRes.rows[0];
+
+  if (!plan.is_active) {
+    throw new PMServiceError('PM Plan is inactive or draft. Only deployed active plans can be executed.', 400);
+  }
+
+  // 2. CRITICAL: Strict Machine Eligibility Check
+  // Machine MUST exist in pm_plan_machines WHERE plan_id = $1 OR pm_plans WHERE id = $1 AND machine_id = $2
+  const eligibilityCheck = await db.query(
+    `SELECT 1 FROM (
+       SELECT machine_id FROM pm_plan_machines WHERE plan_id = $1 AND machine_id = $2
+       UNION
+       SELECT machine_id FROM pm_plans WHERE id = $1 AND machine_id = $2
+     ) matched`,
+    [plan.id, machine_id]
+  );
+
+  if (eligibilityCheck.rows.length === 0) {
+    throw new PMServiceError(
+      'Forbidden: Machine is not eligible for this PM plan. Only machines explicitly associated with this plan may be executed.',
+      403
+    );
+  }
+
+  // 3. Machine existence & scope check
+  const machineRes = await db.query(
+    `SELECT m.*, s.plant_id, s.shop_name, pl.plant_name 
+     FROM machines m 
+     JOIN shops s ON m.shop_id = s.id 
+     JOIN plants pl ON s.plant_id = pl.id 
+     WHERE m.id = $1`,
+    [machine_id]
+  );
+
+  if (machineRes.rows.length === 0) {
+    throw new PMServiceError('Machine asset not found.', 404);
+  }
+
+  const machine = machineRes.rows[0];
+
+  if (machine.status === 'decommissioned') {
+    throw new PMServiceError('Machine asset is decommissioned and cannot undergo PM execution.', 400);
+  }
+
+  enforcePlanScope(user, machine.plant_id, machine.shop_id);
+
+  // 4. Advisory lock on machine to prevent concurrent execution races
+  await db.query(
+    `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
+    [`pm_exec:${machine_id}`]
+  );
+
+  // 5. Check if an active open execution already exists
+  const existingCheck = await db.query(
+    `SELECT id, wo_number, status, assigned_technician_id, assigned_manager_id
+     FROM work_orders
+     WHERE machine_id = $1
+       AND classification = 'regular_maintenance'
+       AND status NOT IN ('verified_closed', 'completed')
+       AND (pm_plan_id = $2 OR (work_instructions LIKE '%' || $3 || '%' OR work_instructions LIKE '%' || $2 || '%'))
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [machine_id, plan.id, plan.plan_code]
+  );
+
+  const cleanOverall = overall_status === 'fail' ? 'fail' : 'pass';
+  const checklistData = {
+    plan_id: plan.id,
+    plan_code: plan.plan_code,
+    plan_title: plan.title,
+    submitted_at: new Date().toISOString(),
+    submitted_by: user.id,
+    overall_status: cleanOverall,
+    responses: Array.isArray(checklist_responses) ? checklist_responses : [],
+  };
+
+  let executionWo: any;
+
+  if (existingCheck.rows.length > 0) {
+    const existing = existingCheck.rows[0];
+    if (existing.status === 'submitted_verification') {
+      throw new PMServiceError(
+        `PM execution ${existing.wo_number} is already submitted and pending management verification.`,
+        409
+      );
+    }
+
+    if (user.role === 'technician' && existing.assigned_technician_id && existing.assigned_technician_id !== user.id) {
+      throw new PMServiceError(
+        'Forbidden: PM execution is already assigned to another technician.',
+        403
+      );
+    }
+
+    // Update existing work order to submitted_verification
+    const updateRes = await db.query(
+      `UPDATE work_orders 
+       SET pm_plan_id = COALESCE(pm_plan_id, $1),
+           assigned_technician_id = COALESCE(assigned_technician_id, $2),
+           status = 'submitted_verification',
+           diagnosis = $3,
+           corrective_action = $4,
+           technician_remarks = $5,
+           repair_completed_time = NOW(),
+           updated_at = NOW()
+       WHERE id = $6
+       RETURNING *`,
+      [
+        plan.id,
+        user.role === 'technician' ? user.id : (existing.assigned_technician_id || user.id),
+        JSON.stringify(checklistData),
+        work_performed.trim(),
+        technician_remarks || null,
+        existing.id,
+      ]
+    );
+    executionWo = updateRes.rows[0];
+  } else {
+    // Generate new work order
+    const currentYear = new Date().getFullYear();
+    await db.query(`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, [`wo_seq:${currentYear}`]);
+
+    const countRes = await db.query(
+      `SELECT COALESCE(MAX(SUBSTRING(wo_number FROM '[0-9]+$')::int), 0) + 1 AS next_seq
+       FROM work_orders
+       WHERE wo_number LIKE $1`,
+      [`WO-${currentYear}-%`]
+    );
+    const nextSeq = countRes.rows[0]?.next_seq || 1;
+    const wo_number = `WO-${currentYear}-${String(nextSeq).padStart(5, '0')}`;
+    const priority: WorkOrderPriority = plan.criticality === 'class_a' ? 'high' : 'medium';
+    const instructions = `[PM Plan: ${plan.plan_code} | Plan ID: ${plan.id}] ${plan.title}. Periodic preventive maintenance service execution.`;
+
+    const insertWoRes = await db.query(
+      `INSERT INTO work_orders (
+        wo_number, machine_id, assigned_technician_id, assigned_manager_id,
+        priority, status, classification, is_major_breakdown, sla_deadline, work_instructions,
+        diagnosis, corrective_action, technician_remarks, repair_completed_time,
+        pm_plan_id, created_at, updated_at
+      )
+      VALUES ($1, $2, $3, $4, $5, 'submitted_verification', 'regular_maintenance', FALSE, NOW() + INTERVAL '48 hours', $6, $7, $8, $9, NOW(), $10, NOW(), NOW())
+      RETURNING *`,
+      [
+        wo_number,
+        machine_id,
+        user.role === 'technician' ? user.id : user.id,
+        user.role === 'manager' ? user.id : null,
+        priority,
+        instructions,
+        JSON.stringify(checklistData),
+        work_performed.trim(),
+        technician_remarks || null,
+        plan.id,
+      ]
+    );
+    executionWo = insertWoRes.rows[0];
+  }
+
+  // 6. Handle parts consumed if provided
+  if (Array.isArray(parts_used)) {
+    for (const part of parts_used) {
+      if (part.part_id && part.quantity && isUUID(part.part_id)) {
+        await db.query(
+          `INSERT INTO wo_parts_consumed (work_order_id, part_id, quantity_requested, quantity_installed)
+           VALUES ($1, $2, $3, $3)
+           ON CONFLICT DO NOTHING`,
+          [executionWo.id, part.part_id, parseInt(String(part.quantity), 10) || 1]
+        );
+      }
+    }
+  }
+
+  // 7. Record Milestone Event
+  await db.query(
+    `INSERT INTO work_order_events (work_order_id, event_type, performed_by, notes, timestamp)
+     VALUES ($1, 'PM_EXECUTION_COMPLETED', $2, $3, NOW())`,
+    [
+      executionWo.id,
+      user.id,
+      `PM plan executed and checklist recorded with ${checklistData.responses.length} items. Submitted for management verification.`,
+    ]
+  );
+
+  // 8. Update PM Plan Schedule (advance next_pm_date)
+  const intervalDays = parseInt(plan.interval_days || '30', 10);
+  const updatedPlanRes = await db.query(
+    `UPDATE pm_plans 
+     SET last_pm_date = CURRENT_DATE,
+         next_pm_date = CURRENT_DATE + ($1 || ' days')::interval,
+         updated_at = NOW()
+     WHERE id = $2
+     RETURNING *`,
+    [intervalDays, plan.id]
+  );
+  const updatedPlan = updatedPlanRes.rows[0];
+
+  // 9. Record Audit Log
+  await recordPMAuditLog(db, executionWo.id, 'EXECUTE_PM_PLAN', user.id, null, {
+    plan_id: plan.id,
+    plan_code: plan.plan_code,
+    machine_id,
+    wo_number: executionWo.wo_number,
+    overall_status: cleanOverall,
+    work_performed: work_performed.trim(),
+  });
+
+  // 10. Emit Realtime Notifications
+  const activeIo = getPmServiceIo();
+  if (activeIo && typeof activeIo.to === 'function') {
+    const notif = {
+      title: 'PM Execution Submitted',
+      message: `PM Service for plan ${plan.plan_code} on machine ${machine.machine_code} was submitted by ${(user as any).full_name || user.email || 'technician'}.`,
+      type: 'pm_execution',
+      link_url: `/work-orders/${executionWo.id}`,
+      created_at: new Date(),
+    };
+    activeIo.to(`plant:${machine.plant_id}`).emit('notification:new', notif);
+    activeIo.emit('pm:execution_submitted', {
+      execution_id: executionWo.id,
+      wo_number: executionWo.wo_number,
+      plan_code: plan.plan_code,
+      machine_code: machine.machine_code,
+    });
+  }
+
+  return {
+    execution_id: executionWo.id,
+    wo_number: executionWo.wo_number,
+    plan_id: plan.id,
+    plan_code: plan.plan_code,
+    machine_id: machine.id,
+    machine_code: machine.machine_code,
+    status: 'submitted_verification',
+    overall_status: cleanOverall,
+    next_pm_date: updatedPlan?.next_pm_date || plan.next_pm_date,
+    last_pm_date: updatedPlan?.last_pm_date || new Date().toISOString(),
+    message: `PM execution ${executionWo.wo_number} submitted for verification successfully.`,
+  };
+}
+
+export async function startPMExecutionService(
+  planId: string,
+  machineId: string,
+  user: AuthenticatedUser
+): Promise<any> {
+  if (!['admin', 'manager', 'technician'].includes(user.role)) {
+    throw new PMServiceError(`Forbidden: Role '${user.role}' cannot start PM execution.`, 403);
+  }
+
+  if (!isUUID(planId)) throw new PMServiceError('Invalid PM plan ID format.', 400);
+  if (!machineId || !isUUID(machineId)) throw new PMServiceError('Valid machine_id is required.', 400);
+
+  const db = getPmServiceDb();
+
+  // 1. Fetch Plan
+  const planRes = await db.query(
+    `SELECT p.*, s.id as shop_id, s.plant_id
+     FROM pm_plans p
+     JOIN machines m ON p.machine_id = m.id
+     JOIN shops s ON m.shop_id = s.id
+     WHERE p.id = $1`,
+    [planId]
+  );
+
+  if (planRes.rows.length === 0) {
+    throw new PMServiceError('PM plan not found.', 404);
+  }
+
+  const plan = planRes.rows[0];
+
+  if (!plan.is_active) {
+    throw new PMServiceError('PM Plan is inactive or draft. Only deployed active plans can be executed.', 400);
+  }
+
+  // 2. Strict Machine Eligibility Check
+  const eligibilityCheck = await db.query(
+    `SELECT 1 FROM (
+       SELECT machine_id FROM pm_plan_machines WHERE plan_id = $1 AND machine_id = $2
+       UNION
+       SELECT machine_id FROM pm_plans WHERE id = $1 AND machine_id = $2
+     ) matched`,
+    [plan.id, machineId]
+  );
+
+  if (eligibilityCheck.rows.length === 0) {
+    throw new PMServiceError(
+      'Forbidden: Machine is not eligible for this PM plan. Only machines explicitly associated with this plan may be executed.',
+      403
+    );
+  }
+
+  // 3. Machine check
+  const machineRes = await db.query(
+    `SELECT m.*, s.plant_id, s.shop_name, pl.plant_name 
+     FROM machines m 
+     JOIN shops s ON m.shop_id = s.id 
+     JOIN plants pl ON s.plant_id = pl.id 
+     WHERE m.id = $1`,
+    [machineId]
+  );
+
+  if (machineRes.rows.length === 0) {
+    throw new PMServiceError('Machine asset not found.', 404);
+  }
+
+  const machine = machineRes.rows[0];
+
+  if (machine.status === 'decommissioned') {
+    throw new PMServiceError('Machine asset is decommissioned.', 400);
+  }
+
+  enforcePlanScope(user, machine.plant_id, machine.shop_id);
+
+  // 4. Check existing open work order
+  const existingCheck = await db.query(
+    `SELECT id, wo_number, status, assigned_technician_id
+     FROM work_orders
+     WHERE machine_id = $1
+       AND classification = 'regular_maintenance'
+       AND status NOT IN ('verified_closed', 'completed')
+       AND (pm_plan_id = $2 OR (work_instructions LIKE '%' || $3 || '%' OR work_instructions LIKE '%' || $2 || '%'))
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [machineId, plan.id, plan.plan_code]
+  );
+
+  let executionWo: any;
+
+  if (existingCheck.rows.length > 0) {
+    const existing = existingCheck.rows[0];
+    if (existing.status === 'submitted_verification') {
+      throw new PMServiceError(
+        `PM execution ${existing.wo_number} is already submitted and pending management verification.`,
+        409
+      );
+    }
+
+    if (user.role === 'technician' && existing.assigned_technician_id && existing.assigned_technician_id !== user.id) {
+      throw new PMServiceError('Forbidden: PM execution is already assigned to another technician.', 403);
+    }
+
+    const updateRes = await db.query(
+      `UPDATE work_orders 
+       SET status = 'in_progress',
+           assigned_technician_id = COALESCE(assigned_technician_id, $1),
+           pm_plan_id = COALESCE(pm_plan_id, $2),
+           updated_at = NOW()
+       WHERE id = $3
+       RETURNING *`,
+      [user.id, plan.id, existing.id]
+    );
+    executionWo = updateRes.rows[0];
+  } else {
+    // Generate new work order in 'in_progress' status
+    const currentYear = new Date().getFullYear();
+    await db.query(`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, [`wo_seq:${currentYear}`]);
+
+    const countRes = await db.query(
+      `SELECT COALESCE(MAX(SUBSTRING(wo_number FROM '[0-9]+$')::int), 0) + 1 AS next_seq
+       FROM work_orders WHERE wo_number LIKE $1`,
+      [`WO-${currentYear}-%`]
+    );
+    const nextSeq = countRes.rows[0]?.next_seq || 1;
+    const wo_number = `WO-${currentYear}-${String(nextSeq).padStart(5, '0')}`;
+    const priority: WorkOrderPriority = plan.criticality === 'class_a' ? 'high' : 'medium';
+    const instructions = `[PM Plan: ${plan.plan_code} | Plan ID: ${plan.id}] ${plan.title}. Periodic preventive maintenance service execution.`;
+
+    const insertWoRes = await db.query(
+      `INSERT INTO work_orders (
+        wo_number, machine_id, assigned_technician_id,
+        priority, status, classification, is_major_breakdown, sla_deadline, work_instructions,
+        pm_plan_id, created_at, updated_at
+      )
+      VALUES ($1, $2, $3, $4, 'in_progress', 'regular_maintenance', FALSE, NOW() + INTERVAL '48 hours', $5, $6, NOW(), NOW())
+      RETURNING *`,
+      [
+        wo_number,
+        machineId,
+        user.id,
+        priority,
+        instructions,
+        plan.id,
+      ]
+    );
+    executionWo = insertWoRes.rows[0];
+  }
+
+  // Record Milestone Event
+  await db.query(
+    `INSERT INTO work_order_events (work_order_id, event_type, performed_by, notes, timestamp)
+     VALUES ($1, 'PM_EXECUTION_STARTED', $2, $3, NOW())`,
+    [
+      executionWo.id,
+      user.id,
+      `Technician commenced on-site PM execution for plan ${plan.plan_code}.`,
+    ]
+  );
+
+  return {
+    execution_id: executionWo.id,
+    wo_number: executionWo.wo_number,
+    status: executionWo.status,
+    plan: {
+      id: plan.id,
+      plan_code: plan.plan_code,
+      title: plan.title,
+      checklist_template: typeof plan.checklist_template === 'string' ? JSON.parse(plan.checklist_template) : (plan.checklist_template || []),
+    },
+    machine: {
+      id: machine.id,
+      machine_code: machine.machine_code,
+      name: machine.name,
+      location: machine.bay_line_location,
+    },
+  };
 }

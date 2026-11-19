@@ -30,6 +30,9 @@ import {
   getPMByMachine,
   getPMByPlant,
   getPMByShop,
+  getPMPlanEligibleMachines,
+  startPMExecution,
+  executePMPlan,
 } from './pm.controller';
 import { authenticateJWT } from '../../middlewares/auth.middleware';
 import { requireRoles } from '../../middlewares/rbac.middleware';
@@ -53,6 +56,9 @@ router.patch('/plans/:id/activate', requireRoles('admin', 'manager'), activatePM
 router.patch('/plans/:id/deactivate', requireRoles('admin', 'manager'), deactivatePMPlan);
 router.get('/plans/:id/history', requireRoles('admin', 'manager', 'technician', 'operator'), getPMPlanHistory);
 router.get('/plans/:id/work-orders', requireRoles('admin', 'manager', 'technician', 'operator'), getPMPlanWorkOrders);
+router.get('/plans/:id/eligible-machines', requireRoles('admin', 'manager', 'technician'), getPMPlanEligibleMachines);
+router.post('/plans/:id/start', requireRoles('admin', 'manager', 'technician'), startPMExecution);
+router.post('/plans/:id/execute', requireRoles('admin', 'manager', 'technician'), executePMPlan);
 
 // ---------------------------------------------------------------------------
 // 2. PM Scheduling & Due Management

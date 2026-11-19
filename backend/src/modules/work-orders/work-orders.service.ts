@@ -620,9 +620,9 @@ export async function executeCreatePMWorkOrderTransaction(
     `INSERT INTO work_orders (
       wo_number, machine_id, assigned_technician_id, assigned_manager_id,
       priority, status, classification, is_major_breakdown, sla_deadline, work_instructions,
-      created_at, updated_at
+      pm_plan_id, created_at, updated_at
     )
-    VALUES ($1, $2, $3, $4, $5, 'assigned', 'regular_maintenance', FALSE, $6, $7, NOW(), NOW())
+    VALUES ($1, $2, $3, $4, $5, 'assigned', 'regular_maintenance', FALSE, $6, $7, $8, NOW(), NOW())
     RETURNING *`,
     [
       wo_number,
@@ -632,6 +632,7 @@ export async function executeCreatePMWorkOrderTransaction(
       priority,
       slaDeadline,
       formattedInstructions,
+      pm_plan_id || null,
     ]
   );
 

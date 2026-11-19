@@ -56,6 +56,7 @@ import { PMVerificationModal } from './components/PMVerificationModal';
 import { PMPlanDetailModal } from './components/PMPlanDetailModal';
 import { PMAnalyticsView } from './components/PMAnalyticsView';
 import { PMExecutionQueueTable } from './components/PMExecutionQueueTable';
+import { PMTechnicianExecutionView } from './components/PMTechnicianExecutionView';
 
 export const PMCalendarPage: React.FC = () => {
   const { user } = useAuth();
@@ -65,8 +66,9 @@ export const PMCalendarPage: React.FC = () => {
 
   // Active Main Tab
   const [activeTab, setActiveTab] = useState<
-    'calendar' | 'queues' | 'plans' | 'executions' | 'verifications' | 'analytics'
-  >(isTechnician ? 'executions' : 'calendar');
+    'calendar' | 'queues' | 'plans' | 'technician_execution' | 'executions' | 'verifications' | 'analytics'
+  >(isTechnician ? 'technician_execution' : 'calendar');
+  const [selectedPlanForExecution, setSelectedPlanForExecution] = useState<string | null>(null);
 
   // Calendar State
   const [selectedMonth, setSelectedMonth] = useState<string>(
@@ -472,6 +474,23 @@ export const PMCalendarPage: React.FC = () => {
           </span>
         </button>
 
+        {/* Plan-Based PM Execution */}
+        <button
+          type="button"
+          onClick={() => setActiveTab('technician_execution')}
+          className={`px-4 py-2 rounded-lg text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+            activeTab === 'technician_execution'
+              ? 'bg-amber-500 text-black shadow-xs font-black'
+              : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50'
+          }`}
+        >
+          <ListChecks className="w-3.5 h-3.5" />
+          <span>Plan-Based PM Execution</span>
+          <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-100 text-amber-900 font-bold">
+            Service
+          </span>
+        </button>
+
         {/* PM Executions Workbench */}
         <button
           type="button"
@@ -570,6 +589,10 @@ export const PMCalendarPage: React.FC = () => {
           }}
           onToggleStatus={handleTogglePlanStatus}
           onViewPlanDetail={(plan) => setSelectedPlanDetailId(plan.id)}
+          onExecutePlan={(plan) => {
+            setSelectedPlanForExecution(plan.id);
+            setActiveTab('technician_execution');
+          }}
           onCreateNewPlan={() => {
             setEditingPlan(null);
             setIsCreatePlanModalOpen(true);
@@ -579,7 +602,22 @@ export const PMCalendarPage: React.FC = () => {
         />
       )}
 
-      {/* Tab D: PM Executions Workbench (Technicians & Oversight) */}
+      {/* Tab D: Plan-Based PM Execution for Technicians */}
+      {activeTab === 'technician_execution' && (
+        <PMTechnicianExecutionView
+          plans={plans}
+          executions={executions}
+          selectedPlanIdFromProps={selectedPlanForExecution}
+          onExecutionCompleted={() => {
+            loadExecutions();
+            loadKPIs();
+            loadPlans();
+          }}
+          onViewExecutionDetail={(executionId) => setSelectedExecutionId(executionId)}
+        />
+      )}
+
+      {/* Tab E: PM Executions Workbench (Technicians & Oversight) */}
       {activeTab === 'executions' && (
         <PMExecutionQueueTable
           executions={executions}

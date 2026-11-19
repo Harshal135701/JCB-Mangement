@@ -32,6 +32,10 @@ import {
   getPMByMachineService,
   getPMByPlantService,
   getPMByShopService,
+  getPMPlanEligibleMachinesService,
+  executePMPlanService,
+  startPMExecutionService,
+  getPmServiceDb,
 } from './pm.service';
 
 export const setPmDb = (db: DbPoolLike): void => setPmServiceDb(db);
@@ -458,12 +462,98 @@ export const getPMExecutionChecklist = async (req: Request, res: Response, next:
       }
     }
 
+    if (!checklist) {
+      const db = getPmServiceDb();
+      let template: any = null;
+      if (execution.pm_plan_id) {
+        const planRes = await db.query('SELECT checklist_template FROM pm_plans WHERE id = $1', [execution.pm_plan_id]);
+        if (planRes.rows.length > 0) template = planRes.rows[0].checklist_template;
+      }
+      if (!template && execution.work_instructions) {
+        const match = execution.work_instructions.match(/Plan ID:\s*([a-f0-9\-]{36})/i);
+        if (match && match[1]) {
+          const planRes = await db.query('SELECT checklist_template FROM pm_plans WHERE id = $1', [match[1]]);
+          if (planRes.rows.length > 0) template = planRes.rows[0].checklist_template;
+        }
+      }
+      if (template) {
+        const parsedTemplate = typeof template === 'string' ? JSON.parse(template) : template;
+        checklist = {
+          overall_status: 'pending',
+          responses: Array.isArray(parsedTemplate) ? parsedTemplate.map((item: any, idx: number) => ({
+            id: item.id || `item_${idx + 1}`,
+            task: item.task || item.item || item.description || `Inspection task ${idx + 1}`,
+            status: 'pass',
+            notes: '',
+            category: item.category || 'General',
+          })) : [],
+        };
+      }
+    }
+
     res.json({
       success: true,
       execution_id: execution.id,
       wo_number: execution.wo_number,
       machine_code: execution.machine_code,
       checklist,
+    });
+  } catch (err) {
+    handlePMError(err, res, next);
+  }
+};
+
+export const getPMPlanEligibleMachines = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ success: false, message: 'Authentication required.' });
+      return;
+    }
+
+    const result = await getPMPlanEligibleMachinesService(req.params.id, user);
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (err) {
+    handlePMError(err, res, next);
+  }
+};
+
+export const executePMPlan = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ success: false, message: 'Authentication required.' });
+      return;
+    }
+
+    const result = await executePMPlanService(req.params.id, req.body, user);
+    res.json({
+      success: true,
+      message: result.message || 'PM execution recorded successfully.',
+      data: result,
+    });
+  } catch (err) {
+    handlePMError(err, res, next);
+  }
+};
+
+export const startPMExecution = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ success: false, message: 'Authentication required.' });
+      return;
+    }
+
+    const { machine_id } = req.body;
+    const result = await startPMExecutionService(req.params.id, machine_id, user);
+    res.json({
+      success: true,
+      message: 'PM execution commenced.',
+      data: result,
     });
   } catch (err) {
     handlePMError(err, res, next);

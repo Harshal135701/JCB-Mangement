@@ -199,3 +199,38 @@ export async function fetchMachinePMHistory(machineId: string): Promise<any[]> {
   const res = await apiClient.get(`/pm/machines/${machineId}/history`);
   return res.data?.data || [];
 }
+
+/**
+ * 5. Plan-Based PM Execution for Technicians
+ */
+export async function fetchPMPlanEligibleMachines(planId: string): Promise<{
+  plan: PMPlan;
+  eligible_machines: any[];
+  total_eligible: number;
+}> {
+  const res = await apiClient.get(`/pm/plans/${planId}/eligible-machines`);
+  return res.data?.data;
+}
+
+export async function executePMPlanService(
+  planId: string,
+  payload: {
+    machine_id: string;
+    checklist_responses: any[];
+    overall_status?: 'pass' | 'fail';
+    work_performed: string;
+    technician_remarks?: string;
+    parts_used?: Array<{ part_id: string; quantity: number }>;
+  }
+): Promise<any> {
+  const res = await apiClient.post(`/pm/plans/${planId}/execute`, payload);
+  return res.data;
+}
+
+export async function startPMExecutionService(
+  planId: string,
+  machine_id: string
+): Promise<any> {
+  const res = await apiClient.post(`/pm/plans/${planId}/start`, { machine_id });
+  return res.data;
+}
