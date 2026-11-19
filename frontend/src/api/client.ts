@@ -1,8 +1,16 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
-// API Base URL: Uses VITE_API_URL if configured, otherwise falls back to '/api/v1'
-// In local development, Vite proxies '/api' to 'http://localhost:5000'
-export const API_URL = import.meta.env.VITE_API_URL || '/api/v1';
+// API Base URL: Uses Render backend in production and Vite proxy in local dev to prevent CORS issues
+const RENDER_API_ORIGIN = 'https://jcb-smart-cmms-api.onrender.com';
+
+export const API_URL = (() => {
+  const envUrl = import.meta.env.VITE_API_URL;
+  // In local Vite dev mode, route through '/api/v1' to utilize the Vite proxy and avoid browser CORS preflight blocks
+  if (import.meta.env.DEV) {
+    return '/api/v1';
+  }
+  return envUrl || `${RENDER_API_ORIGIN}/api/v1`;
+})();
 
 export const apiClient = axios.create({
   baseURL: API_URL,

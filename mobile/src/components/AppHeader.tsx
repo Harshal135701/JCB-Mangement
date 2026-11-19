@@ -8,9 +8,11 @@ import {
   StatusBar,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useAuth } from '../context/AuthContext';
 import { useSidebar } from '../context/SidebarContext';
+import apiClient from '../services/api';
 
 const JCB_HEADER_BADGE = require('../assets/jcb_header_badge.png');
 
@@ -36,8 +38,36 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   onBreadcrumbPress,
 }) => {
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<any>();
   const { user } = useAuth();
   const { openSidebar } = useSidebar();
+
+  const [unreadCount, setUnreadCount] = React.useState(0);
+
+  // Poll for live unread notification count
+  React.useEffect(() => {
+    let isMounted = true;
+    const fetchUnread = async () => {
+      try {
+        const res: any = await apiClient.get('/notifications/unread-count');
+        if (isMounted) {
+          if (typeof res?.unread_count === 'number') {
+            setUnreadCount(res.unread_count);
+          } else if (typeof res?.data?.unread_count === 'number') {
+            setUnreadCount(res.data.unread_count);
+          }
+        }
+      } catch {
+        // Non-blocking
+      }
+    };
+    fetchUnread();
+    const timer = setInterval(fetchUnread, 25000);
+    return () => {
+      isMounted = false;
+      clearInterval(timer);
+    };
+  }, []);
 
   const displayName = user?.fullName?.split(' ')[0] || user?.employeeCode || 'Vikas Verma';
   const roleName = user?.role
@@ -91,25 +121,43 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           </View>
         </View>
 
-        {/* Right Side: User Profile Chip */}
-        <TouchableOpacity
-          style={styles.userProfileChip}
-          onPress={openSidebar}
-          activeOpacity={0.8}
-        >
-          <View style={styles.userAvatarCircle}>
-            <MaterialCommunityIcons name="account" size={17} color="#0F172A" />
-          </View>
-          <View style={styles.userInfoCol}>
-            <Text style={styles.userNameText} numberOfLines={1}>
-              {displayName}
-            </Text>
-            <View style={styles.userRoleRow}>
-              <Text style={styles.userRoleText}>{roleName}</Text>
-              <MaterialCommunityIcons name="chevron-down" size={11} color="#94A3B8" />
+        {/* Right Side: Bell & User Profile Chip */}
+        <View style={styles.headerRightCol}>
+          <TouchableOpacity
+            style={styles.bellButton}
+            onPress={() => navigation?.navigate?.('Notifications')}
+            activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <MaterialCommunityIcons name="bell-outline" size={20} color="#FFFFFF" />
+            {unreadCount > 0 && (
+              <View style={styles.bellBadge}>
+                <Text style={styles.bellBadgeText}>
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.userProfileChip}
+            onPress={openSidebar}
+            activeOpacity={0.8}
+          >
+            <View style={styles.userAvatarCircle}>
+              <MaterialCommunityIcons name="account" size={17} color="#0F172A" />
             </View>
-          </View>
-        </TouchableOpacity>
+            <View style={styles.userInfoCol}>
+              <Text style={styles.userNameText} numberOfLines={1}>
+                {displayName}
+              </Text>
+              <View style={styles.userRoleRow}>
+                <Text style={styles.userRoleText}>{roleName}</Text>
+                <MaterialCommunityIcons name="chevron-down" size={11} color="#94A3B8" />
+              </View>
+            </View>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Yellow Breadcrumb Banner */}
@@ -206,6 +254,41 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     fontWeight: '500',
     marginTop: 1,
+  },
+  headerRightCol: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  bellButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+  },
+  bellBadge: {
+    position: 'absolute',
+    top: -3,
+    right: -3,
+    backgroundColor: '#DC2626',
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+    borderWidth: 1.5,
+    borderColor: '#0F172A',
+  },
+  bellBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '900',
   },
   userProfileChip: {
     flexDirection: 'row',

@@ -132,19 +132,24 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
         />
       )}
 
-      {/* Sidebar Aside: Full-height JCB Excavator Background properly adjusted from very top to bottom */}
+      {/* Sidebar Aside: Full-height JCB Excavator Background softly faded */}
       <aside
-        className={`fixed lg:static inset-y-0 left-0 z-50 w-64 lg:w-[268px] h-screen text-white flex flex-col justify-between shrink-0 border-r border-zinc-800 transition-transform duration-200 ease-in-out select-none shadow-2xl overflow-hidden relative ${isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+        className={`fixed lg:static inset-y-0 left-0 z-50 w-64 lg:w-[268px] h-screen text-white flex flex-col justify-between shrink-0 border-r border-zinc-800 transition-transform duration-200 ease-in-out select-none shadow-2xl overflow-hidden relative bg-[#0b131e] ${isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
           }`}
-        style={{
-          backgroundImage: `url('/jcb-excavator-adjusted.jpg')`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center bottom',
-          backgroundRepeat: 'no-repeat',
-        }}
       >
-        {/* Subtle dark overlay so menu text and icons remain clearly readable */}
-        <div className="absolute inset-0 bg-[#070A12]/30 pointer-events-none z-0" />
+        {/* Faded JCB Excavator background image layer */}
+        <div
+          className="absolute inset-0 pointer-events-none z-0 opacity-50"
+          style={{
+            backgroundImage: `url('/jcb-excavator-adjusted.jpg')`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center bottom',
+            backgroundRepeat: 'no-repeat',
+          }}
+        />
+
+        {/* Smooth dark overlay gradient for superior text clarity & subtle depth */}
+        <div className="absolute inset-0 bg-gradient-to-b from-[#0b131e]/80 via-[#070A12]/40 to-[#070A12]/60 pointer-events-none z-0" />
 
         {/* =========================================================================
             BRAND HEADER & NAVIGATION ITEMS (Displayed above full-height background)

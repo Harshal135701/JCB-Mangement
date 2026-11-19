@@ -32,6 +32,7 @@ import { WorkOrderDetailScreen } from '../modules/work-orders/WorkOrderDetailScr
 import { PartSearchScreen } from '../modules/inventory/PartSearchScreen';
 import { ReportBreakdownScreen } from '../modules/breakdowns/ReportBreakdownScreen';
 import { OperatorDashboardScreen } from '../modules/operator/OperatorDashboardScreen';
+import { NotificationsScreen } from '../modules/notifications/NotificationsScreen';
 import { SplashScreen } from '../modules/splash/SplashScreen';
 
 const Stack = createNativeStackNavigator();
@@ -565,6 +566,11 @@ export const AppNavigator = () => {
             name="ReportBreakdown"
             component={ReportBreakdownScreen}
             options={{ title: 'Report Breakdown' }}
+          />
+          <Stack.Screen
+            name="Notifications"
+            component={NotificationsScreen}
+            options={{ title: 'Notifications' }}
           />
         </Stack.Navigator>
       </NavigationContainer>
