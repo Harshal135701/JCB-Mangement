@@ -3,7 +3,7 @@ import { Building2, Calendar, ChevronDown } from 'lucide-react';
 
 interface DashboardHeaderProps {
   title: string;
-  subtitle: string;
+  subtitle?: string;
   badge?: string;
   plantOptions?: string[];
   selectedPlant?: string;
@@ -40,9 +40,11 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
             </span>
           )}
         </div>
-        <p className="text-xs sm:text-[13px] text-zinc-500 font-normal mt-1 leading-relaxed">
-          {subtitle}
-        </p>
+        {subtitle && subtitle.trim() !== '' && (
+          <p className="text-xs sm:text-[13px] text-zinc-500 font-normal mt-1 leading-relaxed">
+            {subtitle}
+          </p>
+        )}
       </div>
 
       {/* Dropdown Filters & Actions */}

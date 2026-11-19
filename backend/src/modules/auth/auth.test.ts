@@ -133,6 +133,7 @@ interface MockUser {
   approved_at?: Date | null;
   rejection_reason?: string | null;
   requested_machine_id?: string | null;
+  permanent_machine_id?: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -395,6 +396,7 @@ class MockAuthDatabase {
       }
       const plant = match.plant_id ? this.plants.get(match.plant_id) : undefined;
       const shop = match.shop_id ? this.shops.get(match.shop_id) : undefined;
+      const permMachine = match.permanent_machine_id ? this.machines.get(match.permanent_machine_id) : undefined;
       return {
         rows: [
           {
@@ -412,6 +414,12 @@ class MockAuthDatabase {
             is_active: match.is_active,
             plant_name: plant?.plant_name ?? null,
             shop_name: shop?.shop_name ?? null,
+            requested_machine_id: match.requested_machine_id ?? null,
+            permanent_machine_id: match.permanent_machine_id ?? null,
+            permanent_machine_code: permMachine?.machine_code ?? null,
+            permanent_machine_name: permMachine?.name ?? null,
+            permanent_machine_status: permMachine?.status ?? null,
+            permanent_machine_location: permMachine?.bay_line_location ?? null,
           },
         ],
         rowCount: 1,
@@ -572,6 +580,7 @@ class MockAuthDatabase {
         u.is_active = true;
         u.approved_by = approvedBy;
         u.approved_at = new Date();
+        u.permanent_machine_id = u.permanent_machine_id || u.requested_machine_id || null;
         u.rejection_reason = null;
       }
       return {
@@ -2699,6 +2708,7 @@ describe('Authentication & User Governance Module (CMMS Module 0)', () => {
       assert.equal(approveCtx.res.statusCode, 200);
       assert.equal(approveCtx.res.responseData.data.is_active, true);
       assert.equal(approveCtx.res.responseData.data.approval_status, 'approved');
+      assert.equal(approveCtx.res.responseData.data.permanent_machine_id, targetMachineId);
 
       // 4. Verify machine status is STILL untouched (registration approval does not assign or occupy)
       const afterApprovalMachineStatus = mockDb.machines.get(targetMachineId)!.status;

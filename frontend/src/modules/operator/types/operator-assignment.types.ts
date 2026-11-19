@@ -10,6 +10,8 @@ export type AssignmentStatus =
   | 'released'
   | 'cancelled';
 
+export type AssignmentType = 'permanent' | 'temporary' | 'shift';
+
 export type MachineAvailabilityStatus =
   | 'available'
   | 'occupied'
@@ -26,6 +28,9 @@ export interface OperatorMachineAssignment {
   plant_id: string;
   shift: string;
   status: AssignmentStatus;
+  assignment_type?: AssignmentType;
+  replacement_for_machine_id?: string | null;
+  breakdown_id?: string | null;
   approved_by?: string | null;
   approved_at?: string | null;
   rejected_by?: string | null;
@@ -57,6 +62,20 @@ export interface OperatorMachineAssignment {
 
   approver_name?: string | null;
   approver_code?: string | null;
+
+  // Replacement / breakdown context
+  replacement_for_machine_code?: string | null;
+  replacement_for_machine_name?: string | null;
+  breakdown_complaint_number?: string | null;
+  breakdown_problem_title?: string | null;
+  breakdown_status?: string | null;
+
+  // Permanent machine reference for the operator
+  permanent_machine_id?: string | null;
+  permanent_machine_code?: string | null;
+  permanent_machine_name?: string | null;
+  permanent_machine_status?: string | null;
+  permanent_machine_location?: string | null;
 }
 
 export interface MachineAvailabilityItem {
@@ -89,4 +108,33 @@ export interface MachineAvailabilityItem {
     full_name: string;
     employee_code: string;
   } | null;
+}
+
+export interface PermanentMachineInfo {
+  id: string;
+  machine_code: string;
+  name: string;
+  status: string;
+  bay_line_location?: string | null;
+  operating_hours?: number | string | null;
+  category?: string | null;
+  shop_id?: string | null;
+  shop_name?: string | null;
+  plant_id?: string | null;
+  plant_name?: string | null;
+  active_breakdown?: {
+    id: string;
+    complaint_number: string;
+    problem_title: string;
+    status: string;
+    priority: string;
+    reported_at: string;
+  } | null;
+}
+
+export interface GetOperatorCurrentAssignmentResult {
+  permanentMachine: PermanentMachineInfo | null;
+  currentAssignment: OperatorMachineAssignment | null;
+  recentRejected: OperatorMachineAssignment | null;
+  canRequestTemporary: boolean;
 }

@@ -1768,6 +1768,35 @@ export async function verifyAndCloseWorkOrderService(
         }
       }
 
+      // Stage 5b: Notify any operator who has this machine as their permanent machine that it is available again
+      try {
+        const permOperators = await client.query(
+          `SELECT id, full_name, email FROM users WHERE permanent_machine_id = $1 AND is_active = TRUE`,
+          [wo.machine_id]
+        );
+        for (const op of permOperators.rows) {
+          const machineLabel = wo.machine_code || 'Machine';
+          await sendNotificationAndEmit(
+            client,
+            op.id,
+            'Permanent Machine Repaired & Available',
+            `Your permanent machine ${machineLabel} has been repaired and verified operational. You can now return to your permanent machine.`,
+            'info',
+            '/operator/dashboard',
+            'repair:verified',
+            {
+              workOrder: verifiedWo,
+              machine_id: wo.machine_id,
+              machine_code: machineLabel,
+              message: `Your permanent machine ${machineLabel} has been repaired and is now operational.`,
+            },
+            ioInstance
+          );
+        }
+      } catch {
+        // Non-blocking notification for permanent operator
+      }
+
       await client.query('COMMIT');
       return verifiedWo;
     } else {

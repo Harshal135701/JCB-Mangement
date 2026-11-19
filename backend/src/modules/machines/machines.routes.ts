@@ -36,9 +36,11 @@ router.use(authenticateJWT);
 // Must be registered before /:id parameterized routes
 router.get('/operator/available-machines', getAvailableMachines);
 router.post('/operator/sign-in', requireRoles('operator', 'admin'), requestSignIn);
+router.post('/operator/request-temporary', requireRoles('operator', 'admin'), requestSignIn);
 router.get('/operator/current-assignment', getCurrentAssignment);
 router.post('/operator/cancel-request', requireRoles('operator', 'admin'), cancelRequest);
 router.post('/operator/sign-out', signOut);
+router.post('/operator/release-temporary', signOut);
 
 // Manager Approval & Floor Supervision endpoints
 router.get('/operator/requests/pending', requireRoles('manager', 'admin'), getPendingRequests);

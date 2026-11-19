@@ -36,6 +36,12 @@ async function applyMigrations() {
     await client.query(m16Sql);
     console.log('Migration 016 applied successfully.');
 
+    console.log('\n--- Applying Migration 017 ---');
+    const m17Path = path.join(__dirname, '../../database/migrations/017_operator_permanent_and_temporary_assignment.sql');
+    const m17Sql = fs.readFileSync(m17Path, 'utf8');
+    await client.query(m17Sql);
+    console.log('Migration 017 applied successfully.');
+
     console.log('\n--- Verifying Schema ---');
     const omaCheck = await client.query(`
       SELECT column_name, data_type, is_nullable 
@@ -49,7 +55,7 @@ async function applyMigrations() {
     const userColCheck = await client.query(`
       SELECT column_name, data_type, is_nullable
       FROM information_schema.columns 
-      WHERE table_name = 'users' AND column_name IN ('requested_machine_id', 'approval_status', 'approved_by', 'approved_at', 'rejection_reason')
+      WHERE table_name = 'users' AND column_name IN ('requested_machine_id', 'permanent_machine_id', 'approval_status', 'approved_by', 'approved_at', 'rejection_reason')
       ORDER BY column_name
     `);
     console.log('users columns verified:');

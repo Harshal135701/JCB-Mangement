@@ -12,32 +12,39 @@ import {
   Plus, 
   ArrowRight,
   ClipboardCheck,
-  AlertCircle
+  AlertCircle,
+  Repeat,
+  Layers,
+  ShieldCheck,
+  Cpu,
 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { DashboardHeader } from '../../components/dashboard/DashboardHeader';
 import { TopKPICard } from '../../components/dashboard/TopKPICard';
-import { MachineStatusDonut } from '../../components/dashboard/MachineStatusDonut';
+import { MachineStatusDonut, DonutSegment } from '../../components/dashboard/MachineStatusDonut';
+import { MachineStatusBarChart, MachineStatusBarItem } from '../../components/dashboard/MachineStatusBarChart';
 import { MaintenanceTrendChart, TrendDataPoint } from '../../components/dashboard/MaintenanceTrendChart';
 import { DowntimeAnalysisCard } from '../../components/dashboard/DowntimeAnalysisCard';
 import { BreakdownReportModal } from '../breakdowns/components/BreakdownReportModal';
 import { OperatorMachineSignInCard } from './components/OperatorMachineSignInCard';
-import { OperatorMachineAssignment } from './types/operator-assignment.types';
+import { RequestNewMachineModal } from './components/RequestNewMachineModal';
+import { OperatorMachineAssignment, PermanentMachineInfo } from './types/operator-assignment.types';
 
 export const OperatorDashboard: React.FC = () => {
   const { user } = useAuth();
   const { socket } = useSocket();
-  const [plant, setPlant] = useState('All Plants');
-  const [shift, setShift] = useState('Shift A (06:00 - 14:00)');
   const [machines, setMachines] = useState<any[]>([]);
   const [myComplaints, setMyComplaints] = useState<any[]>([]);
   const [recentInspections, setRecentInspections] = useState<any[]>([]);
   const [hierarchy, setHierarchy] = useState<any>(null);
   const [currentAssignment, setCurrentAssignment] = useState<OperatorMachineAssignment | null>(null);
   const [recentRejected, setRecentRejected] = useState<OperatorMachineAssignment | null>(null);
+  const [permanentMachine, setPermanentMachine] = useState<PermanentMachineInfo | null>(null);
+  const [canRequestTemporary, setCanRequestTemporary] = useState<boolean>(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
   const [selectedMachineId, setSelectedMachineId] = useState<string>('');
   const [reportSuccess, setReportSuccess] = useState('');
 
@@ -55,11 +62,11 @@ export const OperatorDashboard: React.FC = () => {
 
       // Scoped query: operators access machines within their shop / plant
       const shopParam = user?.shopId || undefined;
-      const plantParam = plant !== 'All Plants' ? plant : user?.plantId || undefined;
+      const plantParam = user?.plantId || undefined;
 
       const [machRes, complaintsRes, inspectRes, orgRes, assignRes] = await Promise.all([
         apiClient.get('/machines', {
-          params: { shop_id: shopParam, plant_id: plantParam, limit: 20 },
+          params: { shop_id: shopParam, plant_id: plantParam, limit: 50 },
         }),
         apiClient.get('/breakdowns', {
           params: { shop_id: shopParam, limit: 10 },
@@ -75,8 +82,12 @@ export const OperatorDashboard: React.FC = () => {
       setMyComplaints(complaintsRes.data?.data || []);
       setRecentInspections(inspectRes.data?.data || []);
       setHierarchy(orgRes.data?.data || null);
-      setCurrentAssignment(assignRes.data?.data?.currentAssignment || null);
-      setRecentRejected(assignRes.data?.data?.recentRejected || null);
+
+      const assignData = assignRes.data?.data || {};
+      setCurrentAssignment(assignData.currentAssignment || null);
+      setRecentRejected(assignData.recentRejected || null);
+      setPermanentMachine(assignData.permanentMachine || null);
+      setCanRequestTemporary(Boolean(assignData.canRequestTemporary));
     } catch (err: any) {
       console.error('Failed to load operator console:', err);
       setError(
@@ -90,9 +101,9 @@ export const OperatorDashboard: React.FC = () => {
 
   useEffect(() => {
     fetchData();
-  }, [plant, shift]);
+  }, []);
 
-  // Real-time Socket.IO auto-refresh for operator repairs and breakdown updates
+  // Real-time Socket.IO auto-refresh for operator repairs, assignments, and breakdown updates
   useEffect(() => {
     if (!socket) return;
     const handleUpdate = () => {
@@ -103,6 +114,10 @@ export const OperatorDashboard: React.FC = () => {
     socket.on('complaint:info_requested', handleUpdate);
     socket.on('complaint:rejected', handleUpdate);
     socket.on('notification:new', handleUpdate);
+    socket.on('operator:machine_requested', handleUpdate);
+    socket.on('operator:machine_approved', handleUpdate);
+    socket.on('operator:machine_rejected', handleUpdate);
+    socket.on('operator:machine_released', handleUpdate);
 
     return () => {
       socket.off('repair:verified', handleUpdate);
@@ -110,8 +125,12 @@ export const OperatorDashboard: React.FC = () => {
       socket.off('complaint:info_requested', handleUpdate);
       socket.off('complaint:rejected', handleUpdate);
       socket.off('notification:new', handleUpdate);
+      socket.off('operator:machine_requested', handleUpdate);
+      socket.off('operator:machine_approved', handleUpdate);
+      socket.off('operator:machine_rejected', handleUpdate);
+      socket.off('operator:machine_released', handleUpdate);
     };
-  }, [socket, plant, shift]);
+  }, [socket]);
 
   const handleReportSuccess = (complaint: any) => {
     setReportSuccess(
@@ -120,20 +139,22 @@ export const OperatorDashboard: React.FC = () => {
     fetchData();
   };
 
-  // Dynamic Plant Options from hierarchy
-  const plantOptions = useMemo(() => {
-    const list = ['All Plants'];
-    if (hierarchy?.plants && Array.isArray(hierarchy.plants)) {
-      hierarchy.plants.forEach((p: any) => {
-        if (p.plant_name && !list.includes(p.plant_name)) {
-          list.push(p.plant_name);
-        }
-      });
-    }
-    return list;
-  }, [hierarchy]);
+  const handleRequestSuccess = (message: string) => {
+    setReportSuccess(message);
+    fetchData();
+  };
 
-  // 1. Operator's Assigned Machine: strictly prioritize active assignment session
+  // 1. Operator's Assigned Machine & Permanent Machine Context
+  const isTemporaryActive =
+    currentAssignment &&
+    currentAssignment.status === 'approved' &&
+    currentAssignment.assignment_type === 'temporary';
+
+  const isTemporaryPending =
+    currentAssignment &&
+    currentAssignment.status === 'pending' &&
+    currentAssignment.assignment_type === 'temporary';
+
   const assignedMachine =
     currentAssignment && currentAssignment.status === 'approved'
       ? {
@@ -143,15 +164,19 @@ export const OperatorDashboard: React.FC = () => {
           status: currentAssignment.machine_status || 'running',
           operating_hours: currentAssignment.operating_hours,
         }
+      : permanentMachine
+      ? {
+          id: permanentMachine.id,
+          machine_code: permanentMachine.machine_code,
+          name: permanentMachine.name,
+          status: permanentMachine.status || 'running',
+          operating_hours: permanentMachine.operating_hours,
+        }
       : machines.length > 0
       ? machines[0]
       : null;
-  const assignedAssetCode = assignedMachine?.machine_code || assignedMachine?.name || 'None Assigned';
-  const assignedAssetStatus = (assignedMachine?.status || 'unknown').toUpperCase();
-  const machineRunHours =
-    assignedMachine?.operating_hours != null
-      ? `${Number(assignedMachine.operating_hours).toLocaleString()} h`
-      : 'N/A';
+
+  const permStatus = (permanentMachine?.status || 'RUNNING').toUpperCase();
 
   // 2. Pre-Shift Inspection Status for today / current shift
   const latestInspection = recentInspections.length > 0 ? recentInspections[0] : null;
@@ -166,66 +191,115 @@ export const OperatorDashboard: React.FC = () => {
   );
   const openStoppagesCount = openComplaints.length;
 
-  // 4. Inspection Checklist Items breakdown from real responses_json
-  const inspectionSummary = useMemo(() => {
-    if (!latestInspection?.responses_json) {
-      return { total: 0, passed: 0, flagged: 0, failed: 0 };
-    }
-    const evalSummary = latestInspection.responses_json.evaluation_summary;
-    if (evalSummary) {
-      return {
-        total: evalSummary.total_items || 0,
-        passed: evalSummary.passed || 0,
-        flagged: evalSummary.flagged || 0,
-        failed: evalSummary.failed || 0,
-      };
-    }
-    const items = latestInspection.responses_json.items || [];
-    return {
-      total: items.length,
-      passed: items.filter((i: any) => i.status === 'pass' || i.value === true).length,
-      flagged: items.filter((i: any) => i.status === 'flagged').length,
-      failed: items.filter((i: any) => i.status === 'fail' || i.value === false).length,
-    };
-  }, [latestInspection]);
+  // 4. Live Machine Status Counts for Real Visualizations
+  const totalMachinesCount = machines.length;
 
-  const inspectionSegments = useMemo(() => {
-    if (inspectionSummary.total === 0) return [];
+  const availableMachinesCount = useMemo(() => {
+    return machines.filter((m) => {
+      const isFree =
+        m.assignment_status === 'available' ||
+        m.assignment_status === 'unassigned' ||
+        (!m.current_operator_id && m.assignment_status !== 'occupied' && m.assignment_status !== 'pending_approval');
+      const isHealthy = ['running', 'idle', 'active'].includes(String(m.status || '').toLowerCase());
+      return isFree && isHealthy;
+    }).length;
+  }, [machines]);
+
+  const occupiedMachinesCount = useMemo(() => {
+    return machines.filter(
+      (m) =>
+        m.assignment_status === 'occupied' ||
+        m.current_operator_id != null ||
+        (currentAssignment && currentAssignment.status === 'approved' && currentAssignment.machine_id === m.id)
+    ).length;
+  }, [machines, currentAssignment]);
+
+  const breakdownMachinesCount = useMemo(() => {
+    return machines.filter((m) => String(m.status || '').toLowerCase() === 'breakdown').length;
+  }, [machines]);
+
+  const maintenanceMachinesCount = useMemo(() => {
+    return machines.filter((m) =>
+      ['under_maintenance', 'awaiting_parts', 'awaiting_verification'].includes(
+        String(m.status || '').toLowerCase()
+      )
+    ).length;
+  }, [machines]);
+
+  // Bar Chart items for machine status distribution
+  const statusBarItems: MachineStatusBarItem[] = useMemo(() => {
     return [
       {
-        label: 'Pass / Safe',
-        count: inspectionSummary.passed,
-        percentage: (inspectionSummary.passed / inspectionSummary.total) * 100,
+        statusKey: 'available',
+        label: 'Available / Ready',
+        count: availableMachinesCount,
         color: '#10B981',
+        description: 'Operational & unassigned on shop floor',
       },
       {
-        label: 'Advisory Note',
-        count: inspectionSummary.flagged,
-        percentage: (inspectionSummary.flagged / inspectionSummary.total) * 100,
+        statusKey: 'occupied',
+        label: 'Occupied on Shift',
+        count: occupiedMachinesCount,
+        color: '#3B82F6',
+        description: 'Currently operated by floor personnel',
+      },
+      {
+        statusKey: 'breakdown',
+        label: 'Breakdown / Stoppage',
+        count: breakdownMachinesCount,
+        color: '#EF4444',
+        description: 'Out of service due to mechanical/electrical faults',
+      },
+      {
+        statusKey: 'maintenance',
+        label: 'Under Maintenance',
+        count: maintenanceMachinesCount,
+        color: '#F59E0B',
+        description: 'Preventive or corrective service in progress',
+      },
+    ];
+  }, [availableMachinesCount, occupiedMachinesCount, breakdownMachinesCount, maintenanceMachinesCount]);
+
+  // Donut Chart segments for machine assignment distribution
+  const assignmentSegments: DonutSegment[] = useMemo(() => {
+    const myAssignedCount = (permanentMachine ? 1 : 0) + (isTemporaryActive ? 1 : 0);
+    const othersOccupied = Math.max(
+      0,
+      occupiedMachinesCount - (currentAssignment?.status === 'approved' ? 1 : 0)
+    );
+    return [
+      {
+        label: 'Your Machine',
+        count: myAssignedCount,
         color: '#F59E0B',
       },
       {
-        label: 'Action Needed',
-        count: inspectionSummary.failed,
-        percentage: (inspectionSummary.failed / inspectionSummary.total) * 100,
+        label: 'Occupied by Others',
+        count: othersOccupied,
+        color: '#3B82F6',
+      },
+      {
+        label: 'Available for Work',
+        count: availableMachinesCount,
+        color: '#10B981',
+      },
+      {
+        label: 'Down / In Maintenance',
+        count: breakdownMachinesCount + maintenanceMachinesCount,
         color: '#EF4444',
       },
     ].filter((s) => s.count > 0);
-  }, [inspectionSummary]);
+  }, [
+    permanentMachine,
+    isTemporaryActive,
+    occupiedMachinesCount,
+    currentAssignment,
+    availableMachinesCount,
+    breakdownMachinesCount,
+    maintenanceMachinesCount,
+  ]);
 
-  // 5. Stoppage trend over time (real records)
-  const stoppageTrend: TrendDataPoint[] = useMemo(() => {
-    if (myComplaints.length === 0) return [];
-    // Group reported complaints by shift or priority
-    const criticalCount = myComplaints.filter((c) => (c.priority || '').toLowerCase() === 'critical').length;
-    const nonCriticalCount = myComplaints.length - criticalCount;
-    return [
-      { label: 'Logged', series1: criticalCount, series2: nonCriticalCount },
-      { label: 'Active', series1: openStoppagesCount, series2: Math.max(0, myComplaints.length - openStoppagesCount) },
-    ];
-  }, [myComplaints, openStoppagesCount]);
-
-  // 6. Real Recorded Sensor Telemetry
+  // 5. Real Recorded Sensor Telemetry
   const recordedTemp = latestInspection?.temperature != null ? `${latestInspection.temperature} °C` : null;
   const recordedPressure = latestInspection?.pressure != null ? `${latestInspection.pressure} Bar` : null;
   const recordedVibration = latestInspection?.vibration != null ? `${latestInspection.vibration} mm/s` : null;
@@ -238,16 +312,20 @@ export const OperatorDashboard: React.FC = () => {
           ========================================================================= */}
       <DashboardHeader
         title="Operator Dashboard"
-        subtitle={`Machine status, daily safety checks & problem reporting • ${user?.fullName || 'Operator'}`}
+        subtitle=""
         badge="Operator"
-        plantOptions={plantOptions}
-        selectedPlant={plant}
-        onPlantChange={setPlant}
-        timeframeOptions={['Shift A (06:00 - 14:00)', 'Shift B (14:00 - 22:00)', 'Shift C (22:00 - 06:00)']}
-        selectedTimeframe={shift}
-        onTimeframeChange={setShift}
+        plantOptions={[]}
+        timeframeOptions={[]}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => setIsRequestModalOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-500 hover:bg-amber-400 text-black rounded-xl text-xs font-black shadow-2xs transition cursor-pointer border border-amber-600"
+              title="Request an available temporary machine from your shop floor"
+            >
+              <Repeat className="w-3.5 h-3.5 text-black" />
+              <span>Request New Machine</span>
+            </button>
             <button
               onClick={() => {
                 setSelectedMachineId(assignedMachine?.id || '');
@@ -294,7 +372,7 @@ export const OperatorDashboard: React.FC = () => {
                 ? 'Danger: Machine failed the safety check. Do not run.'
                 : isInspectionPassed
                 ? 'Machine passed the safety check. Ready to run.'
-                : 'Notice: Daily safety check pending for this shift.'}
+                : 'Notice: Daily safety check pending.'}
             </span>
           </div>
           <Link
@@ -314,7 +392,7 @@ export const OperatorDashboard: React.FC = () => {
           </div>
           <button
             onClick={() => setReportSuccess('')}
-            className="text-zinc-500 hover:text-black font-extrabold text-xs"
+            className="text-zinc-500 hover:text-black font-extrabold text-xs cursor-pointer"
           >
             ✕
           </button>
@@ -329,100 +407,211 @@ export const OperatorDashboard: React.FC = () => {
           </div>
           <button
             onClick={fetchData}
-            className="px-3 py-1 bg-white border border-red-300 text-red-700 rounded-lg font-bold hover:bg-red-100 transition"
+            className="px-3 py-1 bg-white border border-red-300 text-red-700 rounded-lg font-bold hover:bg-red-100 transition cursor-pointer"
           >
             Retry
           </button>
         </div>
       )}
 
-      {/* Operator Machine Selection & Manager Approval Workflow Card */}
-      <OperatorMachineSignInCard
-        currentAssignment={currentAssignment}
-        recentRejected={recentRejected}
-        hierarchy={hierarchy}
-        user={user}
-        onAssignmentChange={fetchData}
-      />
-
       {/* =========================================================================
-          ROW 1: 4 TOP KPI METRIC CARDS (Essential & Simplified)
+          ROW 1: 6 OPERATIONAL STATISTIC CARDS (Meeting Requirement 1)
           ========================================================================= */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
-        {/* Card 1: Assigned Machine */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
+        {/* Card 1: Permanent / Default Asset */}
         <TopKPICard
-          icon={HardHat}
-          iconBgColor="bg-amber-100"
-          iconColor="text-amber-800"
-          label="My Machine"
-          value={assignedAssetCode}
-          subtitle={assignedMachine?.name || 'Assigned in Shop'}
-          trend={assignedAssetStatus}
+          icon={ShieldCheck}
+          iconBgColor="bg-zinc-100"
+          iconColor="text-zinc-900"
+          label="Permanent Asset"
+          value={permanentMachine?.machine_code || 'None Assigned'}
+          subtitle={permanentMachine?.name || 'Default Asset'}
+          trend={permStatus}
           trendColor={
-            assignedAssetStatus === 'RUNNING'
+            permStatus === 'RUNNING' || permStatus === 'IDLE'
               ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-              : assignedAssetStatus === 'BREAKDOWN'
+              : permStatus === 'BREAKDOWN'
               ? 'bg-red-50 text-red-700 border border-red-200'
               : 'bg-amber-50 text-amber-800 border border-amber-200'
           }
         />
 
-        {/* Card 2: Pre-Shift Inspection Status */}
+        {/* Card 2: Current Working Asset */}
         <TopKPICard
-          icon={CheckCircle2}
+          icon={Activity}
           iconBgColor="bg-emerald-100"
-          iconColor="text-emerald-800"
-          label="Daily Safety Check"
-          value={inspectionStatus}
-          subtitle={latestInspection ? `Recorded (${latestInspection.shift || 'Shift'})` : 'Waiting for Check'}
-          trend={isInspectionPassed ? 'Verified' : inspectionStatus === 'PENDING' ? 'Action Due' : 'Issues Found'}
+          iconColor="text-emerald-900"
+          label="Working Asset"
+          value={
+            currentAssignment && currentAssignment.status === 'approved'
+              ? currentAssignment.machine_code
+              : (permanentMachine?.machine_code || 'Standby')
+          }
+          subtitle={
+            isTemporaryActive
+              ? 'Temp Replacement'
+              : (currentAssignment && currentAssignment.status === 'approved' ? 'Permanent Active' : 'No active session')
+          }
+          trend={isTemporaryActive ? 'TEMP ACTIVE' : (currentAssignment && currentAssignment.status === 'approved' ? 'ACTIVE' : 'STANDBY')}
           trendColor={
-            isInspectionPassed
-              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-              : 'bg-amber-50 text-amber-800 border border-amber-200'
+            isTemporaryActive
+              ? 'bg-amber-100 text-amber-900 border border-amber-300 font-bold'
+              : (currentAssignment && currentAssignment.status === 'approved'
+                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                : 'bg-zinc-100 text-zinc-600')
           }
         />
 
-        {/* Card 3: Machine Run Hours */}
+        {/* Card 3: Temporary Replacement Asset */}
         <TopKPICard
-          icon={Clock}
-          iconBgColor="bg-blue-100"
-          iconColor="text-blue-800"
-          label="Machine Hours"
-          value={machineRunHours}
-          subtitle={assignedMachine ? 'Meter Reading' : 'No Machine Assigned'}
+          icon={Repeat}
+          iconBgColor="bg-amber-100"
+          iconColor="text-amber-900"
+          label="Temporary Asset"
+          value={
+            isTemporaryActive
+              ? currentAssignment.machine_code
+              : (isTemporaryPending
+                ? currentAssignment.machine_code
+                : 'None Active')
+          }
+          subtitle={
+            isTemporaryActive
+              ? `Replaces ${permanentMachine?.machine_code || 'Permanent'}`
+              : (isTemporaryPending
+                ? 'Pending Manager'
+                : 'Standard Permanent')
+          }
+          trend={isTemporaryActive ? 'ASSIGNED' : (isTemporaryPending ? 'PENDING' : 'N/A')}
+          trendColor={
+            isTemporaryActive
+              ? 'bg-amber-100 text-amber-900 border border-amber-300 font-bold'
+              : (isTemporaryPending ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-zinc-50 text-zinc-500 border border-zinc-200')
+          }
         />
 
-        {/* Card 4: Open Stoppages */}
+        {/* Card 4: Machine Availability Status */}
+        <TopKPICard
+          icon={Layers}
+          iconBgColor="bg-blue-100"
+          iconColor="text-blue-900"
+          label="Fleet Availability"
+          value={`${availableMachinesCount} Ready`}
+          subtitle={`of ${totalMachinesCount} Assets in Shop`}
+          trend={`${totalMachinesCount > 0 ? Math.round((availableMachinesCount / totalMachinesCount) * 100) : 0}% Avail`}
+          isPositiveTrend={totalMachinesCount > 0 && (availableMachinesCount / totalMachinesCount) >= 0.5}
+        />
+
+        {/* Card 5: Active Breakdown Requests */}
         <TopKPICard
           icon={AlertTriangle}
-          iconBgColor="bg-amber-100"
-          iconColor="text-amber-800"
-          label="Reported Problems"
+          iconBgColor="bg-red-100"
+          iconColor="text-red-800"
+          label="Active Problems"
           value={openStoppagesCount}
-          subtitle={openStoppagesCount === 0 ? 'No open problems' : `${openStoppagesCount} active problem(s)`}
-          trend={openStoppagesCount === 0 ? 'Clear' : 'Active'}
+          subtitle={openStoppagesCount === 0 ? 'All systems nominal' : `${openStoppagesCount} active ticket(s)`}
+          trend={openStoppagesCount === 0 ? 'CLEAR' : 'ATTENTION'}
           trendColor={
             openStoppagesCount === 0
               ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
               : 'bg-red-50 text-red-600 border border-red-200'
           }
         />
+
+        {/* Card 6: Temporary Replacement Request Status */}
+        <TopKPICard
+          icon={Clock}
+          iconBgColor="bg-purple-100"
+          iconColor="text-purple-800"
+          label="Temp Request State"
+          value={
+            isTemporaryPending
+              ? 'Pending'
+              : recentRejected
+              ? 'Rejected'
+              : isTemporaryActive
+              ? 'Approved'
+              : 'Standby'
+          }
+          subtitle={
+            isTemporaryPending
+              ? 'Awaiting Manager'
+              : recentRejected
+              ? (recentRejected.rejection_reason || 'Request not approved')
+              : isTemporaryActive
+              ? `Using ${currentAssignment.machine_code}`
+              : 'Ready to Request'
+          }
+          trend={
+            isTemporaryPending
+              ? 'PENDING'
+              : recentRejected
+              ? 'REJECTED'
+              : isTemporaryActive
+              ? 'APPROVED'
+              : 'STANDBY'
+          }
+          trendColor={
+            isTemporaryPending
+              ? 'bg-amber-100 text-amber-900 border border-amber-300 font-black'
+              : recentRejected
+              ? 'bg-red-50 text-red-700 border border-red-300'
+              : isTemporaryActive
+              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+              : 'bg-zinc-100 text-zinc-600 border border-zinc-200'
+          }
+        />
       </div>
 
       {/* =========================================================================
-          ROW 2: SENSOR TELEMETRY (Only Relevant Real Machine Readings)
+          ROW 2: VISUALIZATIONS & FLEET ANALYTICS (Meeting Requirement 1 Charts)
           ========================================================================= */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+        {/* Bar Chart: Machine Status Distribution (5 cols) */}
+        <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs flex flex-col justify-between">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <Layers className="w-4 h-4 text-amber-500" />
+              <h3 className="text-xs sm:text-sm font-bold text-zinc-900 tracking-tight">
+                Shop Machine Status Distribution
+              </h3>
+            </div>
+            <span className="text-2xs font-extrabold uppercase bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded">
+              {totalMachinesCount} Assets
+            </span>
+          </div>
+          <div className="pt-2">
+            <MachineStatusBarChart
+              totalCount={totalMachinesCount}
+              items={statusBarItems}
+              loading={loading}
+              emptyMessage="No machines registered in this shop"
+            />
+          </div>
+        </div>
+
+        {/* Donut Chart: Machine Assignment Distribution (4 cols) */}
+        <div className="lg:col-span-4">
+          <MachineStatusDonut
+            title="Machine Assignment Distribution"
+            totalLabel="Shop Machines"
+            totalCount={totalMachinesCount}
+            segments={assignmentSegments}
+            loading={loading}
+            emptyMessage="No machine assignments in this shop"
+          />
+        </div>
+
+        {/* Telemetry / Downtime Widget (3 cols) */}
         <div className="lg:col-span-3">
           <DowntimeAnalysisCard
-            title="Machine Sensor Telemetry"
+            title="Live Sensor Telemetry"
             rateValue={hasTelemetry ? 'ONLINE' : 'N/A'}
             rateLabel={hasTelemetry ? 'Live Sensors Monitored' : 'No Sensor Data'}
             percentage={hasTelemetry ? 100 : 0}
             gaugeColor="#10B981"
             loading={loading}
-            emptyMessage="No sensor readings logged for this shift"
+            emptyMessage="No sensor readings logged"
             metrics={
               hasTelemetry
                 ? [
@@ -467,7 +656,22 @@ export const OperatorDashboard: React.FC = () => {
       </div>
 
       {/* =========================================================================
-          ROW 3: BOTTOM ROW 2-COLUMN SPLIT (~60% Left, ~40% Right)
+          ROW 3: PERMANENT & TEMPORARY MACHINE DETAILS (Meeting Requirement 2)
+          Clearly separated sections for Permanent Machine and Current Working Asset
+          ========================================================================= */}
+      <OperatorMachineSignInCard
+        permanentMachine={permanentMachine}
+        canRequestTemporary={canRequestTemporary}
+        currentAssignment={currentAssignment}
+        recentRejected={recentRejected}
+        hierarchy={hierarchy}
+        user={user}
+        onAssignmentChange={fetchData}
+        onRequestTemporaryClick={() => setIsRequestModalOpen(true)}
+      />
+
+      {/* =========================================================================
+          ROW 4: BOTTOM ROW 2-COLUMN SPLIT (Problems You Reported + Recent Safety Checks)
           ========================================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
         {/* Left Column (~60%): Problems You Reported */}
@@ -620,21 +824,20 @@ export const OperatorDashboard: React.FC = () => {
                 <tr className="border-b border-slate-100 text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
                   <th className="py-2.5 px-3">Machine</th>
                   <th className="py-2.5 px-3">Checklist</th>
-                  <th className="py-2.5 px-3">Shift</th>
                   <th className="py-2.5 px-3">Result</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs text-zinc-800">
                 {loading ? (
                   <tr>
-                    <td colSpan={4} className="py-8 text-center text-xs text-zinc-400 font-medium">
+                    <td colSpan={3} className="py-8 text-center text-xs text-zinc-400 font-medium">
                       Loading safety check records...
                     </td>
                   </tr>
                 ) : recentInspections.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="py-8 text-center text-xs text-zinc-400 font-medium">
-                      No safety checks recorded for this shift yet.
+                    <td colSpan={3} className="py-8 text-center text-xs text-zinc-400 font-medium">
+                      No safety checks recorded yet.
                     </td>
                   </tr>
                 ) : (
@@ -658,9 +861,6 @@ export const OperatorDashboard: React.FC = () => {
                           title={title}
                         >
                           {title}
-                        </td>
-                        <td className="py-3 px-3 text-zinc-500 text-[11px] font-medium whitespace-nowrap">
-                          {rec.shift || 'Shift A'}
                         </td>
                         <td className="py-3 px-3">
                           <span
@@ -694,6 +894,17 @@ export const OperatorDashboard: React.FC = () => {
           preselectedMachineId={selectedMachineId}
         />
       )}
+
+      {/* Request New Machine Modal */}
+      <RequestNewMachineModal
+        isOpen={isRequestModalOpen}
+        onClose={() => setIsRequestModalOpen(false)}
+        onSuccess={handleRequestSuccess}
+        user={user}
+        permanentMachine={permanentMachine}
+        currentAssignment={currentAssignment}
+        hierarchy={hierarchy}
+      />
     </div>
   );
 };

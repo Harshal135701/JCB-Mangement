@@ -499,7 +499,22 @@ class MockAssignmentDatabase {
 
     // 10. Insert new assignment
     if (s.includes('INSERT INTO OPERATOR_MACHINE_ASSIGNMENTS')) {
-      const [operator_id, machine_id, shop_id, plant_id, shift, notes] = params;
+      let operator_id: any;
+      let machine_id: any;
+      let shop_id: any;
+      let plant_id: any;
+      let shift: any;
+      let assignment_type = 'temporary';
+      let replacement_for_machine_id = null;
+      let breakdown_id = null;
+      let notes: any = null;
+
+      if (params.length >= 7) {
+        [operator_id, machine_id, shop_id, plant_id, shift, assignment_type, replacement_for_machine_id, breakdown_id, notes] = params;
+      } else {
+        [operator_id, machine_id, shop_id, plant_id, shift, notes] = params;
+      }
+
       const id = 'e' + String(this.assignments.size + 1).padStart(7, '0') + '-0000-0000-0000-000000000001';
       const newAssignment = {
         id,
@@ -509,6 +524,9 @@ class MockAssignmentDatabase {
         plant_id,
         shift: shift || 'Shift A',
         status: 'pending',
+        assignment_type: assignment_type || 'temporary',
+        replacement_for_machine_id: replacement_for_machine_id || null,
+        breakdown_id: breakdown_id || null,
         notes: notes || null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -736,6 +754,38 @@ class MockAssignmentDatabase {
         }
       }
       return { rows: result, rowCount: result.length };
+    }
+
+    // 17b. Query Operator permanent machine
+    if (s.includes('FROM USERS U') && s.includes('WHERE U.ID = $1')) {
+      const u = this.users.get(params[0]);
+      if (!u) return { rows: [], rowCount: 0 };
+      const m = u.permanent_machine_id ? this.machines.get(u.permanent_machine_id) : null;
+      const s = m ? this.shops.get(m.shop_id) : null;
+      const p = s ? this.plants.get(s.plant_id) : null;
+      return {
+        rows: [
+          {
+            permanent_machine_id: u.permanent_machine_id || null,
+            shop_id: u.shop_id,
+            plant_id: u.plant_id,
+            machine_code: m?.machine_code || null,
+            name: m?.name || null,
+            category: m?.category || null,
+            status: m?.status || null,
+            bay_line_location: m?.bay_line_location || null,
+            operating_hours: m?.operating_hours || null,
+            shop_name: s?.shop_name || null,
+            plant_name: p?.plant_name || null,
+          },
+        ],
+        rowCount: 1,
+      };
+    }
+
+    // 17c. Query active breakdown for machine
+    if (s.includes('FROM MAINTENANCE_REQUESTS') && s.includes('WHERE MACHINE_ID = $1')) {
+      return { rows: [], rowCount: 0 };
     }
 
     // 18. Find managers for notification
@@ -1291,5 +1341,168 @@ describe('Operator Machine Selection & Manager Approval Workflow', () => {
     const machine = mockDb.machines.get(m1Cut001);
     assert.equal(machine.assignment_status, 'unassigned');
     assert.equal(machine.current_operator_id, null);
+  });
+
+  // 13. Operator with permanent machine in breakdown requests temporary machine
+  it('13. Operator with broken permanent machine requests temporary machine (assignment_type = temporary)', async () => {
+    // Set operator's permanent machine to M3 (which is under breakdown)
+    const op = mockDb.users.get(operator1User.id);
+    op.permanent_machine_id = m3Breakdown;
+
+    // Check operator current assignment state: permanentMachine returned and canRequestTemporary is true
+    const { req: reqCur, res: resCur, next: nextCur } = createMockContext(
+      {},
+      {},
+      {},
+      {},
+      operator1User
+    );
+    await getCurrentAssignment(reqCur, resCur, nextCur);
+    assert.equal(resCur.statusCode, 200);
+    assert.ok(resCur.responseData.data.permanentMachine);
+    assert.equal(resCur.responseData.data.permanentMachine.id, m3Breakdown);
+    assert.equal(resCur.responseData.data.canRequestTemporary, true);
+
+    // Operator requests M1 as temporary replacement
+    const { req: reqSign, res: resSign, next: nextSign } = createMockContext(
+      {
+        machine_id: m1Cut001,
+        shop_id: shopCutId,
+        plant_id: plant1Id,
+        shift: 'Shift A',
+        assignment_type: 'temporary',
+        replacement_for_machine_id: m3Breakdown,
+        notes: 'Replacing broken permanent machine Plasma Gamma',
+      },
+      {},
+      {},
+      {},
+      operator1User
+    );
+    await requestSignIn(reqSign, resSign, nextSign);
+
+    assert.equal(resSign.statusCode, 201);
+    assert.equal(resSign.responseData.success, true);
+    assert.equal(resSign.responseData.data.status, 'pending');
+    assert.equal(resSign.responseData.data.assignment_type, 'temporary');
+    assert.equal(resSign.responseData.data.replacement_for_machine_id, m3Breakdown);
+
+    // Temporary machine is reserved
+    const tempMachine = mockDb.machines.get(m1Cut001);
+    assert.equal(tempMachine.assignment_status, 'pending_approval');
+  });
+
+  // 14. Manager approves temporary machine request: temporary machine occupied, permanent machine unchanged
+  it('14. Manager approves temporary machine request: marks temporary machine occupied and preserves permanent machine', async () => {
+    const op = mockDb.users.get(operator1User.id);
+    op.permanent_machine_id = m3Breakdown;
+
+    // 1. Operator requests temporary machine
+    const { req: reqReq, res: resReq, next: nextReq } = createMockContext(
+      {
+        machine_id: m2Cut002,
+        shop_id: shopCutId,
+        plant_id: plant1Id,
+        shift: 'Shift A',
+        assignment_type: 'temporary',
+        replacement_for_machine_id: m3Breakdown,
+        notes: 'Temporary machine request for shift',
+      },
+      {},
+      {},
+      {},
+      operator1User
+    );
+    await requestSignIn(reqReq, resReq, nextReq);
+    const tempAssignId = resReq.responseData.data.id;
+
+    // 2. Manager views pending requests
+    const { req: reqList, res: resList, next: nextList } = createMockContext(
+      {},
+      {},
+      {},
+      {},
+      manager1User
+    );
+    await getPendingRequests(reqList, resList, nextList);
+    assert.equal(resList.statusCode, 200);
+    const pendingItem = resList.responseData.data.find((a: any) => a.id === tempAssignId);
+    assert.ok(pendingItem);
+    assert.equal(pendingItem.assignment_type, 'temporary');
+
+    // 3. Manager approves
+    const { req: reqAppr, res: resAppr, next: nextAppr } = createMockContext(
+      {},
+      { id: tempAssignId },
+      {},
+      {},
+      manager1User
+    );
+    await approveRequest(reqAppr, resAppr, nextAppr);
+    assert.equal(resAppr.statusCode, 200);
+    assert.equal(resAppr.responseData.data.status, 'approved');
+
+    // 4. Temporary machine M2 is marked occupied
+    const tempMachine = mockDb.machines.get(m2Cut002);
+    assert.equal(tempMachine.assignment_status, 'occupied');
+    assert.equal(tempMachine.current_operator_id, operator1User.id);
+
+    // 5. Operator's permanent machine relationship is completely preserved
+    const updatedOp = mockDb.users.get(operator1User.id);
+    assert.equal(updatedOp.permanent_machine_id, m3Breakdown);
+  });
+
+  // 15. Release temporary machine assignment: returns temporary machine to available
+  it('15. Releasing temporary assignment makes temporary machine available and operator returns to permanent machine', async () => {
+    const op = mockDb.users.get(operator1User.id);
+    op.permanent_machine_id = m3Breakdown;
+
+    // 1. Submit and Approve
+    const { req: reqReq, res: resReq, next: nextReq } = createMockContext(
+      {
+        machine_id: m1Cut001,
+        shop_id: shopCutId,
+        plant_id: plant1Id,
+        shift: 'Shift A',
+        assignment_type: 'temporary',
+        replacement_for_machine_id: m3Breakdown,
+      },
+      {},
+      {},
+      {},
+      operator1User
+    );
+    await requestSignIn(reqReq, resReq, nextReq);
+    const tempAssignId = resReq.responseData.data.id;
+
+    const { req: reqAppr, res: resAppr, next: nextAppr } = createMockContext(
+      {},
+      { id: tempAssignId },
+      {},
+      {},
+      manager1User
+    );
+    await approveRequest(reqAppr, resAppr, nextAppr);
+
+    // 2. Release temporary assignment
+    const { req: reqRel, res: resRel, next: nextRel } = createMockContext(
+      { assignment_id: tempAssignId },
+      {},
+      {},
+      {},
+      operator1User
+    );
+    await signOut(reqRel, resRel, nextRel);
+
+    assert.equal(resRel.statusCode, 200);
+    assert.equal(resRel.responseData.data.status, 'released');
+
+    // Temporary machine M1 is unassigned and available
+    const tempMachine = mockDb.machines.get(m1Cut001);
+    assert.equal(tempMachine.assignment_status, 'unassigned');
+    assert.equal(tempMachine.current_operator_id, null);
+
+    // Operator permanent machine is unchanged
+    assert.equal(op.permanent_machine_id, m3Breakdown);
   });
 });

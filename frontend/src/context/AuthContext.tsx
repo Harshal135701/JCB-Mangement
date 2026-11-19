@@ -21,6 +21,12 @@ export interface User {
   phone?: string | null;
   plantName?: string | null;
   shopName?: string | null;
+  requestedMachineId?: string | null;
+  permanentMachineId?: string | null;
+  permanentMachineCode?: string | null;
+  permanentMachineName?: string | null;
+  permanentMachineStatus?: string | null;
+  permanentMachineLocation?: string | null;
 }
 
 export const getRoleHomeRoute = (role?: string): string => {
@@ -91,6 +97,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           shopId: p.shopId ?? p.shop_id ?? null,
           plantName: p.plantName ?? p.plant_name ?? null,
           shopName: p.shopName ?? p.shop_name ?? null,
+          requestedMachineId: p.requestedMachineId ?? p.requested_machine_id ?? null,
+          permanentMachineId: p.permanentMachineId ?? p.permanent_machine_id ?? null,
+          permanentMachineCode: p.permanentMachineCode ?? p.permanent_machine_code ?? null,
+          permanentMachineName: p.permanentMachineName ?? p.permanent_machine_name ?? null,
+          permanentMachineStatus: p.permanentMachineStatus ?? p.permanent_machine_status ?? null,
+          permanentMachineLocation: p.permanentMachineLocation ?? p.permanent_machine_location ?? null,
         };
 
         setUser(mappedUser);

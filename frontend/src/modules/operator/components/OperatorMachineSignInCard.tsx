@@ -16,26 +16,36 @@ import {
   ShieldAlert,
   Sparkles,
   Info,
+  ArrowRight,
+  Repeat,
+  ShieldCheck,
 } from 'lucide-react';
 import {
   OperatorMachineAssignment,
   MachineAvailabilityItem,
+  PermanentMachineInfo,
 } from '../types/operator-assignment.types';
 
 interface OperatorMachineSignInCardProps {
+  permanentMachine?: PermanentMachineInfo | null;
+  canRequestTemporary?: boolean;
   currentAssignment: OperatorMachineAssignment | null;
   recentRejected: OperatorMachineAssignment | null;
   hierarchy: any;
   user: any;
   onAssignmentChange: () => void;
+  onRequestTemporaryClick?: () => void;
 }
 
 export const OperatorMachineSignInCard: React.FC<OperatorMachineSignInCardProps> = ({
+  permanentMachine,
+  canRequestTemporary = false,
   currentAssignment,
   recentRejected,
   hierarchy,
   user,
   onAssignmentChange,
+  onRequestTemporaryClick,
 }) => {
   const { socket } = useSocket();
 
@@ -53,6 +63,8 @@ export const OperatorMachineSignInCard: React.FC<OperatorMachineSignInCardProps>
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
+  const [showReturnConfirm, setShowReturnConfirm] = useState(false);
+  const [showTemporaryRequestDrawer, setShowTemporaryRequestDrawer] = useState(false);
   const [dismissedRejectedId, setDismissedRejectedId] = useState<string | null>(null);
 
   // Available plants from hierarchy
@@ -74,7 +86,7 @@ export const OperatorMachineSignInCard: React.FC<OperatorMachineSignInCardProps>
         setSelectedPlantId(defaultPlant.id);
       }
     }
-  }, [plants, user]);
+  }, [plants, user, selectedPlantId]);
 
   useEffect(() => {
     if (availableShops.length > 0) {
@@ -111,10 +123,10 @@ export const OperatorMachineSignInCard: React.FC<OperatorMachineSignInCardProps>
   };
 
   useEffect(() => {
-    if (selectedShopId && selectedPlantId && !currentAssignment) {
+    if (selectedShopId && selectedPlantId && (!currentAssignment || showTemporaryRequestDrawer)) {
       fetchAvailableMachines(selectedShopId, selectedPlantId);
     }
-  }, [selectedShopId, selectedPlantId, currentAssignment]);
+  }, [selectedShopId, selectedPlantId, currentAssignment, showTemporaryRequestDrawer]);
 
   // Real-time socket event listeners for live availability and approval status
   useEffect(() => {
@@ -123,9 +135,9 @@ export const OperatorMachineSignInCard: React.FC<OperatorMachineSignInCardProps>
     const handleApproved = (payload: any) => {
       if (payload.operator_id === user?.id) {
         setSuccessMessage(`Sign-in approved! You are now assigned to machine ${payload.machine_code}.`);
+        setShowTemporaryRequestDrawer(false);
         onAssignmentChange();
       } else if (payload.shop_id === selectedShopId) {
-        // Another operator's assignment was approved: refresh available machines
         fetchAvailableMachines(selectedShopId, selectedPlantId);
       }
     };
@@ -148,7 +160,6 @@ export const OperatorMachineSignInCard: React.FC<OperatorMachineSignInCardProps>
 
     const handleRequested = (payload: any) => {
       if (payload.shop_id === selectedShopId && payload.operator_id !== user?.id) {
-        // Another operator made a reservation in this shop: refresh list to update availability
         fetchAvailableMachines(selectedShopId, selectedPlantId);
       }
     };
@@ -166,10 +177,10 @@ export const OperatorMachineSignInCard: React.FC<OperatorMachineSignInCardProps>
     };
   }, [socket, user, selectedShopId, selectedPlantId]);
 
-  // Operator Action: Submit Sign-In Request
-  const handleRequestSignIn = async () => {
+  // Operator Action: Submit Machine Sign-In or Temporary Request
+  const handleRequestSignIn = async (isTemporary: boolean = false) => {
     if (!selectedMachineId) {
-      setErrorMessage('Please select an available machine before signing in.');
+      setErrorMessage('Please select an available machine before submitting request.');
       return;
     }
 
@@ -178,20 +189,32 @@ export const OperatorMachineSignInCard: React.FC<OperatorMachineSignInCardProps>
       setErrorMessage(null);
       setSuccessMessage(null);
 
+      const defaultNotes = isTemporary && permanentMachine
+        ? `Temporary replacement for ${permanentMachine.machine_code} due to machine unavailability.`
+        : signInNotes.trim();
+
       await apiClient.post('/machines/operator/sign-in', {
         machine_id: selectedMachineId,
         shop_id: selectedShopId,
         plant_id: selectedPlantId,
         shift: selectedShift,
-        notes: signInNotes.trim() || undefined,
+        notes: signInNotes.trim() || defaultNotes || undefined,
+        assignment_type: isTemporary ? 'temporary' : 'shift',
+        replacement_for_machine_id: isTemporary && permanentMachine ? permanentMachine.id : undefined,
+        breakdown_id: isTemporary && permanentMachine?.active_breakdown ? permanentMachine.active_breakdown.id : undefined,
       });
 
-      setSuccessMessage('Sign-in request submitted! Waiting for manager approval.');
+      setSuccessMessage(
+        isTemporary
+          ? 'Temporary machine request submitted! Awaiting plant manager approval.'
+          : 'Sign-in request submitted! Waiting for manager approval.'
+      );
       setSelectedMachineId('');
       setSignInNotes('');
+      setShowTemporaryRequestDrawer(false);
       onAssignmentChange();
     } catch (err: any) {
-      console.error('Sign-in request failed:', err);
+      console.error('Request failed:', err);
       setErrorMessage(
         err.response?.data?.message || 'Failed to submit machine sign-in request.'
       );
@@ -222,8 +245,8 @@ export const OperatorMachineSignInCard: React.FC<OperatorMachineSignInCardProps>
     }
   };
 
-  // Operator Action: Sign Out from Active Machine
-  const handleSignOut = async () => {
+  // Operator Action: Release Machine / Sign Out / Return to Permanent Machine
+  const handleSignOut = async (isReturningToPermanent: boolean = false) => {
     if (!currentAssignment || currentAssignment.status !== 'approved') return;
 
     try {
@@ -235,7 +258,12 @@ export const OperatorMachineSignInCard: React.FC<OperatorMachineSignInCardProps>
       });
 
       setShowSignOutConfirm(false);
-      setSuccessMessage('Successfully signed out from machine. Shift session closed.');
+      setShowReturnConfirm(false);
+      setSuccessMessage(
+        isReturningToPermanent
+          ? `Temporary machine released. Restored ${permanentMachine?.machine_code || 'Permanent Machine'} as your default working asset!`
+          : 'Successfully signed out from machine. Shift session closed.'
+      );
       onAssignmentChange();
     } catch (err: any) {
       console.error('Failed to sign out:', err);
@@ -245,8 +273,30 @@ export const OperatorMachineSignInCard: React.FC<OperatorMachineSignInCardProps>
     }
   };
 
-  // Selected Machine Details Object
   const selectedMachine = availableMachines.find((m) => m.id === selectedMachineId);
+
+  // Status helper for permanent machine
+  const permStatus = (permanentMachine?.status || 'RUNNING').toUpperCase();
+  const isPermanentBroken =
+    permStatus === 'BREAKDOWN' ||
+    permStatus === 'UNDER_MAINTENANCE' ||
+    permStatus === 'AWAITING_PARTS' ||
+    permStatus === 'AWAITING_VERIFICATION' ||
+    !!permanentMachine?.active_breakdown;
+
+  // Is current working machine different from permanent machine?
+  const isTemporaryActive =
+    currentAssignment &&
+    currentAssignment.status === 'approved' &&
+    (currentAssignment.assignment_type === 'temporary' ||
+      !!currentAssignment.replacement_for_machine_id ||
+      (permanentMachine && currentAssignment.machine_id !== permanentMachine.id));
+
+  const isPermanentRepairedAndReady =
+    isTemporaryActive &&
+    permanentMachine &&
+    !isPermanentBroken &&
+    (permStatus === 'RUNNING' || permStatus === 'IDLE');
 
   return (
     <div className="space-y-4">
@@ -314,28 +364,201 @@ export const OperatorMachineSignInCard: React.FC<OperatorMachineSignInCardProps>
       )}
 
       {/* =====================================================================
-          STATE 1: OPERATOR HAS AN APPROVED ACTIVE ASSIGNMENT
+          PERMANENT MACHINE SHOWCASE CARD (PART 2 REQUIREMENT)
+          Prominently displays operator's permanent/default machine relationship.
           ===================================================================== */}
-      {currentAssignment && currentAssignment.status === 'approved' && (
-        <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border-2 border-amber-500/80 rounded-2xl p-5 shadow-sm bg-white">
+      {permanentMachine && (
+        <div className="bg-white border-2 border-zinc-200 rounded-2xl p-4 sm:p-5 shadow-xs">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-start gap-3.5">
-              <div className="w-12 h-12 rounded-xl bg-amber-500 text-black flex items-center justify-center shrink-0 shadow-sm font-extrabold">
-                <HardHat className="w-6 h-6" />
+              <div className="w-12 h-12 rounded-xl bg-zinc-900 text-amber-400 flex items-center justify-center shrink-0 shadow-xs font-black">
+                <ShieldCheck className="w-6 h-6" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-2xs font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                    ACTIVE OPERATOR SESSION
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-2xs font-extrabold bg-zinc-100 text-zinc-800 border border-zinc-300">
+                    PERMANENT DEFAULT ASSET
                   </span>
-                  <span className="text-xs font-bold text-zinc-500">
-                    {currentAssignment.shift || 'Shift A'}
+                  <span
+                    className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-2xs font-extrabold border ${
+                      permStatus === 'RUNNING'
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                        : isPermanentBroken
+                        ? 'bg-red-50 text-red-700 border-red-300'
+                        : 'bg-amber-50 text-amber-800 border-amber-300'
+                    }`}
+                  >
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        permStatus === 'RUNNING'
+                          ? 'bg-emerald-500 animate-pulse'
+                          : isPermanentBroken
+                          ? 'bg-red-500'
+                          : 'bg-amber-500'
+                      }`}
+                    ></span>
+                    {permStatus.replace(/_/g, ' ')}
+                  </span>
+                </div>
+                <h3 className="text-base sm:text-lg font-black text-zinc-900 mt-1 tracking-tight">
+                  {permanentMachine.machine_code} • {permanentMachine.name}
+                </h3>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-600 mt-1">
+                  <span>
+                    <strong>Shop:</strong> {permanentMachine.shop_name || 'Fabrication'}
+                  </span>
+                  <span>
+                    <strong>Location:</strong> {permanentMachine.bay_line_location || 'Shop Floor'}
+                  </span>
+                  <span>
+                    <strong>Plant:</strong> {permanentMachine.plant_name || 'Plant 1'}
+                  </span>
+                  {permanentMachine.operating_hours != null && (
+                    <span>
+                      <strong>Meter:</strong> {Number(permanentMachine.operating_hours).toLocaleString()} h
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* If permanent machine has breakdown / unavailable, show Request Temporary Machine Action */}
+            {isPermanentBroken && !currentAssignment && (
+              <div className="flex items-center gap-2 self-start md:self-center shrink-0">
+                <button
+                  onClick={() => {
+                    if (onRequestTemporaryClick) {
+                      onRequestTemporaryClick();
+                    } else {
+                      setShowTemporaryRequestDrawer(true);
+                    }
+                  }}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-black text-xs font-black rounded-xl transition shadow-xs cursor-pointer border border-amber-600"
+                >
+                  <Repeat className="w-4 h-4" />
+                  <span>Request Temporary Machine</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Breakdown Alert Box and Repair Progress Tracker */}
+          {permanentMachine.active_breakdown && (
+            <div className="mt-3.5 p-3.5 bg-red-50/90 border border-red-200 rounded-xl space-y-3 text-xs">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-2.5 text-red-900">
+                  <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-extrabold flex items-center gap-2">
+                      <span>Active Breakdown Ticket #{permanentMachine.active_breakdown.complaint_number || 'OPEN'}</span>
+                      <span className="px-1.5 py-0.2 rounded text-2xs uppercase bg-red-200 text-red-900 font-black">
+                        {permanentMachine.active_breakdown.priority || 'CRITICAL'}
+                      </span>
+                    </div>
+                    <div className="text-2xs text-red-800 mt-0.5">
+                      <strong>Issue:</strong> {permanentMachine.active_breakdown.problem_title}
+                    </div>
+                  </div>
+                </div>
+                <span className="px-2 py-0.5 rounded text-2xs font-extrabold bg-red-100 text-red-800 border border-red-300 uppercase shrink-0">
+                  {permanentMachine.active_breakdown.status || 'Under Repair'}
+                </span>
+              </div>
+
+              {/* 4-Step Maintenance / Work Order Progress */}
+              <div className="pt-2 border-t border-red-200/70">
+                <div className="text-2xs font-extrabold uppercase text-red-800 mb-1.5 flex items-center justify-between">
+                  <span>Maintenance &amp; Work-Order Progress</span>
+                  <span className="font-mono text-zinc-500 lowercase">workflow active</span>
+                </div>
+                <div className="grid grid-cols-4 gap-1.5 text-center text-2xs">
+                  <div className="p-1.5 rounded-lg bg-red-600 text-white font-extrabold shadow-2xs">
+                    1. Reported
+                  </div>
+                  <div
+                    className={`p-1.5 rounded-lg font-bold border transition ${
+                      ['assigned', 'in_progress', 'verified'].includes(
+                        String(permanentMachine.active_breakdown.status || '').toLowerCase()
+                      )
+                        ? 'bg-amber-100 text-amber-950 border-amber-300 font-extrabold'
+                        : 'bg-white/80 text-zinc-400 border-zinc-200'
+                    }`}
+                  >
+                    2. Tech Assigned
+                  </div>
+                  <div
+                    className={`p-1.5 rounded-lg font-bold border transition ${
+                      ['in_progress', 'verified'].includes(
+                        String(permanentMachine.active_breakdown.status || '').toLowerCase()
+                      )
+                        ? 'bg-amber-100 text-amber-950 border-amber-300 font-extrabold'
+                        : 'bg-white/80 text-zinc-400 border-zinc-200'
+                    }`}
+                  >
+                    3. Under Repair
+                  </div>
+                  <div
+                    className={`p-1.5 rounded-lg font-bold border transition ${
+                      String(permanentMachine.active_breakdown.status || '').toLowerCase() === 'verified'
+                        ? 'bg-emerald-600 text-white font-extrabold shadow-2xs'
+                        : 'bg-white/80 text-zinc-400 border-zinc-200'
+                    }`}
+                  >
+                    4. Verified
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* =====================================================================
+          STATE 1: OPERATOR HAS AN APPROVED ACTIVE WORKING MACHINE
+          ===================================================================== */}
+      {currentAssignment && currentAssignment.status === 'approved' && (
+        <div
+          className={`border-2 rounded-2xl p-5 shadow-sm bg-white ${
+            isTemporaryActive
+              ? 'border-amber-500 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-white'
+              : 'border-emerald-500/80 bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-white'
+          }`}
+        >
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-start gap-3.5">
+              <div
+                className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 shadow-sm font-extrabold ${
+                  isTemporaryActive
+                    ? 'bg-amber-500 text-black'
+                    : 'bg-emerald-600 text-white'
+                }`}
+              >
+                {isTemporaryActive ? <Repeat className="w-6 h-6" /> : <HardHat className="w-6 h-6" />}
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-2xs font-black border ${
+                      isTemporaryActive
+                        ? 'bg-amber-100 text-amber-950 border-amber-300'
+                        : 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                    }`}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    {isTemporaryActive ? 'TEMPORARY REPLACEMENT ASSET' : 'ACTIVE OPERATOR SESSION'}
                   </span>
                 </div>
                 <h3 className="text-lg font-black text-zinc-900 mt-1 tracking-tight">
                   {currentAssignment.machine_code} • {currentAssignment.machine_name}
                 </h3>
+                {isTemporaryActive && (
+                  <div className="text-xs font-bold text-amber-900 mt-0.5">
+                    Replaces Permanent Asset:{' '}
+                    <span className="font-extrabold underline">
+                      {currentAssignment.replacement_for_machine_code || permanentMachine?.machine_code || 'Default Machine'}
+                    </span>
+                  </div>
+                )}
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-600 mt-1">
                   <span>
                     <strong>Shop:</strong> {currentAssignment.shop_name}
@@ -358,23 +581,94 @@ export const OperatorMachineSignInCard: React.FC<OperatorMachineSignInCardProps>
                     </span>
                   )}
                 </div>
-                {currentAssignment.approver_name && (
-                  <div className="text-2xs text-zinc-500 mt-1">
-                    Approved by {currentAssignment.approver_name}
-                  </div>
-                )}
               </div>
             </div>
 
-            {/* Sign Out Button */}
+            {/* Actions: Return to Permanent Machine or Sign Out */}
             <div className="flex items-center gap-2 self-end md:self-center shrink-0">
+              {isTemporaryActive ? (
+                <>
+                  {isPermanentRepairedAndReady && (
+                    <button
+                      onClick={() => setShowReturnConfirm(true)}
+                      disabled={submitting}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold rounded-xl transition shadow-xs cursor-pointer"
+                    >
+                      <Repeat className="w-3.5 h-3.5 text-white" />
+                      <span>Return to Permanent Machine</span>
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setShowSignOutConfirm(true)}
+                    disabled={submitting}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-zinc-900 hover:bg-black text-white text-xs font-bold rounded-xl transition shadow-xs cursor-pointer"
+                  >
+                    <LogOut className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Release Temporary Machine</span>
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => setShowSignOutConfirm(true)}
+                  disabled={submitting}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-zinc-900 hover:bg-black text-white text-xs font-bold rounded-xl transition shadow-xs cursor-pointer"
+                >
+                  <LogOut className="w-3.5 h-3.5 text-amber-400" />
+                  <span>End Shift / Sign Out</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Banner if Permanent Machine has been repaired and is available */}
+          {isPermanentRepairedAndReady && (
+            <div className="mt-4 p-3 bg-emerald-50 border border-emerald-300 rounded-xl flex items-center justify-between text-xs text-emerald-950">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>
+                  <strong>Permanent Machine Available:</strong> {permanentMachine?.machine_code} has been repaired and verified operational! You can return to your permanent machine at any time.
+                </span>
+              </div>
               <button
-                onClick={() => setShowSignOutConfirm(true)}
-                disabled={submitting}
-                className="flex items-center gap-1.5 px-4 py-2 bg-zinc-900 hover:bg-black text-white text-xs font-bold rounded-xl transition shadow-xs cursor-pointer"
+                onClick={() => setShowReturnConfirm(true)}
+                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-2xs rounded-lg transition shrink-0 ml-2"
               >
-                <LogOut className="w-3.5 h-3.5 text-amber-400" />
-                <span>End Shift / Sign Out</span>
+                Return Now
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Return to Permanent Machine Confirmation Modal */}
+      {showReturnConfirm && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-5 border border-zinc-200 shadow-xl space-y-4">
+            <div className="flex items-center gap-3 text-emerald-600">
+              <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
+                <Repeat className="w-5 h-5 text-emerald-700" />
+              </div>
+              <h4 className="text-base font-extrabold text-zinc-900">
+                Return to Permanent Machine?
+              </h4>
+            </div>
+            <p className="text-xs text-zinc-600 leading-relaxed">
+              This will release your temporary working machine (<strong>{currentAssignment?.machine_code}</strong>) and make it available for other operators. Your active assignment will revert to your permanent machine (<strong>{permanentMachine?.machine_code}</strong>).
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                onClick={() => setShowReturnConfirm(false)}
+                disabled={submitting}
+                className="px-3.5 py-1.5 text-xs font-bold text-zinc-600 hover:bg-zinc-100 rounded-lg transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleSignOut(true)}
+                disabled={submitting}
+                className="px-4 py-1.5 text-xs font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition shadow-xs cursor-pointer"
+              >
+                {submitting ? 'Releasing...' : 'Confirm Return'}
               </button>
             </div>
           </div>
@@ -390,12 +684,12 @@ export const OperatorMachineSignInCard: React.FC<OperatorMachineSignInCardProps>
                 <LogOut className="w-5 h-5" />
               </div>
               <h4 className="text-base font-extrabold text-zinc-900">
-                Sign Out of Machine?
+                {isTemporaryActive ? 'Release Temporary Machine?' : 'Sign Out of Machine?'}
               </h4>
             </div>
             <p className="text-xs text-zinc-600 leading-relaxed">
               Are you sure you want to release <strong>{currentAssignment?.machine_code}</strong>?
-              This will close your active operator session and make the machine available for the next shift.
+              This will close your active operator session and make the machine available for the shop floor.
             </p>
             <div className="flex items-center justify-end gap-2 pt-2">
               <button
@@ -406,11 +700,11 @@ export const OperatorMachineSignInCard: React.FC<OperatorMachineSignInCardProps>
                 Cancel
               </button>
               <button
-                onClick={handleSignOut}
+                onClick={() => handleSignOut(false)}
                 disabled={submitting}
                 className="px-4 py-1.5 text-xs font-extrabold bg-zinc-900 hover:bg-black text-amber-400 rounded-lg transition shadow-xs cursor-pointer"
               >
-                {submitting ? 'Signing out...' : 'Confirm Sign Out'}
+                {submitting ? 'Signing out...' : 'Confirm Release'}
               </button>
             </div>
           </div>
@@ -418,7 +712,7 @@ export const OperatorMachineSignInCard: React.FC<OperatorMachineSignInCardProps>
       )}
 
       {/* =====================================================================
-          STATE 2: OPERATOR HAS A PENDING SIGN-IN REQUEST
+          STATE 2: OPERATOR HAS A PENDING REQUEST (TEMPORARY OR SHIFT)
           ===================================================================== */}
       {currentAssignment && currentAssignment.status === 'pending' && (
         <div className="bg-amber-50/80 border-2 border-amber-400 rounded-2xl p-5 shadow-xs">
@@ -430,7 +724,9 @@ export const OperatorMachineSignInCard: React.FC<OperatorMachineSignInCardProps>
               <div>
                 <div className="flex items-center gap-2">
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-2xs font-black bg-amber-200 text-amber-900 border border-amber-300">
-                    AWAITING MANAGER APPROVAL
+                    {currentAssignment.assignment_type === 'temporary'
+                      ? 'TEMPORARY MACHINE REQUEST PENDING'
+                      : 'AWAITING MANAGER APPROVAL'}
                   </span>
                   <span className="text-2xs font-bold text-amber-800">
                     Machine Reserved
@@ -439,11 +735,16 @@ export const OperatorMachineSignInCard: React.FC<OperatorMachineSignInCardProps>
                 <h3 className="text-base font-black text-zinc-900 mt-1">
                   Requested Machine: {currentAssignment.machine_code} • {currentAssignment.machine_name}
                 </h3>
+                {currentAssignment.replacement_for_machine_code && (
+                  <p className="text-xs text-amber-900 font-bold mt-0.5">
+                    Replacement for: {currentAssignment.replacement_for_machine_code}
+                  </p>
+                )}
                 <p className="text-xs text-zinc-600 mt-0.5">
-                  Shop: <strong>{currentAssignment.shop_name}</strong> • Plant: <strong>{currentAssignment.plant_name}</strong> • {currentAssignment.shift || 'Shift A'}
+                  Shop: <strong>{currentAssignment.shop_name}</strong> • Plant: <strong>{currentAssignment.plant_name}</strong>
                 </p>
                 <p className="text-2xs text-amber-800 font-semibold mt-1">
-                  Notification sent to your plant manager. While pending, this machine cannot be requested by anyone else.
+                  Real-time notification routed to your Plant Manager. While pending, this machine cannot be reserved by other operators.
                 </p>
               </div>
             </div>
@@ -463,28 +764,42 @@ export const OperatorMachineSignInCard: React.FC<OperatorMachineSignInCardProps>
       )}
 
       {/* =====================================================================
-          STATE 3: NO ACTIVE OR PENDING ASSIGNMENT -> MACHINE SELECTION STATION
+          STATE 3: TEMPORARY MACHINE REQUEST STATION / REGULAR SIGN-IN STATION
+          Displayed when operator has no active assignment OR clicks "Request Temporary Machine"
           ===================================================================== */}
-      {!currentAssignment && (
+      {(!currentAssignment || showTemporaryRequestDrawer) && (
         <div className="bg-white border border-zinc-200/90 rounded-2xl p-5 shadow-xs space-y-5">
           {/* Section Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-100">
             <div>
               <div className="flex items-center gap-2">
                 <span className="p-1 rounded-md bg-amber-400 text-black">
-                  <HardHat className="w-4 h-4" />
+                  {showTemporaryRequestDrawer || isPermanentBroken ? <Repeat className="w-4 h-4" /> : <HardHat className="w-4 h-4" />}
                 </span>
                 <h3 className="text-sm font-black text-zinc-900 tracking-tight">
-                  Operator Machine Selection Station
+                  {showTemporaryRequestDrawer || isPermanentBroken
+                    ? 'Request Temporary Replacement Machine'
+                    : 'Operator Machine Selection Station'}
                 </h3>
               </div>
               <p className="text-xs text-zinc-500 mt-0.5">
-                Choose your plant, shop, and an operational machine to sign in for this shift.
+                {showTemporaryRequestDrawer || isPermanentBroken
+                  ? `Select an operational machine in your shop to maintain production while ${permanentMachine?.machine_code || 'your machine'} is under repair.`
+                  : 'Choose your shop and an operational machine to sign in.'}
               </p>
             </div>
 
-            {/* Plant & Shop Dropdown Selectors */}
+            {/* Plant & Shop Selectors */}
             <div className="flex flex-wrap items-center gap-2">
+              {showTemporaryRequestDrawer && currentAssignment && (
+                <button
+                  onClick={() => setShowTemporaryRequestDrawer(false)}
+                  className="px-3 py-1 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-xs font-bold rounded-lg transition"
+                >
+                  Close
+                </button>
+              )}
+
               {/* Plant Selector */}
               <div className="flex items-center gap-1.5 bg-zinc-50 border border-zinc-200 rounded-xl px-2.5 py-1.5 text-xs">
                 <Building2 className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
@@ -680,7 +995,7 @@ export const OperatorMachineSignInCard: React.FC<OperatorMachineSignInCardProps>
                   </div>
                   <div>
                     <div className="text-2xs font-extrabold text-amber-950 uppercase tracking-wider">
-                      Ready to Sign In
+                      {isPermanentBroken || showTemporaryRequestDrawer ? 'Ready to Request Temporary Replacement' : 'Ready to Sign In'}
                     </div>
                     <div className="text-sm font-black text-zinc-900">
                       {selectedMachine.machine_code} • {selectedMachine.name}
@@ -707,19 +1022,29 @@ export const OperatorMachineSignInCard: React.FC<OperatorMachineSignInCardProps>
               <div className="flex flex-col sm:flex-row items-center gap-2 pt-1">
                 <input
                   type="text"
-                  placeholder="Optional shift notes (e.g. starting routine cutting task)..."
+                  placeholder={
+                    isPermanentBroken || showTemporaryRequestDrawer
+                      ? `Reason for temporary request (e.g. permanent ${permanentMachine?.machine_code || 'machine'} is under repair)...`
+                      : 'Optional shift notes (e.g. starting routine task)...'
+                  }
                   value={signInNotes}
                   onChange={(e) => setSignInNotes(e.target.value)}
                   className="flex-1 bg-white border border-amber-300/80 rounded-xl px-3 py-2 text-xs text-zinc-800 placeholder-zinc-400 focus:outline-hidden focus:ring-2 focus:ring-amber-500 w-full"
                 />
 
                 <button
-                  onClick={handleRequestSignIn}
+                  onClick={() => handleRequestSignIn(isPermanentBroken || showTemporaryRequestDrawer)}
                   disabled={submitting}
                   className="w-full sm:w-auto px-5 py-2 bg-amber-500 hover:bg-amber-600 text-black font-extrabold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer shrink-0 disabled:opacity-60"
                 >
-                  <HardHat className="w-4 h-4" />
-                  <span>{submitting ? 'Submitting...' : 'Sign In to Machine'}</span>
+                  {isPermanentBroken || showTemporaryRequestDrawer ? <Repeat className="w-4 h-4" /> : <HardHat className="w-4 h-4" />}
+                  <span>
+                    {submitting
+                      ? 'Submitting...'
+                      : isPermanentBroken || showTemporaryRequestDrawer
+                      ? 'Send Temporary Request'
+                      : 'Sign In to Machine'}
+                  </span>
                 </button>
               </div>
             </div>

@@ -140,7 +140,8 @@ export const login = async (
     const result = await activeQuery(
       `SELECT id, employee_code, full_name, email, phone, role,
               plant_id, shop_id, department, designation, shift,
-              password_hash, is_active, approval_status, rejection_reason
+              password_hash, is_active, approval_status, rejection_reason,
+              permanent_machine_id
        FROM users
        WHERE LOWER(email) = LOWER($1)
           OR UPPER(employee_code) = UPPER($1)`,
@@ -224,6 +225,8 @@ export const login = async (
           department: dbUser.department,
           designation: dbUser.designation,
           shift: dbUser.shift,
+          permanentMachineId: dbUser.permanent_machine_id ?? null,
+          permanent_machine_id: dbUser.permanent_machine_id ?? null,
         },
       },
     });
@@ -318,10 +321,16 @@ export const getProfile = async (
       `SELECT u.id, u.employee_code, u.full_name, u.email, u.phone,
               u.role, u.department, u.designation, u.shift,
               u.plant_id, u.shop_id, u.is_active,
+              u.requested_machine_id, u.permanent_machine_id,
+              pm.machine_code AS permanent_machine_code,
+              pm.name AS permanent_machine_name,
+              pm.status AS permanent_machine_status,
+              pm.bay_line_location AS permanent_machine_location,
               p.plant_name, s.shop_name
        FROM users u
        LEFT JOIN plants p ON u.plant_id = p.id
        LEFT JOIN shops s ON u.shop_id = s.id
+       LEFT JOIN machines pm ON u.permanent_machine_id = pm.id
        WHERE u.id = $1 AND u.is_active = TRUE`,
       [userId]
     );
@@ -358,6 +367,18 @@ export const getProfile = async (
         plantName: row.plant_name ?? null,
         shop_name: row.shop_name ?? null,
         shopName: row.shop_name ?? null,
+        requested_machine_id: row.requested_machine_id ?? null,
+        requestedMachineId: row.requested_machine_id ?? null,
+        permanent_machine_id: row.permanent_machine_id ?? null,
+        permanentMachineId: row.permanent_machine_id ?? null,
+        permanent_machine_code: row.permanent_machine_code ?? null,
+        permanentMachineCode: row.permanent_machine_code ?? null,
+        permanent_machine_name: row.permanent_machine_name ?? null,
+        permanentMachineName: row.permanent_machine_name ?? null,
+        permanent_machine_status: row.permanent_machine_status ?? null,
+        permanentMachineStatus: row.permanent_machine_status ?? null,
+        permanent_machine_location: row.permanent_machine_location ?? null,
+        permanentMachineLocation: row.permanent_machine_location ?? null,
       },
     });
   } catch (err) {
@@ -1923,10 +1944,11 @@ export const approveOperator = async (
            is_active = TRUE,
            approved_by = $1,
            approved_at = NOW(),
+           permanent_machine_id = COALESCE(permanent_machine_id, requested_machine_id),
            rejection_reason = NULL,
            updated_at = NOW()
        WHERE id = $2
-       RETURNING id, employee_code, full_name, email, phone, role, plant_id, shop_id, approval_status, is_active, approved_at`,
+       RETURNING id, employee_code, full_name, email, phone, role, plant_id, shop_id, approval_status, is_active, approved_at, requested_machine_id, permanent_machine_id`,
       [req.user?.id || null, id]
     );
 

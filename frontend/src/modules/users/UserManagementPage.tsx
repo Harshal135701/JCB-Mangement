@@ -206,7 +206,7 @@ export const UserManagementPage: React.FC = () => {
   const handleApproveOperator = async (op: any) => {
     if (
       !window.confirm(
-        `Approve operator ${op.full_name} (${op.employee_code})? This will immediately activate their account and grant system access.`
+        `Approve operator ${op.full_name} (${op.employee_code})? This will activate their account and assign ${op.requested_machine_code ? `machine ${op.requested_machine_code}` : 'the selected machine'} as their permanent default machine.`
       )
     ) {
       return;
@@ -218,7 +218,7 @@ export const UserManagementPage: React.FC = () => {
       if (res.data.success) {
         setFeedback({
           type: 'success',
-          text: `Operator ${op.full_name} (${op.employee_code}) approved and activated successfully.`,
+          text: `Operator ${op.full_name} (${op.employee_code}) approved successfully. Permanent machine configured: ${op.requested_machine_code || 'None'}.`,
         });
         fetchPendingOperators();
         fetchUsers();
@@ -1022,7 +1022,7 @@ export const UserManagementPage: React.FC = () => {
                   <tr className="bg-zinc-100/80 border-b border-zinc-200 text-zinc-600 uppercase text-[10px] font-black tracking-wider">
                     <th className="py-3 px-4">Operator Name &amp; ID</th>
                     <th className="py-3 px-4">Facility &amp; Shop</th>
-                    <th className="py-3 px-4">Requested Machine</th>
+                    <th className="py-3 px-4">Requested Permanent Machine</th>
                     <th className="py-3 px-4">Shift &amp; Role</th>
                     <th className="py-3 px-4">Contact Details</th>
                     <th className="py-3 px-4">Department / Designation</th>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import apiClient from '../../../api/client';
 import { useSocket } from '../../../context/SocketContext';
 import {
@@ -15,6 +15,10 @@ import {
   ShieldCheck,
   AlertTriangle,
   ChevronRight,
+  Repeat,
+  Wrench,
+  Filter,
+  Info,
 } from 'lucide-react';
 import { OperatorMachineAssignment } from '../../operator/types/operator-assignment.types';
 
@@ -28,6 +32,9 @@ export const OperatorMachineRequestsCard: React.FC<OperatorMachineRequestsCardPr
   const { socket } = useSocket();
 
   const [activeTab, setActiveTab] = useState<'pending' | 'active'>('pending');
+  const [pendingFilter, setPendingFilter] = useState<'all' | 'temporary' | 'shift'>('all');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'temporary' | 'shift'>('all');
+
   const [pendingRequests, setPendingRequests] = useState<OperatorMachineAssignment[]>([]);
   const [activeAssignments, setActiveAssignments] = useState<OperatorMachineAssignment[]>([]);
   const [loading, setLoading] = useState(false);
@@ -39,7 +46,7 @@ export const OperatorMachineRequestsCard: React.FC<OperatorMachineRequestsCardPr
   const [rejectingItem, setRejectingItem] = useState<OperatorMachineAssignment | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
 
-  // Force Sign Out Modal
+  // Force Sign Out / Release Modal State
   const [releasingItem, setReleasingItem] = useState<OperatorMachineAssignment | null>(null);
 
   const fetchRequests = useCallback(async () => {
@@ -93,6 +100,35 @@ export const OperatorMachineRequestsCard: React.FC<OperatorMachineRequestsCardPr
     };
   }, [socket, fetchRequests]);
 
+  // Derived filtered collections
+  const temporaryPending = useMemo(
+    () => pendingRequests.filter((r) => r.assignment_type === 'temporary'),
+    [pendingRequests]
+  );
+  const shiftPending = useMemo(
+    () => pendingRequests.filter((r) => r.assignment_type !== 'temporary'),
+    [pendingRequests]
+  );
+  const displayedPending = useMemo(() => {
+    if (pendingFilter === 'temporary') return temporaryPending;
+    if (pendingFilter === 'shift') return shiftPending;
+    return pendingRequests;
+  }, [pendingFilter, temporaryPending, shiftPending, pendingRequests]);
+
+  const temporaryActive = useMemo(
+    () => activeAssignments.filter((r) => r.assignment_type === 'temporary'),
+    [activeAssignments]
+  );
+  const shiftActive = useMemo(
+    () => activeAssignments.filter((r) => r.assignment_type !== 'temporary'),
+    [activeAssignments]
+  );
+  const displayedActive = useMemo(() => {
+    if (activeFilter === 'temporary') return temporaryActive;
+    if (activeFilter === 'shift') return shiftActive;
+    return activeAssignments;
+  }, [activeFilter, temporaryActive, shiftActive, activeAssignments]);
+
   // Action: Manager Approves Request
   const handleApprove = async (assignment: OperatorMachineAssignment) => {
     try {
@@ -102,8 +138,11 @@ export const OperatorMachineRequestsCard: React.FC<OperatorMachineRequestsCardPr
 
       await apiClient.post(`/machines/operator/requests/${assignment.id}/approve`);
 
+      const isTemp = assignment.assignment_type === 'temporary';
       setSuccessMessage(
-        `Approved sign-in for ${assignment.operator_name || 'operator'} on machine ${assignment.machine_code}. Machine marked occupied.`
+        isTemp
+          ? `Approved temporary replacement machine ${assignment.machine_code} for ${assignment.operator_name || 'operator'}. Machine marked occupied; permanent machine relationship preserved.`
+          : `Approved sign-in for ${assignment.operator_name || 'operator'} on machine ${assignment.machine_code}. Machine marked occupied.`
       );
       fetchRequests();
     } catch (err: any) {
@@ -141,7 +180,7 @@ export const OperatorMachineRequestsCard: React.FC<OperatorMachineRequestsCardPr
     }
   };
 
-  // Action: Manager Force Release / Sign Out
+  // Action: Manager Force Release / End Temporary Assignment
   const handleConfirmRelease = async () => {
     if (!releasingItem) return;
 
@@ -154,8 +193,11 @@ export const OperatorMachineRequestsCard: React.FC<OperatorMachineRequestsCardPr
         assignment_id: releasingItem.id,
       });
 
+      const isTemp = releasingItem.assignment_type === 'temporary';
       setSuccessMessage(
-        `Machine ${releasingItem.machine_code} released successfully. Shift session ended.`
+        isTemp
+          ? `Temporary machine ${releasingItem.machine_code} released. Operator can return to permanent machine.`
+          : `Machine ${releasingItem.machine_code} released successfully. Shift session ended.`
       );
       setReleasingItem(null);
       fetchRequests();
@@ -178,16 +220,22 @@ export const OperatorMachineRequestsCard: React.FC<OperatorMachineRequestsCardPr
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-black text-zinc-900 tracking-tight">
-                Operator Machine Sign-In & Floor Supervision
+                Operator Machine Sign-In &amp; Temporary Replacement Supervision
               </h3>
               {pendingRequests.length > 0 && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-black bg-amber-500 text-black animate-pulse">
                   {pendingRequests.length} Pending
                 </span>
               )}
+              {temporaryPending.length > 0 && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-black bg-orange-100 text-orange-900 border border-orange-300">
+                  <Repeat className="w-3 h-3 text-orange-700" />
+                  {temporaryPending.length} Temp Replacements
+                </span>
+              )}
             </div>
             <p className="text-xs text-zinc-500 mt-0.5">
-              Review real-time machine sign-in requests, manage shift occupancy, and approve floor sessions.
+              Review permanent default machine sign-ins, temporary replacement requests during breakdowns, and manage floor occupancy.
             </p>
           </div>
         </div>
@@ -203,7 +251,7 @@ export const OperatorMachineRequestsCard: React.FC<OperatorMachineRequestsCardPr
                   : 'hover:text-zinc-900'
               }`}
             >
-              Pending ({pendingRequests.length})
+              Pending Requests ({pendingRequests.length})
             </button>
             <button
               onClick={() => setActiveTab('active')}
@@ -262,18 +310,58 @@ export const OperatorMachineRequestsCard: React.FC<OperatorMachineRequestsCardPr
       {/* Tab Content 1: PENDING REQUESTS QUEUE */}
       {activeTab === 'pending' && (
         <div className="p-4 sm:p-5">
+          {/* Sub-Filter Bar */}
+          <div className="flex items-center justify-between pb-3 mb-3 border-b border-zinc-100 gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5">
+              <span className="text-2xs font-extrabold uppercase tracking-wider text-zinc-400 mr-1 flex items-center gap-1">
+                <Filter className="w-3 h-3" /> Filter:
+              </span>
+              <button
+                onClick={() => setPendingFilter('all')}
+                className={`px-2.5 py-1 rounded-lg text-2xs font-bold transition cursor-pointer ${
+                  pendingFilter === 'all'
+                    ? 'bg-zinc-900 text-white shadow-2xs'
+                    : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+                }`}
+              >
+                All Pending ({pendingRequests.length})
+              </button>
+              <button
+                onClick={() => setPendingFilter('temporary')}
+                className={`px-2.5 py-1 rounded-lg text-2xs font-bold transition cursor-pointer flex items-center gap-1 ${
+                  pendingFilter === 'temporary'
+                    ? 'bg-amber-600 text-white shadow-2xs'
+                    : 'bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100'
+                }`}
+              >
+                <Repeat className="w-3 h-3" />
+                Temporary Replacements ({temporaryPending.length})
+              </button>
+              <button
+                onClick={() => setPendingFilter('shift')}
+                className={`px-2.5 py-1 rounded-lg text-2xs font-bold transition cursor-pointer ${
+                  pendingFilter === 'shift'
+                    ? 'bg-zinc-900 text-white shadow-2xs'
+                    : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+                }`}
+              >
+                Shift Sign-Ins ({shiftPending.length})
+              </button>
+            </div>
+          </div>
+
           {loading && pendingRequests.length === 0 ? (
             <div className="space-y-3">
               {[1, 2].map((n) => (
                 <div key={n} className="h-20 bg-zinc-50 rounded-xl animate-pulse border border-zinc-100" />
               ))}
             </div>
-          ) : pendingRequests.length === 0 ? (
+          ) : displayedPending.length === 0 ? (
             <div className="py-8 text-center bg-zinc-50/60 rounded-xl border border-dashed border-zinc-200">
               <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2 opacity-80" />
-              <p className="text-xs font-bold text-zinc-700">All machine sign-in requests reviewed</p>
+              <p className="text-xs font-bold text-zinc-700">No pending machine requests in this view</p>
               <p className="text-2xs text-zinc-500 mt-0.5">
-                New operator requests will appear here instantly via real-time sync.
+                New requests from operators will appear here immediately via real-time sync.
               </p>
             </div>
           ) : (
@@ -281,83 +369,141 @@ export const OperatorMachineRequestsCard: React.FC<OperatorMachineRequestsCardPr
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-zinc-200 text-2xs font-extrabold text-zinc-500 uppercase tracking-wider bg-zinc-50/80">
-                    <th className="py-2.5 px-3">Operator</th>
-                    <th className="py-2.5 px-3">Machine</th>
-                    <th className="py-2.5 px-3">Shop & Plant</th>
-                    <th className="py-2.5 px-3">Shift & Time</th>
-                    <th className="py-2.5 px-3 text-right">Actions</th>
+                    <th className="py-2.5 px-3">Type</th>
+                    <th className="py-2.5 px-3">Operator &amp; Permanent Machine</th>
+                    <th className="py-2.5 px-3">Requested Machine</th>
+                    <th className="py-2.5 px-3">Reason / Breakdown Context</th>
+                    <th className="py-2.5 px-3">Shop &amp; Shift</th>
+                    <th className="py-2.5 px-3 text-right">Approval Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100 text-xs">
-                  {pendingRequests.map((req) => (
-                    <tr key={req.id} className="hover:bg-amber-50/20 transition">
-                      {/* Operator Info */}
-                      <td className="py-3 px-3">
-                        <div className="font-extrabold text-zinc-900">
-                          {req.operator_name || req.operator_code || 'Operator'}
-                        </div>
-                        <div className="text-2xs text-zinc-500">
-                          Code: {req.operator_code || 'N/A'} {req.operator_email ? `• ${req.operator_email}` : ''}
-                        </div>
-                      </td>
+                  {displayedPending.map((req) => {
+                    const isTemp = req.assignment_type === 'temporary';
+                    return (
+                      <tr key={req.id} className="hover:bg-amber-50/20 transition">
+                        {/* Type Badge */}
+                        <td className="py-3 px-3">
+                          {isTemp ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-2xs font-black bg-amber-100 text-amber-900 border border-amber-300">
+                              <Repeat className="w-3 h-3 text-amber-700" />
+                              TEMPORARY
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-2xs font-bold bg-blue-50 text-blue-800 border border-blue-200">
+                              <HardHat className="w-3 h-3 text-blue-600" />
+                              SHIFT SIGN-IN
+                            </span>
+                          )}
+                        </td>
 
-                      {/* Machine Info */}
-                      <td className="py-3 px-3">
-                        <div className="flex items-center gap-1.5 font-black text-zinc-900">
-                          <span className="px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-800 text-2xs font-mono font-bold">
-                            {req.machine_code}
-                          </span>
-                          <span className="truncate max-w-[160px]">{req.machine_name}</span>
-                        </div>
-                        <div className="text-2xs text-zinc-500 mt-0.5">
-                          {req.machine_category} {req.bay_line_location ? `• ${req.bay_line_location}` : ''}
-                        </div>
-                      </td>
+                        {/* Operator & Permanent Machine */}
+                        <td className="py-3 px-3">
+                          <div className="font-extrabold text-zinc-900">
+                            {req.operator_name || req.operator_code || 'Operator'}
+                          </div>
+                          <div className="text-2xs text-zinc-500">
+                            Code: {req.operator_code || 'N/A'} {req.operator_email ? `• ${req.operator_email}` : ''}
+                          </div>
+                          <div className="mt-1 flex items-center gap-1 text-2xs">
+                            <span className="text-zinc-400 font-medium">Permanent Asset:</span>
+                            {req.permanent_machine_code ? (
+                              <span className="px-1.5 py-0.2 rounded bg-zinc-100 text-zinc-800 font-mono font-bold">
+                                {req.permanent_machine_code}
+                              </span>
+                            ) : (
+                              <span className="text-zinc-400 italic">None Configured</span>
+                            )}
+                          </div>
+                        </td>
 
-                      {/* Shop & Plant */}
-                      <td className="py-3 px-3">
-                        <div className="font-bold text-zinc-800">{req.shop_name}</div>
-                        <div className="text-2xs text-zinc-500">{req.plant_name}</div>
-                      </td>
+                        {/* Requested Machine */}
+                        <td className="py-3 px-3">
+                          <div className="flex items-center gap-1.5 font-black text-zinc-900">
+                            <span className="px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-800 text-2xs font-mono font-bold">
+                              {req.machine_code}
+                            </span>
+                            <span className="truncate max-w-[150px]">{req.machine_name}</span>
+                          </div>
+                          <div className="text-2xs text-zinc-500 mt-0.5">
+                            {req.machine_category} {req.bay_line_location ? `• ${req.bay_line_location}` : ''}
+                          </div>
+                          <div className="text-2xs text-zinc-400 mt-0.5">
+                            Status: <span className="font-semibold text-emerald-700">{req.machine_status || 'running'}</span>
+                          </div>
+                        </td>
 
-                      {/* Shift & Time */}
-                      <td className="py-3 px-3">
-                        <div className="font-bold text-zinc-700">{req.shift || 'Shift A'}</div>
-                        <div className="text-2xs text-zinc-500 flex items-center gap-1 mt-0.5">
-                          <Clock className="w-3 h-3 text-zinc-400" />
-                          {new Date(req.created_at).toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </div>
-                      </td>
+                        {/* Reason / Breakdown Context */}
+                        <td className="py-3 px-3">
+                          {isTemp ? (
+                            <div className="space-y-1">
+                              {req.replacement_for_machine_code && (
+                                <div className="text-2xs font-bold text-amber-900">
+                                  Replaces broken: <span className="font-mono bg-amber-100 px-1 rounded">{req.replacement_for_machine_code}</span>
+                                </div>
+                              )}
+                              {req.breakdown_complaint_number && (
+                                <div className="text-2xs text-red-700 font-medium flex items-center gap-1">
+                                  <Wrench className="w-3 h-3 text-red-500 shrink-0" />
+                                  <span>Ticket #{req.breakdown_complaint_number}</span>
+                                </div>
+                              )}
+                              {req.breakdown_problem_title && (
+                                <div className="text-2xs text-zinc-600 truncate max-w-[180px]">
+                                  {req.breakdown_problem_title}
+                                </div>
+                              )}
+                              {req.notes && (
+                                <div className="text-2xs italic text-zinc-500 truncate max-w-[180px]">
+                                  &quot;{req.notes}&quot;
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="text-2xs text-zinc-500">
+                              {req.notes ? `"${req.notes}"` : 'Regular shift sign-in'}
+                            </div>
+                          )}
+                        </td>
 
-                      {/* Actions: Approve / Reject */}
-                      <td className="py-3 px-3 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => handleApprove(req)}
-                            disabled={actionLoadingId === req.id}
-                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-extrabold transition shadow-2xs flex items-center gap-1 cursor-pointer disabled:opacity-50"
-                          >
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            <span>{actionLoadingId === req.id ? 'Approving...' : 'Approve'}</span>
-                          </button>
-                          <button
-                            onClick={() => {
-                              setRejectingItem(req);
-                              setRejectionReason('');
-                            }}
-                            disabled={actionLoadingId === req.id}
-                            className="px-3 py-1.5 bg-white border border-red-300 text-red-700 hover:bg-red-50 rounded-lg text-xs font-bold transition shadow-2xs flex items-center gap-1 cursor-pointer disabled:opacity-50"
-                          >
-                            <XCircle className="w-3.5 h-3.5" />
-                            <span>Reject</span>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                        {/* Shop & Shift */}
+                        <td className="py-3 px-3">
+                          <div className="font-bold text-zinc-800">{req.shop_name}</div>
+                          <div className="text-2xs text-zinc-500">{req.plant_name}</div>
+                          <div className="text-2xs text-zinc-600 font-medium mt-0.5 flex items-center gap-1">
+                            <Clock className="w-3 h-3 text-zinc-400" />
+                            {req.shift || 'Shift A'} • {new Date(req.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        </td>
+
+                        {/* Actions: Approve / Reject */}
+                        <td className="py-3 px-3 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => handleApprove(req)}
+                              disabled={actionLoadingId === req.id}
+                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-extrabold transition shadow-2xs flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                              title={isTemp ? 'Approve temporary replacement and occupy machine' : 'Approve shift sign-in and occupy machine'}
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>{actionLoadingId === req.id ? 'Approving...' : 'Approve'}</span>
+                            </button>
+                            <button
+                              onClick={() => {
+                                setRejectingItem(req);
+                                setRejectionReason('');
+                              }}
+                              disabled={actionLoadingId === req.id}
+                              className="px-3 py-1.5 bg-white border border-red-300 text-red-700 hover:bg-red-50 rounded-lg text-xs font-bold transition shadow-2xs flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                            >
+                              <XCircle className="w-3.5 h-3.5" />
+                              <span>Reject</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -368,12 +514,52 @@ export const OperatorMachineRequestsCard: React.FC<OperatorMachineRequestsCardPr
       {/* Tab Content 2: ACTIVE SHOP FLOOR SESSIONS */}
       {activeTab === 'active' && (
         <div className="p-4 sm:p-5">
-          {activeAssignments.length === 0 ? (
+          {/* Sub-Filter Bar */}
+          <div className="flex items-center justify-between pb-3 mb-3 border-b border-zinc-100 gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5">
+              <span className="text-2xs font-extrabold uppercase tracking-wider text-zinc-400 mr-1 flex items-center gap-1">
+                <Filter className="w-3 h-3" /> Filter:
+              </span>
+              <button
+                onClick={() => setActiveFilter('all')}
+                className={`px-2.5 py-1 rounded-lg text-2xs font-bold transition cursor-pointer ${
+                  activeFilter === 'all'
+                    ? 'bg-zinc-900 text-white shadow-2xs'
+                    : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+                }`}
+              >
+                All Active ({activeAssignments.length})
+              </button>
+              <button
+                onClick={() => setActiveFilter('temporary')}
+                className={`px-2.5 py-1 rounded-lg text-2xs font-bold transition cursor-pointer flex items-center gap-1 ${
+                  activeFilter === 'temporary'
+                    ? 'bg-amber-600 text-white shadow-2xs'
+                    : 'bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100'
+                }`}
+              >
+                <Repeat className="w-3 h-3" />
+                Temporary Replacements ({temporaryActive.length})
+              </button>
+              <button
+                onClick={() => setActiveFilter('shift')}
+                className={`px-2.5 py-1 rounded-lg text-2xs font-bold transition cursor-pointer ${
+                  activeFilter === 'shift'
+                    ? 'bg-zinc-900 text-white shadow-2xs'
+                    : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+                }`}
+              >
+                Shift Sessions ({shiftActive.length})
+              </button>
+            </div>
+          </div>
+
+          {displayedActive.length === 0 ? (
             <div className="py-8 text-center bg-zinc-50/60 rounded-xl border border-dashed border-zinc-200">
               <HardHat className="w-8 h-8 text-zinc-400 mx-auto mb-2 opacity-80" />
-              <p className="text-xs font-bold text-zinc-700">No active operator machine sessions</p>
+              <p className="text-xs font-bold text-zinc-700">No active machine sessions matching filter</p>
               <p className="text-2xs text-zinc-500 mt-0.5">
-                Approved machine assignments will appear here during live shifts.
+                Approved machine assignments will appear here during live floor shifts.
               </p>
             </div>
           ) : (
@@ -381,70 +567,104 @@ export const OperatorMachineRequestsCard: React.FC<OperatorMachineRequestsCardPr
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-zinc-200 text-2xs font-extrabold text-zinc-500 uppercase tracking-wider bg-zinc-50/80">
-                    <th className="py-2.5 px-3">Machine</th>
-                    <th className="py-2.5 px-3">Assigned Operator</th>
-                    <th className="py-2.5 px-3">Shop & Plant</th>
+                    <th className="py-2.5 px-3">Type</th>
+                    <th className="py-2.5 px-3">Working Machine</th>
+                    <th className="py-2.5 px-3">Assigned Operator &amp; Default Asset</th>
+                    <th className="py-2.5 px-3">Shop &amp; Plant</th>
                     <th className="py-2.5 px-3">Signed In At</th>
                     <th className="py-2.5 px-3 text-right">Floor Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100 text-xs">
-                  {activeAssignments.map((session) => (
-                    <tr key={session.id} className="hover:bg-zinc-50 transition">
-                      {/* Machine */}
-                      <td className="py-3 px-3">
-                        <div className="flex items-center gap-1.5 font-black text-zinc-900">
-                          <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                          <span className="px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-800 text-2xs font-mono font-bold">
-                            {session.machine_code}
-                          </span>
-                          <span>{session.machine_name}</span>
-                        </div>
-                        <div className="text-2xs text-zinc-500 mt-0.5">
-                          {session.bay_line_location || 'Shop Floor'}
-                        </div>
-                      </td>
+                  {displayedActive.map((session) => {
+                    const isTemp = session.assignment_type === 'temporary';
+                    return (
+                      <tr key={session.id} className="hover:bg-zinc-50 transition">
+                        {/* Type Badge */}
+                        <td className="py-3 px-3">
+                          {isTemp ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-2xs font-black bg-amber-100 text-amber-900 border border-amber-300">
+                              <Repeat className="w-3 h-3 text-amber-700" />
+                              TEMP REPLACEMENT
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-2xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                              <HardHat className="w-3 h-3 text-emerald-600" />
+                              ACTIVE SHIFT
+                            </span>
+                          )}
+                        </td>
 
-                      {/* Operator */}
-                      <td className="py-3 px-3">
-                        <div className="font-bold text-zinc-900">{session.operator_name || 'Operator'}</div>
-                        <div className="text-2xs text-zinc-500">
-                          ID: {session.operator_code || 'N/A'} • {session.shift || 'Shift A'}
-                        </div>
-                      </td>
+                        {/* Working Machine */}
+                        <td className="py-3 px-3">
+                          <div className="flex items-center gap-1.5 font-black text-zinc-900">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                            <span className="px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-800 text-2xs font-mono font-bold">
+                              {session.machine_code}
+                            </span>
+                            <span>{session.machine_name}</span>
+                          </div>
+                          <div className="text-2xs text-zinc-500 mt-0.5">
+                            {session.bay_line_location || 'Shop Floor'}
+                          </div>
+                          {isTemp && session.replacement_for_machine_code && (
+                            <div className="text-2xs text-amber-800 font-medium mt-0.5">
+                              Replaces broken: <span className="font-mono font-bold">{session.replacement_for_machine_code}</span>
+                            </div>
+                          )}
+                        </td>
 
-                      {/* Shop & Plant */}
-                      <td className="py-3 px-3">
-                        <div className="font-semibold text-zinc-800">{session.shop_name}</div>
-                        <div className="text-2xs text-zinc-500">{session.plant_name}</div>
-                      </td>
+                        {/* Operator */}
+                        <td className="py-3 px-3">
+                          <div className="font-bold text-zinc-900">{session.operator_name || 'Operator'}</div>
+                          <div className="text-2xs text-zinc-500">
+                            ID: {session.operator_code || 'N/A'} • {session.shift || 'Shift A'}
+                          </div>
+                          <div className="text-2xs text-zinc-400 mt-0.5">
+                            Permanent Asset:{' '}
+                            <span className="font-mono font-bold text-zinc-700">
+                              {session.permanent_machine_code || 'None'}
+                            </span>
+                          </div>
+                        </td>
 
-                      {/* Signed In At */}
-                      <td className="py-3 px-3">
-                        <div className="text-zinc-700 font-medium">
-                          {session.signed_in_at
-                            ? new Date(session.signed_in_at).toLocaleTimeString([], {
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })
-                            : 'Active'}
-                        </div>
-                        {session.approver_name && (
-                          <div className="text-2xs text-zinc-500">By {session.approver_name}</div>
-                        )}
-                      </td>
+                        {/* Shop & Plant */}
+                        <td className="py-3 px-3">
+                          <div className="font-semibold text-zinc-800">{session.shop_name}</div>
+                          <div className="text-2xs text-zinc-500">{session.plant_name}</div>
+                        </td>
 
-                      {/* Floor Action: Force Release */}
-                      <td className="py-3 px-3 text-right">
-                        <button
-                          onClick={() => setReleasingItem(session)}
-                          className="px-2.5 py-1 text-2xs font-extrabold bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-lg transition cursor-pointer"
-                        >
-                          Release Machine
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                        {/* Signed In At */}
+                        <td className="py-3 px-3">
+                          <div className="text-zinc-700 font-medium">
+                            {session.signed_in_at
+                              ? new Date(session.signed_in_at).toLocaleTimeString([], {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })
+                              : 'Active'}
+                          </div>
+                          {session.approver_name && (
+                            <div className="text-2xs text-zinc-500">By {session.approver_name}</div>
+                          )}
+                        </td>
+
+                        {/* Floor Action: Release Machine */}
+                        <td className="py-3 px-3 text-right">
+                          <button
+                            onClick={() => setReleasingItem(session)}
+                            className={`px-2.5 py-1 text-2xs font-extrabold rounded-lg transition cursor-pointer ${
+                              isTemp
+                                ? 'bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300'
+                                : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700'
+                            }`}
+                          >
+                            {isTemp ? 'Release Temporary Machine' : 'Release Machine'}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -462,16 +682,18 @@ export const OperatorMachineRequestsCard: React.FC<OperatorMachineRequestsCardPr
               </div>
               <div>
                 <h4 className="text-base font-extrabold text-zinc-900">
-                  Reject Machine Sign-In Request
+                  Reject Machine Request
                 </h4>
                 <p className="text-2xs text-zinc-500">
                   {rejectingItem.operator_name} requested machine {rejectingItem.machine_code}
+                  {rejectingItem.assignment_type === 'temporary' ? ' (Temporary Replacement)' : ''}
                 </p>
               </div>
             </div>
 
             <p className="text-xs text-zinc-600 leading-relaxed">
-              Rejecting this request will immediately release the machine reservation so other operators can access it. Please specify a reason for the operator:
+              Rejecting this request will immediately release the machine reservation so other operators can access it.
+              Please specify a reason for the operator:
             </p>
 
             {/* Quick Reason Chips */}
@@ -480,6 +702,7 @@ export const OperatorMachineRequestsCard: React.FC<OperatorMachineRequestsCardPr
                 'Assigned to different line today',
                 'Scheduled for PM / maintenance',
                 'Machine reserved for high-priority order',
+                'Permanent machine is ready to run',
                 'Shift schedule mismatch',
               ].map((chip) => (
                 <button
@@ -541,7 +764,9 @@ export const OperatorMachineRequestsCard: React.FC<OperatorMachineRequestsCardPr
               </div>
               <div>
                 <h4 className="text-base font-extrabold text-zinc-900">
-                  Release Machine Session?
+                  {releasingItem.assignment_type === 'temporary'
+                    ? 'Release Temporary Machine?'
+                    : 'Release Machine Session?'}
                 </h4>
                 <p className="text-2xs text-zinc-500">
                   {releasingItem.machine_code} ({releasingItem.operator_name})
@@ -550,8 +775,19 @@ export const OperatorMachineRequestsCard: React.FC<OperatorMachineRequestsCardPr
             </div>
 
             <p className="text-xs text-zinc-600 leading-relaxed">
-              Are you sure you want to release machine <strong>{releasingItem.machine_code}</strong>?
-              This will end the active operator floor session and return the machine to available status.
+              {releasingItem.assignment_type === 'temporary' ? (
+                <>
+                  Are you sure you want to release temporary machine{' '}
+                  <strong>{releasingItem.machine_code}</strong>? This will release the temporary machine back to available status, allowing operator{' '}
+                  <strong>{releasingItem.operator_name}</strong> to return to their permanent machine (
+                  <strong>{releasingItem.permanent_machine_code || 'Permanent Asset'}</strong>).
+                </>
+              ) : (
+                <>
+                  Are you sure you want to release machine <strong>{releasingItem.machine_code}</strong>?
+                  This will end the active operator floor session and return the machine to available status.
+                </>
+              )}
             </p>
 
             <div className="flex items-center justify-end gap-2 pt-2">
