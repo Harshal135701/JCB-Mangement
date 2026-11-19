@@ -21,6 +21,8 @@ import { MachineStatusDonut } from '../../components/dashboard/MachineStatusDonu
 import { MaintenanceTrendChart, TrendDataPoint } from '../../components/dashboard/MaintenanceTrendChart';
 import { DowntimeAnalysisCard } from '../../components/dashboard/DowntimeAnalysisCard';
 import { BreakdownReportModal } from '../breakdowns/components/BreakdownReportModal';
+import { OperatorMachineSignInCard } from './components/OperatorMachineSignInCard';
+import { OperatorMachineAssignment } from './types/operator-assignment.types';
 
 export const OperatorDashboard: React.FC = () => {
   const { user } = useAuth();
@@ -31,6 +33,8 @@ export const OperatorDashboard: React.FC = () => {
   const [myComplaints, setMyComplaints] = useState<any[]>([]);
   const [recentInspections, setRecentInspections] = useState<any[]>([]);
   const [hierarchy, setHierarchy] = useState<any>(null);
+  const [currentAssignment, setCurrentAssignment] = useState<OperatorMachineAssignment | null>(null);
+  const [recentRejected, setRecentRejected] = useState<OperatorMachineAssignment | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
@@ -53,7 +57,7 @@ export const OperatorDashboard: React.FC = () => {
       const shopParam = user?.shopId || undefined;
       const plantParam = plant !== 'All Plants' ? plant : user?.plantId || undefined;
 
-      const [machRes, complaintsRes, inspectRes, orgRes] = await Promise.all([
+      const [machRes, complaintsRes, inspectRes, orgRes, assignRes] = await Promise.all([
         apiClient.get('/machines', {
           params: { shop_id: shopParam, plant_id: plantParam, limit: 20 },
         }),
@@ -64,12 +68,15 @@ export const OperatorDashboard: React.FC = () => {
           params: { limit: 10 },
         }),
         apiClient.get('/org/hierarchy'),
+        apiClient.get('/machines/operator/current-assignment').catch(() => ({ data: { data: {} } })),
       ]);
 
       setMachines(machRes.data?.data || []);
       setMyComplaints(complaintsRes.data?.data || []);
       setRecentInspections(inspectRes.data?.data || []);
       setHierarchy(orgRes.data?.data || null);
+      setCurrentAssignment(assignRes.data?.data?.currentAssignment || null);
+      setRecentRejected(assignRes.data?.data?.recentRejected || null);
     } catch (err: any) {
       console.error('Failed to load operator console:', err);
       setError(
@@ -126,8 +133,19 @@ export const OperatorDashboard: React.FC = () => {
     return list;
   }, [hierarchy]);
 
-  // 1. Operator's Assigned Machine
-  const assignedMachine = machines.length > 0 ? machines[0] : null;
+  // 1. Operator's Assigned Machine: strictly prioritize active assignment session
+  const assignedMachine =
+    currentAssignment && currentAssignment.status === 'approved'
+      ? {
+          id: currentAssignment.machine_id,
+          machine_code: currentAssignment.machine_code,
+          name: currentAssignment.machine_name,
+          status: currentAssignment.machine_status || 'running',
+          operating_hours: currentAssignment.operating_hours,
+        }
+      : machines.length > 0
+      ? machines[0]
+      : null;
   const assignedAssetCode = assignedMachine?.machine_code || assignedMachine?.name || 'None Assigned';
   const assignedAssetStatus = (assignedMachine?.status || 'unknown').toUpperCase();
   const machineRunHours =
@@ -317,6 +335,15 @@ export const OperatorDashboard: React.FC = () => {
           </button>
         </div>
       )}
+
+      {/* Operator Machine Selection & Manager Approval Workflow Card */}
+      <OperatorMachineSignInCard
+        currentAssignment={currentAssignment}
+        recentRejected={recentRejected}
+        hierarchy={hierarchy}
+        user={user}
+        onAssignmentChange={fetchData}
+      />
 
       {/* =========================================================================
           ROW 1: 4 TOP KPI METRIC CARDS (Essential & Simplified)

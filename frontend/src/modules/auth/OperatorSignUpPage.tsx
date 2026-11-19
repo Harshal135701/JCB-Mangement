@@ -19,6 +19,7 @@ import {
   Briefcase,
   Clock,
   ShieldAlert,
+  Cpu,
 } from 'lucide-react';
 
 interface PlantOption {
@@ -35,6 +36,42 @@ interface ShopOption {
   shop_code: string;
   shop_name: string;
 }
+
+interface MachineOption {
+  id: string;
+  machine_code: string;
+  name: string;
+  status: string;
+  category: string;
+  criticality: string;
+  bay_line_location: string | null;
+  shop_id: string;
+}
+
+// Format readable machine status for display
+const formatReadableStatus = (status?: string | null): string => {
+  if (!status) return 'Active';
+  const s = status.trim().toLowerCase();
+  switch (s) {
+    case 'running':
+    case 'active':
+      return 'Active';
+    case 'idle':
+      return 'Idle';
+    case 'under_maintenance':
+    case 'maintenance':
+      return 'Maintenance';
+    case 'breakdown':
+      return 'Breakdown';
+    case 'inactive':
+    case 'decommissioned':
+      return 'Inactive';
+    case 'awaiting_verification':
+      return 'Awaiting Verification';
+    default:
+      return status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+};
 
 export const OperatorSignUpPage: React.FC = () => {
   const navigate = useNavigate();
@@ -64,6 +101,11 @@ export const OperatorSignUpPage: React.FC = () => {
   const [plants, setPlants] = useState<PlantOption[]>([]);
   const [shops, setShops] = useState<ShopOption[]>([]);
 
+  // Machine Options (All active, inactive, breakdown, and maintenance machines)
+  const [machines, setMachines] = useState<MachineOption[]>([]);
+  const [selectedMachineId, setSelectedMachineId] = useState<string>('');
+  const [loadingMachines, setLoadingMachines] = useState(false);
+
   // Load plants and initial shops on mount
   useEffect(() => {
     const fetchOrgData = async () => {
@@ -74,21 +116,25 @@ export const OperatorSignUpPage: React.FC = () => {
           const plantsList: PlantOption[] = res.data.data.plants || [];
           setPlants(plantsList);
 
-          if (plantsList.length > 0) {
-            const firstPlant = plantsList[0];
-            setPlantId(firstPlant.id);
+          const allShops: ShopOption[] = res.data.data.shops || [];
 
-            // Filter shops for first plant if available in response
-            if (Array.isArray(res.data.data.shops)) {
-              const plantShops = res.data.data.shops.filter(
-                (s: ShopOption) => s.plant_id === firstPlant.id
-              );
-              setShops(plantShops);
-              if (plantShops.length > 0) {
-                setShopId(plantShops[0].id);
-              }
+          if (plantsList.length > 0) {
+            // Find first plant that actually has registered shops available, fallback to first plant
+            const initialPlant =
+              plantsList.find((p) => allShops.some((s) => s.plant_id === p.id)) ||
+              plantsList[0];
+            setPlantId(initialPlant.id);
+
+            // Filter shops for the selected initial plant
+            const plantShops = allShops.filter(
+              (s: ShopOption) => s.plant_id === initialPlant.id
+            );
+            setShops(plantShops);
+            if (plantShops.length > 0) {
+              const firstShop = plantShops[0];
+              setShopId(firstShop.id);
             } else {
-              fetchShopsForPlant(firstPlant.id);
+              setShopId('');
             }
           }
         }
@@ -103,31 +149,73 @@ export const OperatorSignUpPage: React.FC = () => {
   }, []);
 
   // Fetch shops when plant changes
-  const fetchShopsForPlant = async (selectedPlant: string) => {
-    if (!selectedPlant) {
+  const handlePlantChange = async (newPlantId: string) => {
+    setPlantId(newPlantId);
+    setSelectedMachineId('');
+    if (!newPlantId) {
       setShops([]);
       setShopId('');
+      setMachines([]);
       return;
     }
     try {
-      const res = await apiClient.get(`/auth/plants/${selectedPlant}/shops`);
+      const res = await apiClient.get(`/auth/plants/${newPlantId}/shops`);
       if (res.data.success && Array.isArray(res.data.data)) {
-        setShops(res.data.data);
-        if (res.data.data.length > 0) {
-          setShopId(res.data.data[0].id);
+        const newShops = res.data.data;
+        setShops(newShops);
+        if (newShops.length > 0) {
+          setShopId(newShops[0].id);
         } else {
           setShopId('');
+          setMachines([]);
         }
       }
     } catch (err) {
       console.warn('Failed to fetch shops for plant:', err);
+      setShops([]);
+      setShopId('');
+      setMachines([]);
     }
   };
 
-  const handlePlantChange = (newPlantId: string) => {
-    setPlantId(newPlantId);
-    fetchShopsForPlant(newPlantId);
+  const handleShopChange = (newShopId: string) => {
+    setShopId(newShopId);
+    setSelectedMachineId('');
   };
+
+  // Fetch machines for selected shop (all statuses: active, inactive, breakdown, under_maintenance)
+  const fetchMachinesForShop = async (targetShopId: string) => {
+    if (!targetShopId) {
+      setMachines([]);
+      setSelectedMachineId('');
+      return;
+    }
+    try {
+      setLoadingMachines(true);
+      const res = await apiClient.get(`/auth/shops/${targetShopId}/machines`);
+      if (res.data.success && Array.isArray(res.data.data)) {
+        setMachines(res.data.data);
+      } else {
+        setMachines([]);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch machines for shop:', err);
+      setMachines([]);
+    } finally {
+      setLoadingMachines(false);
+    }
+  };
+
+  // Whenever selected shop changes, reload the machine list
+  useEffect(() => {
+    if (shopId) {
+      fetchMachinesForShop(shopId);
+      setSelectedMachineId('');
+    } else {
+      setMachines([]);
+      setSelectedMachineId('');
+    }
+  }, [shopId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -186,15 +274,20 @@ export const OperatorSignUpPage: React.FC = () => {
         designation: designation.trim() || 'Machine Operator',
         shift: shift || 'Shift A',
         password,
+        requested_machine_id: selectedMachineId || undefined,
       };
 
       const res = await apiClient.post('/auth/register-operator', payload);
 
       if (res.data.success) {
+        const pickedMachine = machines.find((m) => m.id === selectedMachineId);
         setSubmittedUser({
           ...res.data.data,
           plantName: plants.find((p) => p.id === plantId)?.plant_name,
           shopName: shops.find((s) => s.id === shopId)?.shop_name,
+          requestedMachine: pickedMachine
+            ? `${pickedMachine.machine_code} - ${pickedMachine.name} [${formatReadableStatus(pickedMachine.status)}]`
+            : 'None specified (General shift pool)',
         });
       }
     } catch (err: any) {
@@ -290,6 +383,10 @@ export const OperatorSignUpPage: React.FC = () => {
               <div className="flex justify-between items-center pb-2 border-b border-zinc-200">
                 <span className="text-zinc-500 font-semibold">Shop Floor</span>
                 <span className="font-semibold text-zinc-800">{submittedUser.shopName || 'Assigned Shop'}</span>
+              </div>
+              <div className="flex justify-between items-center pb-2 border-b border-zinc-200">
+                <span className="text-zinc-500 font-semibold">Preferred Machine</span>
+                <span className="font-bold text-amber-900">{submittedUser.requestedMachine}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-zinc-500 font-semibold">Initial Shift</span>
@@ -453,7 +550,7 @@ export const OperatorSignUpPage: React.FC = () => {
                       required
                       disabled={loading || loadingOrg || shops.length === 0}
                       value={shopId}
-                      onChange={(e) => setShopId(e.target.value)}
+                      onChange={(e) => handleShopChange(e.target.value)}
                       className="w-full pl-9 pr-3 py-2 bg-white border border-[#D1D5DB] rounded-xl text-xs font-bold text-zinc-900 focus:outline-none focus:border-[#F9B101] focus:ring-2 focus:ring-[#F9B101]/20 transition shadow-2xs"
                     >
                       {shops.length === 0 ? (
@@ -467,6 +564,49 @@ export const OperatorSignUpPage: React.FC = () => {
                       )}
                     </select>
                   </div>
+                </div>
+
+                {/* Preferred Machine Selection */}
+                <div className="sm:col-span-2">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-[11px] font-bold text-zinc-700 uppercase tracking-wider">
+                      Preferred Machine Request
+                    </label>
+                    <span className="text-[10px] text-zinc-500 font-medium">
+                      Preference only • Manager confirms on shift sign-in
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <Cpu className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <select
+                      disabled={loading || loadingOrg || loadingMachines || !shopId}
+                      value={selectedMachineId}
+                      onChange={(e) => setSelectedMachineId(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2 bg-white border border-[#D1D5DB] rounded-xl text-xs font-medium text-zinc-900 focus:outline-none focus:border-[#F9B101] focus:ring-2 focus:ring-[#F9B101]/20 transition shadow-2xs"
+                    >
+                      <option value="">-- No specific machine (General shift pool) --</option>
+                      {loadingMachines ? (
+                        <option value="" disabled>Loading shop machines...</option>
+                      ) : machines.length === 0 ? (
+                        <option value="" disabled>No machines registered under this shop</option>
+                      ) : (
+                        machines.map((m) => {
+                          const readableStatus = formatReadableStatus(m.status);
+                          const locationText = m.bay_line_location
+                            ? ` • Location: ${m.bay_line_location}`
+                            : ' • Location: Shop Floor';
+                          return (
+                            <option key={m.id} value={m.id}>
+                              {m.machine_code} — {m.name} [{readableStatus}]{locationText}
+                            </option>
+                          );
+                        })
+                      )}
+                    </select>
+                  </div>
+                  <p className="mt-1 text-[10px] text-zinc-500">
+                    Shows all shop equipment including active, maintenance, and breakdown units. Selecting does not occupy or reserve the machine.
+                  </p>
                 </div>
 
                 {/* Department */}

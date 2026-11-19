@@ -26,6 +26,7 @@ import { WorkOrderStatusDonut } from '../../components/dashboard/WorkOrderStatus
 import { StaffAvailabilityCard, StaffMember } from '../../components/dashboard/StaffAvailabilityCard';
 import { SparePartsSummaryCard, SparePartsSummaryData } from '../../components/dashboard/SparePartsSummaryCard';
 import { WorkOrdersQueueTable } from '../../components/dashboard/WorkOrdersQueueTable';
+import { OperatorMachineRequestsCard } from './components/OperatorMachineRequestsCard';
 
 export const LiveShopFloorDashboard: React.FC = () => {
   const { socket, isConnected } = useSocket();
@@ -331,6 +332,9 @@ export const LiveShopFloorDashboard: React.FC = () => {
         overdueWorkOrdersCount={overdueWorkOrders}
         lowStockPartsCount={lowStockCount}
       />
+
+      {/* Operator Machine Sign-In & Floor Supervision Station */}
+      <OperatorMachineRequestsCard selectedPlantId={selectedPlantId} />
 
       {/* =========================================================================
           ROW 1: COMPACT KPI STRIP (6 Metrics in a single balanced row)

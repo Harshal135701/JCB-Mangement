@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import apiClient from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
+import { useSocket } from '../../context/SocketContext';
 import {
   UserPlus,
   Search,
@@ -26,10 +27,12 @@ import {
   UserX,
   Check,
   Loader2,
+  Cpu,
 } from 'lucide-react';
 
 export const UserManagementPage: React.FC = () => {
   const { user } = useAuth();
+  const { socket } = useSocket();
   const location = useLocation();
   const isAdmin = user?.role === 'admin';
   const isManager = user?.role === 'manager';
@@ -176,10 +179,17 @@ export const UserManagementPage: React.FC = () => {
     }
   };
 
-  const fetchPendingOperators = async () => {
+  const fetchPendingOperators = async (plantIdToFilter?: string) => {
     try {
       setLoadingPending(true);
-      const res = await apiClient.get('/auth/pending-operators');
+      const targetPlant =
+        plantIdToFilter !== undefined
+          ? plantIdToFilter
+          : isAdmin && selectedPlantId && selectedPlantId !== 'all'
+          ? selectedPlantId
+          : '';
+      const url = targetPlant ? `/auth/pending-operators?plant_id=${targetPlant}` : '/auth/pending-operators';
+      const res = await apiClient.get(url);
       if (res.data.success && Array.isArray(res.data.data)) {
         setPendingOperators(res.data.data);
       } else {
@@ -258,13 +268,39 @@ export const UserManagementPage: React.FC = () => {
 
   useEffect(() => {
     fetchUsers();
-  }, [selectedPlantId]);
+    if (activeTab === 'pending' && (isAdmin || isManager)) {
+      fetchPendingOperators();
+    }
+  }, [selectedPlantId, activeTab]);
 
   useEffect(() => {
     if (location.search.includes('tab=pending')) {
       setActiveTab('pending');
+      fetchPendingOperators();
     }
   }, [location.search]);
+
+  // Real-time socket notification handler: auto-refresh pending list when an operator signs up
+  useEffect(() => {
+    if (!socket || (!isAdmin && !isManager)) return;
+    const handleNotification = (notif: any) => {
+      if (
+        notif?.entity_type === 'user_approval' ||
+        notif?.type === 'approval' ||
+        (typeof notif?.message === 'string' && notif.message.toLowerCase().includes('operator'))
+      ) {
+        fetchPendingOperators();
+      }
+    };
+
+    socket.on('notification:new', handleNotification);
+    socket.on('notification', handleNotification);
+
+    return () => {
+      socket.off('notification:new', handleNotification);
+      socket.off('notification', handleNotification);
+    };
+  }, [socket, isAdmin, isManager, selectedPlantId]);
 
   const openCreateModal = (presetRole: string = 'technician') => {
     setEditingUser(null);
@@ -948,7 +984,7 @@ export const UserManagementPage: React.FC = () => {
             </div>
 
             <button
-              onClick={fetchPendingOperators}
+              onClick={() => fetchPendingOperators()}
               disabled={loadingPending}
               className="self-start sm:self-auto px-3.5 py-1.5 bg-white hover:bg-zinc-100 text-zinc-700 border border-zinc-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm disabled:opacity-50 cursor-pointer"
             >
@@ -986,6 +1022,7 @@ export const UserManagementPage: React.FC = () => {
                   <tr className="bg-zinc-100/80 border-b border-zinc-200 text-zinc-600 uppercase text-[10px] font-black tracking-wider">
                     <th className="py-3 px-4">Operator Name &amp; ID</th>
                     <th className="py-3 px-4">Facility &amp; Shop</th>
+                    <th className="py-3 px-4">Requested Machine</th>
                     <th className="py-3 px-4">Shift &amp; Role</th>
                     <th className="py-3 px-4">Contact Details</th>
                     <th className="py-3 px-4">Department / Designation</th>
@@ -1016,6 +1053,46 @@ export const UserManagementPage: React.FC = () => {
                         <div className="text-[11px] text-zinc-600 font-medium mt-0.5">
                           Shop: {op.shop_name || 'Assigned Shop'}
                         </div>
+                      </td>
+
+                      <td className="py-3.5 px-4">
+                        {op.requested_machine_code ? (
+                          <div>
+                            <div className="font-bold text-zinc-900 text-xs flex items-center gap-1.5">
+                              <Cpu className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                              <span className="font-mono">{op.requested_machine_code}</span>
+                            </div>
+                            <div className="text-[11px] text-zinc-600 truncate max-w-[150px]">
+                              {op.requested_machine_name || 'Machine'}
+                            </div>
+                            {op.requested_machine_location && (
+                              <div className="text-[10px] text-zinc-500 font-mono mt-0.5 truncate max-w-[150px]">
+                                Loc: {op.requested_machine_location}
+                              </div>
+                            )}
+                            <span
+                              className={`inline-block mt-1 px-1.5 py-0.5 text-[9px] font-bold rounded uppercase tracking-wider ${
+                                op.requested_machine_status === 'active' ||
+                                op.requested_machine_status === 'idle' ||
+                                op.requested_machine_status === 'running'
+                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                  : op.requested_machine_status === 'under_maintenance'
+                                  ? 'bg-purple-100 text-purple-800 border border-purple-300'
+                                  : op.requested_machine_status === 'breakdown'
+                                  ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                                  : 'bg-zinc-100 text-zinc-700 border border-zinc-300'
+                              }`}
+                            >
+                              {op.requested_machine_status
+                                ? op.requested_machine_status === 'running'
+                                  ? 'Active'
+                                  : op.requested_machine_status.replace(/_/g, ' ')
+                                : 'N/A'}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-zinc-400 italic text-[11px]">None specified</span>
+                        )}
                       </td>
 
                       <td className="py-3.5 px-4">
@@ -1514,6 +1591,12 @@ export const UserManagementPage: React.FC = () => {
                 <strong className="text-zinc-950 font-black">
                   {rejectingUser.full_name} ({rejectingUser.employee_code})
                 </strong>
+                {rejectingUser.requested_machine_code && (
+                  <span>
+                    {' '}• Requested Machine:{' '}
+                    <strong className="font-mono text-zinc-900">{rejectingUser.requested_machine_code}</strong>
+                  </span>
+                )}
                 . Their account will remain deactivated and portal access will be denied.
               </p>
 
