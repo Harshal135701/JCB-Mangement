@@ -559,40 +559,52 @@ export const DowntimeAnalyticsPage: React.FC = () => {
       </div>
 
       {/* Tab Navigation Navigation Controls */}
-      <div className="flex items-center gap-2 border-b-2 border-zinc-200 pb-2">
+      <div className="flex items-center gap-2 border-b-2 border-zinc-200 pb-2 overflow-x-auto">
         <button
+          type="button"
           onClick={() => setActiveTab('overview')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shrink-0 whitespace-nowrap ${
             activeTab === 'overview'
-              ? 'bg-zinc-950 text-white shadow'
-              : 'text-zinc-600 hover:text-zinc-950 hover:bg-zinc-100'
+              ? 'bg-amber-500 text-black shadow-xs font-black border border-amber-600/40'
+              : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50 hover:text-zinc-950 font-bold shadow-2xs'
           }`}
         >
-          <BarChart2 className="w-4 h-4 text-jcb-yellow" />
+          <BarChart2 className={`w-4 h-4 ${activeTab === 'overview' ? 'text-black' : 'text-amber-500'}`} />
           <span>Pareto & Root Cause Analytics</span>
         </button>
 
         <button
+          type="button"
           onClick={() => setActiveTab('incidents')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shrink-0 whitespace-nowrap ${
             activeTab === 'incidents'
-              ? 'bg-zinc-950 text-white shadow'
-              : 'text-zinc-600 hover:text-zinc-950 hover:bg-zinc-100'
+              ? 'bg-amber-500 text-black shadow-xs font-black border border-amber-600/40'
+              : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50 hover:text-zinc-950 font-bold shadow-2xs'
           }`}
         >
-          <FileText className="w-4 h-4 text-jcb-yellow" />
-          <span>Stoppage Incidents Log ({recordsTotal || summary?.total_breakdown_incidents || 0})</span>
+          <FileText className={`w-4 h-4 ${activeTab === 'incidents' ? 'text-black' : 'text-amber-500'}`} />
+          <span>Stoppage Incidents Log</span>
+          <span
+            className={`px-2 py-0.5 rounded-full text-[10px] ${
+              activeTab === 'incidents'
+                ? 'bg-black text-amber-400 font-black'
+                : 'bg-zinc-100 text-zinc-700 border border-zinc-200 font-bold'
+            }`}
+          >
+            {recordsTotal || summary?.total_breakdown_incidents || 0}
+          </span>
         </button>
 
         <button
+          type="button"
           onClick={() => setActiveTab('assets')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shrink-0 whitespace-nowrap ${
             activeTab === 'assets'
-              ? 'bg-zinc-950 text-white shadow'
-              : 'text-zinc-600 hover:text-zinc-950 hover:bg-zinc-100'
+              ? 'bg-amber-500 text-black shadow-xs font-black border border-amber-600/40'
+              : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50 hover:text-zinc-950 font-bold shadow-2xs'
           }`}
         >
-          <Cpu className="w-4 h-4 text-jcb-yellow" />
+          <Cpu className={`w-4 h-4 ${activeTab === 'assets' ? 'text-black' : 'text-amber-500'}`} />
           <span>Asset Availability & MTBF Matrix</span>
         </button>
       </div>

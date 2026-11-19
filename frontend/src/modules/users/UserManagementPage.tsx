@@ -1089,22 +1089,23 @@ export const UserManagementPage: React.FC = () => {
       {activeTab === 'pending' && (
         <div className="bg-white rounded-2xl border-2 border-zinc-200 overflow-hidden shadow-sm">
           {/* Sub-tab Switcher: Operator Registrations vs Temporary Machine Requests */}
-          <div className="flex items-center gap-2 px-5 pt-3.5 bg-zinc-50 border-b border-zinc-200">
+          <div className="flex items-center gap-2 px-5 py-3 bg-zinc-50 border-b border-zinc-200 overflow-x-auto">
             <button
+              type="button"
               onClick={() => setPendingSubTab('operators')}
-              className={`flex items-center gap-2 px-4 py-2.5 text-xs font-black border-b-2 transition-all cursor-pointer ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shrink-0 whitespace-nowrap ${
                 pendingSubTab === 'operators'
-                  ? 'border-amber-500 text-zinc-950 bg-white rounded-t-xl shadow-xs'
-                  : 'border-transparent text-zinc-500 hover:text-zinc-800'
+                  ? 'bg-amber-500 text-black shadow-xs font-black border border-amber-600/40'
+                  : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50 hover:text-zinc-950 font-bold shadow-2xs'
               }`}
             >
-              <HardHat className="w-4 h-4 text-amber-600" />
+              <HardHat className={`w-4 h-4 ${pendingSubTab === 'operators' ? 'text-black' : 'text-amber-600'}`} />
               <span>Operator Registrations</span>
               <span
                 className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                  pendingOperators.length > 0
-                    ? 'bg-amber-100 text-amber-950 border border-amber-300'
-                    : 'bg-zinc-200 text-zinc-600'
+                  pendingSubTab === 'operators'
+                    ? 'bg-black text-amber-400'
+                    : 'bg-amber-100 text-amber-950 border border-amber-300'
                 }`}
               >
                 {pendingOperators.length}
@@ -1112,20 +1113,21 @@ export const UserManagementPage: React.FC = () => {
             </button>
 
             <button
+              type="button"
               onClick={() => setPendingSubTab('temporary')}
-              className={`flex items-center gap-2 px-4 py-2.5 text-xs font-black border-b-2 transition-all cursor-pointer ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shrink-0 whitespace-nowrap ${
                 pendingSubTab === 'temporary'
-                  ? 'border-amber-500 text-zinc-950 bg-white rounded-t-xl shadow-xs'
-                  : 'border-transparent text-zinc-500 hover:text-zinc-800'
+                  ? 'bg-amber-500 text-black shadow-xs font-black border border-amber-600/40'
+                  : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50 hover:text-zinc-950 font-bold shadow-2xs'
               }`}
             >
-              <Repeat className="w-4 h-4 text-amber-600" />
+              <Repeat className={`w-4 h-4 ${pendingSubTab === 'temporary' ? 'text-black' : 'text-amber-600'}`} />
               <span>Temporary Machine Requests</span>
               <span
                 className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                  pendingTempRequests.length > 0
-                    ? 'bg-amber-100 text-amber-950 border border-amber-300 animate-pulse'
-                    : 'bg-zinc-200 text-zinc-600'
+                  pendingSubTab === 'temporary'
+                    ? 'bg-black text-amber-400'
+                    : 'bg-amber-100 text-amber-950 border border-amber-300'
                 }`}
               >
                 {pendingTempRequests.length}

@@ -1435,20 +1435,25 @@ export const ProcurementPage: React.FC = () => {
       )}
 
       {/* Navigation Tabs */}
-      <div className="flex items-center gap-2 border-b-2 border-zinc-200 pb-1 overflow-x-auto">
+      <div className="flex items-center gap-2 border-b-2 border-zinc-200 pb-2 overflow-x-auto">
         <button
+          type="button"
           onClick={() => setActiveTab('prs')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${activeTab === 'prs'
-            ? 'bg-zinc-900 text-white shadow'
-            : 'text-zinc-600 hover:text-black hover:bg-zinc-100'
-            }`}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shrink-0 whitespace-nowrap ${
+            activeTab === 'prs'
+              ? 'bg-amber-500 text-black shadow-xs font-black border border-amber-600/40'
+              : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50 hover:text-zinc-950 font-bold shadow-2xs'
+          }`}
         >
           <ShoppingCart className="w-4 h-4" />
           <span>Part Requests (PRs)</span>
           {totalPRCount > 0 && (
             <span
-              className={`px-2 py-0.5 rounded-full text-[10px] ${activeTab === 'prs' ? 'bg-jcb-yellow text-black' : 'bg-zinc-200 text-zinc-700'
-                }`}
+              className={`px-2 py-0.5 rounded-full text-[10px] ${
+                activeTab === 'prs'
+                  ? 'bg-black text-amber-400 font-black'
+                  : 'bg-zinc-100 text-zinc-700 border border-zinc-200 font-bold'
+              }`}
             >
               {totalPRCount}
             </span>
@@ -1456,17 +1461,22 @@ export const ProcurementPage: React.FC = () => {
         </button>
 
         <button
+          type="button"
           onClick={() => setActiveTab('pos')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${activeTab === 'pos'
-            ? 'bg-zinc-900 text-white shadow'
-            : 'text-zinc-600 hover:text-black hover:bg-zinc-100'
-            }`}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shrink-0 whitespace-nowrap ${
+            activeTab === 'pos'
+              ? 'bg-amber-500 text-black shadow-xs font-black border border-amber-600/40'
+              : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50 hover:text-zinc-950 font-bold shadow-2xs'
+          }`}
         >
           <FileText className="w-4 h-4" />
           <span>Purchase Orders (POs)</span>
           <span
-            className={`px-2 py-0.5 rounded-full text-[10px] ${activeTab === 'pos' ? 'bg-blue-400 text-black' : 'bg-zinc-200 text-zinc-700'
-              }`}
+            className={`px-2 py-0.5 rounded-full text-[10px] ${
+              activeTab === 'pos'
+                ? 'bg-black text-amber-400 font-black'
+                : 'bg-zinc-100 text-zinc-700 border border-zinc-200 font-bold'
+            }`}
           >
             {dashboardData?.summary?.active_pos ?? 0}
           </span>
@@ -1474,11 +1484,13 @@ export const ProcurementPage: React.FC = () => {
 
         {isManager && (
           <button
+            type="button"
             onClick={() => setActiveTab('vendors')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${activeTab === 'vendors'
-              ? 'bg-zinc-900 text-white shadow'
-              : 'text-zinc-600 hover:text-black hover:bg-zinc-100'
-              }`}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shrink-0 whitespace-nowrap ${
+              activeTab === 'vendors'
+                ? 'bg-amber-500 text-black shadow-xs font-black border border-amber-600/40'
+                : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50 hover:text-zinc-950 font-bold shadow-2xs'
+            }`}
           >
             <Building className="w-4 h-4" />
             <span>Vendors / Suppliers</span>
@@ -1487,15 +1499,23 @@ export const ProcurementPage: React.FC = () => {
 
         {isManager && (dashboardData?.summary?.overdue_pos ?? 0) > 0 && (
           <button
+            type="button"
             onClick={() => setActiveTab('analytics')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${activeTab === 'analytics'
-              ? 'bg-red-600 text-white shadow'
-              : 'text-red-700 hover:bg-red-50'
-              }`}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shrink-0 whitespace-nowrap ${
+              activeTab === 'analytics'
+                ? 'bg-rose-600 text-white shadow-xs font-black border border-rose-700'
+                : 'bg-white text-rose-700 border border-rose-200 hover:bg-rose-50 font-bold shadow-2xs'
+            }`}
           >
             <AlertTriangle className="w-4 h-4" />
             <span>Overdue Alerts</span>
-            <span className="bg-white text-red-700 px-2 py-0.5 rounded-full text-[10px] font-black">
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                activeTab === 'analytics'
+                  ? 'bg-white text-rose-700'
+                  : 'bg-rose-100 text-rose-800 border border-rose-200'
+              }`}
+            >
               {dashboardData?.summary?.overdue_pos ?? 0}
             </span>
           </button>
