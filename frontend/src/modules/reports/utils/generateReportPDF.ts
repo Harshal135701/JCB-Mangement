@@ -91,20 +91,6 @@ export function generateReportPDF(options: GenerateReportPDFOptions): string {
     doc.text('JCB', margin + 3.5, currentY + 7);
   }
 
-  // Title & Subtitle beside logo
-  doc.setTextColor(15, 23, 42); // slate-900
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
-  doc.text('SMART CMMS', margin + 32, currentY + 5);
-
-  doc.setTextColor(100, 116, 139); // slate-500
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
-  const subtitle = options.machineSubject
-    ? 'Machine Maintenance Management System • Equipment Operational Performance Summary'
-    : 'Machine Maintenance Management System • Operational Performance Summary';
-  doc.text(subtitle, margin + 32, currentY + 9);
-
   // Real-time Stamp on Top-Right
   const now = new Date();
   const printDateStr = now.toLocaleDateString('en-IN', {
@@ -243,9 +229,32 @@ export function generateReportPDF(options: GenerateReportPDFOptions): string {
 
     doc.setTextColor(15, 23, 42);
     doc.setFont('helvetica', 'bold');
+    
+    const formatDisplayDate = (dStr?: string): string => {
+      if (!dStr) return '';
+      try {
+        const parts = dStr.split('-');
+        if (parts.length === 3) {
+          const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+          return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+        }
+        return new Date(dStr).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+      } catch {
+        return dStr;
+      }
+    };
+
     let periodText = 'All Historic Records';
-    if (options.dateRange?.startDate || options.dateRange?.endDate) {
-      periodText = `${options.dateRange.startDate || 'Start'} to ${options.dateRange.endDate || 'Present'}`;
+    if (options.dateRange?.startDate && options.dateRange?.endDate) {
+      if (options.dateRange.startDate === options.dateRange.endDate) {
+        periodText = formatDisplayDate(options.dateRange.startDate);
+      } else {
+        periodText = `${formatDisplayDate(options.dateRange.startDate)} - ${formatDisplayDate(options.dateRange.endDate)}`;
+      }
+    } else if (options.dateRange?.startDate) {
+      periodText = `From ${formatDisplayDate(options.dateRange.startDate)}`;
+    } else if (options.dateRange?.endDate) {
+      periodText = `Up to ${formatDisplayDate(options.dateRange.endDate)}`;
     }
     doc.text(periodText, col3X, currentY + 9);
 

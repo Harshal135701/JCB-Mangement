@@ -21,6 +21,7 @@ import {
   Building2,
   Check,
   Info,
+  Calendar,
 } from 'lucide-react';
 import {
   fetchUsersByRole,
@@ -232,7 +233,7 @@ export const ReportsPage: React.FC = () => {
     }
   }, [user, userRole, activeTab, selectedUser, selectedMachine, startDate, endDate]);
 
-  // Trigger report fetch when on self tabs or when an item is selected
+  // Trigger report fetch when on self tabs, when an item is selected, or when date filter changes
   useEffect(() => {
     if (userRole === 'technician' || userRole === 'operator' || userRole === 'store_manager') {
       handleGenerateReport();
@@ -246,14 +247,18 @@ export const ReportsPage: React.FC = () => {
     } else if (activeTab === 'machines' && selectedMachine) {
       handleGenerateReport();
     }
-  }, [userRole, activeTab, selectedUser, selectedMachine, handleGenerateReport]);
+  }, [userRole, activeTab, selectedUser, selectedMachine, startDate, endDate, handleGenerateReport]);
 
   // Algorithmic summary paragraph generator strictly using verified system records
   const generateOverallSummary = (role: string, targetName: string, stats: any): string => {
     const s = stats || {};
+    const dateQualifier = (startDate || endDate)
+      ? ` for the period ${startDate && endDate ? `${startDate} to ${endDate}` : startDate ? `from ${startDate}` : `up to ${endDate}`}`
+      : '';
+
     if (role === 'technician') {
       return (
-        `During this reporting period, technician ${targetName} was assigned a total of ${s.totalAssigned || 0} ` +
+        `During this reporting period${dateQualifier}, technician ${targetName} was assigned a total of ${s.totalAssigned || 0} ` +
         `work orders across plant machinery. A total of ${s.verifiedAndClosed || 0} maintenance actions were successfully ` +
         `verified and closed, with ${s.acceptedOrInProgress || 0} repair tasks currently active and ${s.waitingForParts || 0} ` +
         `awaiting spare parts from stores. Cumulative downtime resolved across these work orders totals ${s.totalDowntimeHours || 0} ` +
@@ -261,7 +266,7 @@ export const ReportsPage: React.FC = () => {
       );
     } else if (role === 'operator') {
       return (
-        `Operator ${targetName} conducted a total of ${s.totalInspections || 0} pre-shift safety inspections across ` +
+        `Operator ${targetName} conducted a total of ${s.totalInspections || 0} pre-shift safety inspections${dateQualifier} across ` +
         `${s.machinesOperatedCount || 1} unique production machinery assets. Inspection evaluations recorded ${s.passed || 0} passed ` +
         `evaluations, ${s.requiringAttention || 0} checkpoints flagged for preventive attention, and ${s.failed || 0} failed assessments ` +
         `resulting in ${s.breakdownsReported || 0} reported breakdown complaints. Inspection logs confirm consistent daily compliance.`
@@ -270,12 +275,12 @@ export const ReportsPage: React.FC = () => {
       return (
         `Store manager ${targetName} supervised warehouse operations encompassing ${s.totalItemsCount || 0} active spare parts catalog SKUs ` +
         `with an aggregate inventory valuation of ${s.totalInventoryValuation || '₹ 0.00'}. A total of ${s.transactionsCount || 0} inventory ` +
-        `movements (receipts, issues, adjustments) were completed to fulfill maintenance requirements, with ${s.lowStockCount || 0} items ` +
+        `movements (receipts, issues, adjustments) were completed${dateQualifier} to fulfill maintenance requirements, with ${s.lowStockCount || 0} items ` +
         `flagged below safety buffers across ${s.prsCount || 0} purchase requisitions.`
       );
     } else if (role === 'manager') {
       return (
-        `Maintenance manager ${targetName} directed operational triage and supervisory oversight across ${s.totalComplaintsReceived || 0} ` +
+        `Maintenance manager ${targetName} directed operational triage and supervisory oversight${dateQualifier} across ${s.totalComplaintsReceived || 0} ` +
         `breakdown complaints and ${s.workOrdersAssigned || 0} assigned work orders. Comprehensive triage resulted in ${s.complaintsAcknowledged || 0} ` +
         `acknowledged complaints and ${s.complaintsConverted || 0} work orders dispatched for field repair, with ${s.verifiedAndClosed || 0} jobs ` +
         `successfully completed and ${s.awaitingVerification || 0} work orders currently awaiting final verification sign-off.`
@@ -283,7 +288,7 @@ export const ReportsPage: React.FC = () => {
     } else {
       // Admin
       return (
-        `System administrator ${targetName} exercised enterprise governance across ${s.totalUsers || 0} registered plant personnel, ` +
+        `System administrator ${targetName} exercised enterprise governance${dateQualifier} across ${s.totalUsers || 0} registered plant personnel, ` +
         `${s.totalMachines || 0} monitored machinery assets, and enterprise maintenance queues. The enterprise maintenance system records ` +
         `${s.activeWorkOrders || 0} work orders currently in progress and ${s.pendingBreakdowns || 0} pending triage, alongside ` +
         `${s.completedWorkOrders || 0} completed work orders and ${s.totalAuditLogs || 0} logged administrative governance events ensuring regulatory compliance.`
@@ -976,6 +981,14 @@ export const ReportsPage: React.FC = () => {
               className="px-2.5 py-1.5 bg-zinc-50 border border-zinc-200 rounded-lg text-xs text-zinc-900 focus:outline-none focus:border-amber-500"
             />
           </div>
+          {(startDate || endDate) && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 border border-amber-300 rounded-lg text-[11px] font-bold text-amber-900">
+              <Calendar className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+              <span>
+                Active Window: {startDate ? startDate : 'Start'} → {endDate ? endDate : 'Present'}
+              </span>
+            </div>
+          )}
           {(startDate || endDate) && (
             <button
               type="button"
