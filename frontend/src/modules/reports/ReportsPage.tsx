@@ -777,9 +777,6 @@ export const ReportsPage: React.FC = () => {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="bg-jcb-yellow text-zinc-950 text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded shadow-2xs">
-                JCB CMMS
-              </span>
               <h1 className="text-xl font-black text-zinc-950 tracking-tight uppercase">
                 Role & Asset Reports Generator
               </h1>

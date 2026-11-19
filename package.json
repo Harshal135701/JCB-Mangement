@@ -12,6 +12,8 @@
     "build": "npm --prefix backend run build && npm --prefix frontend run build",
     "dev:backend": "npm --prefix backend run dev",
     "dev:frontend": "npm --prefix frontend run dev",
+    "android": "npm --prefix mobile run android",
+    "start": "npm --prefix mobile run start",
     "mobile:start": "npm --prefix mobile run start",
     "mobile:android": "npm --prefix mobile run android",
     "build:apk": "npm --prefix mobile run build:apk"
@@ -27,5 +29,15 @@
     "postgresql"
   ],
   "author": "JCB Enterprise Team",
-  "license": "UNLICENSED"
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "@react-native/babel-preset": "^0.76.7",
+    "@react-native/community-cli-plugin": "^0.76.7",
+    "@react-native/dev-middleware": "^0.76.7",
+    "@react-native/metro-babel-transformer": "^0.76.7",
+    "@react-native/metro-config": "^0.76.7"
+  },
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "2.1.2"
+  }
 }

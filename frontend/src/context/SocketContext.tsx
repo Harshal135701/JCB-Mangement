@@ -35,14 +35,14 @@ interface SocketContextType {
 
 const SocketContext = createContext<SocketContextType>({} as SocketContextType);
 
+const RENDER_SOCKET_ORIGIN = 'https://jcb-smart-cmms-api.onrender.com';
+
 const getSocketUrl = (): string => {
-  if (import.meta.env.VITE_SOCKET_URL) {
-    return import.meta.env.VITE_SOCKET_URL;
-  }
   if (import.meta.env.DEV) {
-    return 'http://localhost:5000';
+    // In local development, route through Vite dev proxy ('/') to forward /socket.io without CORS issues
+    return '/';
   }
-  return window.location.origin;
+  return import.meta.env.VITE_SOCKET_URL || RENDER_SOCKET_ORIGIN;
 };
 
 export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -129,7 +129,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const socketUrl = getSocketUrl();
     const s = io(socketUrl, {
       auth: { token },
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
       reconnection: true,
       reconnectionAttempts: 15,
       reconnectionDelay: 1000,

@@ -3,7 +3,10 @@ apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
 react {
-    /* Autolinking and JS bundle settings */
+    root = file("../../")
+    reactNativeDir = file("../../../node_modules/react-native")
+    codegenDir = file("../../../node_modules/@react-native/codegen")
+    hermesCommand = "../node_modules/react-native/sdks/hermesc/%OS-BIN%/hermesc"
 }
 
 def enableProguardInReleaseBuilds = false
@@ -60,11 +63,20 @@ android {
 
 dependencies {
     implementation("com.facebook.react:react-android")
+    implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
     if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")
     } else {
         implementation jscFlavor
     }
+
+    implementation project(':react-native-async-storage_async-storage')
+    implementation project(':react-native-safe-area-context')
+    implementation project(':react-native-screens')
+    implementation project(':react-native-vector-icons')
+    implementation project(':react-native-webview')
+    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
+    implementation("com.google.mlkit:barcode-scanning:17.3.0")
 }
 

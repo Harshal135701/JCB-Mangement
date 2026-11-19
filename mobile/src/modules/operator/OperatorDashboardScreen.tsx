@@ -6,20 +6,30 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
-  ActivityIndicator,
+  Image,
+  Dimensions,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useAuth } from '../../context/AuthContext';
+import { useSidebar } from '../../context/SidebarContext';
 import { COLORS } from '../../config/constants';
 import apiClient from '../../services/api';
 
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+const JCB_OFFICIAL_BADGE = require('../../assets/jcb_official_badge.png');
+
 export const OperatorDashboardScreen = ({ navigation }: any) => {
-  const { user, logout } = useAuth();
+  const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+  const { openSidebar } = useSidebar();
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState({
     assignedMachines: 4,
     operational: 3,
     activeBreakdowns: 1,
-    checklistStatus: 'Pending',
+    checklistStatus: 'Done',
   });
   const [recentBreakdowns, setRecentBreakdowns] = useState<any[]>([]);
 
@@ -29,9 +39,16 @@ export const OperatorDashboardScreen = ({ navigation }: any) => {
       const res: any = await apiClient.get('/breakdowns');
       if (res.success && res.data) {
         setRecentBreakdowns(res.data.slice(0, 5));
+        const activeCount = res.data.filter(
+          (b: any) => b.status !== 'verified_closed' && b.status !== 'rejected'
+        ).length;
+        setStats((prev) => ({
+          ...prev,
+          activeBreakdowns: activeCount,
+        }));
       }
     } catch (e) {
-      console.warn('Dashboard fetch error:', e);
+      console.warn('Operator Dashboard fetch error:', e);
     } finally {
       setLoading(false);
     }
@@ -43,94 +60,230 @@ export const OperatorDashboardScreen = ({ navigation }: any) => {
 
   return (
     <View style={styles.container}>
-      {/* Top Bar */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.userRole}>OPERATOR WORKSTATION</Text>
-          <Text style={styles.userName}>{user?.fullName || 'Operator'}</Text>
-          <Text style={styles.userShop}>CNC Machining Shop - Bay 1</Text>
+      {/* Top Header Bar */}
+      <View style={[styles.topHeader, { paddingTop: insets.top + 8 }]}>
+        <View style={styles.headerYellowSlice} />
+
+        <View style={styles.headerLeft}>
+          <TouchableOpacity
+            style={styles.hamburgerBtn}
+            onPress={openSidebar}
+            activeOpacity={0.7}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <MaterialCommunityIcons name="menu" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+
+          <View style={styles.brandBadgeWrap}>
+            <Image
+              source={JCB_OFFICIAL_BADGE}
+              style={styles.headerJcbLogo}
+              resizeMode="contain"
+            />
+          </View>
+
+          <View style={styles.headerDivider} />
+
+          <View style={styles.headerTitleCol}>
+            <Text style={styles.smartCmmsTitle}>SMART CMMS</Text>
+            <Text style={styles.smartCmmsSub}>JCB Intelligent Work</Text>
+          </View>
         </View>
-        <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
-          <Text style={styles.logoutBtnText}>Logout</Text>
+
+        <TouchableOpacity
+          style={styles.userProfileChip}
+          onPress={openSidebar}
+          activeOpacity={0.8}
+        >
+          <View style={styles.userAvatarCircle}>
+            <MaterialCommunityIcons name="account" size={18} color="#0F172A" />
+          </View>
+          <View style={styles.userInfoCol}>
+            <Text style={styles.userNameText} numberOfLines={1}>
+              {user?.fullName?.split(' ')[0] || 'Operator'}
+            </Text>
+            <View style={styles.userRoleRow}>
+              <Text style={styles.userRoleText}>OPERATOR</Text>
+              <MaterialCommunityIcons name="chevron-down" size={12} color="#94A3B8" />
+            </View>
+          </View>
         </TouchableOpacity>
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scroll}
-        refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchDashboardData} />}
+        contentContainerStyle={[styles.contentScroll, { paddingBottom: insets.bottom + 80 }]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={loading}
+            onRefresh={fetchDashboardData}
+            colors={[COLORS.primary]}
+            tintColor={COLORS.primary}
+          />
+        }
       >
-        {/* KPI Grid */}
-        <View style={styles.kpiGrid}>
-          <View style={[styles.kpiCard, { borderLeftColor: COLORS.statusRunning }]}>
-            <Text style={styles.kpiValue}>3</Text>
-            <Text style={styles.kpiLabel}>Operational</Text>
+        {/* Section Title Header */}
+        <View style={styles.sectionTitleBlock}>
+          <View style={styles.sectionTitleRow}>
+            <View style={styles.yellowIndicatorBar} />
+            <Text style={styles.sectionMainTitle}>Operator Dashboard</Text>
           </View>
-          <View style={[styles.kpiCard, { borderLeftColor: COLORS.statusBreakdown }]}>
-            <Text style={[styles.kpiValue, { color: COLORS.statusBreakdown }]}>1</Text>
-            <Text style={styles.kpiLabel}>Active Down</Text>
-          </View>
+          <Text style={styles.sectionSubtitle}>
+            Overview of assigned machinery & shopfloor line operations
+          </Text>
         </View>
 
-        {/* Primary Action Buttons */}
-        <Text style={styles.sectionTitle}>Shopfloor Actions</Text>
+        {/* 4 Metric Cards (2x2 Grid) */}
+        <View style={styles.kpiGrid}>
+          {/* My Machine */}
+          <View style={styles.kpiCard}>
+            <View style={[styles.kpiIconCircle, { backgroundColor: '#FEF3C7' }]}>
+              <MaterialCommunityIcons name="tractor" size={22} color="#000000" />
+            </View>
+            <View style={styles.kpiContentCol}>
+              <Text style={styles.kpiValueText}>{stats.assignedMachines}</Text>
+              <Text style={styles.kpiLabelText}>My Machine</Text>
+              <Text style={styles.trendPositiveText}>Active</Text>
+            </View>
+          </View>
+
+          {/* Fleet Running */}
+          <View style={styles.kpiCard}>
+            <View style={[styles.kpiIconCircle, { backgroundColor: '#DCFCE7' }]}>
+              <MaterialCommunityIcons name="play-circle-outline" size={22} color="#10B981" />
+            </View>
+            <View style={styles.kpiContentCol}>
+              <Text style={styles.kpiValueText}>{stats.operational}</Text>
+              <Text style={styles.kpiLabelText}>Fleet Running</Text>
+              <Text style={styles.trendPositiveText}>Nominal</Text>
+            </View>
+          </View>
+
+          {/* Reported Problems */}
+          <TouchableOpacity
+            style={styles.kpiCard}
+            onPress={() => navigation.navigate('TriageTab')}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.kpiIconCircle, { backgroundColor: '#FEE2E2' }]}>
+              <MaterialCommunityIcons name="wrench-outline" size={20} color="#EF4444" />
+            </View>
+            <View style={styles.kpiContentCol}>
+              <Text style={[styles.kpiValueText, { color: '#EF4444' }]}>{stats.activeBreakdowns}</Text>
+              <Text style={styles.kpiLabelText}>Reported Problems</Text>
+              <Text style={styles.trendNegativeText}>Active</Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Daily AM Checklist */}
+          <TouchableOpacity
+            style={styles.kpiCard}
+            onPress={() => navigation.navigate('DailyInspection')}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.kpiIconCircle, { backgroundColor: '#EDE9FE' }]}>
+              <MaterialCommunityIcons name="clipboard-check-outline" size={20} color="#8B5CF6" />
+            </View>
+            <View style={styles.kpiContentCol}>
+              <Text style={[styles.kpiValueText, { color: '#8B5CF6' }]}>PASS</Text>
+              <Text style={styles.kpiLabelText}>Daily AM Checklist</Text>
+              <Text style={styles.trendPositiveText}>✓ Completed</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* Big Action Buttons */}
+        <Text style={styles.sectionHeaderTitle}>SHOPFLOOR ACTIONS</Text>
 
         <TouchableOpacity
-          style={styles.primaryActionBtn}
+          style={styles.breakdownActionBtn}
           onPress={() => navigation.navigate('ReportBreakdown')}
+          activeOpacity={0.85}
         >
-          <View style={styles.actionIconBox}>
-            <Text style={styles.actionIcon}>⚠️</Text>
+          <View style={styles.actionIconCircle}>
+            <MaterialCommunityIcons name="alert-octagon" size={24} color="#000000" />
           </View>
-          <View style={styles.actionTextBox}>
-            <Text style={styles.actionTitle}>Report Machine Breakdown</Text>
-            <Text style={styles.actionSubtitle}>Tap to log stoppage, fault category & photos</Text>
+          <View style={styles.actionTextContainer}>
+            <Text style={styles.actionTitle}>Report Breakdown</Text>
+            <Text style={styles.actionSubtitle}>Tap to report stoppage, hydraulic fault or issue</Text>
           </View>
+          <MaterialCommunityIcons name="chevron-right" size={22} color="#000000" />
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.primaryActionBtn, styles.inspectionActionBtn]}
+          style={styles.inspectionActionBtn}
           onPress={() => navigation.navigate('DailyInspection')}
+          activeOpacity={0.85}
         >
-          <View style={[styles.actionIconBox, { backgroundColor: '#E2E8F0' }]}>
-            <Text style={styles.actionIcon}>📋</Text>
+          <View style={[styles.actionIconCircle, { backgroundColor: '#F1F5F9' }]}>
+            <MaterialCommunityIcons name="clipboard-check-outline" size={24} color="#0F172A" />
           </View>
-          <View style={styles.actionTextBox}>
-            <Text style={styles.actionTitle}>Pre-Shift Daily Checklist</Text>
-            <Text style={styles.actionSubtitle}>Record pressure, temperature, safety guards</Text>
+          <View style={styles.actionTextContainer}>
+            <Text style={styles.actionTitle}>Daily AM Checklist</Text>
+            <Text style={styles.actionSubtitle}>Pre-shift safety, oil level and pressure check</Text>
           </View>
+          <MaterialCommunityIcons name="chevron-right" size={22} color="#64748B" />
         </TouchableOpacity>
 
-        {/* Recent Tickets Tracking */}
-        <Text style={styles.sectionTitle}>Live Ticket Tracker</Text>
+        {/* My Reported Problems */}
+        <Text style={styles.sectionHeaderTitle}>MY REPORTED PROBLEMS</Text>
 
         {recentBreakdowns.length === 0 ? (
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>No active breakdown tickets recorded.</Text>
+            <MaterialCommunityIcons name="check-circle-outline" size={38} color="#10B981" />
+            <Text style={styles.emptyTitle}>All Machines Running Smoothly</Text>
+            <Text style={styles.emptySubtitle}>No open breakdown tickets on your assigned line</Text>
           </View>
         ) : (
-          recentBreakdowns.map((t) => (
-            <View key={t.id} style={styles.ticketCard}>
-              <View style={styles.ticketHeader}>
-                <Text style={styles.ticketNo}>{t.ticket_number}</Text>
-                <View
-                  style={[
-                    styles.statusBadge,
-                    t.status === 'verified_closed'
-                      ? styles.badgeClosed
-                      : styles.badgeOpen,
-                  ]}
-                >
-                  <Text style={styles.badgeText}>{t.status.toUpperCase()}</Text>
+          recentBreakdowns.map((t) => {
+            const isClosed = t.status === 'verified_closed';
+            return (
+              <View key={t.id} style={styles.ticketCard}>
+                <View style={styles.ticketHeader}>
+                  <Text style={styles.ticketNo}>{t.complaint_number || t.ticket_number || 'TICKET'}</Text>
+                  <View
+                    style={[
+                      styles.statusBadge,
+                      isClosed ? styles.statusClosed : styles.statusOpen,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.statusBadgeText,
+                        isClosed ? styles.statusTextClosed : styles.statusTextOpen,
+                      ]}
+                    >
+                      {(t.status || 'NEW').replace('_', ' ').toUpperCase()}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.ticketMachineRow}>
+                  <MaterialCommunityIcons name="tractor" size={15} color="#64748B" />
+                  <Text style={styles.ticketMachineCode}>{t.machine_code || 'JCB-CNC-001'}</Text>
+                  {t.machine_name && (
+                    <Text style={styles.ticketMachineName} numberOfLines={1}>
+                      • {t.machine_name}
+                    </Text>
+                  )}
+                </View>
+
+                <Text style={styles.ticketIssueText} numberOfLines={2}>
+                  {t.problem_title || t.description || 'Machine breakdown reported'}
+                </Text>
+
+                <View style={styles.ticketFooter}>
+                  <Text style={styles.ticketMeta}>
+                    Category: {t.issue_category || 'Hydraulic'}
+                  </Text>
+                  <Text style={styles.ticketMetaDivider}>•</Text>
+                  <Text style={styles.ticketMeta}>
+                    Priority: {(t.priority || 'Medium').toUpperCase()}
+                  </Text>
                 </View>
               </View>
-
-              <Text style={styles.ticketMachine}>
-                Machine: {t.machine_code || 'JCB-CNC-042'} ({t.machine_name || 'HMC 42'})
-              </Text>
-              <Text style={styles.ticketIssue}>{t.problem_title}</Text>
-              <Text style={styles.ticketMeta}>Category: {t.issue_category} | Priority: {t.priority}</Text>
-            </View>
-          ))
+            );
+          })
         )}
       </ScrollView>
     </View>
@@ -140,136 +293,306 @@ export const OperatorDashboardScreen = ({ navigation }: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: '#F8FAFC',
   },
-  header: {
-    backgroundColor: COLORS.secondary,
-    paddingTop: 45,
-    paddingBottom: 16,
-    paddingHorizontal: 18,
+  topHeader: {
+    backgroundColor: '#0F172A',
+    paddingHorizontal: 16,
+    paddingBottom: 14,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    position: 'relative',
+    overflow: 'hidden',
   },
-  userRole: {
-    color: COLORS.primary,
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1,
+  headerYellowSlice: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: 0,
+    height: 0,
+    borderStyle: 'solid',
+    borderTopWidth: 50,
+    borderLeftWidth: 50,
+    borderTopColor: '#F9B101',
+    borderLeftColor: '#F9B101',
+    borderRightWidth: 20,
+    borderRightColor: 'transparent',
+    borderBottomWidth: 20,
+    borderBottomColor: 'transparent',
+    zIndex: 1,
   },
-  userName: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '700',
-    marginTop: 2,
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    zIndex: 2,
   },
-  userShop: {
-    color: '#94A3B8',
-    fontSize: 12,
+  hamburgerBtn: {
+    padding: 6,
+    marginRight: 6,
   },
-  logoutBtn: {
+  brandBadgeWrap: {
+    width: 58,
+    height: 24,
+    justifyContent: 'center',
+    marginRight: 6,
+  },
+  headerJcbLogo: {
+    width: 58,
+    height: 24,
+  },
+  headerDivider: {
+    width: 1,
+    height: 22,
     backgroundColor: '#334155',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
+    marginHorizontal: 8,
   },
-  logoutBtnText: {
-    color: '#F1F5F9',
-    fontSize: 12,
+  headerTitleCol: {
+    justifyContent: 'center',
+  },
+  smartCmmsTitle: {
+    color: '#FFFFFF',
+    fontSize: 11.5,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  smartCmmsSub: {
+    color: '#94A3B8',
+    fontSize: 9,
+    fontWeight: '500',
+  },
+  userProfileChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 20,
+    gap: 6,
+    zIndex: 2,
+  },
+  userAvatarCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  userInfoCol: {
+    alignItems: 'flex-start',
+  },
+  userNameText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  userRoleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  userRoleText: {
+    color: '#94A3B8',
+    fontSize: 9,
     fontWeight: '600',
   },
-  scroll: {
-    padding: 16,
+  contentScroll: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
   },
-  kpiGrid: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 20,
-  },
-  kpiCard: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    padding: 14,
-    borderLeftWidth: 4,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-  },
-  kpiValue: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  kpiLabel: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 4,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#1E293B',
-    marginBottom: 10,
-    marginTop: 6,
-  },
-  primaryActionBtn: {
-    backgroundColor: '#FEF08A',
-    borderWidth: 1.5,
-    borderColor: COLORS.primary,
-    borderRadius: 10,
-    padding: 16,
+  // Yellow Breadcrumb Banner
+  breadcrumbBanner: {
+    backgroundColor: '#F9B101',
+    borderRadius: 14,
+    height: 46,
+    paddingHorizontal: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    justifyContent: 'space-between',
+    marginBottom: 14,
+    shadowColor: '#F9B101',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  breadcrumbLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  breadcrumbTitle: {
+    color: '#000000',
+    fontSize: 15.5,
+    fontWeight: '800',
+  },
+  // Section Main Header Block
+  sectionTitleBlock: {
+    marginBottom: 14,
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  yellowIndicatorBar: {
+    width: 4,
+    height: 18,
+    backgroundColor: '#F9B101',
+    borderRadius: 2,
+    marginRight: 8,
+  },
+  sectionMainTitle: {
+    fontSize: 19,
+    fontWeight: '900',
+    color: '#0F172A',
+    letterSpacing: -0.2,
+  },
+  sectionSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+    marginLeft: 12,
+  },
+  // 4 KPI Cards Grid
+  kpiGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 14,
+  },
+  kpiCard: {
+    width: (SCREEN_WIDTH - 42) / 2,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    elevation: 1,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+  },
+  kpiIconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  kpiContentCol: {
+    flex: 1,
+  },
+  kpiValueText: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#0F172A',
+    lineHeight: 26,
+  },
+  kpiLabelText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
+    marginTop: 1,
+  },
+  trendPositiveText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#16A34A',
+    marginTop: 2,
+  },
+  trendNegativeText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#DC2626',
+    marginTop: 2,
+  },
+  sectionHeaderTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#64748B',
+    letterSpacing: 0.5,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  breakdownActionBtn: {
+    backgroundColor: '#F9B101',
+    borderRadius: 12,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    shadowColor: '#F9B101',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 5,
+    elevation: 3,
   },
   inspectionActionBtn: {
     backgroundColor: '#FFFFFF',
-    borderColor: '#CBD5E1',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+    elevation: 1,
   },
-  actionIconBox: {
+  actionIconCircle: {
     width: 44,
     height: 44,
-    borderRadius: 8,
-    backgroundColor: COLORS.primary,
-    justifyContent: 'center',
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
-    marginRight: 14,
+    justifyContent: 'center',
+    marginRight: 12,
   },
-  actionIcon: {
-    fontSize: 20,
-  },
-  actionTextBox: {
+  actionTextContainer: {
     flex: 1,
   },
   actionTitle: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 14.5,
+    fontWeight: '800',
     color: '#0F172A',
   },
   actionSubtitle: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#475569',
     marginTop: 2,
   },
   emptyCard: {
     backgroundColor: '#FFFFFF',
-    padding: 20,
-    borderRadius: 8,
+    borderRadius: 12,
+    padding: 24,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
-  emptyText: {
-    color: '#94A3B8',
-    fontSize: 13,
+  emptyTitle: {
+    fontSize: 14.5,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginTop: 8,
+  },
+  emptySubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 4,
+    textAlign: 'center',
   },
   ticketCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    padding: 14,
-    marginBottom: 10,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    elevation: 1,
   },
   ticketHeader: {
     flexDirection: 'row',
@@ -278,40 +601,65 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   ticketNo: {
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 12,
+    fontWeight: '800',
     color: '#0F172A',
   },
   statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
     borderRadius: 4,
   },
-  badgeOpen: {
+  statusOpen: {
     backgroundColor: '#FEE2E2',
   },
-  badgeClosed: {
+  statusClosed: {
     backgroundColor: '#DCFCE7',
   },
-  badgeText: {
-    fontSize: 10,
+  statusBadgeText: {
+    fontSize: 9.5,
     fontWeight: '800',
-    color: '#991B1B',
   },
-  ticketMachine: {
-    fontSize: 13,
+  statusTextOpen: {
+    color: '#DC2626',
+  },
+  statusTextClosed: {
+    color: '#16A34A',
+  },
+  ticketMachineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 4,
+  },
+  ticketMachineCode: {
+    fontSize: 11.5,
+    fontWeight: '700',
     color: '#334155',
-    fontWeight: '600',
   },
-  ticketIssue: {
-    fontSize: 13,
+  ticketMachineName: {
+    fontSize: 11,
     color: '#64748B',
-    marginTop: 2,
+  },
+  ticketIssueText: {
+    fontSize: 12,
+    color: '#0F172A',
+    fontWeight: '500',
+    marginBottom: 8,
+  },
+  ticketFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
   },
   ticketMeta: {
-    fontSize: 11,
-    color: '#94A3B8',
-    marginTop: 4,
+    fontSize: 10,
+    color: '#64748B',
+  },
+  ticketMetaDivider: {
+    marginHorizontal: 6,
+    color: '#CBD5E1',
   },
 });
-

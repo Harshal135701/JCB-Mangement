@@ -676,7 +676,7 @@ export const ProcurementPage: React.FC = () => {
       const [partsRes, machRes, woRes, plantsRes] = await Promise.allSettled([
         apiClient.get('/inventory?limit=100'),
         apiClient.get('/machines?limit=100'),
-        apiClient.get('/work-orders?limit=100&status=waiting_for_parts,assigned,in_progress'),
+        apiClient.get('/work-orders?limit=100'),
         apiClient.get('/org/plants'),
       ]);
 
@@ -781,9 +781,11 @@ export const ProcurementPage: React.FC = () => {
 
   // Open Create PR Modal with appropriate plant preset
   const handleOpenCreateModal = () => {
+    if (isAdmin) return;
     const defaultPlant = !isAdmin && userPlantId ? userPlantId : (createForm.plant_id || (plants.length > 0 ? plants[0].id : ''));
     setCreateForm((prev) => ({
       ...prev,
+      work_order_id: '',
       plant_id: prev.plant_id || defaultPlant,
     }));
     setIsCreateModalOpen(true);
@@ -808,14 +810,28 @@ export const ProcurementPage: React.FC = () => {
       return;
     }
 
+    if (createForm.work_order_id) {
+      const selectedWo = workOrders.find((w) => w.id === createForm.work_order_id);
+      if (
+        selectedWo &&
+        ['completed', 'verified_closed', 'submitted_verification', 'closed', 'cancelled'].includes(
+          selectedWo.status?.toLowerCase()
+        )
+      ) {
+        setFeedback({
+          type: 'error',
+          message: `Cannot link purchase requisition to closed or completed work order (${selectedWo.wo_number}). Please select an active work order or choose '-- No linked work order --'.`,
+        });
+        return;
+      }
+    }
+
     const selectedMachine = machines.find((m) => m.id === createForm.machine_id);
     const selectedPart = parts.find((p) => p.id === createForm.part_id);
     const effectivePlantId =
-      createForm.plant_id ||
-      selectedMachine?.plant_id ||
-      selectedPart?.plant_id ||
-      userPlantId ||
-      (plants.length > 0 ? plants[0].id : null);
+      (!isAdmin && userPlantId)
+        ? userPlantId
+        : (selectedMachine?.plant_id || createForm.plant_id || selectedPart?.plant_id || (plants.length > 0 ? plants[0].id : null));
 
     if (!effectivePlantId) {
       setFeedback({
@@ -1270,7 +1286,7 @@ export const ProcurementPage: React.FC = () => {
           <div className="flex items-center gap-3">
             <div className="bg-jcb-yellow text-black font-black text-xl px-2.5 py-1 rounded-lg border border-amber-500 shadow-sm">
               JCB
-            </div>dministrator: JCB Administrator • Review configured checklist rule
+            </div>
             <h1 className="text-xl sm:text-2xl font-black text-zinc-950 tracking-tight">
               BUYING &amp; RECEIVING (PR / PO / GRN)
             </h1>
@@ -1315,13 +1331,16 @@ export const ProcurementPage: React.FC = () => {
             <RefreshCw className="w-4 h-4" />
           </button>
 
-          {/* <button
-            onClick={handleOpenCreateModal}
-            className="bg-jcb-yellow hover:bg-jcb-yellowDark text-black text-xs font-black px-4 py-2.5 rounded-xl shadow transition-all flex items-center gap-2 border border-amber-500 hover:shadow-md cursor-pointer"
-          >
-            <Plus className="w-4 h-4 stroke-[3]" />
-            <span>Request to Buy Parts</span>
-          </button> */}
+          {!isAdmin && (
+            <button
+              type="button"
+              onClick={handleOpenCreateModal}
+              className="bg-jcb-yellow hover:bg-amber-400 text-black text-xs font-black px-4 py-2.5 rounded-xl shadow-xs transition-all flex items-center gap-2 border border-amber-500 hover:shadow-md cursor-pointer"
+            >
+              <Plus className="w-4 h-4 stroke-[3]" />
+              <span>New Purchase Request</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -1559,12 +1578,14 @@ export const ProcurementPage: React.FC = () => {
                           <p className="text-xs text-zinc-500 font-medium">
                             No requisitions match your active search or filter criteria.
                           </p>
-                          <button
-                            onClick={handleOpenCreateModal}
-                            className="bg-jcb-yellow text-black text-xs font-black px-3.5 py-1.5 rounded-lg shadow-sm mt-2"
-                          >
-                            Raise PR Now
-                          </button>
+                          {!isAdmin && (
+                            <button
+                              onClick={handleOpenCreateModal}
+                              className="bg-jcb-yellow text-black text-xs font-black px-3.5 py-1.5 rounded-lg shadow-sm mt-2 cursor-pointer"
+                            >
+                              Raise PR Now
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1934,7 +1955,7 @@ export const ProcurementPage: React.FC = () => {
       {/* ==================================================================== */}
       {/* MODAL 1: RAISE PURCHASE REQUISITION                                  */}
       {/* ==================================================================== */}
-      {isCreateModalOpen && (
+      {isCreateModalOpen && !isAdmin && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] flex flex-col">
             <div className="bg-white p-5 flex items-center justify-between border-b-2 border-zinc-200 shrink-0">
@@ -2091,19 +2112,32 @@ export const ProcurementPage: React.FC = () => {
                       setCreateForm((prev) => ({
                         ...prev,
                         work_order_id: e.target.value,
-                        machine_id: targetMachineId,
+                        machine_id: targetMachineId || prev.machine_id,
                         plant_id: foundMachine?.plant_id || prev.plant_id,
                       }));
                     }}
                     className="w-full px-3 py-2.5 bg-zinc-50 border border-zinc-300 rounded-xl text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
                   >
-                    <option value="">-- No linked work order --</option>
-                    {workOrders.map((wo) => (
-                      <option key={wo.id} value={wo.id}>
-                        {wo.wo_number} ({wo.machine_code}) — {wo.problem_title}
-                      </option>
-                    ))}
+                    <option value="">-- No linked work order (General Stock Reorder) --</option>
+                    {workOrders
+                      .filter((wo: any) => {
+                        const statusLower = (wo.status || '').toLowerCase();
+                        const isClosed = ['completed', 'verified_closed', 'submitted_verification', 'closed', 'cancelled'].includes(statusLower);
+                        if (isClosed) return false;
+                        if (isTechnician && wo.assigned_technician_id && wo.assigned_technician_id !== user?.id) {
+                          return false;
+                        }
+                        return true;
+                      })
+                      .map((wo: any) => (
+                        <option key={wo.id} value={wo.id}>
+                          {wo.wo_number} ({wo.machine_code || 'Machine'}) — {wo.problem_title || 'Work Order'} [{wo.status}]
+                        </option>
+                      ))}
                   </select>
+                  <p className="text-[10px] text-zinc-500 mt-1">
+                    Select an open work order if this part is for an active repair, or leave blank to replenish shop stock.
+                  </p>
                 </div>
 
                 <div>
