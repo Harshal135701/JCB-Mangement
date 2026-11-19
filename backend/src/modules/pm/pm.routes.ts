@@ -74,9 +74,9 @@ router.post('/generate-due', requireRoles('admin', 'manager'), generateDuePMWork
 // ---------------------------------------------------------------------------
 // 4. PM Execution & Verification Tracking
 // ---------------------------------------------------------------------------
-router.get('/executions', requireRoles('admin', 'manager', 'technician', 'operator'), getPMExecutions);
-router.get('/executions/:id', requireRoles('admin', 'manager', 'technician', 'operator'), getPMExecutionDetails);
-router.get('/executions/:id/checklist', requireRoles('admin', 'manager', 'technician', 'operator'), getPMExecutionChecklist);
+router.get('/executions', requireRoles('admin', 'manager', 'technician'), getPMExecutions);
+router.get('/executions/:id', requireRoles('admin', 'manager', 'technician'), getPMExecutionDetails);
+router.get('/executions/:id/checklist', requireRoles('admin', 'manager', 'technician'), getPMExecutionChecklist);
 router.post('/executions/:id/checklist', requireRoles('admin', 'manager', 'technician'), submitPMExecutionChecklist);
 router.post('/executions/:id/complete', requireRoles('admin', 'manager', 'technician'), completePMExecution);
 router.post('/executions/:id/verify', requireRoles('admin', 'manager'), verifyPMExecution);
@@ -85,9 +85,9 @@ router.get('/machines/:machineId/history', requireRoles('admin', 'manager', 'tec
 // ---------------------------------------------------------------------------
 // 5. PM Dashboard & Compliance Analytics
 // ---------------------------------------------------------------------------
-router.get('/dashboard', requireRoles('admin', 'manager', 'technician', 'operator'), getPMDashboard);
-router.get('/compliance', requireRoles('admin', 'manager', 'technician', 'operator'), getPMCompliance);
-router.get('/trends', requireRoles('admin', 'manager', 'technician', 'operator'), getPMTrends);
+router.get('/dashboard', requireRoles('admin', 'manager', 'technician'), getPMDashboard);
+router.get('/compliance', requireRoles('admin', 'manager', 'technician'), getPMCompliance);
+router.get('/trends', requireRoles('admin', 'manager', 'technician'), getPMTrends);
 router.get('/by-machine', requireRoles('admin', 'manager', 'technician', 'operator'), getPMByMachine);
 router.get('/by-plant', requireRoles('admin', 'manager'), getPMByPlant);
 router.get('/by-shop', requireRoles('admin', 'manager', 'technician'), getPMByShop);

@@ -292,11 +292,13 @@ export const WorkOrderDetailPage: React.FC = () => {
 
   useEffect(() => {
     fetchWorkOrderData();
-    fetchPartsData();
+    if (user?.role !== 'operator') {
+      fetchPartsData();
+    }
     if (isManagerOrAdmin) {
       fetchTechnicians();
     }
-  }, [fetchWorkOrderData, fetchPartsData, fetchTechnicians, isManagerOrAdmin]);
+  }, [fetchWorkOrderData, fetchPartsData, fetchTechnicians, isManagerOrAdmin, user?.role]);
 
   // Technician Milestone Handler
   const handleMilestoneAction = async (action: string, payload: any = {}) => {
@@ -578,6 +580,14 @@ export const WorkOrderDetailPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2 self-start sm:self-auto">
+          {/* Operator Read-Only Badge */}
+          {user?.role === 'operator' && (
+            <span className="bg-amber-100 text-amber-950 border border-amber-300 text-[10px] font-black px-3 py-1.5 rounded-xl uppercase tracking-wider flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-amber-700" />
+              <span>Operator Read-Only</span>
+            </span>
+          )}
+
           {/* Manager / Admin Reassignment Button */}
           {isManagerOrAdmin && !isClosed && !isCompleted && (
             <button
@@ -602,7 +612,7 @@ export const WorkOrderDetailPage: React.FC = () => {
           <button
             onClick={() => {
               fetchWorkOrderData();
-              fetchPartsData();
+              if (user?.role !== 'operator') fetchPartsData();
             }}
             disabled={actionLoading}
             className="flex items-center gap-2 px-3.5 py-2 bg-white border-2 border-slate-200 rounded-xl text-xs font-bold text-zinc-800 hover:bg-slate-50 transition shadow-xs cursor-pointer"
@@ -731,7 +741,22 @@ export const WorkOrderDetailPage: React.FC = () => {
       </div>
 
       {/* Action Control Station: STRICT Role-Based Separation */}
-      <div className="p-5 sm:p-6 bg-white text-zinc-900 rounded-2xl border-2 border-zinc-200 shadow-sm space-y-4">
+      {user?.role === 'operator' ? (
+        <div className="p-5 sm:p-6 bg-slate-50 text-zinc-900 rounded-2xl border-2 border-slate-200 shadow-xs space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] uppercase font-black tracking-widest text-amber-700 bg-amber-100 px-2 py-0.5 rounded border border-amber-300">
+              Operator Observation Mode
+            </span>
+          </div>
+          <h3 className="text-base font-black tracking-wide uppercase text-zinc-900">
+            Work Order Status & Repair Progress
+          </h3>
+          <p className="text-xs text-zinc-600 leading-relaxed">
+            You are viewing maintenance records in read-only mode for your assigned machine. Operational milestone transitions, technician dispatches, and verification closures are handled by authorized maintenance technicians and plant supervisors.
+          </p>
+        </div>
+      ) : (
+        <div className="p-5 sm:p-6 bg-white text-zinc-900 rounded-2xl border-2 border-zinc-200 shadow-sm space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <span className="text-[10px] uppercase font-black tracking-widest text-amber-600 block">
@@ -925,6 +950,7 @@ export const WorkOrderDetailPage: React.FC = () => {
           </div>
         </div>
       </div>
+      )}
 
       {/* Main Content Tabs & Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -942,19 +968,21 @@ export const WorkOrderDetailPage: React.FC = () => {
             >
               Order Overview
             </button>
-            <button
-              onClick={() => setActiveTab('parts')}
-              className={`px-4 py-2.5 text-xs font-black uppercase tracking-wider transition border-b-2 -mb-[2px] flex items-center gap-1.5 ${
-                activeTab === 'parts'
-                  ? 'border-jcb-yellow text-zinc-950 font-black'
-                  : 'border-transparent text-zinc-500 hover:text-zinc-800'
-              }`}
-            >
-              <span>Parts Consumed</span>
-              <span className="bg-slate-100 text-zinc-700 text-[10px] px-1.5 py-0.2 rounded-full font-bold">
-                {parts.length}
-              </span>
-            </button>
+            {user?.role !== 'operator' && (
+              <button
+                onClick={() => setActiveTab('parts')}
+                className={`px-4 py-2.5 text-xs font-black uppercase tracking-wider transition border-b-2 -mb-[2px] flex items-center gap-1.5 ${
+                  activeTab === 'parts'
+                    ? 'border-jcb-yellow text-zinc-950 font-black'
+                    : 'border-transparent text-zinc-500 hover:text-zinc-800'
+                }`}
+              >
+                <span>Parts Consumed</span>
+                <span className="bg-slate-100 text-zinc-700 text-[10px] px-1.5 py-0.2 rounded-full font-bold">
+                  {parts.length}
+                </span>
+              </button>
+            )}
             <button
               onClick={() => setActiveTab('timeline')}
               className={`px-4 py-2.5 text-xs font-black uppercase tracking-wider transition border-b-2 -mb-[2px] flex items-center gap-1.5 ${
@@ -1076,8 +1104,8 @@ export const WorkOrderDetailPage: React.FC = () => {
             </div>
           )}
 
-          {/* TAB 2: SPARE PARTS (Independent error & loading state) */}
-          {activeTab === 'parts' && (() => {
+          {/* TAB 2: SPARE PARTS (Independent error & loading state - Hidden for operators) */}
+          {user?.role !== 'operator' && activeTab === 'parts' && (() => {
             const isAssigned = isTechnician && workOrder?.assigned_technician_id === user?.id;
             const eligibleStatus = ['assigned', 'accepted', 'scheduled', 'under_diagnosis', 'in_progress', 'waiting_for_parts', 'rework_required', 'reopened'].includes(workOrder?.status || '');
             const canReserveParts = (user?.role === 'admin' || user?.role === 'manager' || user?.role === 'store_manager' || isAssigned) && eligibleStatus;

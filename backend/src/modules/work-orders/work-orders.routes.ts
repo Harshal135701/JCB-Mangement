@@ -18,15 +18,15 @@ const router = Router();
 // Authentication required on all routes
 router.use(authenticateJWT);
 
-// Work order listing & search (Technicians, Managers, Store Managers, Admins)
-router.get('/', requireRoles('admin', 'manager', 'technician', 'store_manager'), getWorkOrders);
+// Work order listing & search (Technicians, Managers, Store Managers, Admins, Operators)
+router.get('/', requireRoles('admin', 'manager', 'technician', 'store_manager', 'operator'), getWorkOrders);
 
 // Creation from complaint (Admin & Manager)
 router.post('/assign', requireRoles('admin', 'manager'), createWorkOrderFromComplaint);
 
 // Work order inspection endpoints
-router.get('/:id', requireRoles('admin', 'manager', 'technician', 'store_manager'), getWorkOrderDetails);
-router.get('/:id/history', requireRoles('admin', 'manager', 'technician', 'store_manager'), getWorkOrderHistory);
+router.get('/:id', requireRoles('admin', 'manager', 'technician', 'store_manager', 'operator'), getWorkOrderDetails);
+router.get('/:id/history', requireRoles('admin', 'manager', 'technician', 'store_manager', 'operator'), getWorkOrderHistory);
 router.get('/:id/parts', requireRoles('admin', 'manager', 'technician', 'store_manager'), getWorkOrderParts);
 
 // Reassignment (Admin & Manager)

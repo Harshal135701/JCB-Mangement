@@ -129,11 +129,12 @@ export default function App() {
               <Route path="/breakdowns" element={<BreakdownRedirectRoute />} />
               <Route path="/breakdowns/:id" element={<BreakdownRedirectRoute />} />
 
-              {/* Work Order Engine */}
+              {/* Maintenance Status & Work Order Engine */}
+              <Route path="/maintenance-status" element={<Navigate to="/work-orders" replace />} />
               <Route
                 path="/work-orders"
                 element={
-                  <RoleGuard allowedRoles={['admin', 'manager', 'technician', 'store_manager']}>
+                  <RoleGuard allowedRoles={['admin', 'manager', 'technician', 'store_manager', 'operator']}>
                     <WorkOrderListPage />
                   </RoleGuard>
                 }
@@ -141,7 +142,7 @@ export default function App() {
               <Route
                 path="/work-orders/:id"
                 element={
-                  <RoleGuard allowedRoles={['admin', 'manager', 'technician', 'store_manager']}>
+                  <RoleGuard allowedRoles={['admin', 'manager', 'technician', 'store_manager', 'operator']}>
                     <WorkOrderDetailPage />
                   </RoleGuard>
                 }

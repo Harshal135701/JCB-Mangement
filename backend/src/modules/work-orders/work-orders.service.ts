@@ -1,5 +1,6 @@
 import { query as defaultQuery, pool as defaultPool } from '../../config/db';
 import { AuthenticatedUser } from '../../middlewares/auth.middleware';
+import { getOperatorPermittedMachineIds } from '../machines/operator-maintenance-access.service';
 
 export const isUUID = (value: unknown): value is string =>
   typeof value === 'string' &&
@@ -301,6 +302,11 @@ export async function executeCreateWorkOrderTransaction(
 
   if (!technician_id || !isUUID(technician_id)) {
     throw new WorkOrderServiceError('Valid technician ID is required.', 400);
+  }
+
+  // Role validation (defense-in-depth)
+  if (user && user.role !== 'admin' && user.role !== 'manager') {
+    throw new WorkOrderServiceError(`Role '${user.role}' is not authorized to create or allocate work orders.`, 403);
   }
 
   // 1. Fetch breakdown complaint with row-level lock
@@ -719,11 +725,6 @@ export async function getWorkOrdersService(
     throw new WorkOrderServiceError('Authentication required.', 401);
   }
 
-  // Operators must not perform manager or technician operations
-  if (user.role === 'operator') {
-    throw new WorkOrderServiceError('Operators are not authorized to view or manage work orders.', 403);
-  }
-
   const page = Math.max(1, parseInt(String(filter.page || '1'), 10) || 1);
   const limit = Math.min(100, Math.max(1, parseInt(String(filter.limit || '20'), 10) || 20));
   const offset = (page - 1) * limit;
@@ -732,7 +733,27 @@ export async function getWorkOrdersService(
   const params: any[] = [];
 
   // Role-based security scoping
-  if (user.role === 'technician') {
+  if (user.role === 'operator') {
+    // Operators must not perform general work order listings across the plant
+    if (!filter.machine_id) {
+      throw new WorkOrderServiceError(
+        'Operators are not authorized to view or manage work orders without specifying their assigned machine_id.',
+        403
+      );
+    }
+    const permitted = await getOperatorPermittedMachineIds(user, dbClient);
+    if (!isUUID(filter.machine_id)) {
+      throw new WorkOrderServiceError('Invalid machine ID.', 400);
+    }
+    if (!permitted.permittedMachineIds.includes(filter.machine_id)) {
+      throw new WorkOrderServiceError(
+        'Forbidden: You are only authorized to view work orders for your assigned machine(s).',
+        403
+      );
+    }
+    params.push(filter.machine_id);
+    conditions.push(`wo.machine_id = $${params.length}`);
+  } else if (user.role === 'technician') {
     // Technicians must only access work orders assigned to them
     params.push(user.id);
     conditions.push(`wo.assigned_technician_id = $${params.length}`);
@@ -805,7 +826,7 @@ export async function getWorkOrdersService(
   }
 
   // Filter: machine_id
-  if (filter.machine_id && isUUID(filter.machine_id)) {
+  if (user.role !== 'operator' && filter.machine_id && isUUID(filter.machine_id)) {
     params.push(filter.machine_id);
     conditions.push(`wo.machine_id = $${params.length}`);
   }
@@ -905,10 +926,6 @@ export async function getWorkOrderDetailsService(
     throw new WorkOrderServiceError('Authentication required.', 401);
   }
 
-  if (user.role === 'operator') {
-    throw new WorkOrderServiceError('Operators are not authorized to view or manage work orders.', 403);
-  }
-
   if (!isUUID(id)) {
     throw new WorkOrderServiceError('Invalid work order ID.', 400);
   }
@@ -957,7 +974,15 @@ export async function getWorkOrderDetailsService(
   const wo = res.rows[0];
 
   // RBAC Access Control
-  if (user.role === 'technician') {
+  if (user.role === 'operator') {
+    const permitted = await getOperatorPermittedMachineIds(user, dbClient);
+    if (!permitted.permittedMachineIds.includes(wo.machine_id)) {
+      throw new WorkOrderServiceError(
+        'Forbidden: You are only authorized to view work orders for your assigned machine(s).',
+        403
+      );
+    }
+  } else if (user.role === 'technician') {
     if (wo.assigned_technician_id !== user.id) {
       throw new WorkOrderServiceError('You are only authorized to access work orders assigned to you.', 403);
     }
@@ -1033,6 +1058,13 @@ export async function getWorkOrderPartsService(
   dbClient: DbQueryFunction = activeQuery
 ): Promise<any[]> {
   await getWorkOrderDetailsService(id, user, dbClient);
+
+  if (user?.role === 'operator') {
+    throw new WorkOrderServiceError(
+      'Forbidden: Operators are not authorized to view internal spare parts costs or inventory transactions.',
+      403
+    );
+  }
 
   const partsRes = await dbClient(
     `SELECT pc.*, COALESCE(pc.quantity_requested, pc.quantity_issued, 0) AS quantity,

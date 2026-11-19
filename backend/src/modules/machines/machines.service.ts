@@ -17,6 +17,7 @@ import {
   ListMachinesRepoFilter,
   ALLOWED_SORT_COLUMNS,
 } from './machines.repository';
+import { enforceOperatorMachineAccess } from './operator-maintenance-access.service';
 
 // ---------------------------------------------------------------------------
 // Error Handling
@@ -1198,6 +1199,18 @@ export class MachinesService {
 
     // Facility Scope Enforcement
     enforceMachineFacilityScope(user, machine.plant_id, machine.shop_id);
+
+    // Operator Machine Assignment Enforcement
+    if (user.role === 'operator') {
+      try {
+        await enforceOperatorMachineAccess(user, id, activeQuery);
+      } catch (opErr: any) {
+        throw new MachineServiceError(
+          opErr.message || 'Forbidden: Operators may only view maintenance history for their assigned machines.',
+          opErr.statusCode || 403
+        );
+      }
+    }
 
     // 1. Pagination Validation
     const page = options.page !== undefined ? Number(options.page) : 1;

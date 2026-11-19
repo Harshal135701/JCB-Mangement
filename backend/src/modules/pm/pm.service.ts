@@ -1,6 +1,7 @@
 import { query as defaultQuery } from '../../config/db';
 import { AuthenticatedUser } from '../../middlewares/auth.middleware';
 import { createPMWorkOrderService, WorkOrderPriority } from '../work-orders/work-orders.service';
+import { getOperatorPermittedMachineIds } from '../machines/operator-maintenance-access.service';
 
 // ---------------------------------------------------------------------------
 // Error & Type Definitions
@@ -344,7 +345,26 @@ export async function getPMPlansService(
   const params: any[] = [];
 
   // Scoping
-  if (user.role !== 'admin') {
+  if (user.role === 'operator') {
+    const permitted = await getOperatorPermittedMachineIds(user, db.query.bind(db));
+    if (filters.machine_id) {
+      if (!isUUID(filters.machine_id)) throw new PMServiceError('Invalid machine_id filter format.', 400);
+      if (!permitted.permittedMachineIds.includes(filters.machine_id)) {
+        throw new PMServiceError(
+          'Forbidden: You are only authorized to view PM plans for your assigned machine(s).',
+          403
+        );
+      }
+      params.push(filters.machine_id);
+      conditions.push(`p.machine_id = $${params.length}`);
+    } else {
+      if (permitted.permittedMachineIds.length === 0) {
+        return { data: [], pagination: { total: 0, page, limit, totalPages: 0 } };
+      }
+      params.push(permitted.permittedMachineIds);
+      conditions.push(`p.machine_id = ANY($${params.length})`);
+    }
+  } else if (user.role !== 'admin') {
     if (user.plant_id) {
       params.push(user.plant_id);
       conditions.push(`s.plant_id = $${params.length}`);
@@ -373,7 +393,7 @@ export async function getPMPlansService(
     conditions.push(`m.shop_id = $${params.length}`);
   }
 
-  if (filters.machine_id) {
+  if (user.role !== 'operator' && filters.machine_id) {
     if (!isUUID(filters.machine_id)) throw new PMServiceError('Invalid machine_id filter format.', 400);
     params.push(filters.machine_id);
     conditions.push(`p.machine_id = $${params.length}`);
@@ -491,6 +511,16 @@ export async function getPMPlanByIdService(id: string, user: AuthenticatedUser):
 
   const plan = res.rows[0];
   enforcePlanScope(user, plan.plant_id, plan.shop_id);
+
+  if (user.role === 'operator') {
+    const permitted = await getOperatorPermittedMachineIds(user, db.query.bind(db));
+    if (!permitted.permittedMachineIds.includes(plan.machine_id)) {
+      throw new PMServiceError(
+        'Forbidden: You are only authorized to view PM plans for your assigned machine(s).',
+        403
+      );
+    }
+  }
 
   // Fetch count of generated work orders and any active work order
   const woStats = await db.query(
@@ -664,20 +694,41 @@ export async function getPMUpcomingService(
   ];
   const params: any[] = [safeDays];
 
-  if (filters?.plant_id && isUUID(filters.plant_id)) {
-    params.push(filters.plant_id);
-    conditions.push(`s.plant_id = $${params.length}`);
-  } else if (user.role !== 'admin' && user.plant_id) {
-    params.push(user.plant_id);
-    conditions.push(`s.plant_id = $${params.length}`);
-  }
+  if (user.role === 'operator') {
+    const permitted = await getOperatorPermittedMachineIds(user, db.query.bind(db));
+    if (filters?.machine_id) {
+      if (!isUUID(filters.machine_id)) throw new PMServiceError('Invalid machine_id filter format.', 400);
+      if (!permitted.permittedMachineIds.includes(filters.machine_id)) {
+        throw new PMServiceError('Forbidden: You are only authorized to view PM information for your assigned machine(s).', 403);
+      }
+      params.push(filters.machine_id);
+      conditions.push(`p.machine_id = $${params.length}`);
+    } else {
+      if (permitted.permittedMachineIds.length === 0) return [];
+      params.push(permitted.permittedMachineIds);
+      conditions.push(`p.machine_id = ANY($${params.length})`);
+    }
+  } else {
+    if (filters?.plant_id && isUUID(filters.plant_id)) {
+      params.push(filters.plant_id);
+      conditions.push(`s.plant_id = $${params.length}`);
+    } else if (user.role !== 'admin' && user.plant_id) {
+      params.push(user.plant_id);
+      conditions.push(`s.plant_id = $${params.length}`);
+    }
 
-  if (filters?.shop_id && isUUID(filters.shop_id)) {
-    params.push(filters.shop_id);
-    conditions.push(`m.shop_id = $${params.length}`);
-  } else if (user.role === 'operator' && user.shop_id) {
-    params.push(user.shop_id);
-    conditions.push(`m.shop_id = $${params.length}`);
+    if (filters?.shop_id && isUUID(filters.shop_id)) {
+      params.push(filters.shop_id);
+      conditions.push(`m.shop_id = $${params.length}`);
+    } else if (user.role !== 'admin' && user.shop_id) {
+      params.push(user.shop_id);
+      conditions.push(`m.shop_id = $${params.length}`);
+    }
+
+    if (filters?.machine_id && isUUID(filters.machine_id)) {
+      params.push(filters.machine_id);
+      conditions.push(`p.machine_id = $${params.length}`);
+    }
   }
 
   const sql = `
@@ -716,7 +767,21 @@ export async function getPMDueService(
   ];
   const params: any[] = [];
 
-  if (user.role !== 'admin') {
+  if (user.role === 'operator') {
+    const permitted = await getOperatorPermittedMachineIds(user, db.query.bind(db));
+    if (filters?.machine_id) {
+      if (!isUUID(filters.machine_id)) throw new PMServiceError('Invalid machine_id filter format.', 400);
+      if (!permitted.permittedMachineIds.includes(filters.machine_id)) {
+        throw new PMServiceError('Forbidden: You are only authorized to view PM information for your assigned machine(s).', 403);
+      }
+      params.push(filters.machine_id);
+      conditions.push(`m.id = $${params.length}`);
+    } else {
+      if (permitted.permittedMachineIds.length === 0) return [];
+      params.push(permitted.permittedMachineIds);
+      conditions.push(`m.id = ANY($${params.length})`);
+    }
+  } else if (user.role !== 'admin') {
     if (user.plant_id) {
       params.push(user.plant_id);
       conditions.push(`s.plant_id = $${params.length}`);
@@ -756,7 +821,21 @@ export async function getPMOverdueService(
   ];
   const params: any[] = [];
 
-  if (user.role !== 'admin') {
+  if (user.role === 'operator') {
+    const permitted = await getOperatorPermittedMachineIds(user, db.query.bind(db));
+    if (filters?.machine_id) {
+      if (!isUUID(filters.machine_id)) throw new PMServiceError('Invalid machine_id filter format.', 400);
+      if (!permitted.permittedMachineIds.includes(filters.machine_id)) {
+        throw new PMServiceError('Forbidden: You are only authorized to view PM information for your assigned machine(s).', 403);
+      }
+      params.push(filters.machine_id);
+      conditions.push(`m.id = $${params.length}`);
+    } else {
+      if (permitted.permittedMachineIds.length === 0) return [];
+      params.push(permitted.permittedMachineIds);
+      conditions.push(`m.id = ANY($${params.length})`);
+    }
+  } else if (user.role !== 'admin') {
     if (user.plant_id) {
       params.push(user.plant_id);
       conditions.push(`s.plant_id = $${params.length}`);
@@ -797,7 +876,12 @@ export async function getPMCalendarService(
   const conditions: string[] = ['p.is_active = true'];
   const params: any[] = [];
 
-  if (user.role !== 'admin') {
+  if (user.role === 'operator') {
+    const permitted = await getOperatorPermittedMachineIds(user, db.query.bind(db));
+    if (permitted.permittedMachineIds.length === 0) return {};
+    params.push(permitted.permittedMachineIds);
+    conditions.push(`p.machine_id = ANY($${params.length})`);
+  } else if (user.role !== 'admin') {
     if (user.plant_id) {
       params.push(user.plant_id);
       conditions.push(`s.plant_id = $${params.length}`);
@@ -983,6 +1067,9 @@ export async function generateDuePMWorkOrdersService(
   const params: any[] = [windowDays];
 
   // RBAC scope
+  if (!['admin', 'manager'].includes(user.role)) {
+    throw new PMServiceError(`Forbidden: Role '${user.role}' is not authorized to generate PM work orders.`, 403);
+  }
   if (user.role !== 'admin') {
     if (user.plant_id) {
       params.push(user.plant_id);
@@ -1605,6 +1692,16 @@ export async function getMachinePMHistoryService(
   if (mRes.rows.length === 0) throw new PMServiceError('Machine asset not found.', 404);
   enforcePlanScope(user, mRes.rows[0].plant_id, mRes.rows[0].shop_id);
 
+  if (user.role === 'operator') {
+    const permitted = await getOperatorPermittedMachineIds(user, db.query.bind(db));
+    if (!permitted.permittedMachineIds.includes(machineId)) {
+      throw new PMServiceError(
+        'Forbidden: You are only authorized to view PM history for your assigned machine(s).',
+        403
+      );
+    }
+  }
+
   const sql = `
     SELECT 
       wo.id as execution_id,
@@ -1636,6 +1733,11 @@ export async function getPMDashboardService(
   user: AuthenticatedUser
 ): Promise<any> {
   const db = getPmServiceDb();
+
+  if (user.role === 'operator') {
+    throw new PMServiceError('Forbidden: Operators are not authorized to access PM dashboard analytics.', 403);
+  }
+
   const conditions: string[] = ['p.is_active = true'];
   const params: any[] = [];
 
@@ -1787,7 +1889,21 @@ export async function getPMByMachineService(filters: any, user: AuthenticatedUse
   const conditions: string[] = ['1=1'];
   const params: any[] = [];
 
-  if (user.role !== 'admin') {
+  if (user.role === 'operator') {
+    const permitted = await getOperatorPermittedMachineIds(user, db.query.bind(db));
+    if (filters?.machine_id) {
+      if (!isUUID(filters.machine_id)) throw new PMServiceError('Invalid machine_id filter format.', 400);
+      if (!permitted.permittedMachineIds.includes(filters.machine_id)) {
+        throw new PMServiceError('Forbidden: You are only authorized to view PM information for your assigned machine(s).', 403);
+      }
+      params.push(filters.machine_id);
+      conditions.push(`m.id = $${params.length}`);
+    } else {
+      if (permitted.permittedMachineIds.length === 0) return [];
+      params.push(permitted.permittedMachineIds);
+      conditions.push(`m.id = ANY($${params.length})`);
+    }
+  } else if (user.role !== 'admin') {
     if (user.plant_id) {
       params.push(user.plant_id);
       conditions.push(`s.plant_id = $${params.length}`);

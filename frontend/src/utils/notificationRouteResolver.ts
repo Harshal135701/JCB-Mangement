@@ -158,13 +158,9 @@ export function resolveNotificationRoute(
   if (woMatch || isWoEntity || path === '/work-orders') {
     const extractedId = (woMatch ? woMatch[1] : null) || entityId;
 
-    // Allowed on /work-orders: admin, manager, technician, store_manager
-    if (['admin', 'manager', 'technician', 'store_manager'].includes(userRole as string)) {
+    // Allowed on /work-orders: admin, manager, technician, store_manager, operator
+    if (['admin', 'manager', 'technician', 'store_manager', 'operator'].includes(userRole as string)) {
       return extractedId ? `/work-orders/${extractedId}` : '/work-orders';
-    }
-    // Operator is not allowed on /work-orders; forward to operator dashboard
-    if (userRole === 'operator') {
-      return extractedId ? `/operator/dashboard?ticketId=${extractedId}` : '/operator/dashboard';
     }
     return fallbackHome;
   }

@@ -24,6 +24,10 @@ import {
   approveRequest,
   rejectRequest,
 } from './operator-assignment.controller';
+import {
+  getOperatorMaintenanceStatus,
+  getMachineMaintenanceStatus,
+} from './operator-maintenance-access.controller';
 import { authenticateJWT } from '../../middlewares/auth.middleware';
 import { requireRoles } from '../../middlewares/rbac.middleware';
 
@@ -38,6 +42,7 @@ router.get('/operator/available-machines', getAvailableMachines);
 router.post('/operator/sign-in', requireRoles('operator', 'admin'), requestSignIn);
 router.post('/operator/request-temporary', requireRoles('operator', 'admin'), requestSignIn);
 router.get('/operator/current-assignment', getCurrentAssignment);
+router.get('/operator/maintenance-status', requireRoles('operator', 'admin'), getOperatorMaintenanceStatus);
 router.post('/operator/cancel-request', requireRoles('operator', 'admin'), cancelRequest);
 router.post('/operator/sign-out', signOut);
 router.post('/operator/release-temporary', signOut);
@@ -51,6 +56,7 @@ router.post('/operator/requests/:id/reject', requireRoles('manager', 'admin'), r
 // Read endpoints accessible by all authenticated roles (subject to facility isolation)
 router.get('/', getMachines);
 router.get('/qr/:uid', getMachineByQR);
+router.get('/:id/maintenance-status', getMachineMaintenanceStatus);
 router.get('/:id/history', getMachineHistory);
 router.get('/:id', getMachineById);
 
