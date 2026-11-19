@@ -820,7 +820,7 @@ export const ReportsPage: React.FC = () => {
           <button
             type="button"
             onClick={() => setActiveTab('my_report')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 shrink-0 whitespace-nowrap cursor-pointer ${
               activeTab === 'my_report'
                 ? 'bg-amber-500 text-black shadow-xs font-black'
                 : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50'
@@ -832,7 +832,7 @@ export const ReportsPage: React.FC = () => {
           <button
             type="button"
             onClick={() => setActiveTab('machines')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 shrink-0 whitespace-nowrap cursor-pointer ${
               activeTab === 'machines'
                 ? 'bg-amber-500 text-black shadow-xs font-black'
                 : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50'
@@ -844,7 +844,7 @@ export const ReportsPage: React.FC = () => {
           <button
             type="button"
             onClick={() => setActiveTab('technicians')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 shrink-0 whitespace-nowrap cursor-pointer ${
               activeTab === 'technicians'
                 ? 'bg-amber-500 text-black shadow-xs font-black'
                 : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50'
@@ -856,7 +856,7 @@ export const ReportsPage: React.FC = () => {
           <button
             type="button"
             onClick={() => setActiveTab('operators')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 shrink-0 whitespace-nowrap cursor-pointer ${
               activeTab === 'operators'
                 ? 'bg-amber-500 text-black shadow-xs font-black'
                 : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50'
@@ -873,7 +873,7 @@ export const ReportsPage: React.FC = () => {
           <button
             type="button"
             onClick={() => setActiveTab('enterprise')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 shrink-0 whitespace-nowrap cursor-pointer ${
               activeTab === 'enterprise'
                 ? 'bg-amber-500 text-black shadow-xs font-black'
                 : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50'
@@ -885,7 +885,7 @@ export const ReportsPage: React.FC = () => {
           <button
             type="button"
             onClick={() => setActiveTab('machines')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 shrink-0 whitespace-nowrap cursor-pointer ${
               activeTab === 'machines'
                 ? 'bg-amber-500 text-black shadow-xs font-black'
                 : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50'
@@ -897,7 +897,7 @@ export const ReportsPage: React.FC = () => {
           <button
             type="button"
             onClick={() => setActiveTab('managers')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 shrink-0 whitespace-nowrap cursor-pointer ${
               activeTab === 'managers'
                 ? 'bg-amber-500 text-black shadow-xs font-black'
                 : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50'
@@ -909,7 +909,7 @@ export const ReportsPage: React.FC = () => {
           <button
             type="button"
             onClick={() => setActiveTab('store_managers')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 shrink-0 whitespace-nowrap cursor-pointer ${
               activeTab === 'store_managers'
                 ? 'bg-amber-500 text-black shadow-xs font-black'
                 : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50'
@@ -921,7 +921,7 @@ export const ReportsPage: React.FC = () => {
           <button
             type="button"
             onClick={() => setActiveTab('technicians')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 shrink-0 whitespace-nowrap cursor-pointer ${
               activeTab === 'technicians'
                 ? 'bg-amber-500 text-black shadow-xs font-black'
                 : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50'
@@ -933,7 +933,7 @@ export const ReportsPage: React.FC = () => {
           <button
             type="button"
             onClick={() => setActiveTab('operators')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 shrink-0 whitespace-nowrap cursor-pointer ${
               activeTab === 'operators'
                 ? 'bg-amber-500 text-black shadow-xs font-black'
                 : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50'

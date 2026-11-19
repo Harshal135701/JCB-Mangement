@@ -1100,7 +1100,7 @@ export const DowntimeAnalyticsPage: React.FC = () => {
               </div>
 
               {/* Metrics Grid */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="bg-red-50 border border-red-200 p-3 rounded-xl">
                   <span className="text-[10px] font-black text-red-800 uppercase block">Total Stoppage</span>
                   <span className="text-lg font-black text-red-700">

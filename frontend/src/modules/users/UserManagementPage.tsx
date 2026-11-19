@@ -1546,9 +1546,9 @@ export const UserManagementPage: React.FC = () => {
       {/* ENROLL / EDIT PERSONNEL MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] flex flex-col">
             {/* MODAL HEADER */}
-            <div className="bg-white p-5 flex items-center justify-between border-b border-zinc-200">
+            <div className="bg-white p-5 flex items-center justify-between border-b border-zinc-200 shrink-0">
               <div className="flex items-center gap-3">
                 <div className="bg-jcb-yellow text-black font-black text-xl px-2.5 py-0.5 rounded shadow">
                   JCB
@@ -1646,7 +1646,7 @@ export const UserManagementPage: React.FC = () => {
               </div>
 
               {/* EMPLOYEE ID AND NAME */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
                     Employee ID *
@@ -1691,7 +1691,7 @@ export const UserManagementPage: React.FC = () => {
               </div>
 
               {/* EMAIL AND PHONE */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
                     Email Address *
@@ -1735,7 +1735,7 @@ export const UserManagementPage: React.FC = () => {
               </div>
 
               {/* PLANT AND SHOP */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
                     Assigned Plant Facility{' '}

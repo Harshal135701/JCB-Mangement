@@ -439,7 +439,7 @@ export const BreakdownReportModal: React.FC<BreakdownReportModalProps> = ({
           </div>
 
           {/* Gauge Readings (Optional Hour Meter & Sensors) */}
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <div>
               <label className="block text-[10px] font-bold text-zinc-600 uppercase tracking-wider mb-1">
                 Hour Meter (hrs)

@@ -2242,7 +2242,7 @@ export const ProcurementPage: React.FC = () => {
                 <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
                   Procurement Urgency *
                 </label>
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {(['critical', 'high', 'medium', 'low'] as PRUrgency[]).map((urg) => (
                     <button
                       type="button"

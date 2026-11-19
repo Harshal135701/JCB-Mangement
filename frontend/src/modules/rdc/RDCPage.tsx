@@ -1739,8 +1739,8 @@ export const RDCPage: React.FC = () => {
             </button>
           </div>
 
-          <div className="bg-white rounded-2xl border-2 border-zinc-200 shadow-sm overflow-hidden">
-            <table className="w-full text-left text-xs border-collapse">
+          <div className="bg-white rounded-2xl border-2 border-zinc-200 shadow-sm overflow-hidden overflow-x-auto">
+            <table className="w-full min-w-[700px] text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-zinc-50 border-b border-zinc-200 text-zinc-600 uppercase font-black tracking-wider text-[11px]">
                   <th className="py-3.5 px-4">Challan / Gate Pass</th>

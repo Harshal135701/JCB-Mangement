@@ -15,7 +15,7 @@ interface ReportSummaryCardsProps {
 
 export const ReportSummaryCards: React.FC<ReportSummaryCardsProps> = ({ cards }) => {
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
       {cards.map((card, idx) => {
         const Icon = card.icon;
         let badgeClass = 'bg-zinc-100 text-zinc-700 border-zinc-200';

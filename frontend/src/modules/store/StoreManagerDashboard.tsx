@@ -2156,7 +2156,7 @@ export const StoreManagerDashboard: React.FC = () => {
               </div>
 
               {adjustPart && (
-                <div className="grid grid-cols-4 gap-2 p-3 bg-zinc-100 rounded-xl text-center text-xs">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 bg-zinc-100 rounded-xl text-center text-xs">
                   <div>
                     <div className="text-[10px] font-bold text-zinc-500 uppercase">Physical</div>
                     <div className="font-mono font-black text-sm text-zinc-950">{adjustPart.current_physical_stock}</div>
@@ -2752,7 +2752,7 @@ export const StoreManagerDashboard: React.FC = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
                     Category *
@@ -2797,7 +2797,7 @@ export const StoreManagerDashboard: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
                     Storage Bin Location *
@@ -2895,7 +2895,7 @@ export const StoreManagerDashboard: React.FC = () => {
           ========================================================================= */}
       {selectedPartForDetails && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-xs">
-          <div className="bg-white w-full max-w-lg rounded-2xl border-2 border-zinc-300 shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-white w-full max-w-lg rounded-2xl border-2 border-zinc-300 shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-zinc-200 pb-3">
               <div>
                 <div className="text-[10px] font-mono font-bold text-amber-700 uppercase">Part Master Specification</div>
@@ -2920,7 +2920,7 @@ export const StoreManagerDashboard: React.FC = () => {
               </div>
 
               {/* Stock Balance Quad */}
-              <div className="grid grid-cols-4 gap-2 p-3 bg-zinc-100 rounded-xl text-center">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 bg-zinc-100 rounded-xl text-center">
                 <div>
                   <div className="text-[10px] font-bold text-zinc-500 uppercase">Physical</div>
                   <div className="font-mono font-black text-base text-zinc-950">{selectedPartForDetails.current_physical_stock ?? 0}</div>

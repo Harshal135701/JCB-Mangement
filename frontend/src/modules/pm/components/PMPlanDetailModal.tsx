@@ -169,8 +169,8 @@ export const PMPlanDetailModal: React.FC<PMPlanDetailModalProps> = ({
                   Machine Historical Maintenance Executions ({history.length})
                 </h5>
 
-                <div className="border border-zinc-200 rounded-xl overflow-hidden max-h-40 overflow-y-auto">
-                  <table className="w-full text-left text-xs">
+                <div className="border border-zinc-200 rounded-xl overflow-hidden max-h-40 overflow-y-auto overflow-x-auto">
+                  <table className="w-full min-w-[480px] text-left text-xs">
                     <thead className="bg-zinc-50 border-b border-zinc-200 text-zinc-600 font-bold uppercase text-[10px]">
                       <tr>
                         <th className="px-3 py-2">WO #</th>
