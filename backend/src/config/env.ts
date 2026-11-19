@@ -89,7 +89,11 @@ function parseAllowedOrigins(nodeEnv: string): string[] {
       throw new Error(`[Configuration Error]: Invalid CORS origin: ${origin}`);
     }
 
-    if (nodeEnv === 'production' && parsed.protocol !== 'https:') {
+    if (
+      nodeEnv === 'production' &&
+      parsed.protocol !== 'https:' &&
+      !['localhost', '127.0.0.1'].includes(parsed.hostname)
+    ) {
       throw new Error(
         '[Security Startup Error]: Production CORS origins must use HTTPS.'
       );

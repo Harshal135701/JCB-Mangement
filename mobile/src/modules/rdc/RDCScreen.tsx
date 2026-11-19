@@ -154,8 +154,15 @@ export const RDCScreen = () => {
         (item.vendor_party_name && item.vendor_party_name.toLowerCase().includes(q)) ||
         (item.purpose && item.purpose.toLowerCase().includes(q));
 
+      const isItemOverdue =
+        item.status === 'dispatched' &&
+        item.expected_return_date &&
+        new Date(item.expected_return_date).getTime() < Date.now();
+
       const matchesStatus =
-        statusFilter === 'ALL' || item.status?.toLowerCase() === statusFilter.toLowerCase();
+        statusFilter === 'ALL' ||
+        (statusFilter === 'overdue' && isItemOverdue) ||
+        item.status?.toLowerCase() === statusFilter.toLowerCase();
 
       return matchesSearch && matchesStatus;
     });
@@ -167,7 +174,13 @@ export const RDCScreen = () => {
     const pending = rdcs.filter((r) => r.status === 'pending_approval').length;
     const dispatched = rdcs.filter((r) => r.status === 'dispatched').length;
     const returned = rdcs.filter((r) => r.status === 'fully_returned').length;
-    return { total, pending, dispatched, returned };
+    const overdue = rdcs.filter(
+      (r) =>
+        r.status === 'dispatched' &&
+        r.expected_return_date &&
+        new Date(r.expected_return_date).getTime() < Date.now()
+    ).length;
+    return { total, pending, dispatched, returned, overdue };
   }, [rdcs]);
 
   const canGoBack = navigation?.canGoBack?.();
@@ -241,6 +254,7 @@ export const RDCScreen = () => {
             { id: 'pending_approval', label: 'Pending Gate Pass' },
             { id: 'approved', label: 'Pass Authorized' },
             { id: 'dispatched', label: 'At Vendor' },
+            { id: 'overdue', label: `Overdue (${kpiStats.overdue})` },
             { id: 'fully_returned', label: 'Inwarded & Closed' },
           ].map((chip) => {
             const active = statusFilter === chip.id;
@@ -303,6 +317,10 @@ export const RDCScreen = () => {
             const isApproved = rdc.status === 'approved';
             const isDispatched = rdc.status === 'dispatched';
             const isReturned = rdc.status === 'fully_returned';
+            const isOverdue =
+              isDispatched &&
+              rdc.expected_return_date &&
+              new Date(rdc.expected_return_date).getTime() < Date.now();
 
             return (
               <View key={rdc.id} style={styles.card}>
@@ -315,7 +333,9 @@ export const RDCScreen = () => {
                   <View
                     style={[
                       styles.statusBadge,
-                      isReturned
+                      isOverdue
+                        ? styles.statusOverdue
+                        : isReturned
                         ? styles.statusReturned
                         : isDispatched
                         ? styles.statusDispatched
@@ -327,7 +347,9 @@ export const RDCScreen = () => {
                     <Text
                       style={[
                         styles.statusBadgeText,
-                        isReturned
+                        isOverdue
+                          ? styles.statusTextOverdue
+                          : isReturned
                           ? styles.statusTextReturned
                           : isDispatched
                           ? styles.statusTextDispatched
@@ -336,7 +358,9 @@ export const RDCScreen = () => {
                           : styles.statusTextPending,
                       ]}
                     >
-                      {isReturned
+                      {isOverdue
+                        ? 'OVERDUE RETURN'
+                        : isReturned
                         ? 'RETURNED & CLOSED'
                         : isDispatched
                         ? 'OUTWARD AT VENDOR'
@@ -752,6 +776,11 @@ const styles = StyleSheet.create({
   statusReturned: {
     backgroundColor: '#ECFDF5',
   },
+  statusOverdue: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
   statusBadgeText: {
     fontSize: 9.5,
     fontWeight: '800',
@@ -767,6 +796,10 @@ const styles = StyleSheet.create({
   },
   statusTextReturned: {
     color: '#047857',
+  },
+  statusTextOverdue: {
+    color: '#DC2626',
+    fontWeight: '900',
   },
   vendorRow: {
     flexDirection: 'row',

@@ -8,7 +8,13 @@ export default defineConfig({
     open: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:5000',
+        target: 'https://jcb-smart-cmms-api.onrender.com',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/socket.io': {
+        target: 'https://jcb-smart-cmms-api.onrender.com',
+        ws: true,
         changeOrigin: true,
         secure: false,
       },

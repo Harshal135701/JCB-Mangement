@@ -83,7 +83,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       return {
         title: 'System Admin',
         subtitle: 'Enterprise Control',
-        icon: 'shield-crown',
+        icon: 'shield-check',
         color: '#7C3AED',
         bg: '#EDE9FE',
       };
@@ -124,9 +124,9 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
     };
   }, [isAdmin, isManager, isStoreManager, isTechnician]);
 
-  // Clean, simple English menu sections
+  // Clean, simple English menu sections - 100% Synchronized with Web Sidebar sequence
   const menuSections: MenuSection[] = React.useMemo(() => {
-    // 1. Operator Menu: Flat, clean 5 big buttons
+    // 1. Operator Menu (Matches Web: Dashboard, Machines, Daily AM Checklist, Report Breakdown, Reports)
     if (isOperator) {
       return [
         {
@@ -134,36 +134,36 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           items: [
             {
               id: 'OperatorTab',
-              label: 'Home',
+              label: 'Dashboard',
               icon: 'home',
               iconColor: '#0F172A',
               iconBg: '#F1F5F9',
             },
             {
-              id: 'ReportBreakdownTab',
-              label: 'Report Breakdown',
-              icon: 'alert-circle',
-              iconColor: '#DC2626',
-              iconBg: '#FEE2E2',
-            },
-            {
               id: 'MachinesTab',
-              label: 'Machines & QR Scan',
+              label: 'Machines Management',
               icon: 'tractor',
               iconColor: '#B45309',
               iconBg: '#FEF3C7',
             },
             {
               id: 'DailyInspection',
-              label: 'Daily Checklist',
+              label: 'Daily AM Checklist',
               icon: 'clipboard-check',
               iconColor: '#16A34A',
               iconBg: '#DCFCE7',
             },
             {
-              id: 'TriageTab',
-              label: 'My Tickets',
-              icon: 'ticket-confirmation',
+              id: 'ReportBreakdown',
+              label: 'Report Breakdown',
+              icon: 'alert-circle',
+              iconColor: '#DC2626',
+              iconBg: '#FEE2E2',
+            },
+            {
+              id: 'OperationsTab',
+              label: 'Reports',
+              icon: 'chart-box-outline',
               iconColor: '#2563EB',
               iconBg: '#DBEAFE',
             },
@@ -172,7 +172,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       ];
     }
 
-    // 2. Technician Menu: Simple 5 big buttons
+    // 2. Technician Menu (Matches Web: Dashboard, Machines, Spares, Maintenance Status, Maintenance Schedule, Gate Pass, Reports)
     if (isTechnician) {
       return [
         {
@@ -180,100 +180,56 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           items: [
             {
               id: 'WorkOrdersTab',
-              label: 'My Work Orders',
-              icon: 'wrench-clock',
-              iconColor: '#2563EB',
-              iconBg: '#DBEAFE',
-            },
-            {
-              id: 'TriageTab',
-              label: 'Breakdowns Queue',
-              icon: 'alert-circle',
-              iconColor: '#DC2626',
-              iconBg: '#FEE2E2',
+              label: 'Dashboard',
+              icon: 'view-dashboard',
+              iconColor: '#0F172A',
+              iconBg: '#F1F5F9',
             },
             {
               id: 'MachinesTab',
-              label: 'Machines & QR Scan',
+              label: 'Machines Management',
               icon: 'tractor',
               iconColor: '#B45309',
               iconBg: '#FEF3C7',
             },
             {
               id: 'SparesTab',
-              label: 'Spare Parts',
+              label: 'Spare Parts Management',
               icon: 'package-variant-closed',
               iconColor: '#7C3AED',
               iconBg: '#EDE9FE',
             },
             {
+              id: 'WorkOrders',
+              label: 'Maintenance Status',
+              icon: 'wrench-clock',
+              iconColor: '#2563EB',
+              iconBg: '#DBEAFE',
+            },
+            {
+              id: 'Procurement',
+              label: 'Spare Parts Purchase Request',
+              icon: 'cart-outline',
+              iconColor: '#0284C7',
+              iconBg: '#E0F2FE',
+            },
+            {
               id: 'PMCalendar',
-              label: 'PM Schedule',
+              label: 'Maintenance Schedule',
               icon: 'calendar-clock',
               iconColor: '#059669',
               iconBg: '#D1FAE5',
             },
             {
               id: 'RDC',
-              label: 'Gate Passes (RDC)',
+              label: 'Gate Pass',
               icon: 'truck-fast-outline',
               iconColor: '#475569',
               iconBg: '#F1F5F9',
-            },
-          ],
-        },
-      ];
-    }
-
-    // 3. Store Manager Menu (Web-aligned 100% English)
-    if (isStoreManager) {
-      return [
-        {
-          title: 'STORES & INVENTORY',
-          items: [
-            {
-              id: 'SparesTab',
-              label: 'Spare Parts Stock',
-              icon: 'package-variant-closed',
-              iconColor: '#7C3AED',
-              iconBg: '#EDE9FE',
-            },
-            {
-              id: 'Procurement',
-              label: 'Buying & Receiving',
-              icon: 'cart-outline',
-              iconColor: '#0284C7',
-              iconBg: '#E0F2FE',
-            },
-            {
-              id: 'RDC',
-              label: 'Delivery Passes (RDC)',
-              icon: 'truck-fast-outline',
-              iconColor: '#475569',
-              iconBg: '#F1F5F9',
-            },
-            {
-              id: 'WorkOrdersTab',
-              label: 'Part Requests from Jobs',
-              icon: 'wrench-clock',
-              iconColor: '#2563EB',
-              iconBg: '#DBEAFE',
-            },
-          ],
-        },
-        {
-          title: 'AUDIT & REPORTS',
-          items: [
-            {
-              id: 'AuditLogs',
-              label: 'Stock Audit Log',
-              icon: 'shield-check-outline',
-              iconColor: '#16A34A',
-              iconBg: '#DCFCE7',
             },
             {
               id: 'OperationsTab',
-              label: 'Reports & Analytics',
+              label: 'Reports',
               icon: 'chart-box-outline',
               iconColor: '#EA580C',
               iconBg: '#FFEDD5',
@@ -283,107 +239,174 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       ];
     }
 
-    // 3. Admin & Manager: Categorized, clean English sections
-    const sections: MenuSection[] = [
+    // 3. Store Manager Menu (Matches Web: Dashboard, Spares, Purchase Request, Gate Pass, Maintenance Status, Activity Logs, Reports)
+    if (isStoreManager) {
+      return [
+        {
+          title: 'STORES & INVENTORY',
+          items: [
+            {
+              id: 'SparesTab',
+              label: 'Dashboard',
+              icon: 'view-dashboard',
+              iconColor: '#0F172A',
+              iconBg: '#F1F5F9',
+            },
+            {
+              id: 'SparesTab',
+              label: 'Spare Parts Management',
+              icon: 'package-variant-closed',
+              iconColor: '#7C3AED',
+              iconBg: '#EDE9FE',
+            },
+            {
+              id: 'Procurement',
+              label: 'Spare Parts Purchase Request',
+              icon: 'cart-outline',
+              iconColor: '#0284C7',
+              iconBg: '#E0F2FE',
+            },
+            {
+              id: 'RDC',
+              label: 'Gate Pass',
+              icon: 'truck-fast-outline',
+              iconColor: '#475569',
+              iconBg: '#F1F5F9',
+            },
+            {
+              id: 'WorkOrders',
+              label: 'Maintenance Status',
+              icon: 'wrench-clock',
+              iconColor: '#2563EB',
+              iconBg: '#DBEAFE',
+            },
+            {
+              id: 'AuditLogs',
+              label: 'Activity Logs',
+              icon: 'shield-check-outline',
+              iconColor: '#16A34A',
+              iconBg: '#DCFCE7',
+            },
+            {
+              id: 'OperationsTab',
+              label: 'Reports',
+              icon: 'chart-box-outline',
+              iconColor: '#EA580C',
+              iconBg: '#FFEDD5',
+            },
+          ],
+        },
+      ];
+    }
+
+    // 4. Admin & Manager: 100% Synchronized with Web Sidebar sequence
+    const items: MenuItem[] = [
       {
-        title: 'SHOPFLOOR OPERATIONS',
-        items: [
-          {
-            id: 'ShopfloorTab',
-            label: 'Shop Floor Overview',
-            icon: 'view-dashboard',
-            iconColor: '#0F172A',
-            iconBg: '#F1F5F9',
-          },
-          {
-            id: 'TriageTab',
-            label: 'Breakdowns & Triage',
-            icon: 'alert-circle',
-            iconColor: '#DC2626',
-            iconBg: '#FEE2E2',
-          },
-          {
-            id: 'MachinesTab',
-            label: 'Machines & Assets',
-            icon: 'tractor',
-            iconColor: '#B45309',
-            iconBg: '#FEF3C7',
-          },
-          {
-            id: 'SparesTab',
-            label: 'Spare Parts Inventory',
-            icon: 'package-variant-closed',
-            iconColor: '#7C3AED',
-            iconBg: '#EDE9FE',
-          },
-        ],
+        id: 'ShopfloorTab',
+        label: 'Dashboard',
+        icon: 'view-dashboard',
+        iconColor: '#0F172A',
+        iconBg: '#F1F5F9',
       },
       {
-        title: 'PLANNING & REPORTS',
-        items: [
-          {
-            id: 'OperationsTab',
-            label: 'Operations Hub & KPIs',
-            icon: 'chart-box-outline',
-            iconColor: '#2563EB',
-            iconBg: '#DBEAFE',
-          },
-          {
-            id: 'PMCalendar',
-            label: 'PM Maintenance Plan',
-            icon: 'calendar-clock',
-            iconColor: '#059669',
-            iconBg: '#D1FAE5',
-          },
-          {
-            id: 'DowntimeAnalytics',
-            label: 'Downtime Analytics',
-            icon: 'chart-timeline-variant',
-            iconColor: '#EA580C',
-            iconBg: '#FFEDD5',
-          },
-          {
-            id: 'Procurement',
-            label: 'Procurement Approvals',
-            icon: 'cart-outline',
-            iconColor: '#0284C7',
-            iconBg: '#E0F2FE',
-          },
-          {
-            id: 'RDC',
-            label: 'RDC Gate Passes',
-            icon: 'truck-fast-outline',
-            iconColor: '#475569',
-            iconBg: '#F1F5F9',
-          },
-        ],
+        id: 'UserManagement',
+        label: 'Staff Management',
+        icon: 'account-group-outline',
+        iconColor: '#7C3AED',
+        iconBg: '#EDE9FE',
+      },
+      {
+        id: 'MachinesTab',
+        label: 'Machines Management',
+        icon: 'tractor',
+        iconColor: '#B45309',
+        iconBg: '#FEF3C7',
+      },
+      {
+        id: 'SparesTab',
+        label: 'Spare Parts Management',
+        icon: 'package-variant-closed',
+        iconColor: '#D97706',
+        iconBg: '#FEF3C7',
+      },
+      {
+        id: 'DailyInspection',
+        label: 'Daily AM Checklist',
+        icon: 'clipboard-check-outline',
+        iconColor: '#16A34A',
+        iconBg: '#DCFCE7',
       },
     ];
 
-    if (isAdmin) {
-      sections.push({
-        title: 'ADMIN & SECURITY',
-        items: [
-          {
-            id: 'UserManagement',
-            label: 'Users & Permissions',
-            icon: 'account-group-outline',
-            iconColor: '#7C3AED',
-            iconBg: '#EDE9FE',
-          },
-          {
-            id: 'AuditLogs',
-            label: 'Audit Trail Ledger',
-            icon: 'shield-check-outline',
-            iconColor: '#16A34A',
-            iconBg: '#DCFCE7',
-          },
-        ],
+    if (isManager) {
+      items.push({
+        id: 'TriageTab',
+        label: 'Fault Reports',
+        icon: 'alert-circle',
+        iconColor: '#DC2626',
+        iconBg: '#FEE2E2',
       });
     }
 
-    return sections;
-  }, [isOperator, isTechnician, isStoreManager, isAdmin]);
+    items.push(
+      {
+        id: 'WorkOrders',
+        label: 'Maintenance Status',
+        icon: 'wrench-clock',
+        iconColor: '#2563EB',
+        iconBg: '#DBEAFE',
+      },
+      {
+        id: 'Procurement',
+        label: 'Spare Parts Purchase Request',
+        icon: 'cart-outline',
+        iconColor: '#0284C7',
+        iconBg: '#E0F2FE',
+      },
+      {
+        id: 'PMCalendar',
+        label: 'Maintenance Schedule',
+        icon: 'calendar-clock',
+        iconColor: '#059669',
+        iconBg: '#D1FAE5',
+      },
+      {
+        id: 'DowntimeAnalytics',
+        label: 'Machine Status',
+        icon: 'chart-timeline-variant',
+        iconColor: '#EA580C',
+        iconBg: '#FFEDD5',
+      },
+      {
+        id: 'RDC',
+        label: 'Gate Pass',
+        icon: 'truck-fast-outline',
+        iconColor: '#475569',
+        iconBg: '#F1F5F9',
+      },
+      {
+        id: 'AuditLogs',
+        label: 'Activity Logs',
+        icon: 'shield-check-outline',
+        iconColor: '#16A34A',
+        iconBg: '#DCFCE7',
+      },
+      {
+        id: 'OperationsTab',
+        label: 'Reports',
+        icon: 'chart-box-outline',
+        iconColor: '#7C3AED',
+        iconBg: '#EDE9FE',
+      }
+    );
+
+    return [
+      {
+        title: isAdmin ? 'ADMINISTRATION & OPERATIONS' : 'PLANT OPERATIONS & GOVERNANCE',
+        items,
+      },
+    ];
+  }, [isOperator, isTechnician, isStoreManager, isAdmin, isManager]);
 
   if (!visible) {
     return null;
@@ -430,11 +453,6 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             <Text style={styles.avatarLetter}>
               {String(user?.fullName || user?.employeeCode || (isAdmin ? 'A' : 'W')).charAt(0).toUpperCase()}
             </Text>
-            {isAdmin && (
-              <View style={styles.adminCrownBadge}>
-                <MaterialCommunityIcons name="crown" size={11} color="#FFFFFF" />
-              </View>
-            )}
           </View>
           <View style={styles.workerInfo}>
             <Text style={styles.workerName} numberOfLines={1}>
@@ -606,19 +624,6 @@ const styles = StyleSheet.create({
   adminAvatar: {
     backgroundColor: '#7C3AED',
     shadowColor: '#7C3AED',
-  },
-  adminCrownBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    backgroundColor: '#F59E0B',
-    borderRadius: 8,
-    width: 16,
-    height: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: '#FFFFFF',
   },
   avatarLetter: {
     fontSize: 18,

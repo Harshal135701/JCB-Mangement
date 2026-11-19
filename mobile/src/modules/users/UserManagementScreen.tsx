@@ -32,6 +32,14 @@ export const UserManagementScreen = () => {
   const [search, setSearch] = useState('');
   const [selectedRole, setSelectedRole] = useState('all');
 
+  // Segmented Tabs: 'personnel' | 'pending'
+  const [activeTab, setActiveTab] = useState<'personnel' | 'pending'>('personnel');
+  const [pendingList, setPendingList] = useState<any[]>([]);
+  const [loadingPending, setLoadingPending] = useState(false);
+  const [rejectModalUser, setRejectModalUser] = useState<any | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [actionPendingId, setActionPendingId] = useState<string | null>(null);
+
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<any | null>(null);
@@ -65,8 +73,61 @@ export const UserManagementScreen = () => {
     }
   };
 
+  const fetchPendingOperators = async () => {
+    try {
+      setLoadingPending(true);
+      const res: any = await apiClient.get('/auth/pending-operators');
+      if (res?.success && Array.isArray(res.data)) {
+        setPendingList(res.data);
+      } else {
+        setPendingList([]);
+      }
+    } catch (e) {
+      console.warn('Failed to load pending operators:', e);
+    } finally {
+      setLoadingPending(false);
+    }
+  };
+
+  const handleApprove = async (opId: string, opName: string) => {
+    try {
+      setActionPendingId(opId);
+      const res: any = await apiClient.post(`/auth/operators/${opId}/approve`, {});
+      if (res?.success) {
+        Alert.alert('Approved', `${opName} has been authorized and granted portal access.`);
+        fetchPendingOperators();
+        fetchUsers();
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to approve operator.');
+    } finally {
+      setActionPendingId(null);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!rejectModalUser) return;
+    try {
+      setActionPendingId(rejectModalUser.id);
+      const res: any = await apiClient.post(`/auth/operators/${rejectModalUser.id}/reject`, {
+        rejection_reason: rejectionReason.trim() || 'Details could not be verified by Plant Manager.',
+      });
+      if (res?.success) {
+        Alert.alert('Rejected', `${rejectModalUser.full_name}'s registration has been rejected.`);
+        setRejectModalUser(null);
+        setRejectionReason('');
+        fetchPendingOperators();
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to reject operator.');
+    } finally {
+      setActionPendingId(null);
+    }
+  };
+
   useEffect(() => {
     fetchUsers();
+    fetchPendingOperators();
   }, []);
 
   const openCreateModal = (presetRole: string = 'technician') => {
@@ -210,7 +271,7 @@ export const UserManagementScreen = () => {
       <AppHeader
         title="Plant Personnel"
         icon="account-group-outline"
-        sectionTitle="User Management & Access"
+        sectionTitle="Staff Management"
         sectionSubtitle="Operators, technicians & line managers roster"
         showBack={canGoBack}
         onBack={() => navigation.goBack()}
@@ -228,82 +289,209 @@ export const UserManagementScreen = () => {
         }
       />
 
-      {/* KPI Stats Row */}
-      <View style={styles.kpiRow}>
-        <View style={styles.kpiCard}>
-          <Text style={styles.kpiValue}>{usersList.length}</Text>
-          <Text style={styles.kpiLabel}>Total</Text>
-        </View>
-        <View style={styles.kpiCard}>
-          <Text style={[styles.kpiValue, { color: '#2563EB' }]}>{techCount}</Text>
-          <Text style={styles.kpiLabel}>Techs</Text>
-        </View>
-        <View style={styles.kpiCard}>
-          <Text style={[styles.kpiValue, { color: '#047857' }]}>{oprCount}</Text>
-          <Text style={styles.kpiLabel}>Operators</Text>
-        </View>
-        <View style={styles.kpiCard}>
-          <Text style={[styles.kpiValue, { color: '#7C3AED' }]}>{mgrCount}</Text>
-          <Text style={styles.kpiLabel}>Managers</Text>
-        </View>
-      </View>
-
-      {/* Search & Filter */}
-      <View style={styles.searchSection}>
-        <View style={styles.searchBox}>
-          <MaterialCommunityIcons name="magnify" size={20} color="#64748B" style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search Name, ID, Department, Email..."
-            placeholderTextColor="#94A3B8"
-            value={search}
-            onChangeText={setSearch}
-            clearButtonMode="while-editing"
+      {/* Segmented Tabs: Personnel vs Pending Approvals */}
+      <View style={styles.segmentTabBar}>
+        <TouchableOpacity
+          style={[styles.segmentTabItem, activeTab === 'personnel' && styles.segmentTabItemActive]}
+          onPress={() => setActiveTab('personnel')}
+          activeOpacity={0.7}
+        >
+          <MaterialCommunityIcons
+            name="account-multiple"
+            size={18}
+            color={activeTab === 'personnel' ? '#000000' : '#64748B'}
           />
-          {search.length > 0 && (
-            <TouchableOpacity onPress={() => setSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <MaterialCommunityIcons name="close-circle" size={18} color="#94A3B8" />
-            </TouchableOpacity>
-          )}
-        </View>
+          <Text style={[styles.segmentTabLabel, activeTab === 'personnel' && styles.segmentTabLabelActive]}>
+            All Personnel ({usersList.length})
+          </Text>
+        </TouchableOpacity>
 
-        {/* Filter Chips */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll}>
-          {['all', 'technician', 'operator', 'store_manager', 'manager', 'admin'].map((role) => {
-            const active = selectedRole === role;
-            return (
-              <TouchableOpacity
-                key={role}
-                style={[styles.filterChip, active && styles.filterChipActive]}
-                onPress={() => setSelectedRole(role)}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
-                  {role === 'all'
-                    ? 'All Roles'
-                    : role === 'store_manager'
-                    ? 'STORE MANAGER'
-                    : role.toUpperCase()}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+        <TouchableOpacity
+          style={[styles.segmentTabItem, activeTab === 'pending' && styles.segmentTabItemActive]}
+          onPress={() => setActiveTab('pending')}
+          activeOpacity={0.7}
+        >
+          <MaterialCommunityIcons
+            name="clock-alert-outline"
+            size={18}
+            color={activeTab === 'pending' ? '#000000' : '#64748B'}
+          />
+          <Text style={[styles.segmentTabLabel, activeTab === 'pending' && styles.segmentTabLabelActive]}>
+            Pending Approvals
+          </Text>
+          {pendingList.length > 0 && (
+            <View style={styles.pendingTabBadge}>
+              <Text style={styles.pendingTabBadgeText}>{pendingList.length}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
       </View>
+
+      {activeTab === 'personnel' ? (
+        <>
+          {/* KPI Stats Row */}
+          <View style={styles.kpiRow}>
+            <View style={styles.kpiCard}>
+              <Text style={styles.kpiValue}>{usersList.length}</Text>
+              <Text style={styles.kpiLabel}>Total</Text>
+            </View>
+            <View style={styles.kpiCard}>
+              <Text style={[styles.kpiValue, { color: '#2563EB' }]}>{techCount}</Text>
+              <Text style={styles.kpiLabel}>Techs</Text>
+            </View>
+            <View style={styles.kpiCard}>
+              <Text style={[styles.kpiValue, { color: '#047857' }]}>{oprCount}</Text>
+              <Text style={styles.kpiLabel}>Operators</Text>
+            </View>
+            <View style={styles.kpiCard}>
+              <Text style={[styles.kpiValue, { color: '#7C3AED' }]}>{mgrCount}</Text>
+              <Text style={styles.kpiLabel}>Managers</Text>
+            </View>
+          </View>
+
+          {/* Search & Filter */}
+          <View style={styles.searchSection}>
+            <View style={styles.searchBox}>
+              <MaterialCommunityIcons name="magnify" size={20} color="#64748B" style={styles.searchIcon} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search Name, ID, Department, Email..."
+                placeholderTextColor="#94A3B8"
+                value={search}
+                onChangeText={setSearch}
+                clearButtonMode="while-editing"
+              />
+              {search.length > 0 && (
+                <TouchableOpacity onPress={() => setSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <MaterialCommunityIcons name="close-circle" size={18} color="#94A3B8" />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Filter Chips */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll}>
+              {['all', 'technician', 'operator', 'store_manager', 'manager', 'admin'].map((role) => {
+                const active = selectedRole === role;
+                return (
+                  <TouchableOpacity
+                    key={role}
+                    style={[styles.filterChip, active && styles.filterChipActive]}
+                    onPress={() => setSelectedRole(role)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
+                      {role === 'all'
+                        ? 'All Roles'
+                        : role === 'store_manager'
+                        ? 'STORE MANAGER'
+                        : role.toUpperCase()}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </>
+      ) : null}
 
       {/* Main Staff List */}
       <ScrollView
         contentContainerStyle={[styles.listScroll, { paddingBottom: insets.bottom + 20 }]}
         refreshControl={
           <RefreshControl
-            refreshing={loading}
-            onRefresh={fetchUsers}
+            refreshing={activeTab === 'personnel' ? loading : loadingPending}
+            onRefresh={() => {
+              if (activeTab === 'personnel') fetchUsers();
+              else fetchPendingOperators();
+            }}
             colors={[COLORS.primary]}
             tintColor={COLORS.primary}
           />
         }
       >
-        {filtered.length === 0 ? (
+        {activeTab === 'pending' ? (
+          pendingList.length === 0 ? (
+            <View style={styles.emptyState}>
+              <View style={[styles.emptyIconCircle, { backgroundColor: '#DCFCE7' }]}>
+                <MaterialCommunityIcons name="check-decagram" size={36} color="#16A34A" />
+              </View>
+              <Text style={styles.emptyTitle}>All Registrations Cleared</Text>
+              <Text style={styles.emptySubtitle}>No pending operator authorization requests.</Text>
+            </View>
+          ) : (
+            pendingList.map((p) => {
+              const isActing = actionPendingId === p.id;
+              return (
+                <View key={p.id} style={styles.pendingCard}>
+                  <View style={styles.pendingTopRow}>
+                    <View style={styles.pendingAvatarBox}>
+                      <Text style={styles.pendingAvatarText}>{(p.full_name || 'O')[0].toUpperCase()}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <View style={styles.nameRow}>
+                        <Text style={styles.userName}>{p.full_name}</Text>
+                        <View style={styles.pendingBadgePill}>
+                          <Text style={styles.pendingBadgePillText}>PENDING</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.empCode}>{p.employee_code}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.detailsBox}>
+                    <View style={styles.detailRow}>
+                      <MaterialCommunityIcons name="factory" size={14} color="#64748B" />
+                      <Text style={styles.detailText}>{p.plant_name || 'Plant'} • {p.shop_name || 'Shop'}</Text>
+                    </View>
+                    <View style={styles.detailRow}>
+                      <MaterialCommunityIcons name="email-outline" size={14} color="#64748B" />
+                      <Text style={styles.detailText}>{p.email}</Text>
+                    </View>
+                    {p.phone ? (
+                      <View style={styles.detailRow}>
+                        <MaterialCommunityIcons name="phone-outline" size={14} color="#64748B" />
+                        <Text style={styles.detailText}>{p.phone}</Text>
+                      </View>
+                    ) : null}
+                    <View style={styles.detailRow}>
+                      <MaterialCommunityIcons name="clock-time-four-outline" size={14} color="#64748B" />
+                      <Text style={styles.detailText}>{p.shift || 'Shift A'}</Text>
+                    </View>
+                  </View>
+
+                  {/* Approve / Reject Actions */}
+                  <View style={styles.pendingActionRow}>
+                    <TouchableOpacity
+                      style={styles.rejectBtn}
+                      onPress={() => setRejectModalUser(p)}
+                      disabled={isActing}
+                      activeOpacity={0.8}
+                    >
+                      <MaterialCommunityIcons name="close" size={16} color="#DC2626" />
+                      <Text style={styles.rejectBtnText}>Reject</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.approveBtn}
+                      onPress={() => handleApprove(p.id, p.full_name)}
+                      disabled={isActing}
+                      activeOpacity={0.85}
+                    >
+                      {isActing ? (
+                        <ActivityIndicator color="#000000" size="small" />
+                      ) : (
+                        <>
+                          <MaterialCommunityIcons name="check" size={16} color="#000000" />
+                          <Text style={styles.approveBtnText}>Approve & Authorize</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            })
+          )
+        ) : filtered.length === 0 ? (
           <View style={styles.emptyState}>
             <View style={styles.emptyIconCircle}>
               <MaterialCommunityIcons name="account-search" size={36} color="#94A3B8" />
@@ -550,6 +738,47 @@ export const UserManagementScreen = () => {
                 </TouchableOpacity>
               </View>
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Operator Rejection Modal */}
+      <Modal visible={!!rejectModalUser} animationType="fade" transparent onRequestClose={() => setRejectModalUser(null)}>
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalContainer, { maxHeight: 320, padding: 18 }]}>
+            <View style={[styles.modalHeader, { paddingHorizontal: 0, paddingTop: 0 }]}>
+              <View>
+                <Text style={styles.modalTitle}>Reject Operator</Text>
+                <Text style={styles.modalSubtitle}>Provide reason to applicant</Text>
+              </View>
+              <TouchableOpacity onPress={() => setRejectModalUser(null)} style={styles.modalCloseBtn}>
+                <MaterialCommunityIcons name="close" size={20} color="#0F172A" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[styles.inputLabel, { marginTop: 12 }]}>REJECTION REASON</Text>
+            <TextInput
+              style={[styles.textInput, { height: 75, textAlignVertical: 'top', paddingTop: 8 }]}
+              value={rejectionReason}
+              onChangeText={setRejectionReason}
+              placeholder="e.g. Employee ID not found in HR records."
+              placeholderTextColor="#94A3B8"
+              multiline
+            />
+
+            <View style={styles.modalBtnRow}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setRejectModalUser(null)}>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.saveBtn, { backgroundColor: '#DC2626' }]}
+                onPress={handleReject}
+                disabled={actionPendingId !== null}
+              >
+                <Text style={[styles.saveBtnText, { color: '#FFFFFF' }]}>Confirm Rejection</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -991,5 +1220,135 @@ const styles = StyleSheet.create({
     color: '#000000',
     fontWeight: '800',
     fontSize: 13,
+  },
+  /* Segmented Tab Bar */
+  segmentTabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    paddingHorizontal: 12,
+    gap: 8,
+  },
+  segmentTabItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    gap: 6,
+    borderBottomWidth: 2.5,
+    borderBottomColor: 'transparent',
+  },
+  segmentTabItemActive: {
+    borderBottomColor: COLORS.primary,
+  },
+  segmentTabLabel: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  segmentTabLabelActive: {
+    color: '#0F172A',
+    fontWeight: '900',
+  },
+  pendingTabBadge: {
+    backgroundColor: '#DC2626',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  pendingTabBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+
+  /* Pending Operator Cards */
+  pendingCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1.5,
+    borderColor: '#FEF3C7',
+    elevation: 2,
+    shadowColor: '#000000',
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+  },
+  pendingTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  pendingAvatarBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  pendingAvatarText: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#B45309',
+  },
+  pendingBadgePill: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+  },
+  pendingBadgePillText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#B45309',
+    letterSpacing: 0.5,
+  },
+  pendingActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  rejectBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: '#FEE2E2',
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  rejectBtnText: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#DC2626',
+  },
+  approveBtn: {
+    flex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#F9B101',
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  approveBtnText: {
+    fontSize: 12.5,
+    fontWeight: '900',
+    color: '#000000',
   },
 });

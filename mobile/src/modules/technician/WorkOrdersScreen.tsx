@@ -125,7 +125,7 @@ export const WorkOrdersScreen = ({ navigation }: any) => {
         <View style={styles.sectionTitleBlock}>
           <View style={styles.sectionTitleRow}>
             <View style={styles.yellowIndicatorBar} />
-            <Text style={styles.sectionMainTitle}>Technician Workbench</Text>
+            <Text style={styles.sectionMainTitle}>Maintenance Status</Text>
           </View>
           <Text style={styles.sectionSubtitle}>
             Overview of assigned repair orders & field maintenance

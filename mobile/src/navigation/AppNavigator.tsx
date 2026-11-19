@@ -12,6 +12,7 @@ import { COLORS } from '../config/constants';
 
 // Screens
 import { LoginScreen } from '../modules/auth/LoginScreen';
+import { OperatorSignUpScreen } from '../modules/auth/OperatorSignUpScreen';
 import { ShopFloorDashboardScreen } from '../modules/manager/ShopFloorDashboardScreen';
 import { TriageQueueScreen } from '../modules/breakdowns/TriageQueueScreen';
 import { MachineMasterScreen } from '../modules/machines/MachineMasterScreen';
@@ -21,6 +22,7 @@ import { OperationsHubScreen } from '../modules/operations/OperationsHubScreen';
 // Sub / Detail Screens
 import { ProcurementScreen } from '../modules/procurement/ProcurementScreen';
 import { RDCScreen } from '../modules/rdc/RDCScreen';
+import { PreShiftInspectionScreen } from '../modules/inspections/PreShiftInspectionScreen';
 import { PMCalendarScreen } from '../modules/pm/PMCalendarScreen';
 import { DowntimeAnalyticsScreen } from '../modules/downtime/DowntimeAnalyticsScreen';
 import { AuditLogsScreen } from '../modules/audit/AuditLogsScreen';
@@ -202,32 +204,46 @@ const MainTabNavigator = ({ navigation }: any) => {
   // Android system navigation bar clearance
   const safeBottom = Math.max(insets.bottom, Platform.OS === 'android' ? 22 : 12);
 
-  // Tab switching proxy for child screens
+  // Active bottom tabs for current logged-in role
+  const activeTabIds = React.useMemo(() => {
+    if (isOperator) return ['OperatorTab', 'MachinesTab', 'ReportBreakdownTab', 'TriageTab'];
+    if (isTechnician) return ['WorkOrdersTab', 'TriageTab', 'MachinesTab', 'SparesTab'];
+    if (isStoreManager) return ['SparesTab', 'ProcurementTab', 'RDCTab', 'AuditTab'];
+    return ['ShopfloorTab', 'MachinesTab', 'TriageTab', 'OperationsTab'];
+  }, [isOperator, isTechnician, isStoreManager]);
+
+  // Tab switching proxy for child screens & sidebar:
+  // If the target tab is not in the active bottom tabs for this role, smoothly open it as a full stack screen
+  const tabToStackMap: Record<string, string> = {
+    ShopfloorTab: 'MainTabs',
+    OperatorTab: 'MainTabs',
+    WorkOrdersTab: 'WorkOrders',
+    SparesTab: 'InventoryCatalog',
+    OperationsTab: 'OperationsHub',
+    MachinesTab: 'MachinesMaster',
+    TriageTab: 'TriageQueue',
+    ProcurementTab: 'Procurement',
+    RDCTab: 'RDC',
+    AuditTab: 'AuditLogs',
+    ReportBreakdownTab: 'ReportBreakdown',
+  };
+
   const tabNavigation = React.useMemo(
     () => ({
       ...navigation,
       navigate: (name: string, params?: any) => {
-        const tabNames = [
-          'ShopfloorTab',
-          'TriageTab',
-          'MachinesTab',
-          'SparesTab',
-          'OperationsTab',
-          'OperatorTab',
-          'ReportBreakdownTab',
-          'WorkOrdersTab',
-          'ProcurementTab',
-          'RDCTab',
-          'AuditTab',
-        ];
-        if (tabNames.includes(name)) {
+        if (activeTabIds.includes(name)) {
           setActiveTab(name);
+          return;
+        }
+        if (tabToStackMap[name]) {
+          navigation.navigate(tabToStackMap[name], params);
           return;
         }
         navigation.navigate(name, params);
       },
     }),
-    [navigation]
+    [navigation, activeTabIds]
   );
 
   let tabs: Array<{
@@ -257,15 +273,15 @@ const MainTabNavigator = ({ navigation }: any) => {
       },
       {
         id: 'ReportBreakdownTab',
-        label: 'Requests',
-        activeIcon: 'clipboard-text',
-        inactiveIcon: 'clipboard-text-outline',
+        label: 'Report',
+        activeIcon: 'alert-circle',
+        inactiveIcon: 'alert-circle-outline',
         badge: 'NEW',
         component: <ReportBreakdownScreen navigation={tabNavigation} />,
       },
       {
         id: 'TriageTab',
-        label: 'Tickets',
+        label: 'Faults',
         activeIcon: 'ticket-confirmation',
         inactiveIcon: 'ticket-confirmation-outline',
         component: <TriageQueueScreen navigation={tabNavigation} />,
@@ -275,14 +291,14 @@ const MainTabNavigator = ({ navigation }: any) => {
     tabs = [
       {
         id: 'WorkOrdersTab',
-        label: 'Home',
-        activeIcon: 'home',
-        inactiveIcon: 'home-outline',
+        label: 'Maintenance',
+        activeIcon: 'wrench-clock',
+        inactiveIcon: 'wrench-clock',
         component: <WorkOrdersScreen navigation={tabNavigation} />,
       },
       {
         id: 'TriageTab',
-        label: 'Requests',
+        label: 'Faults',
         activeIcon: 'alert-circle',
         inactiveIcon: 'alert-circle-outline',
         component: <TriageQueueScreen navigation={tabNavigation} />,
@@ -296,7 +312,7 @@ const MainTabNavigator = ({ navigation }: any) => {
       },
       {
         id: 'SparesTab',
-        label: 'Spares',
+        label: 'Spare Parts',
         activeIcon: 'package-variant-closed',
         inactiveIcon: 'package-variant-closed',
         component: <InventoryCatalogScreen navigation={tabNavigation} />,
@@ -306,28 +322,28 @@ const MainTabNavigator = ({ navigation }: any) => {
     tabs = [
       {
         id: 'SparesTab',
-        label: 'Inventory',
+        label: 'Spare Parts',
         activeIcon: 'package-variant-closed',
         inactiveIcon: 'package-variant-closed',
         component: <InventoryCatalogScreen navigation={tabNavigation} />,
       },
       {
         id: 'ProcurementTab',
-        label: 'Buying',
+        label: 'Purchase',
         activeIcon: 'cart',
         inactiveIcon: 'cart-outline',
         component: <ProcurementScreen />,
       },
       {
         id: 'RDCTab',
-        label: 'Passes',
+        label: 'Gate Pass',
         activeIcon: 'truck-fast',
         inactiveIcon: 'truck-fast-outline',
         component: <RDCScreen />,
       },
       {
         id: 'AuditTab',
-        label: 'Audit',
+        label: 'Activity Logs',
         activeIcon: 'shield-check',
         inactiveIcon: 'shield-check-outline',
         component: <AuditLogsScreen />,
@@ -352,9 +368,9 @@ const MainTabNavigator = ({ navigation }: any) => {
       },
       {
         id: 'TriageTab',
-        label: 'Requests',
-        activeIcon: 'clipboard-text',
-        inactiveIcon: 'clipboard-text-outline',
+        label: 'Faults',
+        activeIcon: 'alert-circle',
+        inactiveIcon: 'alert-circle-outline',
         component: <TriageQueueScreen navigation={tabNavigation} />,
       },
       {
@@ -434,6 +450,16 @@ const MainTabNavigator = ({ navigation }: any) => {
   );
 };
 
+const AuthNavigator = () => {
+  const [authView, setAuthView] = React.useState<'login' | 'register'>('login');
+
+  if (authView === 'register') {
+    return <OperatorSignUpScreen onBackToLogin={() => setAuthView('login')} />;
+  }
+
+  return <LoginScreen onNavigateToRegister={() => setAuthView('register')} />;
+};
+
 export const AppNavigator = () => {
   const { user, isLoading } = useAuth();
 
@@ -441,9 +467,9 @@ export const AppNavigator = () => {
     return <SplashScreen />;
   }
 
-  // If user is not logged in, render LoginScreen directly for instantaneous, zero-delay load
+  // If user is not logged in, render AuthNavigator (Login + Operator Self-Registration)
   if (!user) {
-    return <LoginScreen />;
+    return <AuthNavigator />;
   }
 
   return (
@@ -463,42 +489,67 @@ export const AppNavigator = () => {
           <Stack.Screen
             name="Procurement"
             component={ProcurementScreen}
-            options={{ title: 'Purchase Requisition (PR)' }}
+            options={{ title: 'Spare Parts Purchase Request' }}
           />
           <Stack.Screen
             name="RDC"
             component={RDCScreen}
-            options={{ title: 'RDC Gate Passes' }}
+            options={{ title: 'Gate Pass' }}
           />
           <Stack.Screen
             name="DailyInspection"
-            component={PMCalendarScreen}
-            options={{ title: 'Daily Pre-Shift Inspection' }}
+            component={PreShiftInspectionScreen}
+            options={{ title: 'Daily AM Checklist' }}
+          />
+          <Stack.Screen
+            name="InventoryCatalog"
+            component={InventoryCatalogScreen}
+            options={{ title: 'Spare Parts Management' }}
+          />
+          <Stack.Screen
+            name="TriageQueue"
+            component={TriageQueueScreen}
+            options={{ title: 'Fault Reports' }}
+          />
+          <Stack.Screen
+            name="OperationsHub"
+            component={OperationsHubScreen}
+            options={{ title: 'Reports' }}
+          />
+          <Stack.Screen
+            name="Reports"
+            component={OperationsHubScreen}
+            options={{ title: 'Reports' }}
+          />
+          <Stack.Screen
+            name="MachinesMaster"
+            component={MachineMasterScreen}
+            options={{ title: 'Machines Management' }}
           />
           <Stack.Screen
             name="PMCalendar"
             component={PMCalendarScreen}
-            options={{ title: 'Preventive Maint (PM)' }}
+            options={{ title: 'Maintenance Schedule' }}
           />
           <Stack.Screen
             name="DowntimeAnalytics"
             component={DowntimeAnalyticsScreen}
-            options={{ title: 'Downtime & Pareto Analytics' }}
+            options={{ title: 'Machine Status' }}
           />
           <Stack.Screen
             name="AuditLogs"
             component={AuditLogsScreen}
-            options={{ title: 'Immutable Audit Ledger' }}
+            options={{ title: 'Activity Logs' }}
           />
           <Stack.Screen
             name="UserManagement"
             component={UserManagementScreen}
-            options={{ title: 'Personnel & Techs' }}
+            options={{ title: 'Staff Management' }}
           />
           <Stack.Screen
             name="WorkOrders"
             component={WorkOrdersScreen}
-            options={{ title: 'Technician Work Orders' }}
+            options={{ title: 'Maintenance Status' }}
           />
           <Stack.Screen
             name="WorkOrderDetail"
@@ -508,12 +559,12 @@ export const AppNavigator = () => {
           <Stack.Screen
             name="PartSearch"
             component={PartSearchScreen}
-            options={{ title: '160k Spares Catalog' }}
+            options={{ title: 'Spare Parts Catalog' }}
           />
           <Stack.Screen
             name="ReportBreakdown"
             component={ReportBreakdownScreen}
-            options={{ title: 'Report Breakdown (CMP)' }}
+            options={{ title: 'Report Breakdown' }}
           />
         </Stack.Navigator>
       </NavigationContainer>

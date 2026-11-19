@@ -9,6 +9,7 @@ import {
   RefreshControl,
   Platform,
   Image,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -42,6 +43,7 @@ export const OperationsHubScreen = ({ navigation }: any) => {
     wos: 0,
   });
   const [loading, setLoading] = useState(false);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
   const fetchLiveStats = async () => {
     try {
@@ -85,7 +87,7 @@ export const OperationsHubScreen = ({ navigation }: any) => {
       title: 'SUPPLY CHAIN & LOGISTICS',
       items: [
         {
-          name: 'Procurement (PR / PO)',
+          name: 'Spare Parts Purchase Request',
           screen: 'Procurement',
           desc: 'Purchase indents, quotations & approval status',
           iconName: 'truck-fast-outline',
@@ -94,7 +96,7 @@ export const OperationsHubScreen = ({ navigation }: any) => {
           badgeTextColor: '#B45309',
         },
         {
-          name: 'RDC Hub Network',
+          name: 'Gate Pass',
           screen: 'RDC',
           desc: 'Regional distribution centers & stock replenishment',
           iconName: 'warehouse',
@@ -108,7 +110,7 @@ export const OperationsHubScreen = ({ navigation }: any) => {
       title: 'MAINTENANCE & RELIABILITY',
       items: [
         {
-          name: 'PM Maintenance Calendar',
+          name: 'Maintenance Schedule',
           screen: 'PMCalendar',
           desc: 'Preventive schedules, checksheets & due tasks',
           iconName: 'calendar-clock',
@@ -117,7 +119,7 @@ export const OperationsHubScreen = ({ navigation }: any) => {
           badgeTextColor: '#15803D',
         },
         {
-          name: 'Downtime & Analytics',
+          name: 'Machine Status',
           screen: 'DowntimeAnalytics',
           desc: 'Plant availability, MTTR, MTBF & Pareto charts',
           iconName: 'chart-bell-curve-cumulative',
@@ -133,7 +135,7 @@ export const OperationsHubScreen = ({ navigation }: any) => {
             title: 'ADMINISTRATION & SECURITY',
             items: [
               {
-                name: 'User Management',
+                name: 'Staff Management',
                 screen: 'UserManagement',
                 desc: 'Team members, roles, passwords & permissions',
                 iconName: 'account-group-outline',
@@ -142,7 +144,7 @@ export const OperationsHubScreen = ({ navigation }: any) => {
                 badgeTextColor: '#B91C1C',
               },
               {
-                name: 'Audit Logs',
+                name: 'Activity Logs',
                 screen: 'AuditLogs',
                 desc: 'Timestamped user activity & security events',
                 iconName: 'shield-check-outline',
@@ -159,10 +161,10 @@ export const OperationsHubScreen = ({ navigation }: any) => {
   return (
     <View style={styles.container}>
       <AppHeader
-        title="Plant Operations"
+        title="Reports"
         icon="clipboard-text-clock"
-        sectionTitle="Operations Command Hub"
-        sectionSubtitle="Enterprise logistics, maintenance & governance"
+        sectionTitle="Reports & Analytics"
+        sectionSubtitle="Plant telemetry, downtime metrics & logs"
       />
 
       <ScrollView
@@ -206,6 +208,29 @@ export const OperationsHubScreen = ({ navigation }: any) => {
           </TouchableOpacity>
         </View>
 
+        {/* Official Shift Report Banner */}
+        <View style={styles.shiftReportCard}>
+          <View style={styles.shiftReportLeft}>
+            <View style={styles.shiftBadgeCircle}>
+              <MaterialCommunityIcons name="file-chart-outline" size={22} color="#000000" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.shiftReportTitle}>Shift Handover Report</Text>
+              <Text style={styles.shiftReportSub}>
+                Export live plant telemetry, downtime logs & maintenance status
+              </Text>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={styles.shiftPreviewBtn}
+            onPress={() => setIsReportModalOpen(true)}
+            activeOpacity={0.8}
+          >
+            <MaterialCommunityIcons name="file-pdf-box" size={16} color="#000000" />
+            <Text style={styles.shiftPreviewBtnText}>Preview Report</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Dynamic Sections */}
         {menuSections.map((section, idx) => (
           <View key={idx} style={{ marginBottom: 20 }}>
@@ -239,6 +264,126 @@ export const OperationsHubScreen = ({ navigation }: any) => {
           </View>
         ))}
       </ScrollView>
+
+      {/* Shift Report Preview Modal */}
+      <Modal
+        visible={isReportModalOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setIsReportModalOpen(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Image source={JCB_OFFICIAL_BADGE} style={{ width: 28, height: 28 }} resizeMode="contain" />
+                <View>
+                  <Text style={styles.modalHeaderTitle}>Shift Handover Report</Text>
+                  <Text style={styles.modalHeaderSub}>Ballabgarh Works • Plant 1</Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                onPress={() => setIsReportModalOpen(false)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <MaterialCommunityIcons name="close" size={22} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 460 }} showsVerticalScrollIndicator={false}>
+              {/* Report Header Metadata */}
+              <View style={styles.reportMetaBox}>
+                <View style={styles.reportMetaItem}>
+                  <Text style={styles.reportMetaLabel}>Date</Text>
+                  <Text style={styles.reportMetaVal}>
+                    {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  </Text>
+                </View>
+                <View style={styles.reportMetaItem}>
+                  <Text style={styles.reportMetaLabel}>Shift</Text>
+                  <Text style={styles.reportMetaVal}>Shift A (06:00 - 14:30)</Text>
+                </View>
+                <View style={styles.reportMetaItem}>
+                  <Text style={styles.reportMetaLabel}>Generated By</Text>
+                  <Text style={styles.reportMetaVal}>{user?.fullName || 'Plant Manager'}</Text>
+                </View>
+              </View>
+
+              {/* Plant Health KPIs */}
+              <Text style={styles.reportSectionTitle}>PLANT PERFORMANCE SUMMARY</Text>
+              <View style={styles.reportKpiGrid}>
+                <View style={styles.reportKpiCard}>
+                  <Text style={[styles.reportKpiValue, { color: '#047857' }]}>94.2%</Text>
+                  <Text style={styles.reportKpiLabel}>Availability</Text>
+                </View>
+                <View style={styles.reportKpiCard}>
+                  <Text style={[styles.reportKpiValue, { color: '#2563EB' }]}>42m</Text>
+                  <Text style={styles.reportKpiLabel}>Mean MTTR</Text>
+                </View>
+                <View style={styles.reportKpiCard}>
+                  <Text style={[styles.reportKpiValue, { color: '#B45309' }]}>{counts.prs}</Text>
+                  <Text style={styles.reportKpiLabel}>Spares PRs</Text>
+                </View>
+                <View style={styles.reportKpiCard}>
+                  <Text style={[styles.reportKpiValue, { color: '#7E22CE' }]}>{counts.rdcs}</Text>
+                  <Text style={styles.reportKpiLabel}>RDC Passes</Text>
+                </View>
+              </View>
+
+              {/* Shift Events & Work Orders */}
+              <Text style={styles.reportSectionTitle}>ACTIVE SHIFT HIGHLIGHTS</Text>
+              <View style={styles.eventItem}>
+                <MaterialCommunityIcons name="check-circle" size={16} color="#047857" />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.eventTitle}>Welding Station W-04 Hydraulics</Text>
+                  <Text style={styles.eventSub}>Leak isolated, seal replaced & pressure calibrated.</Text>
+                </View>
+                <Text style={styles.eventBadgeResolved}>RESOLVED</Text>
+              </View>
+
+              <View style={styles.eventItem}>
+                <MaterialCommunityIcons name="clock-alert-outline" size={16} color="#D97706" />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.eventTitle}>Assembly Line Conveyor Motor</Text>
+                  <Text style={styles.eventSub}>Vibration alert triaged; replacement bearing on order.</Text>
+                </View>
+                <Text style={styles.eventBadgePending}>MONITORING</Text>
+              </View>
+
+              <View style={styles.eventItem}>
+                <MaterialCommunityIcons name="calendar-check" size={16} color="#2563EB" />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.eventTitle}>Cutting Shop CNC-01 Weekly PM</Text>
+                  <Text style={styles.eventSub}>Spindle alignment & filter cleaning completed.</Text>
+                </View>
+                <Text style={styles.eventBadgeResolved}>PM DONE</Text>
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalBtnRow}>
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setIsReportModalOpen(false)}
+              >
+                <Text style={styles.modalCloseBtnText}>Close</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalExportBtn}
+                onPress={() => {
+                  setIsReportModalOpen(false);
+                  Alert.alert(
+                    'Report Exported',
+                    'Official JCB Shift Handover PDF compiled and dispatched to plant management team.'
+                  );
+                }}
+              >
+                <MaterialCommunityIcons name="share-variant" size={16} color="#000000" />
+                <Text style={styles.modalExportBtnText}>Share & Export</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -247,6 +392,222 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8FAFC',
+  },
+  // Shift Report Action Banner
+  shiftReportCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+    gap: 12,
+  },
+  shiftReportLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  shiftBadgeCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FEF08A',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shiftReportTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  shiftReportSub: {
+    fontSize: 11.5,
+    color: '#64748B',
+    fontWeight: '500',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  shiftPreviewBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: COLORS.primary,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  shiftPreviewBtnText: {
+    color: '#000000',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    padding: 16,
+  },
+  modalCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 18,
+    maxHeight: '90%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    marginBottom: 12,
+  },
+  modalHeaderTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  modalHeaderSub: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  reportMetaBox: {
+    flexDirection: 'row',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  reportMetaItem: {
+    flex: 1,
+  },
+  reportMetaLabel: {
+    fontSize: 9.5,
+    color: '#94A3B8',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  reportMetaVal: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginTop: 2,
+  },
+  reportSectionTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#64748B',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+    marginTop: 6,
+  },
+  reportKpiGrid: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+  },
+  reportKpiCard: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    padding: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  reportKpiValue: {
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  reportKpiLabel: {
+    fontSize: 9.5,
+    color: '#64748B',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  eventItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#F8FAFC',
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  eventTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  eventSub: {
+    fontSize: 10.5,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  eventBadgeResolved: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#047857',
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  eventBadgePending: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#B45309',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  modalBtnRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  modalCloseBtn: {
+    flex: 1,
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  modalCloseBtnText: {
+    color: '#475569',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  modalExportBtn: {
+    flex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: COLORS.primary,
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  modalExportBtnText: {
+    color: '#000000',
+    fontWeight: '800',
+    fontSize: 13,
   },
   topHeader: {
     flexDirection: 'row',

@@ -779,12 +779,19 @@ export async function getWorkOrdersService(
     }
   }
 
-  // Filter: status
+  // Filter: status (supports single status or comma-separated list)
   if (filter.status) {
-    const cleanStatus = String(filter.status).trim().toLowerCase();
-    if (ALLOWED_WO_STATUSES.includes(cleanStatus as WorkOrderStatus)) {
-      params.push(cleanStatus);
+    const rawStatuses = String(filter.status)
+      .split(',')
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+    const validStatuses = rawStatuses.filter((s) => ALLOWED_WO_STATUSES.includes(s as WorkOrderStatus));
+    if (validStatuses.length === 1) {
+      params.push(validStatuses[0]);
       conditions.push(`wo.status = $${params.length}`);
+    } else if (validStatuses.length > 1) {
+      params.push(validStatuses);
+      conditions.push(`wo.status = ANY($${params.length})`);
     }
   }
 

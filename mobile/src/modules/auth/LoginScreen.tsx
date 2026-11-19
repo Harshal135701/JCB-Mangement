@@ -28,7 +28,11 @@ const TOP_LEFT_ACCENT = require('../../assets/top_left_accent.png');
 
 const SAVED_IDENTIFIER_KEY = '@jcb_saved_identifier';
 
-export const LoginScreen = () => {
+interface LoginScreenProps {
+  onNavigateToRegister?: () => void;
+}
+
+export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigateToRegister }) => {
   const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
   const { login } = useAuth();
@@ -285,6 +289,19 @@ export const LoginScreen = () => {
                   <Text style={styles.primaryLoginBtnText}>SIGN IN</Text>
                 )}
               </TouchableOpacity>
+
+              {/* Register Operator Link */}
+              {onNavigateToRegister && (
+                <TouchableOpacity
+                  style={styles.registerLinkBtn}
+                  onPress={onNavigateToRegister}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.registerLinkText}>
+                    New factory operator? <Text style={styles.registerLinkHighlight}>Register for access</Text>
+                  </Text>
+                </TouchableOpacity>
+              )}
 
               {/* Bottom Brand Divider */}
               <View style={styles.cardFooterDivider}>
@@ -609,5 +626,20 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#94A3B8',
     letterSpacing: 0.5,
+  },
+  registerLinkBtn: {
+    alignItems: 'center',
+    paddingVertical: 10,
+    marginTop: 4,
+  },
+  registerLinkText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  registerLinkHighlight: {
+    color: '#0F172A',
+    fontWeight: '800',
+    textDecorationLine: 'underline',
   },
 });

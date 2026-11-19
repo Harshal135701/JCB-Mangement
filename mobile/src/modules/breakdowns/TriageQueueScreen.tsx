@@ -251,9 +251,9 @@ export const TriageQueueScreen = ({ navigation }: any) => {
     <View style={styles.container}>
       {/* Smart CMMS Unified AppHeader */}
       <AppHeader
-        title="Breakdown Requests"
+        title="Fault Reports"
         icon="alert-octagon"
-        sectionTitle="Breakdown Triage"
+        sectionTitle="Fault Reports"
         sectionSubtitle="Active equipment stoppages & work orders"
         rightAction={
           <TouchableOpacity

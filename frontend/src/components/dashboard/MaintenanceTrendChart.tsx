@@ -95,9 +95,9 @@ export const MaintenanceTrendChart: React.FC<MaintenanceTrendChartProps> = ({
       ? `${pathSeries2} L ${getX(data.length - 1)} ${paddingTop + chartHeight} L ${getX(0)} ${paddingTop + chartHeight} Z`
       : '';
 
-  // 3-step tick markers
+  // 3-step tick markers (deduplicated to prevent duplicate key warning)
   const tickStep = Math.max(1, Math.ceil(effectiveMaxY / 3));
-  const yTicks = [0, tickStep, tickStep * 2, effectiveMaxY];
+  const yTicks = Array.from(new Set([0, tickStep, tickStep * 2, effectiveMaxY]));
 
   const hasData = data.length > 0;
   const totalCorrective = data.reduce((acc, curr) => acc + (curr.series1 || 0), 0);
@@ -168,10 +168,10 @@ export const MaintenanceTrendChart: React.FC<MaintenanceTrendChartProps> = ({
               </defs>
 
               {/* Gridlines & Y-axis numbers */}
-              {yTicks.map((val) => {
+              {yTicks.map((val, idx) => {
                 const yPos = getY(val);
                 return (
-                  <g key={val}>
+                  <g key={`ytick-${idx}-${val}`}>
                     <line
                       x1={paddingLeft}
                       y1={yPos}

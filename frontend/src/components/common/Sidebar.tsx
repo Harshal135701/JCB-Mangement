@@ -83,6 +83,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
       { name: 'Spare Parts Management', path: '/inventory', icon: Package, roles: ['technician'] },
       // { name: 'Daily AM Checklist', path: '/inspections', icon: ClipboardCheck, roles: ['technician'] },
       { name: 'Maintenance Status', path: '/work-orders', icon: Wrench, roles: ['technician'] },
+      { name: 'Spare Parts Purchase Request', path: '/procurement', icon: ShoppingCart, roles: ['technician'] },
       { name: 'Maintenance Schedule', path: '/pm', icon: Calendar, roles: ['technician'] },
       { name: 'Gate Pass', path: '/rdc', icon: FileText, roles: ['technician'] },
       { name: 'Reports', path: '/reports', icon: BarChart3, roles: ['technician'] },
@@ -108,6 +109,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
 
   return (
     <>
+      <style>{`
+        .sidebar-nav-container::-webkit-scrollbar,
+        aside nav::-webkit-scrollbar {
+          display: none !important;
+          width: 0 !important;
+          height: 0 !important;
+          background: transparent !important;
+        }
+        .sidebar-nav-container,
+        aside nav {
+          -ms-overflow-style: none !important;
+          scrollbar-width: none !important;
+        }
+      `}</style>
+
       {/* Mobile Backdrop */}
       {isMobileOpen && (
         <div
@@ -166,7 +182,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
           </div>
 
           {/* Navigation Links: Increased vertical spacing between items with comfortable padding */}
-          <nav className="p-3 space-y-2 overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
+          <nav
+            className="p-3 space-y-2 overflow-y-auto flex-1 sidebar-nav-container no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          >
             {navItems.map((item) => {
               const Icon = item.icon;
               // Cleanly normalize trailing slashes

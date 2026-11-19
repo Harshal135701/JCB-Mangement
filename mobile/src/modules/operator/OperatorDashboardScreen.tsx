@@ -135,31 +135,31 @@ export const OperatorDashboardScreen = ({ navigation }: any) => {
 
         {/* 4 Metric Cards (2x2 Grid) */}
         <View style={styles.kpiGrid}>
-          {/* Assigned Machines */}
+          {/* My Machine */}
           <View style={styles.kpiCard}>
             <View style={[styles.kpiIconCircle, { backgroundColor: '#FEF3C7' }]}>
               <MaterialCommunityIcons name="tractor" size={22} color="#000000" />
             </View>
             <View style={styles.kpiContentCol}>
               <Text style={styles.kpiValueText}>{stats.assignedMachines}</Text>
-              <Text style={styles.kpiLabelText}>Assigned Machines</Text>
-              <Text style={styles.trendPositiveText}>↑ 1.5%</Text>
+              <Text style={styles.kpiLabelText}>My Machine</Text>
+              <Text style={styles.trendPositiveText}>Active</Text>
             </View>
           </View>
 
-          {/* Running Nominally */}
+          {/* Fleet Running */}
           <View style={styles.kpiCard}>
             <View style={[styles.kpiIconCircle, { backgroundColor: '#DCFCE7' }]}>
               <MaterialCommunityIcons name="play-circle-outline" size={22} color="#10B981" />
             </View>
             <View style={styles.kpiContentCol}>
               <Text style={styles.kpiValueText}>{stats.operational}</Text>
-              <Text style={styles.kpiLabelText}>Running Normally</Text>
-              <Text style={styles.trendPositiveText}>↑ 0.5%</Text>
+              <Text style={styles.kpiLabelText}>Fleet Running</Text>
+              <Text style={styles.trendPositiveText}>Nominal</Text>
             </View>
           </View>
 
-          {/* Active Issues */}
+          {/* Reported Problems */}
           <TouchableOpacity
             style={styles.kpiCard}
             onPress={() => navigation.navigate('TriageTab')}
@@ -170,12 +170,12 @@ export const OperatorDashboardScreen = ({ navigation }: any) => {
             </View>
             <View style={styles.kpiContentCol}>
               <Text style={[styles.kpiValueText, { color: '#EF4444' }]}>{stats.activeBreakdowns}</Text>
-              <Text style={styles.kpiLabelText}>Active Breakdowns</Text>
-              <Text style={styles.trendNegativeText}>↑ 1.0%</Text>
+              <Text style={styles.kpiLabelText}>Reported Problems</Text>
+              <Text style={styles.trendNegativeText}>Active</Text>
             </View>
           </TouchableOpacity>
 
-          {/* Daily Checklist */}
+          {/* Daily AM Checklist */}
           <TouchableOpacity
             style={styles.kpiCard}
             onPress={() => navigation.navigate('DailyInspection')}
@@ -186,7 +186,7 @@ export const OperatorDashboardScreen = ({ navigation }: any) => {
             </View>
             <View style={styles.kpiContentCol}>
               <Text style={[styles.kpiValueText, { color: '#8B5CF6' }]}>PASS</Text>
-              <Text style={styles.kpiLabelText}>Pre-Shift Inspection</Text>
+              <Text style={styles.kpiLabelText}>Daily AM Checklist</Text>
               <Text style={styles.trendPositiveText}>✓ Completed</Text>
             </View>
           </TouchableOpacity>
@@ -204,7 +204,7 @@ export const OperatorDashboardScreen = ({ navigation }: any) => {
             <MaterialCommunityIcons name="alert-octagon" size={24} color="#000000" />
           </View>
           <View style={styles.actionTextContainer}>
-            <Text style={styles.actionTitle}>Report Machine Breakdown</Text>
+            <Text style={styles.actionTitle}>Report Breakdown</Text>
             <Text style={styles.actionSubtitle}>Tap to report stoppage, hydraulic fault or issue</Text>
           </View>
           <MaterialCommunityIcons name="chevron-right" size={22} color="#000000" />
@@ -219,14 +219,14 @@ export const OperatorDashboardScreen = ({ navigation }: any) => {
             <MaterialCommunityIcons name="clipboard-check-outline" size={24} color="#0F172A" />
           </View>
           <View style={styles.actionTextContainer}>
-            <Text style={styles.actionTitle}>Daily Inspection Checklist</Text>
+            <Text style={styles.actionTitle}>Daily AM Checklist</Text>
             <Text style={styles.actionSubtitle}>Pre-shift safety, oil level and pressure check</Text>
           </View>
           <MaterialCommunityIcons name="chevron-right" size={22} color="#64748B" />
         </TouchableOpacity>
 
-        {/* My Reported Issues */}
-        <Text style={styles.sectionHeaderTitle}>MY REPORTED ISSUES</Text>
+        {/* My Reported Problems */}
+        <Text style={styles.sectionHeaderTitle}>MY REPORTED PROBLEMS</Text>
 
         {recentBreakdowns.length === 0 ? (
           <View style={styles.emptyCard}>

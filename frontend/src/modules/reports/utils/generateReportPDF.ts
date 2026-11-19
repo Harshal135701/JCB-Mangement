@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { JCB_OFFICIAL_LOGO_BASE64 } from './jcbOfficialLogo';
 
 export interface PDFReportMetric {
   label: string;
@@ -75,28 +76,20 @@ export function generateReportPDF(options: GenerateReportPDFOptions): string {
   let currentY = margin;
 
   // 1. BRAND HEADER BANNER
-  // JCB Yellow Logo Box
-  doc.setFillColor(245, 158, 11); // JCB Yellow #F59E0B
-  doc.roundedRect(margin, currentY, 20, 10, 1.5, 1.5, 'F');
-
-  doc.setTextColor(0, 0, 0);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(14);
-  doc.text('JCB', margin + 3.5, currentY + 7);
-
-  // Title & Subtitle beside logo
-  doc.setTextColor(15, 23, 42); // slate-900
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
-  doc.text('SMART CMMS', margin + 24, currentY + 5);
-
-  doc.setTextColor(100, 116, 139); // slate-500
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
-  const subtitle = options.machineSubject
-    ? 'Machine Maintenance Management System • Equipment Operational Performance Summary'
-    : 'Machine Maintenance Management System • Operational Performance Summary';
-  doc.text(subtitle, margin + 24, currentY + 9);
+  // Official JCB Logo (identical to sidebar branding)
+  const logoWidth = 28;
+  const logoHeight = 9.1; // aspect ratio 370:120 ≈ 3.08
+  try {
+    doc.addImage(JCB_OFFICIAL_LOGO_BASE64, 'PNG', margin, currentY, logoWidth, logoHeight);
+  } catch (_err) {
+    // Fallback if image fails
+    doc.setFillColor(245, 158, 11);
+    doc.roundedRect(margin, currentY, 20, 10, 1.5, 1.5, 'F');
+    doc.setTextColor(0, 0, 0);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.text('JCB', margin + 3.5, currentY + 7);
+  }
 
   // Real-time Stamp on Top-Right
   const now = new Date();

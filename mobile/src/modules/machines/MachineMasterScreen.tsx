@@ -395,7 +395,7 @@ export const MachineMasterScreen = ({ navigation }: any) => {
       <AppHeader
         title="Machines"
         icon="tractor"
-        sectionTitle="Machines & Assets"
+        sectionTitle="Machines Management"
         sectionSubtitle="Directory & QR Verification"
         rightAction={
           isAdmin ? (

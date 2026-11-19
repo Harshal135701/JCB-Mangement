@@ -24,9 +24,11 @@ export const InventoryCatalogScreen = ({ navigation }: any) => {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { openSidebar } = useSidebar();
-  const isAdmin = user?.role === 'admin';
-  const isManager = user?.role === 'manager';
-  const canAdjust = isAdmin || isManager;
+  const role = (user?.role || '').toLowerCase();
+  const isAdmin = role === 'admin' || role === 'plant_admin' || role === 'enterprise_admin';
+  const isManager = role === 'manager';
+  const isStoreManager = role === 'store_manager' || role === 'store' || role === 'store_keeper';
+  const canAdjust = isAdmin || isManager || isStoreManager;
 
   const [query, setQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
@@ -218,7 +220,7 @@ export const InventoryCatalogScreen = ({ navigation }: any) => {
       <AppHeader
         title="Spare Parts"
         icon="package-variant-closed"
-        sectionTitle="Spare Parts Inventory"
+        sectionTitle="Spare Parts Management"
         sectionSubtitle="Workshop & Warehouse Stock Levels"
         rightAction={
           isAdmin ? (

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,8 @@ import {
   Modal,
   Image,
   Dimensions,
+  Animated,
+  PanResponder,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -40,6 +42,48 @@ export const ShopFloorDashboardScreen = ({ navigation }: any) => {
   const [selectedMachine, setSelectedMachine] = useState<any | null>(null);
   const [lastSyncedTime, setLastSyncedTime] = useState<string>('Live');
 
+  // Enterprise Multi-Plant & Operator Authorization States
+  const [pendingOperatorsCount, setPendingOperatorsCount] = useState(0);
+  const [selectedPlant, setSelectedPlant] = useState('All Plants');
+  const [selectedShift, setSelectedShift] = useState('Shift A');
+  const [plantsList, setPlantsList] = useState<string[]>(['All Plants', 'Chakan', 'PCMC', 'Talegaon']);
+
+  // Swipe-to-dismiss states for Action Required alert banner
+  const [isAlertDismissed, setIsAlertDismissed] = useState(false);
+  const panX = useRef(new Animated.Value(0)).current;
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dx) > 12 && Math.abs(gestureState.dy) < 15;
+      },
+      onPanResponderMove: (_, gestureState) => {
+        panX.setValue(gestureState.dx);
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (Math.abs(gestureState.dx) > 80) {
+          const toValue = gestureState.dx > 0 ? SCREEN_WIDTH + 80 : -SCREEN_WIDTH - 80;
+          Animated.timing(panX, {
+            toValue,
+            duration: 200,
+            useNativeDriver: true,
+          }).start(() => {
+            setIsAlertDismissed(true);
+            panX.setValue(0);
+          });
+        } else {
+          Animated.spring(panX, {
+            toValue: 0,
+            friction: 6,
+            tension: 40,
+            useNativeDriver: true,
+          }).start();
+        }
+      },
+    })
+  ).current;
+
   // Detect role dynamically (Admin vs Manager vs other)
   const role = (user?.role || '').toLowerCase();
   const isAdmin = role === 'admin' || role === 'plant_admin' || role === 'enterprise_admin';
@@ -53,13 +97,18 @@ export const ShopFloorDashboardScreen = ({ navigation }: any) => {
 
   const fetchData = async (silent = false) => {
     try {
-      if (!silent) setLoading(true);
-      const [kpiRes, machinesRes, dtRes, pmRes, woRes]: any[] = await Promise.allSettled([
+      if (!silent) {
+        setLoading(true);
+        setIsAlertDismissed(false);
+      }
+      const [kpiRes, machinesRes, dtRes, pmRes, woRes, pendingRes, orgRes]: any[] = await Promise.allSettled([
         apiClient.get('/reports/dashboard-kpis'),
         apiClient.get('/machines?limit=100'),
         apiClient.get('/downtime'),
         apiClient.get('/pm/plans'),
         apiClient.get('/work-orders?limit=50'),
+        apiClient.get('/auth/pending-operators'),
+        apiClient.get('/auth/plants'),
       ]);
 
       if (kpiRes.status === 'fulfilled' && kpiRes.value) {
@@ -76,6 +125,13 @@ export const ShopFloorDashboardScreen = ({ navigation }: any) => {
       }
       if (woRes.status === 'fulfilled' && woRes.value?.data) {
         setWorkOrders(woRes.value.data);
+      }
+      if (pendingRes.status === 'fulfilled' && Array.isArray(pendingRes.value?.data)) {
+        setPendingOperatorsCount(pendingRes.value.data.length);
+      }
+      if (orgRes.status === 'fulfilled' && Array.isArray(orgRes.value?.data)) {
+        const pNames = ['All Plants', ...orgRes.value.data.map((p: any) => p.plant_name)];
+        setPlantsList(pNames);
       }
       const now = new Date();
       setLastSyncedTime(now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
@@ -305,6 +361,96 @@ export const ShopFloorDashboardScreen = ({ navigation }: any) => {
           <Text style={styles.syncTimeText}>Synced: {lastSyncedTime}</Text>
         </View>
 
+        {/* Global Plant Selector (Admin & Manager) */}
+        {(isAdmin || isManager) && (
+          <View style={styles.plantSelectorWrap}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.plantSelectorScroll}>
+              {plantsList.map((pName) => {
+                const active = selectedPlant === pName;
+                return (
+                  <TouchableOpacity
+                    key={pName}
+                    style={[styles.plantPill, active && styles.plantPillActive]}
+                    onPress={() => setSelectedPlant(pName)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.plantPillText, active && styles.plantPillTextActive]}>{pName}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* Operator Registration Action Alert Banner with Swipe-to-Dismiss */}
+        {pendingOperatorsCount > 0 && !isAlertDismissed && (
+          <Animated.View
+            {...panResponder.panHandlers}
+            style={[
+              styles.swipeAlertWrapper,
+              {
+                transform: [{ translateX: panX }],
+                opacity: panX.interpolate({
+                  inputRange: [-180, 0, 180],
+                  outputRange: [0.3, 1, 0.3],
+                  extrapolate: 'clamp',
+                }),
+              },
+            ]}
+          >
+            <TouchableOpacity
+              style={styles.pendingAlertCard}
+              onPress={() => navigation.navigate('UserManagement')}
+              activeOpacity={0.9}
+            >
+              <View style={styles.pendingAlertLeft}>
+                <View style={styles.alertIconBadge}>
+                  <MaterialCommunityIcons name="hard-hat" size={22} color="#000000" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={styles.alertHeaderRow}>
+                    <Text style={styles.alertTagText}>ACTION REQUIRED</Text>
+                    <View style={styles.pulseCountBadge}>
+                      <Text style={styles.pulseCountText}>{pendingOperatorsCount} PENDING</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.alertDescText}>
+                    {pendingOperatorsCount === 1
+                      ? '1 factory operator registered & awaiting authorization.'
+                      : `${pendingOperatorsCount} factory operators registered & awaiting authorization.`}
+                  </Text>
+                  <View style={styles.swipeHintRow}>
+                    <MaterialCommunityIcons name="gesture-swipe-horizontal" size={13} color="#D97706" />
+                    <Text style={styles.swipeHintText}>Swipe to dismiss</Text>
+                  </View>
+                </View>
+              </View>
+              <View style={styles.alertRightActions}>
+                <View style={styles.authorizeBtn}>
+                  <Text style={styles.authorizeBtnText}>Review</Text>
+                  <MaterialCommunityIcons name="chevron-right" size={16} color="#000000" />
+                </View>
+                <TouchableOpacity
+                  style={styles.dismissCloseBtn}
+                  onPress={() => {
+                    Animated.timing(panX, {
+                      toValue: SCREEN_WIDTH + 60,
+                      duration: 200,
+                      useNativeDriver: true,
+                    }).start(() => {
+                      setIsAlertDismissed(true);
+                      panX.setValue(0);
+                    });
+                  }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <MaterialCommunityIcons name="close" size={15} color="#92400E" />
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          </Animated.View>
+        )}
+
         {/* Metric Cards - Access-based */}
         <View style={styles.kpiGrid}>
           {/* 1. Total Machines */}
@@ -319,14 +465,14 @@ export const ShopFloorDashboardScreen = ({ navigation }: any) => {
             </View>
           </View>
 
-          {/* 2. Running Machines */}
+          {/* 2. Running Machines / Fleet Availability */}
           <View style={styles.kpiCard}>
             <View style={[styles.kpiIconCircle, { backgroundColor: '#DCFCE7' }]}>
               <MaterialCommunityIcons name="play-circle-outline" size={22} color="#10B981" />
             </View>
             <View style={styles.kpiContentCol}>
               <Text style={styles.kpiValueText}>{runningCount}</Text>
-              <Text style={styles.kpiLabelText}>Running Equipment</Text>
+              <Text style={styles.kpiLabelText}>Fleet Availability</Text>
               <Text style={styles.trendPositiveText}>{machineAvailability}% Uptime</Text>
             </View>
           </View>
@@ -342,14 +488,14 @@ export const ShopFloorDashboardScreen = ({ navigation }: any) => {
             </View>
             <View style={styles.kpiContentCol}>
               <Text style={[styles.kpiValueText, { color: '#EF4444' }]}>{breakdownCount}</Text>
-              <Text style={styles.kpiLabelText}>Breakdown Stoppages</Text>
+              <Text style={styles.kpiLabelText}>Critical Breakdowns</Text>
               <Text style={breakdownCount > 0 ? styles.trendNegativeText : styles.trendPositiveText}>
                 {breakdownCount > 0 ? `${breakdownPercent}% Fleet Down` : 'Zero Stoppages'}
               </Text>
             </View>
           </TouchableOpacity>
 
-          {/* 4. Pending Requests */}
+          {/* 4. Maintenance Status */}
           <TouchableOpacity
             style={styles.kpiCard}
             onPress={() => navigation.navigate('TriageTab')}
@@ -360,7 +506,7 @@ export const ShopFloorDashboardScreen = ({ navigation }: any) => {
             </View>
             <View style={styles.kpiContentCol}>
               <Text style={styles.kpiValueText}>{pendingRequestsCount}</Text>
-              <Text style={styles.kpiLabelText}>Open Work Orders</Text>
+              <Text style={styles.kpiLabelText}>Maintenance Status</Text>
               <Text style={styles.trendPositiveText}>
                 {pendingRequestsCount > 0 ? `${pendingRequestsCount} In Pipeline` : 'All Clear'}
               </Text>
@@ -370,7 +516,7 @@ export const ShopFloorDashboardScreen = ({ navigation }: any) => {
           {/* Admin-Only Access Analytics Cards */}
           {isAdmin && (
             <>
-              {/* 5. Pending Approvals */}
+              {/* 5. Purchase Requests */}
               <TouchableOpacity
                 style={styles.kpiCard}
                 onPress={() => navigation.navigate('Procurement')}
@@ -383,8 +529,8 @@ export const ShopFloorDashboardScreen = ({ navigation }: any) => {
                   <Text style={[styles.kpiValueText, { color: '#0284C7' }]}>
                     {stats?.pendingApprovals ?? 0}
                   </Text>
-                  <Text style={styles.kpiLabelText}>Pending Approvals</Text>
-                  <Text style={styles.trendWarningText}>PR & WO Sign-off</Text>
+                  <Text style={styles.kpiLabelText}>Purchase Requests</Text>
+                  <Text style={styles.trendWarningText}>PR Sign-off</Text>
                 </View>
               </TouchableOpacity>
 
@@ -414,7 +560,7 @@ export const ShopFloorDashboardScreen = ({ navigation }: any) => {
           <View style={styles.chartCardHeader}>
             <View style={styles.chartHeaderLeft}>
               <MaterialCommunityIcons name="chart-bar" size={18} color="#F59E0B" />
-              <Text style={styles.chartCardTitle}>Machine Status Overview</Text>
+              <Text style={styles.chartCardTitle}>Machine Status</Text>
             </View>
             <TouchableOpacity onPress={() => navigation.navigate('MachinesTab')}>
               <Text style={styles.viewAllOrangeText}>View All ({totalMachinesCount}) →</Text>
@@ -991,6 +1137,139 @@ const styles = StyleSheet.create({
     color: '#000000',
     fontSize: 15.5,
     fontWeight: '800',
+  },
+  // Multi-Plant Selector Bar
+  plantSelectorWrap: {
+    marginBottom: 14,
+  },
+  plantSelectorScroll: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  plantPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  plantPillActive: {
+    backgroundColor: '#0F172A',
+    borderColor: '#0F172A',
+  },
+  plantPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  plantPillTextActive: {
+    color: '#F9B101',
+  },
+  // Pending Operator Authorization Alert Banner
+  pendingAlertCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1.5,
+    borderColor: '#FDE68A',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 14,
+    shadowColor: '#D97706',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  pendingAlertLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  alertIconBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  alertHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 2,
+  },
+  alertTagText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#92400E',
+    letterSpacing: 0.2,
+  },
+  pulseCountBadge: {
+    backgroundColor: '#EF4444',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 10,
+  },
+  pulseCountText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  alertDescText: {
+    fontSize: 11,
+    color: '#B45309',
+    fontWeight: '600',
+  },
+  authorizeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#D97706',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  authorizeBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  alertRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  dismissCloseBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  swipeAlertWrapper: {
+    marginBottom: 0,
+  },
+  swipeHintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  swipeHintText: {
+    fontSize: 10,
+    color: '#B45309',
+    fontWeight: '700',
   },
   // Top Plant Status Row
   topStatusRow: {
