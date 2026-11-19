@@ -408,6 +408,15 @@ class MockProcurementDatabase implements DbPoolLike {
         plant_id: '10000000-0000-0000-0000-000000000001',
         is_active: true,
       },
+      {
+        id: '00000000-0000-0000-0000-000000000007',
+        employee_code: 'EMP-STR-01',
+        full_name: 'Store Manager Pune',
+        email: 'store.pune@jcb.com',
+        role: 'store_manager',
+        plant_id: '10000000-0000-0000-0000-000000000001',
+        is_active: true,
+      },
     ];
 
     this.machines = [
@@ -885,18 +894,35 @@ class MockProcurementDatabase implements DbPoolLike {
       const shop = this.shops.find((s) => s.id === machine?.shop_id);
       const part = this.parts.find((p) => p.id === pr.part_id);
       const wo = this.workOrders.find((w) => w.id === pr.work_order_id);
+      const reqUser = this.users.find((u) => u.id === pr.requested_by);
+      const appUser = this.users.find((u) => u.id === pr.approved_by);
+      const plant = this.plants.find((p) => p.id === (shop?.plant_id || pr.plant_id));
 
       return {
         rows: [
           {
             ...pr,
-            plant_id: shop?.plant_id,
+            plant_id: shop?.plant_id || pr.plant_id,
             shop_id: shop?.id,
             part_number: part?.part_number,
             part_name: part?.name,
             warehouse_zone: part?.warehouse_zone,
             bin_location: part?.bin_location,
             work_order_status: wo?.status,
+            requested_by_name: reqUser?.full_name,
+            requested_by_code: reqUser?.employee_code,
+            requested_by_role: reqUser?.role,
+            requester_name: reqUser?.full_name,
+            requester_employee_code: reqUser?.employee_code,
+            requester_role: reqUser?.role,
+            approved_by_name: appUser?.full_name,
+            approved_by_code: appUser?.employee_code,
+            approved_by_role: appUser?.role,
+            approver_name: appUser?.full_name,
+            shop_name: shop?.shop_name || 'Central Stores',
+            plant_name: plant?.plant_name || plant?.name || 'Talegaon Dabhade Plant',
+            machine_code: machine?.machine_code,
+            machine_name: machine?.name,
           },
         ],
         rowCount: 1,
@@ -1087,12 +1113,19 @@ class MockProcurementDatabase implements DbPoolLike {
           bin_location: part?.bin_location,
           requested_by_name: reqUser?.full_name,
           requested_by_code: reqUser?.employee_code,
+          requested_by_role: reqUser?.role,
+          requester_name: reqUser?.full_name,
+          requester_employee_code: reqUser?.employee_code,
+          requester_role: reqUser?.role,
           approved_by_name: appUser?.full_name,
+          approved_by_code: appUser?.employee_code,
+          approved_by_role: appUser?.role,
+          approver_name: appUser?.full_name,
           machine_code: machine?.machine_code,
           machine_name: machine?.name,
           machine_model: machine?.model_number || 'Mazak VARIAXIS',
-          shop_name: shop?.shop_name,
-          plant_name: plant?.plant_name || plant?.name,
+          shop_name: shop?.shop_name || 'Central Stores',
+          plant_name: plant?.plant_name || plant?.name || 'Talegaon Dabhade Plant',
           wo_number: wo?.wo_number,
         };
       });
@@ -1213,6 +1246,14 @@ describe('Procurement & Purchase Requisition Module (CMMS Module 4)', () => {
     employee_code: 'EMP-OPR-01',
     email: 'op1@jcb.com',
     role: 'operator',
+    plant_id: '10000000-0000-0000-0000-000000000001',
+  };
+
+  const storeManagerUser: AuthenticatedUser = {
+    id: '00000000-0000-0000-0000-000000000007',
+    employee_code: 'EMP-STR-01',
+    email: 'store.pune@jcb.com',
+    role: 'store_manager',
     plant_id: '10000000-0000-0000-0000-000000000001',
   };
 
@@ -1473,6 +1514,49 @@ describe('Procurement & Purchase Requisition Module (CMMS Module 4)', () => {
       assert.equal(res.responseData.data.plant_id, '10000000-0000-0000-0000-000000000001');
       assert.equal(res.responseData.data.requested_by, unscopedAdmin.id);
     });
+
+    it('8g. Store Manager successfully creates purchase requisition in assigned plant facility', async () => {
+      const { req, res, next } = createMockContext(
+        {
+          part_id: '30000000-0000-0000-0000-000000000001',
+          quantity_required: 15,
+          urgency: 'medium',
+          technical_justification: 'Store inventory replenishment for upcoming monthly PM cycles',
+        },
+        {},
+        {},
+        {},
+        storeManagerUser
+      );
+
+      await createPurchaseRequisition(req, res, next);
+      assert.equal(res.statusCode, 201);
+      assert.equal(res.responseData.success, true);
+      assert.equal(res.responseData.data.requested_by, storeManagerUser.id);
+      assert.equal(res.responseData.data.plant_id, storeManagerUser.plant_id);
+    });
+
+    it('8h. Plant Manager successfully creates purchase requisition in assigned plant facility', async () => {
+      const { req, res, next } = createMockContext(
+        {
+          part_id: '30000000-0000-0000-0000-000000000001',
+          machine_id: '40000000-0000-0000-0000-000000000001',
+          quantity_required: 4,
+          urgency: 'high',
+          technical_justification: 'Urgent manager procurement for CNC machining center maintenance',
+        },
+        {},
+        {},
+        {},
+        puneManagerUser
+      );
+
+      await createPurchaseRequisition(req, res, next);
+      assert.equal(res.statusCode, 201);
+      assert.equal(res.responseData.success, true);
+      assert.equal(res.responseData.data.requested_by, puneManagerUser.id);
+      assert.equal(res.responseData.data.plant_id, puneManagerUser.plant_id);
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -1545,6 +1629,12 @@ describe('Procurement & Purchase Requisition Module (CMMS Module 4)', () => {
       assert.equal(res.responseData.success, true);
       assert.equal(res.responseData.data.pr_number, 'PR-2026-00001');
       assert.equal(res.responseData.data.part_number, 'HYD-10025');
+      assert.ok(res.responseData.data.requested_by_name || res.responseData.data.requester_name, 'Must include requester name');
+      assert.ok(res.responseData.data.requested_by_code || res.responseData.data.requester_employee_code, 'Must include requester employee code');
+      assert.ok(res.responseData.data.requested_by_role || res.responseData.data.requester_role, 'Must include requester role');
+      assert.ok(res.responseData.data.plant_name, 'Must include plant name');
+      assert.ok(res.responseData.data.shop_name, 'Must include shop name');
+      assert.ok(res.responseData.data.status, 'Must include status');
       assert.ok(Array.isArray(res.responseData.data.grn_receipts), 'Response must include grn_receipts array');
     });
 
