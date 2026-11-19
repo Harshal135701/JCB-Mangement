@@ -330,9 +330,9 @@ export const DowntimeAnalyticsPage: React.FC = () => {
               </span>
             )}
           </div>
-          <p className="text-xs text-zinc-500 font-medium mt-1">
+          {/* <p className="text-xs text-zinc-500 font-medium mt-1">
             Machine stoppage analysis, Average Repair Time (MTTR), response time, and most affected machines.
-          </p>
+          </p> */}
         </div>
 
         {/* Global Controls */}

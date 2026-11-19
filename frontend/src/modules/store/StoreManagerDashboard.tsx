@@ -804,6 +804,7 @@ export const StoreManagerDashboard: React.FC = () => {
         quantity_required: Number(prForm.quantity_required),
         urgency: prForm.urgency,
         technical_justification: prForm.technical_justification.trim() || `Automated store reorder trigger: Part ${prForm.part_number} breached minimum safety threshold.`,
+        plant_id: (prForm as any).plant_id || user?.plantId || (user as any)?.plant_id || undefined,
       });
 
       if (res.data?.success) {
@@ -976,9 +977,9 @@ export const StoreManagerDashboard: React.FC = () => {
               {user?.plantName || (user as any)?.plant_name || 'Central Store Hub'}
             </span>
           </div>
-          <p className="text-xs text-zinc-500 font-medium mt-1.5">
+          {/* <p className="text-xs text-zinc-500 font-medium mt-1.5">
             Manage spare parts inventory, stock receiving, bin transfers and job parts issues.
-          </p>
+          </p> */}
         </div>
 
         {/* Global Action Buttons */}

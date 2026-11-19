@@ -36,6 +36,19 @@ export const Header: React.FC<HeaderProps> = ({ onMobileMenuToggle }) => {
 
   const notifRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Global keyboard shortcut to focus search (⌘K or Ctrl+K)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -105,44 +118,51 @@ export const Header: React.FC<HeaderProps> = ({ onMobileMenuToggle }) => {
 
   return (
     <header className="bg-white border-b-2 border-slate-200 h-16 px-4 sm:px-6 flex items-center justify-between shrink-0 shadow-xs z-30">
-      {/* Left: Mobile Menu Toggle & Plant Badge */}
-      <div className="flex items-center gap-3">
+      {/* Left: Mobile Menu Toggle & Left-Aligned Search Box */}
+      <div className="flex items-center gap-3 w-full max-w-md">
         <button
           onClick={onMobileMenuToggle}
-          className="lg:hidden p-2 rounded-lg text-zinc-600 hover:text-black hover:bg-zinc-100 transition"
+          className="lg:hidden p-2 rounded-lg text-zinc-600 hover:text-black hover:bg-zinc-100 transition shrink-0"
           aria-label="Toggle navigation menu"
         >
           <Menu className="w-5 h-5" />
         </button>
 
-        {/* Verified Facility Indicator */}
-        <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-950 border border-amber-300 rounded-lg text-xs font-black uppercase tracking-wider">
-          <MapPin className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-          <span className="truncate max-w-[200px] sm:max-w-none">
-            {user?.plantName || (user ? 'JCB Manufacturing Works' : '')}
-          </span>
-          {user?.shopName && (
-            <span className="hidden md:inline text-amber-800 font-semibold border-l border-amber-300 pl-1.5 ml-1.5">
-              {user.shopName}
-            </span>
-          )}
+        {/* Global Search Bar (Left-aligned with main content margin) */}
+        <div className="w-full">
+          <div className="group relative w-full flex items-center bg-slate-100/70 hover:bg-slate-100 focus-within:bg-white border border-slate-200/90 hover:border-slate-300 focus-within:border-amber-500 rounded-xl shadow-[inset_0_1px_2px_rgba(0,0,0,0.03)] focus-within:shadow-md focus-within:ring-2 focus-within:ring-amber-400/60 transition-all duration-200 ease-in-out">
+            <Search className="w-4 h-4 text-zinc-400 group-hover:text-zinc-600 group-focus-within:text-amber-600 absolute left-3 transition-colors pointer-events-none shrink-0" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              placeholder="Search machines, repair jobs..."
+              className="w-full pl-9 pr-14 py-2 bg-transparent text-xs font-medium text-zinc-900 placeholder:text-zinc-400 focus:outline-none"
+            />
+            <div className="absolute right-2.5 flex items-center pointer-events-none select-none">
+              <kbd className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-mono font-bold text-zinc-400 bg-white border border-slate-200 rounded-md shadow-2xs group-hover:text-zinc-600 group-hover:border-slate-300 group-focus-within:border-amber-300 group-focus-within:text-amber-800 group-focus-within:bg-amber-50/60 transition-all">
+                <span className="text-[11px] leading-none">⌘</span>K
+              </kbd>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Center: Global Search Bar */}
-      <div className="hidden md:flex items-center flex-1 max-w-md mx-6">
-        <div className="relative w-full">
-          <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-2.5" />
-          <input
-            type="text"
-            placeholder="Search machines, repair jobs..."
-            className="w-full pl-9 pr-4 py-1.5 bg-slate-100 hover:bg-slate-200/80 focus:bg-white border border-slate-200 focus:border-amber-500 rounded-xl text-xs font-medium text-zinc-900 placeholder-zinc-400 transition focus:outline-none focus:ring-1 focus:ring-amber-500 shadow-2xs"
-          />
-        </div>
-      </div>
-
-      {/* Right: Notifications & User Profile Menu */}
+      {/* Right: Notifications, LIVE Indicator & User Profile Menu */}
       <div className="flex items-center gap-3">
+        {/* Verified Facility Indicator (if present) */}
+        {(user?.plantName || user?.shopName) ? (
+          <div className="hidden xl:flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-950 border border-amber-300 rounded-lg text-xs font-black uppercase tracking-wider">
+            <MapPin className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+            <span className="truncate max-w-[200px] sm:max-w-none">
+              {user?.plantName || ''}
+            </span>
+            {user?.shopName && (
+              <span className="hidden md:inline text-amber-800 font-semibold border-l border-amber-300 pl-1.5 ml-1.5">
+                {user.shopName}
+              </span>
+            )}
+          </div>
+        ) : null}
         {/* Real-Time Socket Connection Indicator */}
         <div
           className="hidden sm:flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border transition"

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { TrendingUp } from 'lucide-react';
 
 export interface TrendDataPoint {
@@ -10,6 +10,7 @@ export interface TrendDataPoint {
 
 interface MaintenanceTrendChartProps {
   title?: string;
+  subtitle?: string;
   series1Name?: string;
   series2Name?: string;
   series1Color?: string; // Corrective / Primary
@@ -21,23 +22,26 @@ interface MaintenanceTrendChartProps {
 }
 
 export const MaintenanceTrendChart: React.FC<MaintenanceTrendChartProps> = ({
-  title = 'Maintenance Trend',
+  title = 'Maintenance Velocity',
+  subtitle,
   series1Name = 'Corrective',
   series2Name = 'Preventive',
   series1Color = '#18181B', // Dark charcoal
-  series2Color = '#EAB308', // JCB Yellow/Amber
+  series2Color = '#F59E0B', // JCB Yellow/Amber
   data = [],
   maxY,
   loading = false,
-  emptyMessage = 'No maintenance trend data recorded for this period',
+  emptyMessage = 'No maintenance trend recorded',
 }) => {
-  // SVG Canvas dimensions
-  const width = 380;
-  const height = 150;
-  const paddingLeft = 32;
-  const paddingRight = 16;
-  const paddingTop = 12;
-  const paddingBottom = 26;
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+
+  // SVG Canvas dimensions (clean compact ratio)
+  const width = 360;
+  const height = 144;
+  const paddingLeft = 28;
+  const paddingRight = 14;
+  const paddingTop = 14;
+  const paddingBottom = 24;
 
   const chartWidth = width - paddingLeft - paddingRight;
   const chartHeight = height - paddingTop - paddingBottom;
@@ -47,7 +51,7 @@ export const MaintenanceTrendChart: React.FC<MaintenanceTrendChartProps> = ({
     (acc, curr) => Math.max(acc, curr.series1 || 0, curr.series2 || 0),
     0
   );
-  const effectiveMaxY = maxY || Math.max(5, Math.ceil(maxDataVal * 1.25) || 5);
+  const effectiveMaxY = maxY || Math.max(4, Math.ceil(maxDataVal * 1.25) || 4);
 
   // Scale functions
   const getX = (index: number) => {
@@ -91,158 +95,223 @@ export const MaintenanceTrendChart: React.FC<MaintenanceTrendChartProps> = ({
       ? `${pathSeries2} L ${getX(data.length - 1)} ${paddingTop + chartHeight} L ${getX(0)} ${paddingTop + chartHeight} Z`
       : '';
 
-  // Generate 4-step tick markers
-  const tickStep = Math.max(1, Math.ceil(effectiveMaxY / 4));
-  const yTicks = [0, tickStep, tickStep * 2, tickStep * 3, effectiveMaxY];
+  // 3-step tick markers
+  const tickStep = Math.max(1, Math.ceil(effectiveMaxY / 3));
+  const yTicks = [0, tickStep, tickStep * 2, effectiveMaxY];
 
   const hasData = data.length > 0;
+  const totalCorrective = data.reduce((acc, curr) => acc + (curr.series1 || 0), 0);
+  const totalPreventive = data.reduce((acc, curr) => acc + (curr.series2 || 0), 0);
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs flex flex-col justify-between">
-      {/* Header & Legend */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
-        <div className="flex items-center gap-2">
-          <TrendingUp className="w-4 h-4 text-amber-500" />
-          <h3 className="text-xs sm:text-sm font-bold text-zinc-900 tracking-tight">
-            {title}
-          </h3>
+    <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs flex flex-col justify-between h-full overflow-hidden">
+      {/* Header */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0">
+              <TrendingUp className="w-4 h-4 text-amber-600" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-zinc-900 tracking-tight">
+                {title}
+              </h3>
+              {subtitle && (
+                <p className="text-[11px] text-zinc-500 font-normal">
+                  {subtitle}
+                </p>
+              )}
+            </div>
+          </div>
+          <span className="text-[10px] font-bold text-zinc-500 bg-slate-100 px-2 py-0.5 rounded-md uppercase tracking-wider shrink-0">
+            4-Wk
+          </span>
         </div>
 
-        {/* Legend */}
-        <div className="flex items-center gap-4 text-[11px] font-semibold text-zinc-600">
-          <div className="flex items-center gap-1.5">
-            <span
-              className="w-2.5 h-2.5 rounded-full inline-block"
-              style={{ backgroundColor: series1Color }}
-            />
-            <span>{series1Name}</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span
-              className="w-2.5 h-2.5 rotate-45 inline-block"
-              style={{ backgroundColor: series2Color }}
-            />
-            <span>{series2Name}</span>
+        {/* Legend Pills Bar - structured and wrap-safe */}
+        <div className="flex flex-wrap items-center justify-between gap-1.5 pt-2 pb-1.5 border-t border-slate-100 text-xs">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-lg text-[11px] font-medium text-zinc-700">
+              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: series1Color }} />
+              <span>{series1Name}</span>
+              <strong className="text-zinc-950 font-mono">({totalCorrective})</strong>
+            </span>
+            <span className="flex items-center gap-1.5 bg-amber-50/70 border border-amber-200 px-2 py-0.5 rounded-lg text-[11px] font-medium text-amber-900">
+              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: series2Color }} />
+              <span>{series2Name}</span>
+              <strong className="text-amber-950 font-mono">({totalPreventive})</strong>
+            </span>
           </div>
         </div>
+
+        {/* Chart Visualization Area */}
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-12 text-xs text-zinc-400 font-medium">
+            <div className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mb-2" />
+            Loading trend...
+          </div>
+        ) : !hasData ? (
+          <div className="flex items-center justify-center py-8 text-center border border-dashed border-slate-200 rounded-xl bg-slate-50/50 my-2">
+            <span className="text-xs text-zinc-400 font-medium">{emptyMessage}</span>
+          </div>
+        ) : (
+          <div className="w-full relative mt-2 select-none">
+            <svg
+              viewBox={`0 0 ${width} ${height}`}
+              className="w-full h-auto overflow-visible select-none"
+            >
+              <defs>
+                <linearGradient id="trendAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={series2Color} stopOpacity="0.25" />
+                  <stop offset="100%" stopColor={series2Color} stopOpacity="0.02" />
+                </linearGradient>
+              </defs>
+
+              {/* Gridlines & Y-axis numbers */}
+              {yTicks.map((val) => {
+                const yPos = getY(val);
+                return (
+                  <g key={val}>
+                    <line
+                      x1={paddingLeft}
+                      y1={yPos}
+                      x2={width - paddingRight}
+                      y2={yPos}
+                      stroke="#F1F5F9"
+                      strokeWidth="1"
+                      strokeDasharray={val === 0 ? undefined : '2 2'}
+                    />
+                    <text
+                      x={paddingLeft - 6}
+                      y={yPos + 3.5}
+                      textAnchor="end"
+                      className="text-[9px] fill-zinc-400 font-mono font-medium"
+                    >
+                      {val}
+                    </text>
+                  </g>
+                );
+              })}
+
+              {/* Preventive Area Fill */}
+              {areaSeries2 && <path d={areaSeries2} fill="url(#trendAreaGrad)" />}
+
+              {/* Corrective Spline (Dark Charcoal) */}
+              {pathSeries1 && (
+                <path
+                  d={pathSeries1}
+                  fill="none"
+                  stroke={series1Color}
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              )}
+
+              {/* Preventive Spline (JCB Amber) */}
+              {pathSeries2 && (
+                <path
+                  d={pathSeries2}
+                  fill="none"
+                  stroke={series2Color}
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              )}
+
+              {/* Interactive Points */}
+              {data.map((item, idx) => {
+                const xPos = getX(idx);
+                const yPos1 = getY(item.series1 || 0);
+                const yPos2 = getY(item.series2 || 0);
+                const isHovered = hoveredIdx === idx;
+
+                return (
+                  <g
+                    key={idx}
+                    className="cursor-pointer"
+                    onMouseEnter={() => setHoveredIdx(idx)}
+                    onMouseLeave={() => setHoveredIdx(null)}
+                  >
+                    {isHovered && (
+                      <line
+                        x1={xPos}
+                        y1={paddingTop}
+                        x2={xPos}
+                        y2={paddingTop + chartHeight}
+                        stroke="#CBD5E1"
+                        strokeWidth="1"
+                        strokeDasharray="2 2"
+                      />
+                    )}
+
+                    {/* Point 1 */}
+                    <circle
+                      cx={xPos}
+                      cy={yPos1}
+                      r={isHovered ? 4.5 : 3.5}
+                      fill={series1Color}
+                      stroke="#FFFFFF"
+                      strokeWidth="1.5"
+                    />
+
+                    {/* Point 2 */}
+                    <circle
+                      cx={xPos}
+                      cy={yPos2}
+                      r={isHovered ? 4.5 : 3.5}
+                      fill={series2Color}
+                      stroke="#FFFFFF"
+                      strokeWidth="1.5"
+                    />
+
+                    {/* X-Axis Label */}
+                    <text
+                      x={xPos}
+                      y={height - 4}
+                      textAnchor="middle"
+                      className={`text-[9.5px] font-medium transition-colors ${
+                        isHovered ? 'fill-zinc-950 font-bold' : 'fill-zinc-500'
+                      }`}
+                    >
+                      {item.label}
+                    </text>
+                  </g>
+                );
+              })}
+            </svg>
+
+            {/* Hover Tooltip Popup - safely clamped */}
+            {hoveredIdx !== null && data[hoveredIdx] && (
+              <div
+                className="absolute top-0 bg-zinc-900/95 text-white rounded-lg px-2.5 py-1 text-[11px] shadow-md pointer-events-none transform -translate-x-1/2 z-10"
+                style={{
+                  left: `${Math.max(20, Math.min(80, (getX(hoveredIdx) / width) * 100))}%`,
+                }}
+              >
+                <div className="font-semibold text-zinc-300 border-b border-zinc-700/80 pb-0.5 mb-0.5 text-[10px]">
+                  {data[hoveredIdx].label} {data[hoveredIdx].dateLabel ? `(${data[hoveredIdx].dateLabel})` : ''}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-zinc-300">Corr: <strong className="text-white">{data[hoveredIdx].series1}</strong></span>
+                  <span className="text-zinc-300">• Prev: <strong className="text-amber-400">{data[hoveredIdx].series2}</strong></span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {loading ? (
-        <div className="flex items-center justify-center py-10 text-xs text-zinc-400 font-medium">
-          Loading trend records...
-        </div>
-      ) : !hasData ? (
-        <div className="flex flex-col items-center justify-center py-10 text-center">
-          <span className="text-xs text-zinc-400 font-medium">{emptyMessage}</span>
-        </div>
-      ) : (
-        /* SVG Spline Chart */
-        <div className="w-full mt-2">
-          <svg
-            viewBox={`0 0 ${width} ${height}`}
-            className="w-full h-auto overflow-visible select-none"
-          >
-            <defs>
-              <linearGradient id="trendAreaGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={series2Color} stopOpacity="0.28" />
-                <stop offset="100%" stopColor={series2Color} stopOpacity="0.02" />
-              </linearGradient>
-            </defs>
-
-            {/* Horizontal Gridlines & Y-axis labels */}
-            {yTicks.map((val) => {
-              const yPos = getY(val);
-              return (
-                <g key={val}>
-                  <line
-                    x1={paddingLeft}
-                    y1={yPos}
-                    x2={width - paddingRight}
-                    y2={yPos}
-                    stroke="#E2E8F0"
-                    strokeWidth="1"
-                    strokeDasharray={val === 0 ? undefined : '2 2'}
-                  />
-                  <text
-                    x={paddingLeft - 6}
-                    y={yPos + 3}
-                    textAnchor="end"
-                    className="text-[9px] fill-zinc-400 font-mono font-bold"
-                  >
-                    {val}
-                  </text>
-                </g>
-              );
-            })}
-
-            {/* Area Fill for Series 2 (Preventive) */}
-            {areaSeries2 && <path d={areaSeries2} fill="url(#trendAreaGradient)" />}
-
-            {/* Smooth Spline for Series 1 (Charcoal) */}
-            {pathSeries1 && (
-              <path
-                d={pathSeries1}
-                fill="none"
-                stroke={series1Color}
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            )}
-
-            {/* Smooth Spline for Series 2 (JCB Yellow) */}
-            {pathSeries2 && (
-              <path
-                d={pathSeries2}
-                fill="none"
-                stroke={series2Color}
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            )}
-
-            {/* Circular Data Markers & X-Axis Labels */}
-            {data.map((item, idx) => {
-              const xPos = getX(idx);
-              const yPos1 = getY(item.series1 || 0);
-              const yPos2 = getY(item.series2 || 0);
-
-              return (
-                <g key={idx}>
-                  {/* Point Series 1 */}
-                  <circle
-                    cx={xPos}
-                    cy={yPos1}
-                    r="3.5"
-                    fill={series1Color}
-                    stroke="#FFFFFF"
-                    strokeWidth="1.5"
-                  />
-                  {/* Point Series 2 */}
-                  <circle
-                    cx={xPos}
-                    cy={yPos2}
-                    r="3.5"
-                    fill={series2Color}
-                    stroke="#FFFFFF"
-                    strokeWidth="1.5"
-                  />
-                  {/* X-Axis Label */}
-                  <text
-                    x={xPos}
-                    y={height - 6}
-                    textAnchor="middle"
-                    className="text-[10px] fill-zinc-500 font-bold"
-                  >
-                    {item.label}
-                  </text>
-                </g>
-              );
-            })}
-          </svg>
-        </div>
-      )}
+      {/* Footer */}
+      <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between text-xs text-zinc-500">
+        <span>Velocity Ratio</span>
+        <span className="font-semibold text-zinc-800 font-mono">
+          {totalCorrective + totalPreventive > 0
+            ? `${Math.round((totalPreventive / (totalCorrective + totalPreventive)) * 100)}% PM Share`
+            : 'Nominal'}
+        </span>
+      </div>
     </div>
   );
 };

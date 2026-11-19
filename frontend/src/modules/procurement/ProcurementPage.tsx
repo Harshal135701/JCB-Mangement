@@ -261,6 +261,14 @@ export interface PRDetails extends PurchaseRequisition {
   }>;
 }
 
+interface PlantOption {
+  id: string;
+  plant_code: string;
+  plant_name: string;
+  location?: string;
+  status?: string;
+}
+
 interface SparePartOption {
   id: string;
   part_number: string;
@@ -268,12 +276,15 @@ interface SparePartOption {
   category?: string;
   available_stock: number;
   unit_cost?: number;
+  plant_id?: string;
 }
 
 interface MachineOption {
   id: string;
   machine_code: string;
   name: string;
+  shop_id?: string;
+  plant_id?: string;
   plant_name?: string;
 }
 
@@ -430,6 +441,7 @@ export const ProcurementPage: React.FC = () => {
   const isStoreManager = user?.role === 'store_manager';
   const isManager = user?.role === 'manager' || isAdmin || isStoreManager;
   const isTechnician = user?.role === 'technician';
+  const userPlantId = user?.plantId || (user as any)?.plant_id || '';
 
   // Navigation tab state
   const [activeTab, setActiveTab] = useState<'prs' | 'pos' | 'vendors' | 'analytics'>('prs');
@@ -468,6 +480,7 @@ export const ProcurementPage: React.FC = () => {
   const [parts, setParts] = useState<SparePartOption[]>([]);
   const [machines, setMachines] = useState<MachineOption[]>([]);
   const [workOrders, setWorkOrders] = useState<WorkOrderOption[]>([]);
+  const [plants, setPlants] = useState<PlantOption[]>([]);
 
   // Action Loading & Notifications
   const [actionLoading, setActionLoading] = useState(false);
@@ -488,6 +501,7 @@ export const ProcurementPage: React.FC = () => {
   // Create PR Form State
   const [createForm, setCreateForm] = useState({
     part_id: '',
+    plant_id: '',
     machine_id: '',
     work_order_id: '',
     quantity_required: 1,
@@ -659,10 +673,11 @@ export const ProcurementPage: React.FC = () => {
 
   const fetchAuxiliaryData = useCallback(async () => {
     try {
-      const [partsRes, machRes, woRes] = await Promise.allSettled([
+      const [partsRes, machRes, woRes, plantsRes] = await Promise.allSettled([
         apiClient.get('/inventory?limit=100'),
         apiClient.get('/machines?limit=100'),
         apiClient.get('/work-orders?limit=100&status=waiting_for_parts,assigned,in_progress'),
+        apiClient.get('/org/plants'),
       ]);
 
       if (partsRes.status === 'fulfilled' && partsRes.value.data?.success) {
@@ -673,6 +688,10 @@ export const ProcurementPage: React.FC = () => {
       }
       if (woRes.status === 'fulfilled' && woRes.value.data?.success) {
         setWorkOrders(woRes.value.data.data || []);
+      }
+      if (plantsRes.status === 'fulfilled' && plantsRes.value.data?.success) {
+        const rawPlants = plantsRes.value.data?.data || plantsRes.value.data?.plants || [];
+        setPlants(Array.isArray(rawPlants) ? rawPlants : []);
       }
     } catch (err) {
       console.error('Failed to load auxiliary catalog data:', err);
@@ -760,6 +779,16 @@ export const ProcurementPage: React.FC = () => {
   // WORKFLOW ACTION HANDLERS
   // ============================================================================
 
+  // Open Create PR Modal with appropriate plant preset
+  const handleOpenCreateModal = () => {
+    const defaultPlant = !isAdmin && userPlantId ? userPlantId : (createForm.plant_id || (plants.length > 0 ? plants[0].id : ''));
+    setCreateForm((prev) => ({
+      ...prev,
+      plant_id: prev.plant_id || defaultPlant,
+    }));
+    setIsCreateModalOpen(true);
+  };
+
   // 1. Create Purchase Requisition
   const handleCreatePR = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -779,6 +808,23 @@ export const ProcurementPage: React.FC = () => {
       return;
     }
 
+    const selectedMachine = machines.find((m) => m.id === createForm.machine_id);
+    const selectedPart = parts.find((p) => p.id === createForm.part_id);
+    const effectivePlantId =
+      createForm.plant_id ||
+      selectedMachine?.plant_id ||
+      selectedPart?.plant_id ||
+      userPlantId ||
+      (plants.length > 0 ? plants[0].id : null);
+
+    if (!effectivePlantId) {
+      setFeedback({
+        type: 'error',
+        message: 'Plant facility is required. Please select a valid target plant.',
+      });
+      return;
+    }
+
     try {
       setActionLoading(true);
       const payload: any = {
@@ -786,6 +832,7 @@ export const ProcurementPage: React.FC = () => {
         quantity_required: Number(createForm.quantity_required),
         urgency: createForm.urgency,
         technical_justification: createForm.technical_justification.trim(),
+        plant_id: effectivePlantId,
       };
       if (createForm.machine_id) payload.machine_id = createForm.machine_id;
       if (createForm.work_order_id) payload.work_order_id = createForm.work_order_id;
@@ -802,6 +849,7 @@ export const ProcurementPage: React.FC = () => {
         setIsCreateModalOpen(false);
         setCreateForm({
           part_id: '',
+          plant_id: !isAdmin && userPlantId ? userPlantId : (plants.length > 0 ? plants[0].id : ''),
           machine_id: '',
           work_order_id: '',
           quantity_required: 1,
@@ -809,6 +857,7 @@ export const ProcurementPage: React.FC = () => {
           expected_delivery_date: '',
           technical_justification: '',
         });
+        setPage(1);
         fetchPRs();
         if (isManager) fetchDashboardData();
       }
@@ -1221,7 +1270,7 @@ export const ProcurementPage: React.FC = () => {
           <div className="flex items-center gap-3">
             <div className="bg-jcb-yellow text-black font-black text-xl px-2.5 py-1 rounded-lg border border-amber-500 shadow-sm">
               JCB
-            </div>
+            </div>dministrator: JCB Administrator • Review configured checklist rule
             <h1 className="text-xl sm:text-2xl font-black text-zinc-950 tracking-tight">
               BUYING &amp; RECEIVING (PR / PO / GRN)
             </h1>
@@ -1229,9 +1278,9 @@ export const ProcurementPage: React.FC = () => {
               Buying Hub
             </span>
           </div>
-          <p className="text-xs text-zinc-500 font-medium mt-1">
+          {/* <p className="text-xs text-zinc-500 font-medium mt-1">
             Manage requests to buy spare parts, purchase orders, and receive materials (GRN).
-          </p>
+          </p> */}
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">
@@ -1266,13 +1315,13 @@ export const ProcurementPage: React.FC = () => {
             <RefreshCw className="w-4 h-4" />
           </button>
 
-          <button
-            onClick={() => setIsCreateModalOpen(true)}
+          {/* <button
+            onClick={handleOpenCreateModal}
             className="bg-jcb-yellow hover:bg-jcb-yellowDark text-black text-xs font-black px-4 py-2.5 rounded-xl shadow transition-all flex items-center gap-2 border border-amber-500 hover:shadow-md cursor-pointer"
           >
             <Plus className="w-4 h-4 stroke-[3]" />
             <span>Request to Buy Parts</span>
-          </button>
+          </button> */}
         </div>
       </div>
 
@@ -1511,7 +1560,7 @@ export const ProcurementPage: React.FC = () => {
                             No requisitions match your active search or filter criteria.
                           </p>
                           <button
-                            onClick={() => setIsCreateModalOpen(true)}
+                            onClick={handleOpenCreateModal}
                             className="bg-jcb-yellow text-black text-xs font-black px-3.5 py-1.5 rounded-lg shadow-sm mt-2"
                           >
                             Raise PR Now
@@ -1911,6 +1960,45 @@ export const ProcurementPage: React.FC = () => {
             </div>
 
             <form onSubmit={handleCreatePR} className="p-6 space-y-4 overflow-y-auto">
+              {/* Plant Facility Selector */}
+              <div>
+                <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1 flex items-center justify-between">
+                  <span>Target Plant Facility *</span>
+                  {isAdmin ? (
+                    <span className="text-[10px] text-amber-700 font-bold bg-amber-100 px-2 py-0.5 rounded border border-amber-300">
+                      Admin Selectable
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-zinc-500 font-semibold bg-zinc-100 px-2 py-0.5 rounded border border-zinc-200">
+                      Plant Scoped
+                    </span>
+                  )}
+                </label>
+                <select
+                  required
+                  value={createForm.plant_id}
+                  onChange={(e) => setCreateForm({ ...createForm, plant_id: e.target.value })}
+                  disabled={!isAdmin && !!userPlantId}
+                  className="w-full px-3 py-2.5 bg-zinc-50 border border-zinc-300 rounded-xl text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow disabled:bg-zinc-100 disabled:text-zinc-500 cursor-pointer"
+                >
+                  <option value="">-- Choose plant facility --</option>
+                  {plants.map((pl) => (
+                    <option key={pl.id} value={pl.id}>
+                      {pl.plant_name} ({pl.plant_code})
+                    </option>
+                  ))}
+                </select>
+                {isAdmin ? (
+                  <p className="text-[10px] text-zinc-500 mt-1">
+                    Select the manufacturing facility where the requested spare parts will be delivered and allocated.
+                  </p>
+                ) : (
+                  <p className="text-[10px] text-zinc-400 mt-1">
+                    Requisition automatically scoped to your assigned plant facility.
+                  </p>
+                )}
+              </div>
+
               {/* Part Selector */}
               <div>
                 <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
@@ -1919,7 +2007,15 @@ export const ProcurementPage: React.FC = () => {
                 <select
                   required
                   value={createForm.part_id}
-                  onChange={(e) => setCreateForm({ ...createForm, part_id: e.target.value })}
+                  onChange={(e) => {
+                    const selPartId = e.target.value;
+                    const foundPart = parts.find((p) => p.id === selPartId);
+                    setCreateForm((prev) => ({
+                      ...prev,
+                      part_id: selPartId,
+                      plant_id: prev.plant_id || foundPart?.plant_id || (userPlantId || (plants.length > 0 ? plants[0].id : '')),
+                    }));
+                  }}
                   className="w-full px-3 py-2.5 bg-zinc-50 border border-zinc-300 rounded-xl text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
                 >
                   <option value="">-- Choose spare part SKU --</option>
@@ -1939,13 +2035,21 @@ export const ProcurementPage: React.FC = () => {
                   </label>
                   <select
                     value={createForm.machine_id}
-                    onChange={(e) => setCreateForm({ ...createForm, machine_id: e.target.value })}
+                    onChange={(e) => {
+                      const selMachId = e.target.value;
+                      const foundMachine = machines.find((m) => m.id === selMachId);
+                      setCreateForm((prev) => ({
+                        ...prev,
+                        machine_id: selMachId,
+                        plant_id: foundMachine?.plant_id || prev.plant_id,
+                      }));
+                    }}
                     className="w-full px-3 py-2.5 bg-zinc-50 border border-zinc-300 rounded-xl text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
                   >
                     <option value="">-- General Stock Reorder --</option>
                     {machines.map((m) => (
                       <option key={m.id} value={m.id}>
-                        {m.machine_code} - {m.name}
+                        {m.machine_code} - {m.name} {m.plant_name ? `(${m.plant_name})` : ''}
                       </option>
                     ))}
                   </select>
@@ -1982,11 +2086,14 @@ export const ProcurementPage: React.FC = () => {
                     value={createForm.work_order_id}
                     onChange={(e) => {
                       const selectedWo = workOrders.find((w) => w.id === e.target.value);
-                      setCreateForm({
-                        ...createForm,
+                      const targetMachineId = selectedWo?.machine_id || createForm.machine_id;
+                      const foundMachine = machines.find((m) => m.id === targetMachineId);
+                      setCreateForm((prev) => ({
+                        ...prev,
                         work_order_id: e.target.value,
-                        machine_id: selectedWo?.machine_id || createForm.machine_id,
-                      });
+                        machine_id: targetMachineId,
+                        plant_id: foundMachine?.plant_id || prev.plant_id,
+                      }));
                     }}
                     className="w-full px-3 py-2.5 bg-zinc-50 border border-zinc-300 rounded-xl text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
                   >

@@ -647,7 +647,11 @@ export async function adjustStockService(
     throw new InventoryError('Unauthorized: Authentication required.', 401);
   }
 
-  if (!['admin', 'manager', 'store_manager'].includes(user.role)) {
+  if (user.role === 'admin') {
+    throw new InventoryError('Forbidden: Admin has read-only access and cannot modify stock quantities.', 403);
+  }
+
+  if (!['manager', 'store_manager'].includes(user.role)) {
     throw new InventoryError(`Forbidden: Role '${user.role}' is not authorized to adjust stock.`, 403);
   }
 
@@ -685,12 +689,26 @@ export function validateStoreManagerOrAdmin(user?: AuthenticatedUser, action: st
 /**
  * Store Dashboard Summary & Real-time Inventory Statistics
  */
-export async function getStoreDashboardService(user: AuthenticatedUser): Promise<any> {
+
+export async function getStoreDashboardService(
+  user: AuthenticatedUser,
+  selectedPlantId?: string | null
+): Promise<any> {
   validateStoreManagerOrAdmin(user, 'accessing store dashboard');
+
   const { query } = getInventoryServiceDb();
 
-  const plantId = (user.role !== 'admin' && user.plant_id) ? user.plant_id : null;
-  const plantFilter = plantId ? 'AND (sp.plant_id = $1 OR sp.plant_id IS NULL)' : '';
+  // Admin can select a plant or view all plants.
+  // Other roles remain restricted to their assigned plant.
+  const plantId =
+    user.role === 'admin'
+      ? (selectedPlantId || null)
+      : (user.plant_id || null);
+
+  const plantFilter = plantId
+    ? 'AND (sp.plant_id = $1 OR sp.plant_id IS NULL)'
+    : '';
+
   const params: any[] = plantId ? [plantId] : [];
 
   // Summary KPIs
@@ -722,32 +740,49 @@ export async function getStoreDashboardService(user: AuthenticatedUser): Promise
     ORDER BY valuation DESC
   `, params);
 
-  // Transfers count
-  const transferParams: any[] = plantId ? [plantId] : [];
-  const transferFilter = plantId ? 'WHERE (source_plant_id = $1 OR destination_plant_id = $1)' : '';
+  // Stock transfers
+  const transferFilter = plantId
+    ? 'WHERE (source_plant_id = $1 OR destination_plant_id = $1)'
+    : '';
+
   const transferRes = await query(`
     SELECT
       COUNT(CASE WHEN status IN ('pending', 'in_transit') THEN 1 END)::int AS active_transfers_count,
       COUNT(*)::int AS total_transfers_count
-    FROM stock_transfers ${transferFilter}
-  `, transferParams);
+    FROM stock_transfers
+    ${transferFilter}
+  `, params);
 
   // Damaged stock summary
-  const damagedParams: any[] = plantId ? [plantId] : [];
-  const damagedFilter = plantId ? 'WHERE (plant_id = $1 OR plant_id IS NULL)' : '';
+  const damagedFilter = plantId
+    ? 'WHERE (plant_id = $1 OR plant_id IS NULL)'
+    : '';
+
   const damagedRes = await query(`
     SELECT
       COUNT(*)::int AS total_damaged_reports,
       COALESCE(SUM(CASE WHEN disposition = 'quarantined' THEN quantity ELSE 0 END), 0)::int AS quarantined_units,
       COALESCE(SUM(CASE WHEN disposition = 'scrapped' THEN quantity ELSE 0 END), 0)::int AS scrapped_units
-    FROM damaged_stock_items ${damagedFilter}
-  `, damagedParams);
+    FROM damaged_stock_items
+    ${damagedFilter}
+  `, params);
 
   // Recent 10 transactions
   const txRes = await query(`
-    SELECT it.id, it.part_id, it.transaction_type, it.quantity, it.source_location,
-           it.destination_location, it.reference_work_order_id, it.remarks, it.created_at,
-           sp.part_number, sp.name AS part_name, u.full_name AS performed_by_name, u.role AS performed_by_role
+    SELECT
+      it.id,
+      it.part_id,
+      it.transaction_type,
+      it.quantity,
+      it.source_location,
+      it.destination_location,
+      it.reference_work_order_id,
+      it.remarks,
+      it.created_at,
+      sp.part_number,
+      sp.name AS part_name,
+      u.full_name AS performed_by_name,
+      u.role AS performed_by_role
     FROM inventory_transactions it
     JOIN spare_parts sp ON it.part_id = sp.id
     LEFT JOIN users u ON it.performed_by = u.id
@@ -755,6 +790,45 @@ export async function getStoreDashboardService(user: AuthenticatedUser): Promise
     ORDER BY it.created_at DESC
     LIMIT 10
   `, params);
+
+  // Franchise-wise breakdown for Admin global overview
+  let franchiseBreakdown: any[] = [];
+  if (user.role === 'admin') {
+    try {
+      const fbRes = await query(`
+        SELECT
+          p.id AS plant_id,
+          p.plant_name,
+          p.plant_code,
+          p.city,
+          COUNT(sp.id)::int AS total_parts,
+          COALESCE(SUM(sp.current_physical_stock), 0)::int AS total_physical_stock,
+          COALESCE(SUM(sp.available_stock), 0)::int AS total_available_stock,
+          COUNT(CASE WHEN sp.available_stock <= sp.min_reorder_level AND sp.current_physical_stock > 0 THEN 1 END)::int AS low_stock_items_count,
+          COUNT(CASE WHEN sp.current_physical_stock = 0 OR sp.available_stock <= 0 THEN 1 END)::int AS out_of_stock_count,
+          COALESCE(SUM(sp.current_physical_stock * sp.unit_cost), 0)::numeric(14,2) AS total_inventory_valuation
+        FROM plants p
+        LEFT JOIN spare_parts sp ON sp.plant_id = p.id AND sp.status = 'active'
+        WHERE p.status = 'active'
+        GROUP BY p.id, p.plant_name, p.plant_code, p.city
+        ORDER BY p.plant_name ASC
+      `);
+      franchiseBreakdown = (fbRes.rows || []).map((r: any) => ({
+        plant_id: r.plant_id,
+        plant_name: r.plant_name,
+        plant_code: r.plant_code,
+        city: r.city,
+        total_parts: parseInt(r.total_parts || 0, 10),
+        total_physical_stock: parseInt(r.total_physical_stock || 0, 10),
+        total_available_stock: parseInt(r.total_available_stock || 0, 10),
+        low_stock_items_count: parseInt(r.low_stock_items_count || 0, 10),
+        out_of_stock_count: parseInt(r.out_of_stock_count || 0, 10),
+        total_inventory_valuation: parseFloat(r.total_inventory_valuation || 0),
+      }));
+    } catch (fbErr) {
+      console.warn('[Dashboard Franchise Breakdown Warning]:', fbErr);
+    }
+  }
 
   const kpis = summaryRes.rows[0] || {};
 
@@ -769,8 +843,15 @@ export async function getStoreDashboardService(user: AuthenticatedUser): Promise
       out_of_stock_count: parseInt(kpis.out_of_stock_count || 0, 10),
       total_inventory_valuation: parseFloat(kpis.total_inventory_valuation || 0),
     },
-    transfers: transferRes.rows[0] || { active_transfers_count: 0, total_transfers_count: 0 },
-    damaged_stock: damagedRes.rows[0] || { total_damaged_reports: 0, quarantined_units: 0, scrapped_units: 0 },
+    transfers: transferRes.rows[0] || {
+      active_transfers_count: 0,
+      total_transfers_count: 0,
+    },
+    damaged_stock: damagedRes.rows[0] || {
+      total_damaged_reports: 0,
+      quarantined_units: 0,
+      scrapped_units: 0,
+    },
     category_breakdown: categoryRes.rows.map((r: any) => ({
       category: r.category,
       part_count: parseInt(r.part_count, 10),
@@ -778,9 +859,11 @@ export async function getStoreDashboardService(user: AuthenticatedUser): Promise
       available_stock: parseInt(r.available_stock, 10),
       valuation: parseFloat(r.valuation),
     })),
+    franchise_breakdown: franchiseBreakdown,
     recent_transactions: txRes.rows,
   };
 }
+
 
 export interface GetLowStockAlertsFilter {
   category?: string;

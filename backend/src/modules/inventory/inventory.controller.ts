@@ -26,15 +26,22 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
  * Search and list spare parts catalog with server-side pagination, category filtering,
  * and Trigram / ILIKE search across part number, OEM number, and name.
  */
+
 export const searchParts = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { query: searchQuery, category, page = '1', limit = '50', sort_by = 'part_number', sort_order = 'ASC' } = req.query;
+    const {
+      query: searchQuery,
+      category,
+      page = '1',
+      limit = '50',
+      sort_by = 'part_number',
+      sort_order = 'ASC',
+    } = req.query;
 
     const pageNum = Math.max(1, parseInt(String(page), 10) || 1);
     const limitNum = Math.min(100, Math.max(1, parseInt(String(limit), 10) || 50));
     const offset = (pageNum - 1) * limitNum;
 
-    // Allowed sort columns
     const allowedSortColumns: Record<string, string> = {
       part_number: 'part_number',
       name: 'name',
@@ -44,67 +51,106 @@ export const searchParts = async (req: Request, res: Response, next: NextFunctio
       unit_cost: 'unit_cost',
       created_at: 'created_at',
     };
+
     const sortCol = allowedSortColumns[String(sort_by)] || 'part_number';
     const sortDir = String(sort_order).toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
 
+    const callerRole = req.user?.role?.trim().toLowerCase();
+    const callerPlantId = req.user?.plant_id;
+
+    let selectedPlantId: string | null = null;
+
+    if (callerRole === 'admin') {
+      if (req.query.plant_id !== undefined && req.query.plant_id !== 'ALL' && String(req.query.plant_id).trim() !== '') {
+        if (
+          typeof req.query.plant_id !== 'string' ||
+          !UUID_REGEX.test(req.query.plant_id.trim())
+        ) {
+          res.status(400).json({
+            success: false,
+            message: 'Invalid plant_id. A valid UUID is required.',
+          });
+          return;
+        }
+
+        selectedPlantId = req.query.plant_id.trim();
+      }
+    } else {
+      if (!callerPlantId || !UUID_REGEX.test(callerPlantId)) {
+        res.status(403).json({
+          success: false,
+          message: 'Your account is not assigned to a valid franchise.',
+        });
+        return;
+      }
+
+      selectedPlantId = callerPlantId;
+    }
+
     let sql = `
-      SELECT id, part_number, oem_part_number, name, description, category, subcategory,
-             uom, warehouse_zone, bin_location, rack_number, shelf_number, bin_number,
-             current_physical_stock, reserved_stock, quarantined_stock, available_stock,
-             min_reorder_level, max_stock_level, unit_cost, supplier_name, plant_id, status,
-             created_at, updated_at
-      FROM spare_parts
-      WHERE status = 'active'
+      SELECT sp.id, sp.part_number, sp.oem_part_number, sp.name, sp.description, sp.category, sp.subcategory,
+             sp.uom, sp.warehouse_zone, sp.bin_location, sp.rack_number, sp.shelf_number, sp.bin_number,
+             sp.current_physical_stock, sp.reserved_stock, sp.quarantined_stock, sp.available_stock,
+             sp.min_reorder_level, sp.max_stock_level, sp.unit_cost, sp.supplier_name, sp.plant_id, sp.status,
+             sp.created_at, sp.updated_at,
+             p.plant_name, p.plant_code
+      FROM spare_parts sp
+      LEFT JOIN plants p ON sp.plant_id = p.id
+      WHERE sp.status = 'active'
     `;
+
     const params: any[] = [];
 
     if (searchQuery && String(searchQuery).trim()) {
       params.push(`%${String(searchQuery).trim()}%`);
-      sql += ` AND (part_number ILIKE $${params.length} OR name ILIKE $${params.length} OR oem_part_number ILIKE $${params.length})`;
+      sql += ` AND (
+        sp.part_number ILIKE $${params.length}
+        OR sp.name ILIKE $${params.length}
+        OR sp.oem_part_number ILIKE $${params.length}
+      )`;
     }
 
     if (category && String(category).trim() && String(category).trim().toLowerCase() !== 'all') {
       params.push(String(category).trim());
-      sql += ` AND category = $${params.length}`;
+      sql += ` AND sp.category = $${params.length}`;
     }
 
-    // Multi-Plant Isolation
-    const callerRole = req.user?.role?.trim().toLowerCase();
-    const callerPlantId = req.user?.plant_id;
-
-    if (callerRole !== 'admin' && callerPlantId) {
-      params.push(callerPlantId);
-      sql += ` AND (plant_id = $${params.length} OR plant_id IS NULL)`;
-    } else if (req.query.plant_id && typeof req.query.plant_id === 'string' && UUID_REGEX.test(req.query.plant_id)) {
-      params.push(req.query.plant_id);
-      sql += ` AND plant_id = $${params.length}`;
+    if (selectedPlantId) {
+      params.push(selectedPlantId);
+      sql += ` AND sp.plant_id = $${params.length}`;
     }
 
-    sql += ` ORDER BY ${sortCol} ${sortDir} LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+    sql += ` ORDER BY sp.${sortCol} ${sortDir} LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
     params.push(limitNum, offset);
 
     const result = await query(sql, params);
 
-    // Synchronized count query with matching filters
-    let countSql = `SELECT COUNT(*) FROM spare_parts WHERE status = 'active'`;
+    // Count query uses exactly the same filters.
+    let countSql = `
+      SELECT COUNT(*)
+      FROM spare_parts sp
+      WHERE sp.status = 'active'
+    `;
+
     const countParams: any[] = [];
 
     if (searchQuery && String(searchQuery).trim()) {
       countParams.push(`%${String(searchQuery).trim()}%`);
-      countSql += ` AND (part_number ILIKE $${countParams.length} OR name ILIKE $${countParams.length} OR oem_part_number ILIKE $${countParams.length})`;
+      countSql += ` AND (
+        sp.part_number ILIKE $${countParams.length}
+        OR sp.name ILIKE $${countParams.length}
+        OR sp.oem_part_number ILIKE $${countParams.length}
+      )`;
     }
 
     if (category && String(category).trim() && String(category).trim().toLowerCase() !== 'all') {
       countParams.push(String(category).trim());
-      countSql += ` AND category = $${countParams.length}`;
+      countSql += ` AND sp.category = $${countParams.length}`;
     }
 
-    if (callerRole !== 'admin' && callerPlantId) {
-      countParams.push(callerPlantId);
-      countSql += ` AND (plant_id = $${countParams.length} OR plant_id IS NULL)`;
-    } else if (req.query.plant_id && typeof req.query.plant_id === 'string' && UUID_REGEX.test(req.query.plant_id)) {
-      countParams.push(req.query.plant_id);
-      countSql += ` AND plant_id = $${countParams.length}`;
+    if (selectedPlantId) {
+      countParams.push(selectedPlantId);
+      countSql += ` AND sp.plant_id = $${countParams.length}`;
     }
 
     const countRes = await query(countSql, countParams);
@@ -125,6 +171,7 @@ export const searchParts = async (req: Request, res: Response, next: NextFunctio
   }
 };
 
+
 /**
  * Get single spare part by ID with full stock metrics and bin location
  */
@@ -136,14 +183,19 @@ export const getSparePartById = async (req: Request, res: Response, next: NextFu
       return;
     }
 
+    const callerRole = req.user?.role?.trim().toLowerCase();
+    const callerPlantId = req.user?.plant_id;
+
     const result = await query(
-      `SELECT id, part_number, oem_part_number, name, description, category, subcategory,
-              uom, warehouse_zone, bin_location, rack_number, shelf_number, bin_number,
-              current_physical_stock, reserved_stock, quarantined_stock, available_stock,
-              min_reorder_level, max_stock_level, unit_cost, supplier_name, plant_id, status,
-              created_at, updated_at
-       FROM spare_parts
-       WHERE id = $1`,
+      `SELECT sp.id, sp.part_number, sp.oem_part_number, sp.name, sp.description, sp.category, sp.subcategory,
+              sp.uom, sp.warehouse_zone, sp.bin_location, sp.rack_number, sp.shelf_number, sp.bin_number,
+              sp.current_physical_stock, sp.reserved_stock, sp.quarantined_stock, sp.available_stock,
+              sp.min_reorder_level, sp.max_stock_level, sp.unit_cost, sp.supplier_name, sp.plant_id, sp.status,
+              sp.created_at, sp.updated_at,
+              p.plant_name, p.plant_code
+       FROM spare_parts sp
+       LEFT JOIN plants p ON sp.plant_id = p.id
+       WHERE sp.id = $1`,
       [id]
     );
 
@@ -152,9 +204,22 @@ export const getSparePartById = async (req: Request, res: Response, next: NextFu
       return;
     }
 
+    const part = result.rows[0];
+
+    // Role-based access check: Manager can only view spare parts belonging to their assigned franchise
+    if (callerRole !== 'admin' && callerPlantId) {
+      if (part.plant_id && part.plant_id !== callerPlantId) {
+        res.status(403).json({
+          success: false,
+          message: 'Forbidden: You do not have access to spare parts belonging to another franchise.',
+        });
+        return;
+      }
+    }
+
     res.json({
       success: true,
-      data: result.rows[0],
+      data: part,
     });
   } catch (err) {
     next(err);
@@ -286,16 +351,40 @@ export const reservePartForWorkOrder = async (req: Request, res: Response, next:
  * Create a new spare part master record (Admin and Store Manager).
  * Validates part_number, name, bin_location and numeric bounds.
  */
-export const createSparePart = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+
+/**
+ * Create a new spare part master record (Admin and Store Manager).
+ * Plant assignment is mandatory and validated against active plants.
+ */
+export const createSparePart = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
   try {
     const user = req.user;
+
     if (!user || !user.id) {
-      res.status(401).json({ success: false, message: 'Unauthorized: Authentication required.' });
+      res.status(401).json({
+        success: false,
+        message: 'Unauthorized: Authentication required.',
+      });
       return;
     }
 
-    if (!['admin', 'store_manager'].includes(user.role)) {
-      res.status(403).json({ success: false, message: `Forbidden: Role '${user.role}' is not authorized to create spare parts.` });
+    if (user.role === 'admin') {
+      res.status(403).json({
+        success: false,
+        message: 'Forbidden: Admin has read-only access and cannot create spare parts.',
+      });
+      return;
+    }
+
+    if (!['manager', 'store_manager'].includes(user.role)) {
+      res.status(403).json({
+        success: false,
+        message: `Forbidden: Role '${user.role}' is not authorized to create spare parts.`,
+      });
       return;
     }
 
@@ -314,47 +403,126 @@ export const createSparePart = async (req: Request, res: Response, next: NextFun
       max_stock_level = 100,
       unit_cost = 0,
       supplier_name,
-      plant_id,
-    } = req.body;
+    } = req.body || {};
 
-    if (!part_number || typeof part_number !== 'string' || !part_number.trim()) {
-      res.status(400).json({ success: false, message: 'part_number is required.' });
+    // Required field validation
+    if (
+      !part_number ||
+      typeof part_number !== 'string' ||
+      !part_number.trim()
+    ) {
+      res.status(400).json({
+        success: false,
+        message: 'part_number is required.',
+      });
       return;
     }
 
     if (!name || typeof name !== 'string' || !name.trim()) {
-      res.status(400).json({ success: false, message: 'name is required.' });
+      res.status(400).json({
+        success: false,
+        message: 'name is required.',
+      });
       return;
     }
 
-    if (!bin_location || typeof bin_location !== 'string' || !bin_location.trim()) {
-      res.status(400).json({ success: false, message: 'bin_location is required.' });
+    if (
+      !bin_location ||
+      typeof bin_location !== 'string' ||
+      !bin_location.trim()
+    ) {
+      res.status(400).json({
+        success: false,
+        message: 'bin_location is required.',
+      });
       return;
     }
 
-    if (user.role !== 'admin' && plant_id && user.plant_id && plant_id !== user.plant_id) {
-      res.status(403).json({ success: false, message: 'Forbidden: Cannot create spare parts for another plant.' });
+    // Derive the manager's franchise ID from authenticated user's account
+    // Never trust a franchise ID supplied by the frontend for authorization
+    if (!user.plant_id || !UUID_REGEX.test(user.plant_id)) {
+      res.status(403).json({
+        success: false,
+        message: 'Your account is not assigned to a valid franchise.',
+      });
       return;
     }
 
-    const assignedPlantId = user.role !== 'admin'
-      ? (user.plant_id || plant_id || null)
-      : (plant_id || user.plant_id || null);
+    const assignedPlantId = user.plant_id;
+
+    // Verify that the selected plant exists and is active.
+    const plantResult = await query(
+      `SELECT id, plant_name
+       FROM plants
+       WHERE id = $1
+         AND status = 'active'`,
+      [assignedPlantId]
+    );
+
+    if (plantResult.rows.length === 0) {
+      res.status(400).json({
+        success: false,
+        message: 'Assigned franchise does not exist or is inactive.',
+      });
+      return;
+    }
 
     const trimmedPartNo = part_number.trim();
     const trimmedName = name.trim();
     const trimmedBin = bin_location.trim();
-    const physicalStockNum = Math.max(0, parseInt(String(current_physical_stock), 10) || 0);
-    const minReorderNum = Math.max(0, parseInt(String(min_reorder_level), 10) || 5);
-    const maxStockNum = Math.max(1, parseInt(String(max_stock_level), 10) || 100);
-    const unitCostNum = Math.max(0, parseFloat(String(unit_cost)) || 0);
+
+    // Check duplicate part number within this franchise scope
+    const duplicateCheck = await query(
+      `SELECT id FROM spare_parts WHERE part_number = $1 AND plant_id = $2 AND status = 'active'`,
+      [trimmedPartNo, assignedPlantId]
+    );
+    if (duplicateCheck.rows.length > 0) {
+      res.status(409).json({
+        success: false,
+        message: `Part Number '${trimmedPartNo}' already exists in your franchise catalog.`,
+      });
+      return;
+    }
+
+    const physicalStockNum = Math.max(
+      0,
+      parseInt(String(current_physical_stock), 10) || 0
+    );
+
+    const minReorderNum = Math.max(
+      0,
+      parseInt(String(min_reorder_level), 10) || 5
+    );
+
+    const maxStockNum = Math.max(
+      1,
+      parseInt(String(max_stock_level), 10) || 100
+    );
+
+    const unitCostNum = Math.max(
+      0,
+      parseFloat(String(unit_cost)) || 0
+    );
 
     const result = await query(
       `INSERT INTO spare_parts (
-        part_number, oem_part_number, name, description, category, subcategory,
-        uom, warehouse_zone, bin_location, current_physical_stock, min_reorder_level,
-        max_stock_level, unit_cost, supplier_name, plant_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        part_number,
+        oem_part_number,
+        name,
+        description,
+        category,
+        subcategory,
+        uom,
+        warehouse_zone,
+        bin_location,
+        current_physical_stock,
+        min_reorder_level,
+        max_stock_level,
+        unit_cost,
+        supplier_name,
+        plant_id
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       RETURNING *`,
       [
         trimmedPartNo,
@@ -377,15 +545,28 @@ export const createSparePart = async (req: Request, res: Response, next: NextFun
 
     const newPart = result.rows[0];
 
-    // If part was created with initial physical stock > 0, log immutable audit transaction
-    if (physicalStockNum > 0 && user?.id) {
+    // Record initial stock transaction when applicable.
+    if (physicalStockNum > 0) {
       try {
         await query(
           `INSERT INTO inventory_transactions (
-            part_id, transaction_type, quantity, source_location, destination_location,
-            performed_by, remarks, created_at
-          ) VALUES ($1, 'STOCK_IN', $2, 'Goods Receiving', $3, $4, 'Initial stock intake upon catalog creation', NOW())`,
-          [newPart.id, physicalStockNum, `Bin: ${trimmedBin}`, user.id]
+            part_id,
+            transaction_type,
+            quantity,
+            source_location,
+            destination_location,
+            performed_by,
+            remarks,
+            created_at
+          )
+          VALUES ($1, 'STOCK_IN', $2, 'Goods Receiving', $3, $4,
+                  'Initial stock intake upon catalog creation', NOW())`,
+          [
+            newPart.id,
+            physicalStockNum,
+            `Bin: ${trimmedBin}`,
+            user.id,
+          ]
         );
       } catch (txErr) {
         console.warn('[Initial Stock Transaction Warning]:', txErr);
@@ -393,24 +574,32 @@ export const createSparePart = async (req: Request, res: Response, next: NextFun
     }
 
     const io = getIo();
+
     if (io) {
       io.emit('inventory:part_created', { part: newPart });
-      io.emit('inventory:stock_adjusted', { partId: newPart.id });
+      io.emit('inventory:stock_adjusted', {
+        partId: newPart.id,
+      });
     }
 
     res.status(201).json({
       success: true,
-      message: `Spare Part ${trimmedPartNo} added to catalog successfully.`,
+      message: `Spare Part ${trimmedPartNo} added to ${plantResult.rows[0].plant_name} catalog successfully.`,
       data: newPart,
     });
   } catch (err: any) {
     if (err.code === '23505') {
-      res.status(409).json({ success: false, message: `Part Number '${req.body.part_number}' already exists in catalog.` });
+      res.status(409).json({
+        success: false,
+        message: `Part Number '${req.body?.part_number}' already exists in catalog.`,
+      });
       return;
     }
+
     next(err);
   }
 };
+
 
 /**
  * Update spare part metadata (Admin and Store Manager).
@@ -425,8 +614,19 @@ export const updateSparePart = async (req: Request, res: Response, next: NextFun
       return;
     }
 
-    if (!['admin', 'store_manager'].includes(user.role)) {
-      res.status(403).json({ success: false, message: `Forbidden: Role '${user.role}' is not authorized to update spare parts.` });
+    if (user.role === 'admin') {
+      res.status(403).json({
+        success: false,
+        message: 'Forbidden: Admin has read-only access and cannot edit spare parts.',
+      });
+      return;
+    }
+
+    if (!['manager', 'store_manager'].includes(user.role)) {
+      res.status(403).json({
+        success: false,
+        message: `Forbidden: Role '${user.role}' is not authorized to update spare parts.`,
+      });
       return;
     }
 
@@ -436,17 +636,18 @@ export const updateSparePart = async (req: Request, res: Response, next: NextFun
       return;
     }
 
-    // Plant isolation check for store manager
-    if (user.role !== 'admin' && user.plant_id) {
-      const partCheck = await query('SELECT id, plant_id FROM spare_parts WHERE id = $1', [id]);
-      if (partCheck.rows.length === 0) {
-        res.status(404).json({ success: false, message: 'Spare part not found.' });
-        return;
-      }
-      if (partCheck.rows[0].plant_id && partCheck.rows[0].plant_id !== user.plant_id) {
-        res.status(403).json({ success: false, message: 'Forbidden: Cannot update spare parts assigned to another plant.' });
-        return;
-      }
+    // Plant isolation check: Manager can only update parts within their assigned franchise
+    const partCheck = await query('SELECT id, plant_id FROM spare_parts WHERE id = $1', [id]);
+    if (partCheck.rows.length === 0) {
+      res.status(404).json({ success: false, message: 'Spare part not found.' });
+      return;
+    }
+    if (user.plant_id && partCheck.rows[0].plant_id && partCheck.rows[0].plant_id !== user.plant_id) {
+      res.status(403).json({
+        success: false,
+        message: 'Forbidden: Cannot update spare parts assigned to another franchise.',
+      });
+      return;
     }
 
     const {
@@ -539,7 +740,15 @@ export const deleteSparePart = async (req: Request, res: Response, next: NextFun
       return;
     }
 
-    if (!['admin', 'store_manager'].includes(user.role)) {
+    if (user.role === 'admin') {
+      res.status(403).json({
+        success: false,
+        message: 'Forbidden: Admin has read-only access and cannot delete spare parts.',
+      });
+      return;
+    }
+
+    if (!['manager', 'store_manager'].includes(user.role)) {
       res.status(403).json({ success: false, message: `Forbidden: Role '${user.role}' is not authorized to delete spare parts.` });
       return;
     }
@@ -557,9 +766,9 @@ export const deleteSparePart = async (req: Request, res: Response, next: NextFun
     }
     const part = partRes.rows[0];
 
-    // Plant isolation check for store manager
-    if (user.role !== 'admin' && user.plant_id && part.plant_id && part.plant_id !== user.plant_id) {
-      res.status(403).json({ success: false, message: 'Forbidden: Cannot delete spare parts assigned to another plant.' });
+    // Plant isolation check: Manager can only delete parts in their assigned franchise
+    if (user.plant_id && part.plant_id && part.plant_id !== user.plant_id) {
+      res.status(403).json({ success: false, message: 'Forbidden: Cannot delete spare parts assigned to another franchise.' });
       return;
     }
 
@@ -640,7 +849,15 @@ export const adjustStock = async (req: Request, res: Response, next: NextFunctio
       return;
     }
 
-    if (!['admin', 'manager', 'store_manager'].includes(user.role)) {
+    if (user.role === 'admin') {
+      res.status(403).json({
+        success: false,
+        message: 'Forbidden: Admin has read-only access and cannot modify stock quantities.',
+      });
+      return;
+    }
+
+    if (!['manager', 'store_manager'].includes(user.role)) {
       res.status(403).json({ success: false, message: `Forbidden: Role '${user.role}' is not authorized to adjust stock.` });
       return;
     }
@@ -661,6 +878,20 @@ export const adjustStock = async (req: Request, res: Response, next: NextFunctio
 
     if (!reason || typeof reason !== 'string' || !reason.trim()) {
       res.status(400).json({ success: false, message: 'Reason for adjustment is mandatory.' });
+      return;
+    }
+
+    // Franchise ownership verification for Manager
+    const partCheck = await query('SELECT id, plant_id FROM spare_parts WHERE id = $1', [part_id.trim()]);
+    if (partCheck.rows.length === 0) {
+      res.status(404).json({ success: false, message: 'Spare part not found.' });
+      return;
+    }
+    if (user.plant_id && partCheck.rows[0].plant_id && partCheck.rows[0].plant_id !== user.plant_id) {
+      res.status(403).json({
+        success: false,
+        message: 'Forbidden: Cannot adjust stock for a spare part belonging to another franchise.',
+      });
       return;
     }
 
@@ -711,18 +942,56 @@ export const adjustStock = async (req: Request, res: Response, next: NextFunctio
 /**
  * GET /dashboard - Store Dashboard Summary KPIs & Status
  */
-export const getStoreDashboard = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+
+export const getStoreDashboard = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
   try {
-    const data = await getStoreDashboardService(req.user as AuthenticatedUser);
-    res.json({ success: true, data });
+    const user = req.user as AuthenticatedUser;
+    const rawPlantId = req.query.plant_id;
+
+    let selectedPlantId: string | null = null;
+
+    // Only admins can select a plant from the dashboard.
+    if (user.role === 'admin' && rawPlantId !== undefined && rawPlantId !== 'ALL' && String(rawPlantId).trim() !== '') {
+      if (
+        typeof rawPlantId !== 'string' ||
+        !UUID_REGEX.test(rawPlantId.trim())
+      ) {
+        res.status(400).json({
+          success: false,
+          message: 'Invalid plant_id. A valid UUID is required.',
+        });
+        return;
+      }
+
+      selectedPlantId = rawPlantId.trim();
+    }
+
+    const data = await getStoreDashboardService(
+      user,
+      selectedPlantId
+    );
+
+    res.json({
+      success: true,
+      data,
+    });
   } catch (err: any) {
     if (err instanceof InventoryError) {
-      res.status(err.statusCode).json({ success: false, message: err.message });
+      res.status(err.statusCode).json({
+        success: false,
+        message: err.message,
+      });
       return;
     }
+
     next(err);
   }
 };
+
 
 /**
  * GET /alerts/low-stock - Low-stock alerts and reorder recommendations

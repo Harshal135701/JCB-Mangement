@@ -50,17 +50,17 @@ router.get('/reports/movement', requireRoles('admin', 'manager', 'store_manager'
 // Reservation accessible by Technician, Manager, Store Manager, Admin
 router.post('/reserve', requireRoles('admin', 'manager', 'technician', 'store_manager'), reservePartForWorkOrder);
 
-// Stock adjustment accessible by Manager, Store Manager, Admin
-router.post('/adjust', requireRoles('admin', 'manager', 'store_manager'), adjustStock);
+// Stock adjustment accessible by Manager and Store Manager (Admin is strictly read-only)
+router.post('/adjust', requireRoles('manager', 'store_manager'), adjustStock);
 
-// Spare Parts Catalog Search & Listing
+// Spare Parts Catalog Search & Listing (Admin views globally or filtered; Manager strictly own franchise)
 router.get('/', searchParts);
 router.get('/search', searchParts);
 
-// Spare Parts Master CRUD (Admin and Store Manager)
-router.post('/', requireRoles('admin', 'store_manager'), createSparePart);
-router.put('/:id', requireRoles('admin', 'store_manager'), updateSparePart);
-router.delete('/:id', requireRoles('admin', 'store_manager'), deleteSparePart);
+// Spare Parts Master CRUD (Manager and Store Manager only - Admin is strictly read-only)
+router.post('/', requireRoles('manager', 'store_manager'), createSparePart);
+router.put('/:id', requireRoles('manager', 'store_manager'), updateSparePart);
+router.delete('/:id', requireRoles('manager', 'store_manager'), deleteSparePart);
 
 // Single Part Retrieval by ID (placed after specific endpoints)
 router.get('/:id', getSparePartById);

@@ -220,9 +220,9 @@ export const MachineMasterPage: React.FC = () => {
               </span>
             )}
           </div>
-          <p className="text-xs text-zinc-500 font-medium mt-1">
+          {/* <p className="text-xs text-zinc-500 font-medium mt-1">
             Manage plant machines, locations, QR codes, and maintenance records.
-          </p>
+          </p> */}
         </div>
 
         {/* Header Actions */}
@@ -246,7 +246,7 @@ export const MachineMasterPage: React.FC = () => {
             <span className="hidden sm:inline">Refresh</span>
           </button>
 
-          {isAdmin && (
+          {isManager && (
             <button
               onClick={() => setIsCreateOpen(true)}
               className="bg-jcb-yellow hover:bg-jcb-yellowDark text-black text-xs font-black px-4 py-2.5 rounded-xl shadow transition-all flex items-center gap-2 border border-amber-500"
@@ -657,7 +657,7 @@ export const MachineMasterPage: React.FC = () => {
       </div>
 
       {/* Modals */}
-      {isCreateOpen && (
+      {isManager && isCreateOpen && (
         <MachineCreateModal
           isOpen={isCreateOpen}
           onClose={() => setIsCreateOpen(false)}

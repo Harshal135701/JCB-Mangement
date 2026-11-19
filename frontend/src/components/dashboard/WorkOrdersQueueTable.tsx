@@ -25,12 +25,14 @@ interface WorkOrdersQueueTableProps {
   liveOrders?: any[];
   workOrders?: any[];
   loading?: boolean;
+  showCreateWorkOrder?: boolean;
 }
 
 export const WorkOrdersQueueTable: React.FC<WorkOrdersQueueTableProps> = ({
   liveOrders,
   workOrders,
   loading = false,
+  showCreateWorkOrder = false,
 }) => {
   const [activeTab, setActiveTab] = useState<FilterTab>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
@@ -135,162 +137,170 @@ export const WorkOrdersQueueTable: React.FC<WorkOrdersQueueTableProps> = ({
   });
 
   return (
-    <div className="bg-white rounded-2xl border-2 border-slate-200 p-5 sm:p-6 shadow-xs flex flex-col justify-between">
+    <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-xs flex flex-col justify-between h-full">
       {/* Top Header & Action */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-        <div className="flex items-center gap-2">
-          <Wrench className="w-4 h-4 text-zinc-950" />
-          <h3 className="text-sm font-black text-zinc-950 uppercase tracking-wider">
-            Work Orders Queue
-          </h3>
+      <div>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-purple-50 border border-purple-200 flex items-center justify-center shrink-0">
+              <Wrench className="w-4 h-4 text-purple-700" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-zinc-900 tracking-tight">
+                Live Work Orders & Maintenance Queue
+              </h3>
+            </div>
+          </div>
+
+          {showCreateWorkOrder && (
+            <Link
+              to="/triage"
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-jcb-yellow hover:bg-amber-400 text-black text-[13px] sm:text-sm font-semibold rounded-xl transition border border-amber-500 shadow-2xs self-start sm:self-auto shrink-0"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Create Work Order</span>
+            </Link>
+          )}
         </div>
 
-        <Link
-          to="/triage"
-          className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-jcb-yellow hover:bg-amber-400 text-black text-xs font-black rounded-xl transition border border-amber-500 shadow-xs self-start sm:self-auto uppercase tracking-wider"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>Create Work Order</span>
-        </Link>
-      </div>
+        {/* Tabs & Search Filter Bar */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-100">
+          {/* Filter Pills */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
+            {(
+              [
+                { key: 'ALL', label: `All (${allCount})` },
+                { key: 'OPEN', label: `Open (${openCount})` },
+                { key: 'IN PROGRESS', label: `In Progress (${inProgressCount})` },
+                { key: 'COMPLETED', label: `Completed (${completedCount})` },
+                { key: 'OVERDUE', label: `Overdue (${overdueCount})` },
+              ] as const
+            ).map((tab) => {
+              const isActive = activeTab === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`px-3 py-1 rounded-full text-xs sm:text-[13px] font-semibold transition whitespace-nowrap ${
+                    isActive
+                      ? 'bg-zinc-950 text-white shadow-2xs'
+                      : 'bg-slate-100 text-zinc-600 hover:bg-slate-200 hover:text-zinc-900'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
 
-      {/* Tabs & Search Filter Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-100">
-        {/* Filter Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
-          {(
-            [
-              { key: 'ALL', label: `All (${allCount})` },
-              { key: 'OPEN', label: `Open (${openCount})` },
-              { key: 'IN PROGRESS', label: `In Progress (${inProgressCount})` },
-              { key: 'COMPLETED', label: `Completed (${completedCount})` },
-              { key: 'OVERDUE', label: `Overdue (${overdueCount})` },
-            ] as const
-          ).map((tab) => {
-            const isActive = activeTab === tab.key;
-            return (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className={`px-3 py-1 rounded-full text-xs font-bold transition whitespace-nowrap ${
-                  isActive
-                    ? 'bg-zinc-950 text-white shadow-2xs'
-                    : 'bg-slate-100 text-zinc-600 hover:bg-slate-200 hover:text-zinc-900'
-                }`}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
+          {/* Search Input */}
+          <div className="relative min-w-[200px]">
+            <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-3 top-2.5" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search work orders..."
+              className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs sm:text-[13px] font-medium text-zinc-900 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-amber-500"
+            />
+          </div>
         </div>
 
-        {/* Search Input */}
-        <div className="relative min-w-[200px]">
-          <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-3 top-2.5" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search work orders..."
-            className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-zinc-900 placeholder-zinc-400 focus:outline-none focus:ring-1 focus:ring-amber-500"
-          />
-        </div>
-      </div>
-
-      {/* Responsive Table */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="border-b border-slate-200 text-[10px] uppercase font-black text-zinc-400 tracking-wider">
-              <th className="pb-2.5 font-bold">WO #</th>
-              <th className="pb-2.5 font-bold">Type</th>
-              <th className="pb-2.5 font-bold">Machine</th>
-              <th className="pb-2.5 font-bold">Priority</th>
-              <th className="pb-2.5 font-bold">Status</th>
-              <th className="pb-2.5 font-bold">Assigned To</th>
-              <th className="pb-2.5 font-bold">Due Date</th>
-              <th className="pb-2.5 text-right font-bold">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 text-xs">
-            {loading ? (
-              <tr>
-                <td colSpan={8} className="py-8 text-center text-xs text-zinc-400 font-medium">
-                  Loading work orders queue...
-                </td>
+        {/* Responsive Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-slate-200/80 text-[13px] font-semibold text-zinc-600">
+                <th className="py-2.5 px-3">WO #</th>
+                <th className="py-2.5 px-3">Type</th>
+                <th className="py-2.5 px-3">Machine</th>
+                <th className="py-2.5 px-3">Priority</th>
+                <th className="py-2.5 px-3">Status</th>
+                <th className="py-2.5 px-3">Assigned To</th>
+                <th className="py-2.5 px-3">Due Date</th>
+                <th className="py-2.5 px-3 text-right">Actions</th>
               </tr>
-            ) : filteredOrders.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="py-8 text-center text-xs text-zinc-400 font-medium">
-                  No work orders found matching the filter criteria.
-                </td>
-              </tr>
-            ) : (
-              filteredOrders.map((wo) => (
-                <tr key={wo.id} className="hover:bg-slate-50 transition group">
-                  <td className="py-3 font-mono font-bold text-zinc-950">
-                    <Link
-                      to={`/work-orders/${wo.id}`}
-                      className="hover:text-amber-800 transition flex items-center gap-1"
-                    >
-                      <span>{wo.woNumber}</span>
-                    </Link>
-                  </td>
-                  <td className="py-3 text-zinc-600 font-medium">
-                    {wo.type}
-                  </td>
-                  <td className="py-3 font-bold text-zinc-900">
-                    {wo.machine}
-                  </td>
-                  <td className="py-3">
-                    <span
-                      className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${getPriorityBadge(
-                        wo.priority
-                      )}`}
-                    >
-                      {wo.priority}
-                    </span>
-                  </td>
-                  <td className="py-3">
-                    <span
-                      className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${getStatusBadge(
-                        wo.status
-                      )}`}
-                    >
-                      {wo.status}
-                    </span>
-                  </td>
-                  <td className="py-3 text-zinc-700 font-medium">
-                    {wo.assignedTo}
-                  </td>
-                  <td className="py-3 font-mono text-zinc-500 text-[11px]">
-                    {wo.dueDate}
-                  </td>
-                  <td className="py-3 text-right">
-                    <Link
-                      to={`/work-orders/${wo.id}`}
-                      className="inline-flex items-center justify-center p-1.5 text-zinc-400 hover:text-black hover:bg-slate-100 rounded-lg transition"
-                      title="View Details"
-                    >
-                      <MoreHorizontal className="w-4 h-4" />
-                    </Link>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-sm text-zinc-800">
+              {loading ? (
+                <tr>
+                  <td colSpan={8} className="py-8 text-center text-[13px] text-zinc-400 font-normal">
+                    Loading work orders queue...
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : filteredOrders.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-8 text-center text-[13px] text-zinc-400 font-normal">
+                    No work orders found matching the filter criteria.
+                  </td>
+                </tr>
+              ) : (
+                filteredOrders.map((wo) => (
+                  <tr key={wo.id} className="hover:bg-slate-50/70 transition group">
+                    <td className="py-3 px-3 font-mono font-bold text-zinc-950">
+                      <Link
+                        to={`/work-orders/${wo.id}`}
+                        className="hover:text-amber-600 transition flex items-center gap-1"
+                      >
+                        <span>{wo.woNumber}</span>
+                      </Link>
+                    </td>
+                    <td className="py-3 px-3 text-zinc-600 font-normal">
+                      {wo.type}
+                    </td>
+                    <td className="py-3 px-3 font-semibold text-zinc-900">
+                      {wo.machine}
+                    </td>
+                    <td className="py-3 px-3">
+                      <span
+                        className={`inline-block px-2.5 py-0.5 rounded-md text-xs font-semibold border ${getPriorityBadge(
+                          wo.priority
+                        )}`}
+                      >
+                        {wo.priority}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3">
+                      <span
+                        className={`inline-block px-2.5 py-0.5 rounded-md text-xs font-semibold border ${getStatusBadge(
+                          wo.status
+                        )}`}
+                      >
+                        {wo.status}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3 text-zinc-700 font-normal">
+                      {wo.assignedTo}
+                    </td>
+                    <td className="py-3 px-3 font-mono text-zinc-500 text-xs">
+                      {wo.dueDate}
+                    </td>
+                    <td className="py-3 px-3 text-right">
+                      <Link
+                        to={`/work-orders/${wo.id}`}
+                        className="inline-flex items-center justify-center p-1.5 text-zinc-400 hover:text-black hover:bg-slate-100 rounded-lg transition"
+                        title="View Details"
+                      >
+                        <MoreHorizontal className="w-4 h-4" />
+                      </Link>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Footer count */}
-      <div className="pt-3 mt-1 border-t border-slate-100 flex items-center justify-between text-xs text-zinc-500 font-medium">
+      <div className="pt-4 mt-5 border-t border-slate-100 flex items-center justify-between text-[13px] text-zinc-500 font-normal">
         <span>
-          Showing <strong className="text-zinc-900">{filteredOrders.length}</strong> of{' '}
-          <strong className="text-zinc-900">{orders.length}</strong> work orders
+          Showing <strong className="text-zinc-900 font-semibold">{filteredOrders.length}</strong> of{' '}
+          <strong className="text-zinc-900 font-semibold">{orders.length}</strong> work orders
         </span>
         <Link
           to="/work-orders"
-          className="font-bold text-amber-800 hover:text-black flex items-center gap-1"
+          className="font-semibold text-amber-600 hover:text-amber-700 flex items-center gap-1 transition"
         >
           <span>Complete Work Order Engine</span>
           <ChevronRight className="w-3.5 h-3.5" />

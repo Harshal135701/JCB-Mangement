@@ -9,6 +9,7 @@ import { resolveNotificationRoute } from './utils/notificationRouteResolver';
 // Pages & Dashboards
 import { WelcomePage } from './modules/welcome/WelcomePage';
 import { LoginPage } from './modules/auth/LoginPage';
+import { OperatorSignUpPage } from './modules/auth/OperatorSignUpPage';
 import { LiveShopFloorDashboard } from './modules/manager/LiveShopFloorDashboard';
 import { TechnicianDashboard } from './modules/technician/TechnicianDashboard';
 import { OperatorDashboard } from './modules/operator/OperatorDashboard';
@@ -50,8 +51,10 @@ export default function App() {
             {/* Public Welcome Page */}
             <Route path="/" element={<WelcomePage />} />
 
-            {/* Public Login Page */}
+            {/* Public Login & Operator Registration Pages */}
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/signup" element={<OperatorSignUpPage />} />
+            <Route path="/operator/signup" element={<OperatorSignUpPage />} />
 
             {/* Protected Enterprise CMMS Layout Shell */}
             <Route

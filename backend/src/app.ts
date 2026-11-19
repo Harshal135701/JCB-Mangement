@@ -89,35 +89,21 @@ app.get('/api/v1', (req: Request, res: Response) => {
   });
 });
 
-// Register All Module Routes (supports both /api/v1 and /api)
+// Register All Module Routes
 app.use('/api/v1/auth', authRoutes);
-app.use('/api/auth', authRoutes);
 app.use('/api/v1/org', orgRoutes);
-app.use('/api/org', orgRoutes);
 app.use('/api/v1/machines', machineRoutes);
-app.use('/api/machines', machineRoutes);
 app.use('/api/v1/breakdowns', breakdownRoutes);
-app.use('/api/breakdowns', breakdownRoutes);
 app.use('/api/v1/work-orders', workOrderRoutes);
-app.use('/api/work-orders', workOrderRoutes);
 app.use('/api/v1/inventory', inventoryRoutes);
-app.use('/api/inventory', inventoryRoutes);
 app.use('/api/v1/procurement', procurementRoutes);
-app.use('/api/procurement', procurementRoutes);
 app.use('/api/v1/rdc', rdcRoutes);
-app.use('/api/rdc', rdcRoutes);
 app.use('/api/v1/pm', pmRoutes);
-app.use('/api/pm', pmRoutes);
 app.use('/api/v1/inspections', inspectionRoutes);
-app.use('/api/inspections', inspectionRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
-app.use('/api/notifications', notificationRoutes);
 app.use('/api/v1/audit', auditRoutes);
-app.use('/api/audit', auditRoutes);
 app.use('/api/v1/downtime', downtimeRoutes);
-app.use('/api/downtime', downtimeRoutes);
 app.use('/api/v1/reports', reportRoutes);
-app.use('/api/reports', reportRoutes);
 
 // Global Error Handler
 app.use(errorHandler);

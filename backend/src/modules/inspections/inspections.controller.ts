@@ -245,6 +245,26 @@ export const getInspectionRecords = async (
       res.status(401).json({ success: false, message: 'Authentication required.' });
       return;
     }
+
+    const { operator_id, from_date, to_date, date } = req.query;
+
+    if (operator_id !== undefined && typeof operator_id !== 'string') {
+      res.status(400).json({ success: false, message: 'Invalid operator_id query parameter.' });
+      return;
+    }
+    if (from_date !== undefined && typeof from_date !== 'string') {
+      res.status(400).json({ success: false, message: 'Invalid from_date query parameter.' });
+      return;
+    }
+    if (to_date !== undefined && typeof to_date !== 'string') {
+      res.status(400).json({ success: false, message: 'Invalid to_date query parameter.' });
+      return;
+    }
+    if (date !== undefined && typeof date !== 'string') {
+      res.status(400).json({ success: false, message: 'Invalid date query parameter.' });
+      return;
+    }
+
     const result = await getInspectionRecordsService(req.query, user);
     res.json({
       success: true,

@@ -60,7 +60,7 @@ export const TopKPICard: React.FC<TopKPICardProps> = ({
 
         {trend && (
           <span
-            className={`text-[11px] font-black px-2 py-0.5 rounded-full flex items-center gap-0.5 shrink-0 shadow-2xs ${
+            className={`text-xs font-semibold px-2.5 py-0.5 rounded-full flex items-center gap-0.5 shrink-0 shadow-2xs ${
               trendColor
                 ? trendColor
                 : trend.includes('↓') || trend.includes('Critical') || trend.includes('Due')
@@ -75,14 +75,14 @@ export const TopKPICard: React.FC<TopKPICardProps> = ({
 
       {/* Metric Value & Label */}
       <div className="mt-3 sm:mt-4">
-        <div className="text-2xl sm:text-3xl font-black text-zinc-950 font-mono tracking-tight leading-none">
+        <div className="text-[28px] sm:text-[32px] font-bold text-zinc-950 font-mono tracking-tight leading-none">
           {value}
         </div>
-        <p className="text-xs font-bold text-zinc-600 uppercase tracking-wider mt-1.5 truncate">
+        <p className="text-[13px] sm:text-sm font-semibold text-zinc-600 mt-1.5 truncate">
           {label}
         </p>
         {subtitle && (
-          <p className="text-[10px] text-zinc-400 font-medium truncate mt-0.5">
+          <p className="text-xs text-zinc-500 font-normal truncate mt-0.5">
             {subtitle}
           </p>
         )}

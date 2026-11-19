@@ -1045,6 +1045,14 @@ const plant2Technician: AuthenticatedUser = {
   plant_id: 'b0000000-0000-0000-0000-000000000002',
 };
 
+const plant1StoreManager: AuthenticatedUser = {
+  id: 'u0000000-0000-0000-0000-000000000005',
+  employee_code: 'EMP-STR-001',
+  email: 'store.plant1@jcb.local',
+  role: 'store_manager',
+  plant_id: 'b0000000-0000-0000-0000-000000000001',
+};
+
 describe('Machines Asset Management Module (CMMS Module 2)', () => {
   beforeEach(() => {
     mockDb.seed();
@@ -1054,7 +1062,7 @@ describe('Machines Asset Management Module (CMMS Module 2)', () => {
   // -------------------------------------------------------------------------
   // 1. Machine Creation with Valid Data
   // -------------------------------------------------------------------------
-  it('1. Machine creation with valid data registers asset, auto-generates QR UID, and records audit', async () => {
+  it('1. Machine creation with valid data by Manager registers asset, auto-generates QR UID, and records audit', async () => {
     const ctx = createMockContext(
       {
         machine_code: 'NEW-CNC-99',
@@ -1072,7 +1080,7 @@ describe('Machines Asset Management Module (CMMS Module 2)', () => {
       {},
       {},
       {},
-      enterpriseAdmin
+      plant1Manager
     );
 
     await createMachine(ctx.req, ctx.res, ctx.next);
@@ -1084,9 +1092,95 @@ describe('Machines Asset Management Module (CMMS Module 2)', () => {
     assert.ok(ctx.res.responseData.data.qr_code_uid.startsWith('QR-JCB-NEW-CNC-99-'));
 
     // Check Audit Log
-    const audit = mockDb.audit_logs.find((a) => a.action === 'MACHINE_CREATED');
+    const audit = mockDb.audit_logs.find(
+      (a) => a.action === 'MACHINE_CREATED' && a.entity_id === ctx.res.responseData.data.id
+    );
     assert.ok(audit, 'Audit log for MACHINE_CREATED must be recorded');
-    assert.equal(audit.performed_by, enterpriseAdmin.id);
+    assert.equal(audit.performed_by, plant1Manager.id);
+  });
+
+  it('1b. Admin cannot create machine asset (HTTP 403 Forbidden)', async () => {
+    const ctx = createMockContext(
+      {
+        machine_code: 'NEW-ADM-01',
+        name: 'Admin Machine',
+        category: 'VMC',
+        oem_manufacturer: 'Haas Automation',
+        shop_id: 'c0000000-0000-0000-0000-000000000001',
+      },
+      {},
+      {},
+      {},
+      enterpriseAdmin
+    );
+
+    await createMachine(ctx.req, ctx.res, ctx.next);
+    assert.equal(ctx.res.statusCode, 403);
+    assert.equal(ctx.res.responseData.success, false);
+    assert.ok(ctx.res.responseData.message.includes('Forbidden'));
+  });
+
+  it('1c. Operator cannot create machine asset (HTTP 403 Forbidden)', async () => {
+    const ctx = createMockContext(
+      {
+        machine_code: 'NEW-OPR-01',
+        name: 'Operator Machine',
+        category: 'VMC',
+        oem_manufacturer: 'Haas Automation',
+        shop_id: 'c0000000-0000-0000-0000-000000000001',
+      },
+      {},
+      {},
+      {},
+      plant1OperatorShop1
+    );
+
+    await createMachine(ctx.req, ctx.res, ctx.next);
+    assert.equal(ctx.res.statusCode, 403);
+    assert.equal(ctx.res.responseData.success, false);
+    assert.ok(ctx.res.responseData.message.includes('Forbidden'));
+  });
+
+  it('1d. Technician cannot create machine asset (HTTP 403 Forbidden)', async () => {
+    const ctx = createMockContext(
+      {
+        machine_code: 'NEW-TCH-01',
+        name: 'Technician Machine',
+        category: 'VMC',
+        oem_manufacturer: 'Haas Automation',
+        shop_id: 'c0000000-0000-0000-0000-000000000001',
+      },
+      {},
+      {},
+      {},
+      plant2Technician
+    );
+
+    await createMachine(ctx.req, ctx.res, ctx.next);
+    assert.equal(ctx.res.statusCode, 403);
+    assert.equal(ctx.res.responseData.success, false);
+    assert.ok(ctx.res.responseData.message.includes('Forbidden'));
+  });
+
+  it('1e. Store Manager cannot create machine asset (HTTP 403 Forbidden)', async () => {
+    const ctx = createMockContext(
+      {
+        machine_code: 'NEW-STR-01',
+        name: 'Store Manager Machine',
+        category: 'VMC',
+        oem_manufacturer: 'Haas Automation',
+        shop_id: 'c0000000-0000-0000-0000-000000000001',
+      },
+      {},
+      {},
+      {},
+      plant1StoreManager
+    );
+
+    await createMachine(ctx.req, ctx.res, ctx.next);
+    assert.equal(ctx.res.statusCode, 403);
+    assert.equal(ctx.res.responseData.success, false);
+    assert.ok(ctx.res.responseData.message.includes('Forbidden'));
   });
 
   // -------------------------------------------------------------------------
@@ -1094,19 +1188,19 @@ describe('Machines Asset Management Module (CMMS Module 2)', () => {
   // -------------------------------------------------------------------------
   it('2. Missing required fields (machine_code, name, category, oem_manufacturer, shop_id) returns HTTP 400', async () => {
     // Missing machine_code
-    let ctx = createMockContext({ name: 'Lathe', category: 'Lathe', oem_manufacturer: 'HMT', shop_id: 'c0000000-0000-0000-0000-000000000001' }, {}, {}, {}, enterpriseAdmin);
+    let ctx = createMockContext({ name: 'Lathe', category: 'Lathe', oem_manufacturer: 'HMT', shop_id: 'c0000000-0000-0000-0000-000000000001' }, {}, {}, {}, plant1Manager);
     await createMachine(ctx.req, ctx.res, ctx.next);
     assert.equal(ctx.res.statusCode, 400);
     assert.ok(ctx.res.responseData.message.includes('machine_code'));
 
     // Missing shop_id (never silently choose first shop)
-    ctx = createMockContext({ machine_code: 'LAT-01', name: 'Lathe', category: 'Lathe', oem_manufacturer: 'HMT' }, {}, {}, {}, enterpriseAdmin);
+    ctx = createMockContext({ machine_code: 'LAT-01', name: 'Lathe', category: 'Lathe', oem_manufacturer: 'HMT' }, {}, {}, {}, plant1Manager);
     await createMachine(ctx.req, ctx.res, ctx.next);
     assert.equal(ctx.res.statusCode, 400);
     assert.ok(ctx.res.responseData.message.includes('shop_id'));
 
     // Missing oem_manufacturer
-    ctx = createMockContext({ machine_code: 'LAT-01', name: 'Lathe', category: 'Lathe', shop_id: 'c0000000-0000-0000-0000-000000000001' }, {}, {}, {}, enterpriseAdmin);
+    ctx = createMockContext({ machine_code: 'LAT-01', name: 'Lathe', category: 'Lathe', shop_id: 'c0000000-0000-0000-0000-000000000001' }, {}, {}, {}, plant1Manager);
     await createMachine(ctx.req, ctx.res, ctx.next);
     assert.equal(ctx.res.statusCode, 400);
     assert.ok(ctx.res.responseData.message.includes('oem_manufacturer'));
@@ -1127,7 +1221,7 @@ describe('Machines Asset Management Module (CMMS Module 2)', () => {
       {},
       {},
       {},
-      enterpriseAdmin
+      plant1Manager
     );
 
     await createMachine(ctx.req, ctx.res, ctx.next);
@@ -1153,7 +1247,7 @@ describe('Machines Asset Management Module (CMMS Module 2)', () => {
       {},
       {},
       {},
-      enterpriseAdmin
+      plant1Manager
     );
 
     await createMachine(ctx.req, ctx.res, ctx.next);
@@ -1179,7 +1273,7 @@ describe('Machines Asset Management Module (CMMS Module 2)', () => {
       {},
       {},
       {},
-      enterpriseAdmin
+      plant1Manager
     );
     await createMachine(ctx.req, ctx.res, ctx.next);
     assert.equal(ctx.res.statusCode, 404);
@@ -1192,6 +1286,25 @@ describe('Machines Asset Management Module (CMMS Module 2)', () => {
         category: 'Press',
         oem_manufacturer: 'Schuler',
         shop_id: 'c0000000-0000-0000-0000-000000000003', // Shop 3 is in Plant 2 (Pune)
+      },
+      {},
+      {},
+      {},
+      plant1Manager
+    );
+    await createMachine(ctx.req, ctx.res, ctx.next);
+    assert.equal(ctx.res.statusCode, 403);
+    assert.ok(ctx.res.responseData.message.includes('Forbidden'));
+
+    // Cross-plant assignment: Plant 1 Manager attempts to specify plant_id for Plant 2
+    ctx = createMockContext(
+      {
+        machine_code: 'PRESS-89',
+        name: 'Press 89',
+        category: 'Press',
+        oem_manufacturer: 'Schuler',
+        shop_id: 'c0000000-0000-0000-0000-000000000001',
+        plant_id: 'b0000000-0000-0000-0000-000000000002', // Plant 2 (tampered)
       },
       {},
       {},

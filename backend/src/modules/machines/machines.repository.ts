@@ -153,6 +153,8 @@ const MACHINE_SELECT_FIELDS = `
   m.model_number,
   m.serial_number,
   m.bay_line_location,
+  m.bay_id,
+  m.production_line_id,
   m.criticality,
   m.status,
   m.operating_hours,
@@ -170,8 +172,10 @@ const MACHINE_SELECT_FIELDS = `
   s.plant_id,
   p.plant_name,
   p.plant_code,
-  m.bay_line_location as bay_name,
-  m.bay_line_location as line_name
+  b.bay_name,
+  b.bay_code,
+  pl.line_name,
+  pl.line_code
 `;
 
 export interface HistoryCategoryPagination {
@@ -215,6 +219,8 @@ export class MachinesRepository {
       FROM machines m
       JOIN shops s ON m.shop_id = s.id
       JOIN plants p ON s.plant_id = p.id
+      LEFT JOIN bays b ON m.bay_id = b.id
+      LEFT JOIN production_lines pl ON m.production_line_id = pl.id
       WHERE m.id = $1
     `;
     const res = await queryFn(sql, [id]);
@@ -230,6 +236,8 @@ export class MachinesRepository {
       FROM machines m
       JOIN shops s ON m.shop_id = s.id
       JOIN plants p ON s.plant_id = p.id
+      LEFT JOIN bays b ON m.bay_id = b.id
+      LEFT JOIN production_lines pl ON m.production_line_id = pl.id
       WHERE m.id = $1
       FOR UPDATE OF m
     `;
@@ -246,6 +254,8 @@ export class MachinesRepository {
       FROM machines m
       JOIN shops s ON m.shop_id = s.id
       JOIN plants p ON s.plant_id = p.id
+      LEFT JOIN bays b ON m.bay_id = b.id
+      LEFT JOIN production_lines pl ON m.production_line_id = pl.id
       WHERE m.qr_code_uid = $1
     `;
     const res = await queryFn(sql, [qrUid]);
@@ -262,6 +272,8 @@ export class MachinesRepository {
       FROM machines m
       JOIN shops s ON m.shop_id = s.id
       JOIN plants p ON s.plant_id = p.id
+      LEFT JOIN bays b ON m.bay_id = b.id
+      LEFT JOIN production_lines pl ON m.production_line_id = pl.id
       WHERE m.qr_code_uid = $1 OR LOWER(m.machine_code) = LOWER($1)
       ORDER BY (CASE WHEN m.qr_code_uid = $1 THEN 0 ELSE 1 END) ASC
       LIMIT 1
@@ -279,6 +291,8 @@ export class MachinesRepository {
       FROM machines m
       JOIN shops s ON m.shop_id = s.id
       JOIN plants p ON s.plant_id = p.id
+      LEFT JOIN bays b ON m.bay_id = b.id
+      LEFT JOIN production_lines pl ON m.production_line_id = pl.id
       WHERE LOWER(m.machine_code) = LOWER($1)
     `;
     const res = await queryFn(sql, [code]);
@@ -332,13 +346,9 @@ export class MachinesRepository {
     bayId: string,
     shopId: string
   ): Promise<{ id: string; bay_name: string; shop_id: string } | null> {
-    try {
-      const sql = `SELECT id, bay_name, shop_id FROM bays WHERE id = $1 AND shop_id = $2`;
-      const res = await queryFn(sql, [bayId, shopId]);
-      return res.rows[0] || null;
-    } catch {
-      return { id: bayId, bay_name: 'Main Bay', shop_id: shopId };
-    }
+    const sql = `SELECT id, bay_name, shop_id FROM bays WHERE id = $1 AND shop_id = $2`;
+    const res = await queryFn(sql, [bayId, shopId]);
+    return res.rows[0] || null;
   }
 
   /**
@@ -349,13 +359,9 @@ export class MachinesRepository {
     lineId: string,
     shopId: string
   ): Promise<{ id: string; line_name: string; shop_id: string } | null> {
-    try {
-      const sql = `SELECT id, line_name, shop_id FROM production_lines WHERE id = $1 AND shop_id = $2`;
-      const res = await queryFn(sql, [lineId, shopId]);
-      return res.rows[0] || null;
-    } catch {
-      return { id: lineId, line_name: 'Main Line', shop_id: shopId };
-    }
+    const sql = `SELECT id, line_name, shop_id FROM production_lines WHERE id = $1 AND shop_id = $2`;
+    const res = await queryFn(sql, [lineId, shopId]);
+    return res.rows[0] || null;
   }
 
   /**
@@ -434,6 +440,8 @@ export class MachinesRepository {
       FROM machines m
       JOIN shops s ON m.shop_id = s.id
       JOIN plants p ON s.plant_id = p.id
+      LEFT JOIN bays b ON m.bay_id = b.id
+      LEFT JOIN production_lines pl ON m.production_line_id = pl.id
       WHERE ${whereClause}
       ORDER BY ${sortField} ${sortDir}, m.id ASC
       LIMIT $${limitIdx} OFFSET $${offsetIdx}
