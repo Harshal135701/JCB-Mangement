@@ -799,13 +799,23 @@ export const ReportsPage: React.FC = () => {
 
           <button
             type="button"
-            onClick={handleDownloadPDF}
+            onClick={() => {
+              if (!reportData) {
+                if (isMachineTab && !selectedMachine) {
+                  setErrorMsg('Please select a machinery asset from the dropdown above to generate and export its summary PDF report.');
+                } else if (isSubordinateTab && !selectedUser) {
+                  setErrorMsg('Please select an authorized employee from the dropdown above to generate and export their summary PDF report.');
+                }
+                return;
+              }
+              handleDownloadPDF();
+            }}
             disabled={
-              !reportData ||
               isDownloading ||
               (isSubordinateTab && !selectedUser) ||
               (isMachineTab && !selectedMachine)
             }
+            title={!reportData ? 'Select a machine or personnel above to export PDF' : 'Download Summary PDF'}
             className="px-4 py-2 bg-amber-500 text-black rounded-xl text-xs font-black uppercase tracking-wider hover:bg-amber-400 transition flex items-center gap-2 shadow-xs disabled:opacity-50 cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" />

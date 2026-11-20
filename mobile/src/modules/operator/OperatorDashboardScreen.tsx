@@ -86,27 +86,17 @@ export const OperatorDashboardScreen = ({ navigation }: any) => {
 
           <View style={styles.headerTitleCol}>
             <Text style={styles.smartCmmsTitle}>SMART CMMS</Text>
-            <Text style={styles.smartCmmsSub}>JCB Intelligent Work</Text>
           </View>
         </View>
 
+        {/* Right: Bell Notification */}
         <TouchableOpacity
-          style={styles.userProfileChip}
-          onPress={openSidebar}
-          activeOpacity={0.8}
+          style={styles.bellBtn}
+          onPress={() => navigation.navigate('Notifications')}
+          activeOpacity={0.7}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <View style={styles.userAvatarCircle}>
-            <MaterialCommunityIcons name="account" size={18} color="#0F172A" />
-          </View>
-          <View style={styles.userInfoCol}>
-            <Text style={styles.userNameText} numberOfLines={1}>
-              {user?.fullName?.split(' ')[0] || 'Operator'}
-            </Text>
-            <View style={styles.userRoleRow}>
-              <Text style={styles.userRoleText}>OPERATOR</Text>
-              <MaterialCommunityIcons name="chevron-down" size={12} color="#94A3B8" />
-            </View>
-          </View>
+          <MaterialCommunityIcons name="bell-outline" size={22} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
 

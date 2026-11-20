@@ -213,7 +213,10 @@ export const NotificationsScreen = ({ navigation }: any) => {
         sectionTitle="SYSTEM NOTIFICATIONS"
         sectionSubtitle="Real-time alerts, approvals & assignments"
         showBack={true}
-        onBack={() => navigation.goBack()}
+        onBack={() => {
+          if (navigation?.canGoBack?.()) navigation.goBack();
+          else navigation?.navigate?.('MainTabs');
+        }}
         rightAction={
           unreadCount > 0 ? (
             <TouchableOpacity

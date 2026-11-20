@@ -1,6 +1,32 @@
 import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import autoTable, { applyPlugin } from 'jspdf-autotable';
 import { JCB_OFFICIAL_LOGO_BASE64 } from './jcbOfficialLogo';
+
+// Ensure autoTable plugin is registered on jsPDF
+try {
+  if (typeof applyPlugin === 'function') {
+    applyPlugin(jsPDF);
+  }
+} catch (_err) {
+  // safe fallback
+}
+
+// Resilient wrapper to invoke autoTable across different bundler environments
+const safeAutoTable = (docInstance: any, options: any) => {
+  try {
+    if (typeof (docInstance as any).autoTable === 'function') {
+      (docInstance as any).autoTable(options);
+    } else if (typeof autoTable === 'function') {
+      autoTable(docInstance, options);
+    } else if (typeof (autoTable as any)?.default === 'function') {
+      (autoTable as any).default(docInstance, options);
+    } else if (typeof (autoTable as any)?.autoTable === 'function') {
+      (autoTable as any).autoTable(docInstance, options);
+    }
+  } catch (tableErr) {
+    console.warn('safeAutoTable fallback error:', tableErr);
+  }
+};
 
 export interface PDFReportMetric {
   label: string;
@@ -344,7 +370,7 @@ export function generateReportPDF(options: GenerateReportPDFOptions): string {
       currentY += 5;
 
       if (block.tableHead && block.tableRows && block.tableRows.length > 0) {
-        autoTable(doc, {
+        safeAutoTable(doc, {
           startY: currentY,
           head: [block.tableHead],
           body: block.tableRows,
@@ -372,7 +398,8 @@ export function generateReportPDF(options: GenerateReportPDFOptions): string {
           },
         });
 
-        currentY = (doc as any).lastAutoTable.finalY + 5;
+        const nextY = (doc as any).lastAutoTable?.finalY;
+        currentY = typeof nextY === 'number' && !isNaN(nextY) ? nextY + 5 : currentY + (block.tableRows.length * 6) + 10;
       }
     }
   }
@@ -445,8 +472,26 @@ export function generateReportPDF(options: GenerateReportPDFOptions): string {
   const dateStr = now.toISOString().split('T')[0];
   const finalFileName = options.fileName || `JCB_${cleanRole}_Report_${cleanName}_${dateStr}.pdf`;
 
-  // Save / Download
-  doc.save(finalFileName);
+  // Save / Download with multi-mechanism fallback for all browsers & mobile views
+  try {
+    doc.save(finalFileName);
+  } catch (_saveErr) {
+    try {
+      const blob = doc.output('blob');
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = finalFileName;
+      document.body.appendChild(link);
+      link.click();
+      setTimeout(() => {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }, 1000);
+    } catch (_fallbackErr) {
+      console.error('All PDF download mechanisms failed:', _fallbackErr);
+    }
+  }
 
   return finalFileName;
 }

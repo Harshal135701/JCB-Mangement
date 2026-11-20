@@ -15,6 +15,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useSidebar } from '../../context/SidebarContext';
 import { COLORS } from '../../config/constants';
 import apiClient from '../../services/api';
+import { AppHeader } from '../../components/AppHeader';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -57,37 +58,15 @@ export const WorkOrdersScreen = ({ navigation }: any) => {
 
   return (
     <View style={styles.container}>
-      {/* Top Header Bar */}
-      <View style={[styles.topHeader, { paddingTop: insets.top + 8 }]}>
-        <View style={styles.headerYellowSlice} />
-
-        <View style={styles.headerLeft}>
-          <TouchableOpacity
-            style={styles.hamburgerBtn}
-            onPress={openSidebar}
-            activeOpacity={0.7}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          >
-            <MaterialCommunityIcons name="menu" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-
-          <View style={styles.brandBadgeWrap}>
-            <Image
-              source={JCB_OFFICIAL_BADGE}
-              style={styles.headerJcbLogo}
-              resizeMode="contain"
-            />
-          </View>
-
-          <View style={styles.headerDivider} />
-
-          <View style={styles.headerTitleCol}>
-            <Text style={styles.smartCmmsTitle}>SMART CMMS</Text>
-            <Text style={styles.smartCmmsSub}>JCB Intelligent Work</Text>
-          </View>
-        </View>
-
-        <View style={styles.headerRightRow}>
+      {/* Smart CMMS Unified AppHeader with Back & Notifications */}
+      <AppHeader
+        title="Work Orders"
+        icon="wrench-clock"
+        sectionTitle="Maintenance Status"
+        sectionSubtitle="Overview of assigned repair orders & field maintenance"
+        showBack={navigation?.canGoBack?.()}
+        onBack={() => navigation?.goBack?.()}
+        rightAction={
           <TouchableOpacity
             style={styles.scanQrBtn}
             onPress={() => navigation.navigate('MachinesTab')}
@@ -96,18 +75,8 @@ export const WorkOrdersScreen = ({ navigation }: any) => {
             <MaterialCommunityIcons name="qrcode-scan" size={15} color="#000000" />
             <Text style={styles.scanQrText}>Scan</Text>
           </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.userProfileChip}
-            onPress={openSidebar}
-            activeOpacity={0.8}
-          >
-            <View style={styles.userAvatarCircle}>
-              <MaterialCommunityIcons name="account" size={18} color="#0F172A" />
-            </View>
-          </TouchableOpacity>
-        </View>
-      </View>
+        }
+      />
 
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 80 }]}
@@ -121,17 +90,6 @@ export const WorkOrdersScreen = ({ navigation }: any) => {
           />
         }
       >
-        {/* Section Title Header */}
-        <View style={styles.sectionTitleBlock}>
-          <View style={styles.sectionTitleRow}>
-            <View style={styles.yellowIndicatorBar} />
-            <Text style={styles.sectionMainTitle}>Maintenance Status</Text>
-          </View>
-          <Text style={styles.sectionSubtitle}>
-            Overview of assigned repair orders & field maintenance
-          </Text>
-        </View>
-
         {/* 4 Metric Cards (2x2 Grid) */}
         <View style={styles.kpiGrid}>
           {/* Assigned Work Orders */}
