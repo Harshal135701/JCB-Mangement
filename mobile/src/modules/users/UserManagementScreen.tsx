@@ -462,6 +462,14 @@ export const UserManagementScreen = () => {
                       <MaterialCommunityIcons name="clock-time-four-outline" size={14} color="#64748B" />
                       <Text style={styles.detailText}>{p.shift || 'Shift A'}</Text>
                     </View>
+                    {p.requested_machine_code ? (
+                      <View style={styles.detailRow}>
+                        <MaterialCommunityIcons name="tractor" size={14} color="#D97706" />
+                        <Text style={[styles.detailText, { color: '#B45309', fontWeight: '700' }]}>
+                          Requested: {p.requested_machine_code} {p.requested_machine_name ? `(${p.requested_machine_name})` : ''}
+                        </Text>
+                      </View>
+                    ) : null}
                   </View>
 
                   {/* Approve / Reject Actions */}

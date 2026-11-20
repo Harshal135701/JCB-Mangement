@@ -39,6 +39,25 @@ export const PMCalendarScreen = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [frequencyFilter, setFrequencyFilter] = useState('ALL');
 
+  // Harshal Feature: PM Execution & Tabs
+  const [activeTab, setActiveTab] = useState<'routines' | 'executions'>('routines');
+  const [executionsList, setExecutionsList] = useState<any[]>([]);
+  const [loadingExecutions, setLoadingExecutions] = useState(false);
+
+  // Execution Modal State
+  const [execModalOpen, setExecModalOpen] = useState(false);
+  const [executingPlan, setExecutingPlan] = useState<any | null>(null);
+  const [eligibleMachines, setEligibleMachines] = useState<any[]>([]);
+  const [loadingEligible, setLoadingEligible] = useState(false);
+  const [selectedExecMachineId, setSelectedExecMachineId] = useState('');
+  const [checklistItems, setChecklistItems] = useState<
+    Array<{ step: number; task: string; status: 'pass' | 'fail' | 'na'; notes: string }>
+  >([]);
+  const [overallStatus, setOverallStatus] = useState<'pass' | 'fail'>('pass');
+  const [workPerformed, setWorkPerformed] = useState('');
+  const [technicianRemarks, setTechnicianRemarks] = useState('');
+  const [submittingExec, setSubmittingExec] = useState(false);
+
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({
@@ -70,8 +89,115 @@ export const PMCalendarScreen = () => {
     }
   };
 
+  const fetchExecutions = async () => {
+    try {
+      setLoadingExecutions(true);
+      const res: any = await apiClient.get('/pm/executions');
+      if (res?.success && Array.isArray(res.data)) {
+        setExecutionsList(res.data);
+      }
+    } catch (e) {
+      console.warn('Failed to load PM executions:', e);
+    } finally {
+      setLoadingExecutions(false);
+    }
+  };
+
+  const handleOpenExecution = async (plan: any) => {
+    setExecutingPlan(plan);
+    setWorkPerformed('Preventive maintenance routine executed as per factory standards.');
+    setTechnicianRemarks('');
+    setOverallStatus('pass');
+
+    let items: any[] = [];
+    if (Array.isArray(plan.checklist_template) && plan.checklist_template.length > 0) {
+      items = plan.checklist_template.map((c: any, idx: number) => ({
+        step: c.step || idx + 1,
+        task: c.task || c.description || `Inspection Task ${idx + 1}`,
+        status: 'pass',
+        notes: '',
+      }));
+    } else {
+      items = [
+        { step: 1, task: 'Hydraulic fluid level check & top-up', status: 'pass', notes: '' },
+        { step: 2, task: 'Pressure hoses & coupling leak inspection', status: 'pass', notes: '' },
+        { step: 3, task: 'Air & engine oil filter inspection/cleaning', status: 'pass', notes: '' },
+        { step: 4, task: 'Grease pivot joints & boom linkages', status: 'pass', notes: '' },
+        { step: 5, task: 'Emergency stop & electrical circuit verification', status: 'pass', notes: '' },
+      ];
+    }
+    setChecklistItems(items);
+    setSelectedExecMachineId(plan.machine_id || '');
+    setExecModalOpen(true);
+
+    try {
+      setLoadingEligible(true);
+      const res: any = await apiClient.get(`/pm/plans/${plan.id}/eligible-machines`);
+      if (res?.success && Array.isArray(res.data)) {
+        setEligibleMachines(res.data);
+        if (!plan.machine_id && res.data.length > 0) {
+          setSelectedExecMachineId(res.data[0].id);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load eligible machines:', e);
+    } finally {
+      setLoadingEligible(false);
+    }
+  };
+
+  const handleChecklistStatusChange = (index: number, newStatus: 'pass' | 'fail' | 'na') => {
+    setChecklistItems((prev) => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], status: newStatus };
+      return copy;
+    });
+  };
+
+  const handleChecklistNotesChange = (index: number, notes: string) => {
+    setChecklistItems((prev) => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], notes };
+      return copy;
+    });
+  };
+
+  const handleSubmitExecution = async () => {
+    if (!executingPlan) return;
+    const targetMachine = selectedExecMachineId || executingPlan.machine_id;
+    if (!targetMachine) {
+      Alert.alert('Required', 'Please select a target machine for this PM routine.');
+      return;
+    }
+    try {
+      setSubmittingExec(true);
+      const payload = {
+        machine_id: targetMachine,
+        checklist_responses: checklistItems,
+        overall_status: overallStatus,
+        work_performed: workPerformed.trim() || 'PM Routine Executed',
+        technician_remarks: technicianRemarks.trim() || undefined,
+      };
+      const res: any = await apiClient.post(`/pm/plans/${executingPlan.id}/execute`, payload);
+      if (res?.success) {
+        Alert.alert(
+          'PM Execution Logged',
+          `Routine checklist completed successfully for ${executingPlan.title}.`
+        );
+        setExecModalOpen(false);
+        fetchPlans();
+        fetchExecutions();
+      }
+    } catch (err: any) {
+      Alert.alert('Execution Error', err.message || 'Failed to submit PM execution.');
+    } finally {
+      setSubmittingExec(false);
+    }
+  };
+
   useEffect(() => {
     fetchPlans();
+    fetchExecutions();
   }, []);
 
   const handleTriggerEngine = async () => {
@@ -194,6 +320,39 @@ export const PMCalendarScreen = () => {
         }
       />
 
+      {/* Segmented Tab Bar: Routines vs Executions */}
+      <View style={styles.segmentTabBar}>
+        <TouchableOpacity
+          style={[styles.segmentTabItem, activeTab === 'routines' && styles.segmentTabItemActive]}
+          onPress={() => setActiveTab('routines')}
+          activeOpacity={0.7}
+        >
+          <MaterialCommunityIcons
+            name="calendar-clock"
+            size={18}
+            color={activeTab === 'routines' ? '#000000' : '#64748B'}
+          />
+          <Text style={[styles.segmentTabLabel, activeTab === 'routines' && styles.segmentTabLabelActive]}>
+            PM Routines ({plans.length})
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.segmentTabItem, activeTab === 'executions' && styles.segmentTabItemActive]}
+          onPress={() => setActiveTab('executions')}
+          activeOpacity={0.7}
+        >
+          <MaterialCommunityIcons
+            name="clipboard-list-outline"
+            size={18}
+            color={activeTab === 'executions' ? '#000000' : '#64748B'}
+          />
+          <Text style={[styles.segmentTabLabel, activeTab === 'executions' && styles.segmentTabLabelActive]}>
+            Execution Logs ({executionsList.length})
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       {/* KPI Stats Row */}
       <View style={styles.kpiRow}>
         <View style={styles.kpiCard}>
@@ -216,8 +375,10 @@ export const PMCalendarScreen = () => {
         </View>
       </View>
 
-      {/* Search Bar */}
-      <View style={styles.searchSection}>
+      {activeTab === 'routines' ? (
+        <>
+          {/* Search Bar */}
+          <View style={styles.searchSection}>
         <View style={styles.searchBox}>
           <MaterialCommunityIcons name="magnify" size={20} color="#64748B" style={styles.searchIcon} />
           <TextInput
@@ -371,11 +532,107 @@ export const PMCalendarScreen = () => {
                     </Text>
                   </View>
                 </View>
+
+                {/* Harshal Feature: Execute Checklist Action */}
+                <View style={styles.cardActionRow}>
+                  <TouchableOpacity
+                    style={styles.executeRoutineBtn}
+                    onPress={() => handleOpenExecution(plan)}
+                    activeOpacity={0.85}
+                  >
+                    <MaterialCommunityIcons name="clipboard-check" size={16} color="#000000" />
+                    <Text style={styles.executeRoutineBtnText}>EXECUTE PM CHECKLIST</Text>
+                    <MaterialCommunityIcons name="chevron-right" size={16} color="#000000" />
+                  </TouchableOpacity>
+                </View>
               </View>
             );
           })
         )}
       </ScrollView>
+    </>
+  ) : (
+    /* Executions History Tab */
+      <ScrollView
+        contentContainerStyle={[styles.listScroll, { paddingBottom: insets.bottom + 20 }]}
+        refreshControl={
+          <RefreshControl
+            refreshing={loadingExecutions}
+            onRefresh={fetchExecutions}
+            colors={[COLORS.primary]}
+            tintColor={COLORS.primary}
+          />
+        }
+      >
+        {executionsList.length === 0 ? (
+          <View style={styles.emptyState}>
+            <View style={styles.emptyIconCircle}>
+              <MaterialCommunityIcons name="clipboard-check-outline" size={36} color="#94A3B8" />
+            </View>
+            <Text style={styles.emptyTitle}>No Execution Records Found</Text>
+            <Text style={styles.emptySubtitle}>
+              Completed preventive maintenance routines will appear here with verification logs.
+            </Text>
+          </View>
+        ) : (
+          executionsList.map((ex) => {
+            const isPass = ex.overall_status === 'pass' || ex.status === 'completed' || ex.status === 'verified';
+            return (
+              <View key={ex.id} style={styles.card}>
+                <View style={styles.cardTopRow}>
+                  <View style={styles.codeBadge}>
+                    <Text style={styles.codeText}>{ex.execution_number || ex.plan_code || 'PM-EXEC'}</Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.statusBadge,
+                      isPass ? styles.statusBadgeNominal : styles.statusBadgeDue,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.statusBadgeText,
+                        isPass ? styles.statusTextNominal : styles.statusTextDue,
+                      ]}
+                    >
+                      {(ex.overall_status || ex.status || 'COMPLETED').toUpperCase()}
+                    </Text>
+                  </View>
+                </View>
+
+                <Text style={styles.planTitle}>{ex.plan_title || ex.routine_title || 'Maintenance Routine'}</Text>
+
+                <View style={styles.machineRow}>
+                  <MaterialCommunityIcons name="robot-industrial" size={16} color="#64748B" />
+                  <Text style={styles.machineLabel}>Machine:</Text>
+                  <Text style={styles.machineCode}>{ex.machine_code || 'Plant Machinery'}</Text>
+                </View>
+
+                {ex.work_performed ? (
+                  <Text style={styles.execWorkText} numberOfLines={2}>
+                    Work: {ex.work_performed}
+                  </Text>
+                ) : null}
+
+                <View style={styles.execFooterRow}>
+                  <Text style={styles.execTechText}>
+                    Tech: {ex.technician_name || ex.executed_by_name || 'Plant Technician'}
+                  </Text>
+                  <Text style={styles.execDateText}>
+                    {ex.executed_at || ex.completed_at
+                      ? new Date(ex.executed_at || ex.completed_at).toLocaleDateString('en-IN', {
+                          day: 'numeric',
+                          month: 'short',
+                        })
+                      : 'Recently'}
+                  </Text>
+                </View>
+              </View>
+            );
+          })
+        )}
+      </ScrollView>
+    )}
 
       {/* New PM Plan Modal */}
       <Modal visible={isModalOpen} animationType="slide" transparent onRequestClose={() => setIsModalOpen(false)}>
@@ -491,6 +748,208 @@ export const PMCalendarScreen = () => {
                 )}
               </TouchableOpacity>
             </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Harshal Feature: PM Routine Execution & Checklist Modal */}
+      <Modal
+        visible={execModalOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setExecModalOpen(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalBackdrop}
+        >
+          <View style={[styles.modalContainer, { maxHeight: '90%' }]}>
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1, marginRight: 8 }}>
+                <Text style={styles.modalTitle} numberOfLines={1}>
+                  Execute: {executingPlan?.title || 'PM Routine'}
+                </Text>
+                <Text style={styles.modalSubtitle}>
+                  Code: {executingPlan?.plan_code || 'PM-PLAN'} • Checklist Verification
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setExecModalOpen(false)}
+                style={styles.modalCloseBtn}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <MaterialCommunityIcons name="close" size={20} color="#0F172A" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              style={styles.modalScroll}
+              contentContainerStyle={{ paddingBottom: 24 }}
+              showsVerticalScrollIndicator={false}
+            >
+              {/* Target Machine Selection */}
+              <Text style={styles.inputLabel}>TARGET MACHINERY *</Text>
+              {loadingEligible ? (
+                <ActivityIndicator size="small" color="#F9B101" style={{ marginVertical: 6 }} />
+              ) : eligibleMachines.length > 0 ? (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+                  {eligibleMachines.map((m) => {
+                    const isSel = selectedExecMachineId === m.id;
+                    return (
+                      <TouchableOpacity
+                        key={m.id}
+                        style={[styles.execMachPill, isSel && styles.execMachPillActive]}
+                        onPress={() => setSelectedExecMachineId(m.id)}
+                      >
+                        <Text style={[styles.execMachCode, isSel && styles.execMachCodeActive]}>
+                          {m.machine_code}
+                        </Text>
+                        <Text style={[styles.execMachName, isSel && styles.execMachNameActive]} numberOfLines={1}>
+                          {m.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              ) : (
+                <View style={styles.defaultMachBox}>
+                  <Text style={styles.defaultMachText}>
+                    Assigned Machine: {executingPlan?.machine_code || 'All Plant Machinery'}
+                  </Text>
+                </View>
+              )}
+
+              {/* Overall Status Toggle */}
+              <Text style={styles.inputLabel}>OVERALL OUTCOME *</Text>
+              <View style={styles.outcomeRow}>
+                <TouchableOpacity
+                  style={[styles.outcomeBtn, overallStatus === 'pass' && styles.outcomeBtnPass]}
+                  onPress={() => setOverallStatus('pass')}
+                >
+                  <MaterialCommunityIcons
+                    name="check-circle"
+                    size={18}
+                    color={overallStatus === 'pass' ? '#16A34A' : '#64748B'}
+                  />
+                  <Text style={[styles.outcomeText, overallStatus === 'pass' && styles.outcomeTextPass]}>
+                    PASS / NOMINAL
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.outcomeBtn, overallStatus === 'fail' && styles.outcomeBtnFail]}
+                  onPress={() => setOverallStatus('fail')}
+                >
+                  <MaterialCommunityIcons
+                    name="alert-circle"
+                    size={18}
+                    color={overallStatus === 'fail' ? '#DC2626' : '#64748B'}
+                  />
+                  <Text style={[styles.outcomeText, overallStatus === 'fail' && styles.outcomeTextFail]}>
+                    FAIL / ACTION REQ
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Interactive Checklist Steps */}
+              <Text style={styles.inputLabel}>PM CHECKLIST STEPS ({checklistItems.length})</Text>
+              {checklistItems.map((item, idx) => {
+                return (
+                  <View key={item.step || idx} style={styles.checkItemCard}>
+                    <View style={styles.checkItemHeader}>
+                      <View style={styles.stepCircle}>
+                        <Text style={styles.stepNum}>{item.step || idx + 1}</Text>
+                      </View>
+                      <Text style={styles.checkTaskText}>{item.task}</Text>
+                    </View>
+
+                    {/* Step Status Toggles */}
+                    <View style={styles.stepStatusRow}>
+                      {(['pass', 'fail', 'na'] as const).map((st) => {
+                        const isSelected = item.status === st;
+                        return (
+                          <TouchableOpacity
+                            key={st}
+                            style={[
+                              styles.stepStatusPill,
+                              isSelected &&
+                                (st === 'pass'
+                                  ? styles.pillPassActive
+                                  : st === 'fail'
+                                  ? styles.pillFailActive
+                                  : styles.pillNaActive),
+                            ]}
+                            onPress={() => handleChecklistStatusChange(idx, st)}
+                          >
+                            <Text
+                              style={[
+                                styles.stepStatusPillText,
+                                isSelected &&
+                                  (st === 'pass'
+                                    ? styles.textPassActive
+                                    : st === 'fail'
+                                    ? styles.textFailActive
+                                    : styles.textNaActive),
+                              ]}
+                            >
+                              {st.toUpperCase()}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+
+                    {/* Step Notes */}
+                    <TextInput
+                      style={styles.stepNotesInput}
+                      placeholder="Step remarks or measurements..."
+                      placeholderTextColor="#94A3B8"
+                      value={item.notes}
+                      onChangeText={(txt) => handleChecklistNotesChange(idx, txt)}
+                    />
+                  </View>
+                );
+              })}
+
+              {/* Work Performed */}
+              <Text style={styles.inputLabel}>WORK PERFORMED</Text>
+              <TextInput
+                style={[styles.textInput, { minHeight: 50 }]}
+                placeholder="Details of servicing performed..."
+                placeholderTextColor="#94A3B8"
+                value={workPerformed}
+                onChangeText={setWorkPerformed}
+                multiline
+              />
+
+              {/* Technician Remarks */}
+              <Text style={styles.inputLabel}>TECHNICIAN REMARKS</Text>
+              <TextInput
+                style={[styles.textInput, { minHeight: 50 }]}
+                placeholder="Observations, oil level, future recommendation..."
+                placeholderTextColor="#94A3B8"
+                value={technicianRemarks}
+                onChangeText={setTechnicianRemarks}
+                multiline
+              />
+
+              {/* Submit Execution Button */}
+              <TouchableOpacity
+                style={styles.submitExecBtn}
+                onPress={handleSubmitExecution}
+                disabled={submittingExec}
+                activeOpacity={0.88}
+              >
+                {submittingExec ? (
+                  <ActivityIndicator size="small" color="#000000" />
+                ) : (
+                  <>
+                    <MaterialCommunityIcons name="check-decagram" size={20} color="#000000" />
+                    <Text style={styles.submitExecBtnText}>COMPLETE & LOG PM EXECUTION</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </ScrollView>
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -991,5 +1450,265 @@ const styles = StyleSheet.create({
     color: '#000000',
     fontWeight: '800',
     fontSize: 13,
+  },
+  // Harshal Feature: PM Execution Styles
+  segmentTabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    gap: 8,
+  },
+  segmentTabItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  segmentTabItemActive: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#F9B101',
+  },
+  segmentTabLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  segmentTabLabelActive: {
+    color: '#000000',
+    fontWeight: '900',
+  },
+  cardActionRow: {
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    paddingTop: 10,
+    marginTop: 10,
+  },
+  executeRoutineBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#F9B101',
+    borderRadius: 8,
+    paddingVertical: 9,
+  },
+  executeRoutineBtnText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#000000',
+    letterSpacing: 0.5,
+  },
+  execWorkText: {
+    fontSize: 11.5,
+    color: '#334155',
+    marginBottom: 6,
+  },
+  execFooterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    paddingTop: 8,
+    marginTop: 4,
+  },
+  execTechText: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  execDateText: {
+    fontSize: 11,
+    color: '#94A3B8',
+  },
+  execMachPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+    marginRight: 8,
+    minWidth: 90,
+  },
+  execMachPillActive: {
+    borderColor: '#F9B101',
+    backgroundColor: '#FFFBEB',
+  },
+  execMachCode: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  execMachCodeActive: {
+    color: '#000000',
+  },
+  execMachName: {
+    fontSize: 10,
+    color: '#64748B',
+  },
+  execMachNameActive: {
+    color: '#334155',
+  },
+  defaultMachBox: {
+    backgroundColor: '#F1F5F9',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 12,
+  },
+  defaultMachText: {
+    fontSize: 12,
+    color: '#334155',
+    fontWeight: '600',
+  },
+  outcomeRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 14,
+  },
+  outcomeBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  outcomeBtnPass: {
+    borderColor: '#86EFAC',
+    backgroundColor: '#F0FDF4',
+  },
+  outcomeBtnFail: {
+    borderColor: '#FECACA',
+    backgroundColor: '#FEF2F2',
+  },
+  outcomeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  outcomeTextPass: {
+    color: '#16A34A',
+    fontWeight: '900',
+  },
+  outcomeTextFail: {
+    color: '#DC2626',
+    fontWeight: '900',
+  },
+  checkItemCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 10,
+    marginBottom: 10,
+  },
+  checkItemHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginBottom: 8,
+  },
+  stepCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#F9B101',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepNum: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#000000',
+  },
+  checkTaskText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#0F172A',
+    flex: 1,
+    lineHeight: 18,
+  },
+  stepStatusRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 8,
+  },
+  stepStatusPill: {
+    flex: 1,
+    paddingVertical: 5,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+  },
+  stepStatusPillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  pillPassActive: {
+    backgroundColor: '#DCFCE7',
+    borderColor: '#86EFAC',
+  },
+  textPassActive: {
+    color: '#16A34A',
+    fontWeight: '900',
+  },
+  pillFailActive: {
+    backgroundColor: '#FEE2E2',
+    borderColor: '#FECACA',
+  },
+  textFailActive: {
+    color: '#DC2626',
+    fontWeight: '900',
+  },
+  pillNaActive: {
+    backgroundColor: '#E2E8F0',
+    borderColor: '#94A3B8',
+  },
+  textNaActive: {
+    color: '#334155',
+    fontWeight: '900',
+  },
+  stepNotesInput: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    fontSize: 11,
+    color: '#0F172A',
+  },
+  submitExecBtn: {
+    backgroundColor: '#F9B101',
+    borderRadius: 10,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 14,
+  },
+  submitExecBtnText: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#000000',
+    letterSpacing: 0.5,
   },
 });

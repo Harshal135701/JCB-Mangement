@@ -34,6 +34,16 @@ interface ShopOption {
   shop_name: string;
 }
 
+interface MachineOption {
+  id: string;
+  machine_code: string;
+  name: string;
+  category?: string;
+  status?: string;
+  bay_line_location?: string | null;
+  shop_id?: string;
+}
+
 interface OperatorSignUpScreenProps {
   onBackToLogin: () => void;
 }
@@ -62,6 +72,35 @@ export const OperatorSignUpScreen: React.FC<OperatorSignUpScreenProps> = ({ onBa
   // Facility Options
   const [plants, setPlants] = useState<PlantOption[]>([]);
   const [shops, setShops] = useState<ShopOption[]>([]);
+  const [machines, setMachines] = useState<MachineOption[]>([]);
+  const [selectedMachineId, setSelectedMachineId] = useState<string>('');
+  const [loadingMachines, setLoadingMachines] = useState(false);
+
+  const fetchMachinesForShop = async (targetShopId: string) => {
+    if (!targetShopId) {
+      setMachines([]);
+      setSelectedMachineId('');
+      return;
+    }
+    try {
+      setLoadingMachines(true);
+      const res: any = await apiClient.get('/machines', {
+        params: { shop_id: targetShopId, limit: 100 },
+      });
+      if (res?.success && Array.isArray(res.data)) {
+        setMachines(res.data);
+      } else if (Array.isArray(res)) {
+        setMachines(res);
+      } else {
+        setMachines([]);
+      }
+    } catch (e) {
+      console.warn('Failed to load machines for shop:', e);
+      setMachines([]);
+    } finally {
+      setLoadingMachines(false);
+    }
+  };
 
   useEffect(() => {
     const fetchOrgData = async () => {
@@ -82,7 +121,9 @@ export const OperatorSignUpScreen: React.FC<OperatorSignUpScreenProps> = ({ onBa
               );
               setShops(plantShops);
               if (plantShops.length > 0) {
-                setShopId(plantShops[0].id);
+                const initShopId = plantShops[0].id;
+                setShopId(initShopId);
+                fetchMachinesForShop(initShopId);
               }
             }
           }
@@ -99,19 +140,32 @@ export const OperatorSignUpScreen: React.FC<OperatorSignUpScreenProps> = ({ onBa
 
   const handlePlantSelect = async (pId: string) => {
     setPlantId(pId);
+    setSelectedMachineId('');
     try {
       const res: any = await apiClient.get(`/auth/plants/${pId}/shops`);
       if (res?.success && Array.isArray(res.data)) {
         setShops(res.data);
         if (res.data.length > 0) {
-          setShopId(res.data[0].id);
+          const newShopId = res.data[0].id;
+          setShopId(newShopId);
+          fetchMachinesForShop(newShopId);
         } else {
           setShopId('');
+          setMachines([]);
         }
       }
     } catch (e) {
       console.warn('Failed to load shops for plant:', e);
+      setShops([]);
+      setShopId('');
+      setMachines([]);
     }
+  };
+
+  const handleShopSelect = (sId: string) => {
+    setShopId(sId);
+    setSelectedMachineId('');
+    fetchMachinesForShop(sId);
   };
 
   const handleSubmit = async () => {
@@ -161,6 +215,7 @@ export const OperatorSignUpScreen: React.FC<OperatorSignUpScreenProps> = ({ onBa
         phone: phone.trim() || undefined,
         plant_id: plantId,
         shop_id: shopId,
+        requested_machine_id: selectedMachineId || undefined,
         department: 'Production Operations',
         designation: 'Machine Operator',
         shift,
@@ -169,10 +224,12 @@ export const OperatorSignUpScreen: React.FC<OperatorSignUpScreenProps> = ({ onBa
 
       const res: any = await apiClient.post('/auth/register-operator', payload);
       if (res?.success) {
+        const selMach = machines.find((m) => m.id === selectedMachineId);
         setSubmittedUser({
           ...res.data,
           plantName: plants.find((p) => p.id === plantId)?.plant_name,
           shopName: shops.find((s) => s.id === shopId)?.shop_name,
+          machineCode: selMach ? `${selMach.machine_code} (${selMach.name})` : undefined,
         });
       }
     } catch (err: any) {
@@ -215,6 +272,14 @@ export const OperatorSignUpScreen: React.FC<OperatorSignUpScreenProps> = ({ onBa
               <Text style={styles.receiptKey}>SHOP FLOOR</Text>
               <Text style={styles.receiptVal}>{submittedUser.shopName || 'Shop'}</Text>
             </View>
+            {submittedUser.machineCode ? (
+              <View style={styles.receiptRow}>
+                <Text style={styles.receiptKey}>REQUESTED MACHINE</Text>
+                <Text style={[styles.receiptVal, { color: '#B45309', fontWeight: '800' }]}>
+                  {submittedUser.machineCode}
+                </Text>
+              </View>
+            ) : null}
             <View style={styles.receiptRow}>
               <Text style={styles.receiptKey}>STATUS</Text>
               <View style={styles.pendingBadge}>
@@ -362,12 +427,78 @@ export const OperatorSignUpScreen: React.FC<OperatorSignUpScreenProps> = ({ onBa
                   <TouchableOpacity
                     key={s.id}
                     style={[styles.pillBtn, isSelected && styles.pillBtnActive]}
-                    onPress={() => setShopId(s.id)}
+                    onPress={() => handleShopSelect(s.id)}
                     activeOpacity={0.7}
                   >
                     <Text style={[styles.pillBtnText, isSelected && styles.pillBtnTextActive]}>
                       {s.shop_name}
                     </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+        </View>
+
+        {/* 6B. Preferred / Requested Machine Selection */}
+        <View style={styles.fieldGroup}>
+          <View style={styles.fieldLabelRow}>
+            <Text style={styles.fieldLabel}>REQUESTED MACHINE (OPTIONAL)</Text>
+            {selectedMachineId ? (
+              <TouchableOpacity onPress={() => setSelectedMachineId('')}>
+                <Text style={styles.clearFieldText}>Clear</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+          {loadingMachines ? (
+            <View style={styles.loadingInlineRow}>
+              <ActivityIndicator size="small" color="#F9B101" />
+              <Text style={styles.loadingInlineText}>Loading bay machines...</Text>
+            </View>
+          ) : machines.length === 0 ? (
+            <Text style={styles.mutedHelper}>
+              {shopId ? 'No machines registered for this shop floor.' : 'Select a shop floor first.'}
+            </Text>
+          ) : (
+            <View style={styles.machinePillsContainer}>
+              {machines.map((m) => {
+                const isSelected = selectedMachineId === m.id;
+                return (
+                  <TouchableOpacity
+                    key={m.id}
+                    style={[styles.machinePillCard, isSelected && styles.machinePillCardActive]}
+                    onPress={() => setSelectedMachineId(isSelected ? '' : m.id)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.machinePillTop}>
+                      <MaterialCommunityIcons
+                        name="tractor"
+                        size={16}
+                        color={isSelected ? '#000000' : '#64748B'}
+                      />
+                      <Text
+                        style={[
+                          styles.machinePillCode,
+                          isSelected && styles.machinePillCodeActive,
+                        ]}
+                      >
+                        {m.machine_code}
+                      </Text>
+                    </View>
+                    <Text
+                      style={[
+                        styles.machinePillName,
+                        isSelected && styles.machinePillNameActive,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {m.name}
+                    </Text>
+                    {m.bay_line_location ? (
+                      <Text style={styles.machinePillLoc} numberOfLines={1}>
+                        📍 {m.bay_line_location}
+                      </Text>
+                    ) : null}
                   </TouchableOpacity>
                 );
               })}
@@ -521,6 +652,72 @@ const styles = StyleSheet.create({
     color: '#475569',
     letterSpacing: 0.5,
     marginBottom: 6,
+  },
+  fieldLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  clearFieldText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#EF4444',
+  },
+  loadingInlineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+  },
+  loadingInlineText: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  machinePillsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  machinePillCard: {
+    width: (SCREEN_WIDTH - 48) / 2,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    padding: 10,
+  },
+  machinePillCardActive: {
+    borderColor: '#F9B101',
+    backgroundColor: '#FFFBEB',
+  },
+  machinePillTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  machinePillCode: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  machinePillCodeActive: {
+    color: '#000000',
+  },
+  machinePillName: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#64748B',
+    marginBottom: 2,
+  },
+  machinePillNameActive: {
+    color: '#1E293B',
+    fontWeight: '600',
+  },
+  machinePillLoc: {
+    fontSize: 9.5,
+    color: '#94A3B8',
   },
   inputWrap: {
     flexDirection: 'row',
