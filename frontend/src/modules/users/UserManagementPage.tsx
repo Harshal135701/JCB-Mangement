@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import apiClient from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
+import { useSocket } from '../../context/SocketContext';
 import {
   UserPlus,
   Search,
@@ -26,10 +27,13 @@ import {
   UserX,
   Check,
   Loader2,
+  Cpu,
+  Repeat,
 } from 'lucide-react';
 
 export const UserManagementPage: React.FC = () => {
   const { user } = useAuth();
+  const { socket } = useSocket();
   const location = useLocation();
   const isAdmin = user?.role === 'admin';
   const isManager = user?.role === 'manager';
@@ -40,14 +44,27 @@ export const UserManagementPage: React.FC = () => {
     location.search.includes('tab=pending') ? 'pending' : 'personnel'
   );
 
+  // Sub-tabs under Pending Approvals: 'operators' | 'temporary'
+  const [pendingSubTab, setPendingSubTab] = useState<'operators' | 'temporary'>(
+    location.search.includes('sub=temp') ? 'temporary' : 'operators'
+  );
+
   // Pending Operator Approvals state
   const [pendingOperators, setPendingOperators] = useState<any[]>([]);
   const [loadingPending, setLoadingPending] = useState(false);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
 
-  // Rejection modal state
+  // Pending Temporary Machine Requests state
+  const [pendingTempRequests, setPendingTempRequests] = useState<any[]>([]);
+  const [loadingPendingTemp, setLoadingPendingTemp] = useState(false);
+
+  // Rejection modal state for Operators
   const [rejectingUser, setRejectingUser] = useState<any | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
+
+  // Rejection modal state for Temporary Machine Requests
+  const [rejectingTempRequest, setRejectingTempRequest] = useState<any | null>(null);
+  const [tempRejectionReason, setTempRejectionReason] = useState('');
 
   const [usersList, setUsersList] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -176,10 +193,17 @@ export const UserManagementPage: React.FC = () => {
     }
   };
 
-  const fetchPendingOperators = async () => {
+  const fetchPendingOperators = async (plantIdToFilter?: string) => {
     try {
       setLoadingPending(true);
-      const res = await apiClient.get('/auth/pending-operators');
+      const targetPlant =
+        plantIdToFilter !== undefined
+          ? plantIdToFilter
+          : isAdmin && selectedPlantId && selectedPlantId !== 'all'
+          ? selectedPlantId
+          : '';
+      const url = targetPlant ? `/auth/pending-operators?plant_id=${targetPlant}` : '/auth/pending-operators';
+      const res = await apiClient.get(url);
       if (res.data.success && Array.isArray(res.data.data)) {
         setPendingOperators(res.data.data);
       } else {
@@ -196,7 +220,7 @@ export const UserManagementPage: React.FC = () => {
   const handleApproveOperator = async (op: any) => {
     if (
       !window.confirm(
-        `Approve operator ${op.full_name} (${op.employee_code})? This will immediately activate their account and grant system access.`
+        `Approve operator ${op.full_name} (${op.employee_code})? This will activate their account and assign ${op.requested_machine_code ? `machine ${op.requested_machine_code}` : 'the selected machine'} as their permanent default machine.`
       )
     ) {
       return;
@@ -208,7 +232,7 @@ export const UserManagementPage: React.FC = () => {
       if (res.data.success) {
         setFeedback({
           type: 'success',
-          text: `Operator ${op.full_name} (${op.employee_code}) approved and activated successfully.`,
+          text: `Operator ${op.full_name} (${op.employee_code}) approved successfully. Permanent machine configured: ${op.requested_machine_code || 'None'}.`,
         });
         fetchPendingOperators();
         fetchUsers();
@@ -249,22 +273,162 @@ export const UserManagementPage: React.FC = () => {
     }
   };
 
+  const fetchPendingTempRequests = async (plantIdToFilter?: string) => {
+    try {
+      setLoadingPendingTemp(true);
+      const targetPlant =
+        plantIdToFilter !== undefined
+          ? plantIdToFilter
+          : isAdmin && selectedPlantId && selectedPlantId !== 'all'
+          ? selectedPlantId
+          : isManager
+          ? user?.plantId || (user as any)?.plant_id || ''
+          : '';
+      const params: any = {};
+      if (targetPlant) params.plant_id = targetPlant;
+      const res = await apiClient.get('/machines/operator/requests/pending', { params });
+      if (res.data.success && Array.isArray(res.data.data)) {
+        const list = res.data.data.filter(
+          (r: any) => r.assignment_type === 'temporary' || Boolean(r.replacement_for_machine_code)
+        );
+        setPendingTempRequests(list);
+      } else {
+        setPendingTempRequests([]);
+      }
+    } catch (e) {
+      console.warn('Failed to load pending temporary requests:', e);
+      setPendingTempRequests([]);
+    } finally {
+      setLoadingPendingTemp(false);
+    }
+  };
+
+  const handleApproveTempRequest = async (req: any) => {
+    if (
+      !window.confirm(
+        `Approve temporary replacement machine ${req.machine_code || 'selected'} for operator ${
+          req.operator_name || req.operator_code || 'Operator'
+        }?`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setPendingActionId(req.id);
+      const res = await apiClient.post(`/machines/operator/requests/${req.id}/approve`);
+      if (res.data.success) {
+        setFeedback({
+          type: 'success',
+          text: `Temporary machine ${req.machine_code || 'assignment'} approved for ${
+            req.operator_name || 'Operator'
+          }.`,
+        });
+        fetchPendingTempRequests();
+      }
+    } catch (err: any) {
+      setFeedback({
+        type: 'error',
+        text: err.response?.data?.message || 'Failed to approve temporary machine request.',
+      });
+    } finally {
+      setPendingActionId(null);
+    }
+  };
+
+  const handleConfirmRejectTempRequest = async () => {
+    if (!rejectingTempRequest) return;
+    try {
+      setPendingActionId(rejectingTempRequest.id);
+      const res = await apiClient.post(
+        `/machines/operator/requests/${rejectingTempRequest.id}/reject`,
+        {
+          rejection_reason:
+            tempRejectionReason.trim() ||
+            'Temporary assignment not approved for current shift requirements.',
+        }
+      );
+      if (res.data.success) {
+        setFeedback({
+          type: 'success',
+          text: `Temporary machine request for ${
+            rejectingTempRequest.operator_name || 'Operator'
+          } rejected.`,
+        });
+        setRejectingTempRequest(null);
+        setTempRejectionReason('');
+        fetchPendingTempRequests();
+      }
+    } catch (err: any) {
+      setFeedback({
+        type: 'error',
+        text: err.response?.data?.message || 'Failed to reject temporary machine request.',
+      });
+    } finally {
+      setPendingActionId(null);
+    }
+  };
+
   useEffect(() => {
     fetchPlants();
     if (isAdmin || isManager) {
       fetchPendingOperators();
+      fetchPendingTempRequests();
     }
   }, [isAdmin, isManager]);
 
   useEffect(() => {
     fetchUsers();
-  }, [selectedPlantId]);
+    if (activeTab === 'pending' && (isAdmin || isManager)) {
+      fetchPendingOperators();
+      fetchPendingTempRequests();
+    }
+  }, [selectedPlantId, activeTab]);
 
   useEffect(() => {
     if (location.search.includes('tab=pending')) {
       setActiveTab('pending');
+      fetchPendingOperators();
+      fetchPendingTempRequests();
+    }
+    if (location.search.includes('sub=temp')) {
+      setPendingSubTab('temporary');
     }
   }, [location.search]);
+
+  // Real-time socket notification handler: auto-refresh pending list when an operator signs up or requests a machine
+  useEffect(() => {
+    if (!socket || (!isAdmin && !isManager)) return;
+    const handleNotification = (notif: any) => {
+      if (
+        notif?.entity_type === 'user_approval' ||
+        notif?.type === 'approval' ||
+        (typeof notif?.message === 'string' && notif.message.toLowerCase().includes('operator'))
+      ) {
+        fetchPendingOperators();
+      }
+    };
+
+    const handleTempUpdate = () => {
+      fetchPendingTempRequests();
+    };
+
+    socket.on('notification:new', handleNotification);
+    socket.on('notification', handleNotification);
+    socket.on('operator:machine_requested', handleTempUpdate);
+    socket.on('operator:machine_approved', handleTempUpdate);
+    socket.on('operator:machine_rejected', handleTempUpdate);
+    socket.on('operator:machine_released', handleTempUpdate);
+
+    return () => {
+      socket.off('notification:new', handleNotification);
+      socket.off('notification', handleNotification);
+      socket.off('operator:machine_requested', handleTempUpdate);
+      socket.off('operator:machine_approved', handleTempUpdate);
+      socket.off('operator:machine_rejected', handleTempUpdate);
+      socket.off('operator:machine_released', handleTempUpdate);
+    };
+  }, [socket, isAdmin, isManager, selectedPlantId]);
 
   const openCreateModal = (presetRole: string = 'technician') => {
     setEditingUser(null);
@@ -612,10 +776,10 @@ export const UserManagementPage: React.FC = () => {
           }`}
         >
           <HardHat className="w-4 h-4" />
-          <span>Pending Operator Approvals</span>
-          {pendingOperators.length > 0 ? (
+          <span>Pending Approvals</span>
+          {pendingOperators.length + pendingTempRequests.length > 0 ? (
             <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-red-600 text-white animate-pulse">
-              {pendingOperators.length}
+              {pendingOperators.length + pendingTempRequests.length}
             </span>
           ) : (
             <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-zinc-200 text-zinc-600">
@@ -921,45 +1085,95 @@ export const UserManagementPage: React.FC = () => {
         </>
       )}
 
-      {/* PENDING OPERATOR APPROVALS TAB */}
+      {/* PENDING APPROVALS TAB */}
       {activeTab === 'pending' && (
         <div className="bg-white rounded-2xl border-2 border-zinc-200 overflow-hidden shadow-sm">
-          {/* PENDING HEADER */}
-          <div className="p-5 border-b border-zinc-200 bg-amber-50/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-amber-500 text-black rounded-xl shadow-sm">
-                <HardHat className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-black text-zinc-950 uppercase tracking-wider">
-                    Pending Operator Registrations
-                  </h3>
-                  <span className="px-2 py-0.5 rounded-full text-[11px] font-black bg-amber-200 text-amber-900 border border-amber-300">
-                    {pendingOperators.length} Awaiting Authorization
-                  </span>
-                </div>
-                <p className="text-xs text-zinc-500 font-medium mt-0.5">
-                  {isManager
-                    ? 'Self-registered operators awaiting plant manager authorization before portal access is granted.'
-                    : 'All factory operator registrations awaiting plant authorization.'}
-                </p>
-              </div>
-            </div>
+          {/* Sub-tab Switcher: Operator Registrations vs Temporary Machine Requests */}
+          <div className="flex items-center gap-2 px-5 py-3 bg-zinc-50 border-b border-zinc-200 overflow-x-auto">
+            <button
+              type="button"
+              onClick={() => setPendingSubTab('operators')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shrink-0 whitespace-nowrap ${
+                pendingSubTab === 'operators'
+                  ? 'bg-amber-500 text-black shadow-xs font-black border border-amber-600/40'
+                  : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50 hover:text-zinc-950 font-bold shadow-2xs'
+              }`}
+            >
+              <HardHat className={`w-4 h-4 ${pendingSubTab === 'operators' ? 'text-black' : 'text-amber-600'}`} />
+              <span>Operator Registrations</span>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                  pendingSubTab === 'operators'
+                    ? 'bg-black text-amber-400'
+                    : 'bg-amber-100 text-amber-950 border border-amber-300'
+                }`}
+              >
+                {pendingOperators.length}
+              </span>
+            </button>
 
             <button
-              onClick={fetchPendingOperators}
-              disabled={loadingPending}
-              className="self-start sm:self-auto px-3.5 py-1.5 bg-white hover:bg-zinc-100 text-zinc-700 border border-zinc-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm disabled:opacity-50 cursor-pointer"
+              type="button"
+              onClick={() => setPendingSubTab('temporary')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shrink-0 whitespace-nowrap ${
+                pendingSubTab === 'temporary'
+                  ? 'bg-amber-500 text-black shadow-xs font-black border border-amber-600/40'
+                  : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50 hover:text-zinc-950 font-bold shadow-2xs'
+              }`}
             >
-              {loadingPending ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600" />
-              ) : (
-                <Clock className="w-3.5 h-3.5 text-zinc-500" />
-              )}
-              <span>Refresh List</span>
+              <Repeat className={`w-4 h-4 ${pendingSubTab === 'temporary' ? 'text-black' : 'text-amber-600'}`} />
+              <span>Temporary Machine Requests</span>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                  pendingSubTab === 'temporary'
+                    ? 'bg-black text-amber-400'
+                    : 'bg-amber-100 text-amber-950 border border-amber-300'
+                }`}
+              >
+                {pendingTempRequests.length}
+              </span>
             </button>
           </div>
+
+          {/* SUB-TAB 1: OPERATOR REGISTRATIONS */}
+          {pendingSubTab === 'operators' && (
+            <div>
+              {/* PENDING HEADER */}
+              <div className="p-5 border-b border-zinc-200 bg-amber-50/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-amber-500 text-black rounded-xl shadow-sm">
+                    <HardHat className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-black text-zinc-950 uppercase tracking-wider">
+                        Pending Operator Registrations
+                      </h3>
+                      <span className="px-2 py-0.5 rounded-full text-[11px] font-black bg-amber-200 text-amber-900 border border-amber-300">
+                        {pendingOperators.length} Awaiting Authorization
+                      </span>
+                    </div>
+                    <p className="text-xs text-zinc-500 font-medium mt-0.5">
+                      {isManager
+                        ? 'Self-registered operators awaiting plant manager authorization before portal access is granted.'
+                        : 'All factory operator registrations awaiting plant authorization.'}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => fetchPendingOperators()}
+                  disabled={loadingPending}
+                  className="self-start sm:self-auto px-3.5 py-1.5 bg-white hover:bg-zinc-100 text-zinc-700 border border-zinc-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm disabled:opacity-50 cursor-pointer"
+                >
+                  {loadingPending ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600" />
+                  ) : (
+                    <Clock className="w-3.5 h-3.5 text-zinc-500" />
+                  )}
+                  <span>Refresh List</span>
+                </button>
+              </div>
 
           {/* PENDING OPERATORS LIST */}
           {loadingPending ? (
@@ -986,6 +1200,7 @@ export const UserManagementPage: React.FC = () => {
                   <tr className="bg-zinc-100/80 border-b border-zinc-200 text-zinc-600 uppercase text-[10px] font-black tracking-wider">
                     <th className="py-3 px-4">Operator Name &amp; ID</th>
                     <th className="py-3 px-4">Facility &amp; Shop</th>
+                    <th className="py-3 px-4">Requested Permanent Machine</th>
                     <th className="py-3 px-4">Shift &amp; Role</th>
                     <th className="py-3 px-4">Contact Details</th>
                     <th className="py-3 px-4">Department / Designation</th>
@@ -1016,6 +1231,46 @@ export const UserManagementPage: React.FC = () => {
                         <div className="text-[11px] text-zinc-600 font-medium mt-0.5">
                           Shop: {op.shop_name || 'Assigned Shop'}
                         </div>
+                      </td>
+
+                      <td className="py-3.5 px-4">
+                        {op.requested_machine_code ? (
+                          <div>
+                            <div className="font-bold text-zinc-900 text-xs flex items-center gap-1.5">
+                              <Cpu className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                              <span className="font-mono">{op.requested_machine_code}</span>
+                            </div>
+                            <div className="text-[11px] text-zinc-600 truncate max-w-[150px]">
+                              {op.requested_machine_name || 'Machine'}
+                            </div>
+                            {op.requested_machine_location && (
+                              <div className="text-[10px] text-zinc-500 font-mono mt-0.5 truncate max-w-[150px]">
+                                Loc: {op.requested_machine_location}
+                              </div>
+                            )}
+                            <span
+                              className={`inline-block mt-1 px-1.5 py-0.5 text-[9px] font-bold rounded uppercase tracking-wider ${
+                                op.requested_machine_status === 'active' ||
+                                op.requested_machine_status === 'idle' ||
+                                op.requested_machine_status === 'running'
+                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                  : op.requested_machine_status === 'under_maintenance'
+                                  ? 'bg-purple-100 text-purple-800 border border-purple-300'
+                                  : op.requested_machine_status === 'breakdown'
+                                  ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                                  : 'bg-zinc-100 text-zinc-700 border border-zinc-300'
+                              }`}
+                            >
+                              {op.requested_machine_status
+                                ? op.requested_machine_status === 'running'
+                                  ? 'Active'
+                                  : op.requested_machine_status.replace(/_/g, ' ')
+                                : 'N/A'}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-zinc-400 italic text-[11px]">None specified</span>
+                        )}
                       </td>
 
                       <td className="py-3.5 px-4">
@@ -1095,12 +1350,207 @@ export const UserManagementPage: React.FC = () => {
         </div>
       )}
 
+          {/* SUB-TAB 2: TEMPORARY MACHINE REQUESTS */}
+          {pendingSubTab === 'temporary' && (
+            <div>
+              {/* PENDING HEADER */}
+              <div className="p-5 border-b border-zinc-200 bg-amber-50/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-amber-500 text-black rounded-xl shadow-sm">
+                    <Repeat className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-black text-zinc-950 uppercase tracking-wider">
+                        Pending Temporary Machine Requests
+                      </h3>
+                      <span className="px-2 py-0.5 rounded-full text-[11px] font-black bg-amber-200 text-amber-900 border border-amber-300">
+                        {pendingTempRequests.length} Awaiting Authorization
+                      </span>
+                    </div>
+                    <p className="text-xs text-zinc-500 font-medium mt-0.5">
+                      Operator replacement requests for temporary machine assignments while permanent machines are under repair or maintenance.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => fetchPendingTempRequests()}
+                  disabled={loadingPendingTemp}
+                  className="self-start sm:self-auto px-3.5 py-1.5 bg-white hover:bg-zinc-100 text-zinc-700 border border-zinc-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm disabled:opacity-50 cursor-pointer"
+                >
+                  {loadingPendingTemp ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600" />
+                  ) : (
+                    <Clock className="w-3.5 h-3.5 text-zinc-500" />
+                  )}
+                  <span>Refresh List</span>
+                </button>
+              </div>
+
+              {/* PENDING TEMPORARY REQUESTS LIST */}
+              {loadingPendingTemp ? (
+                <div className="py-16 text-center text-zinc-500 text-xs font-bold flex flex-col items-center justify-center gap-3">
+                  <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
+                  <span>Loading pending temporary machine requests...</span>
+                </div>
+              ) : pendingTempRequests.length === 0 ? (
+                <div className="py-16 text-center text-zinc-500 text-xs flex flex-col items-center justify-center gap-3 bg-zinc-50/50">
+                  <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                    <CheckCircle2 className="w-6 h-6" />
+                  </div>
+                  <div className="max-w-sm">
+                    <p className="font-black text-zinc-900 text-sm">No Pending Replacement Requests</p>
+                    <p className="text-zinc-500 text-xs mt-1">
+                      All operator temporary machine requests have been reviewed and allocated. New replacement requests will appear here in real time.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-zinc-100/80 border-b border-zinc-200 text-zinc-600 uppercase text-[10px] font-black tracking-wider">
+                        <th className="py-3 px-4">Operator Details</th>
+                        <th className="py-3 px-4">Facility &amp; Shop</th>
+                        <th className="py-3 px-4">Permanent Machine (Broken)</th>
+                        <th className="py-3 px-4">Requested Temporary Machine</th>
+                        <th className="py-3 px-4">Operator Notes / Reason</th>
+                        <th className="py-3 px-4">Requested At</th>
+                        <th className="py-3 px-4 text-right">Approval Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-200">
+                      {pendingTempRequests.map((req) => (
+                        <tr key={req.id} className="hover:bg-amber-50/30 transition-colors">
+                          <td className="py-3.5 px-4">
+                            <div className="font-black text-zinc-950 text-xs flex items-center gap-2">
+                              <span>{req.operator_name || 'Operator'}</span>
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                                Pending Temp
+                              </span>
+                            </div>
+                            <div className="text-[11px] font-mono text-zinc-600 font-bold mt-0.5">
+                              ID: {req.operator_code || 'OP'}
+                            </div>
+                          </td>
+
+                          <td className="py-3.5 px-4">
+                            <div className="font-bold text-zinc-900 text-xs flex items-center gap-1">
+                              <Building2 className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+                              <span>{req.plant_name || 'Facility'}</span>
+                            </div>
+                            <div className="text-[11px] text-zinc-600 font-medium mt-0.5">
+                              Shop: {req.shop_name || 'Floor'}
+                            </div>
+                          </td>
+
+                          <td className="py-3.5 px-4">
+                            <div className="font-bold text-zinc-900 text-xs flex items-center gap-1.5">
+                              <span className="font-mono bg-rose-50 text-rose-800 px-1.5 py-0.5 rounded border border-rose-200">
+                                {req.replacement_for_machine_code || req.permanent_machine_code || 'Broken Asset'}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-zinc-600 mt-0.5 truncate max-w-[160px]">
+                              {req.replacement_for_machine_name || req.permanent_machine_name || 'Permanent Asset'}
+                            </div>
+                          </td>
+
+                          <td className="py-3.5 px-4">
+                            <div>
+                              <div className="font-bold text-zinc-900 text-xs flex items-center gap-1.5">
+                                <Cpu className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                <span className="font-mono">{req.machine_code || 'Replacement'}</span>
+                              </div>
+                              <div className="text-[11px] text-zinc-600 truncate max-w-[150px]">
+                                {req.machine_name || 'Machine Asset'}
+                              </div>
+                              {req.machine_location && (
+                                <div className="text-[10px] text-zinc-500 font-mono mt-0.5 truncate max-w-[150px]">
+                                  Loc: {req.machine_location}
+                                </div>
+                              )}
+                              <span
+                                className={`inline-block mt-1 px-1.5 py-0.5 text-[9px] font-bold rounded uppercase tracking-wider ${
+                                  req.machine_status === 'active' ||
+                                  req.machine_status === 'idle' ||
+                                  req.machine_status === 'running'
+                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                    : 'bg-zinc-100 text-zinc-700 border border-zinc-300'
+                                }`}
+                              >
+                                {req.machine_status ? req.machine_status.replace(/_/g, ' ') : 'Available'}
+                              </span>
+                            </div>
+                          </td>
+
+                          <td className="py-3.5 px-4 max-w-[200px]">
+                            <p className="text-xs text-zinc-700 line-clamp-2">
+                              {req.notes || req.request_reason || 'Permanent machine stoppage; temporary machine needed for production.'}
+                            </p>
+                          </td>
+
+                          <td className="py-3.5 px-4 text-zinc-600 text-[11px] font-medium">
+                            <div className="flex items-center gap-1">
+                              <Clock className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                              <span>
+                                {req.created_at
+                                  ? new Date(req.created_at).toLocaleString('en-IN', {
+                                      dateStyle: 'short',
+                                      timeStyle: 'short',
+                                    })
+                                  : 'Recent'}
+                              </span>
+                            </div>
+                          </td>
+
+                          <td className="py-3.5 px-4 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => handleApproveTempRequest(req)}
+                                disabled={pendingActionId === req.id}
+                                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-sm disabled:opacity-50 cursor-pointer"
+                                title="Approve Temporary Allocation"
+                              >
+                                {pendingActionId === req.id ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                  <UserCheck className="w-3.5 h-3.5" />
+                                )}
+                                <span>Approve</span>
+                              </button>
+
+                              <button
+                                onClick={() => {
+                                  setRejectingTempRequest(req);
+                                  setTempRejectionReason('');
+                                }}
+                                disabled={pendingActionId === req.id}
+                                className="px-3 py-1.5 bg-zinc-100 hover:bg-rose-50 text-rose-700 hover:text-rose-800 border border-zinc-300 hover:border-rose-300 rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-sm disabled:opacity-50 cursor-pointer"
+                                title="Reject Temporary Request"
+                              >
+                                <UserX className="w-3.5 h-3.5" />
+                                <span>Reject</span>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ENROLL / EDIT PERSONNEL MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-white w-full max-w-xl rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] flex flex-col">
             {/* MODAL HEADER */}
-            <div className="bg-white p-5 flex items-center justify-between border-b border-zinc-200">
+            <div className="bg-white p-5 flex items-center justify-between border-b border-zinc-200 shrink-0">
               <div className="flex items-center gap-3">
                 <div className="bg-jcb-yellow text-black font-black text-xl px-2.5 py-0.5 rounded shadow">
                   JCB
@@ -1198,7 +1648,7 @@ export const UserManagementPage: React.FC = () => {
               </div>
 
               {/* EMPLOYEE ID AND NAME */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
                     Employee ID *
@@ -1243,7 +1693,7 @@ export const UserManagementPage: React.FC = () => {
               </div>
 
               {/* EMAIL AND PHONE */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
                     Email Address *
@@ -1287,7 +1737,7 @@ export const UserManagementPage: React.FC = () => {
               </div>
 
               {/* PLANT AND SHOP */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
                     Assigned Plant Facility{' '}
@@ -1514,6 +1964,12 @@ export const UserManagementPage: React.FC = () => {
                 <strong className="text-zinc-950 font-black">
                   {rejectingUser.full_name} ({rejectingUser.employee_code})
                 </strong>
+                {rejectingUser.requested_machine_code && (
+                  <span>
+                    {' '}• Requested Machine:{' '}
+                    <strong className="font-mono text-zinc-900">{rejectingUser.requested_machine_code}</strong>
+                  </span>
+                )}
                 . Their account will remain deactivated and portal access will be denied.
               </p>
 
@@ -1551,6 +2007,79 @@ export const UserManagementPage: React.FC = () => {
                     <UserX className="w-4 h-4" />
                   )}
                   <span>Confirm Rejection</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* REJECTION MODAL FOR TEMPORARY MACHINE REQUEST */}
+      {rejectingTempRequest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="bg-rose-50 border-b border-rose-200 p-4 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-rose-800">
+                <AlertCircle className="w-5 h-5 text-rose-600" />
+                <h3 className="text-sm font-black uppercase tracking-wider">
+                  Decline Temporary Machine Request
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRejectingTempRequest(null)}
+                className="text-zinc-400 hover:text-black p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <p className="text-xs text-zinc-600">
+                You are about to decline the temporary machine request for{' '}
+                <strong className="text-zinc-950 font-black">
+                  {rejectingTempRequest.operator_name || 'Operator'} ({rejectingTempRequest.operator_code || 'OP'})
+                </strong>
+                . Requested temporary asset:{' '}
+                <strong className="font-mono text-zinc-900">
+                  {rejectingTempRequest.machine_code || 'Machine'}
+                </strong>
+                .
+              </p>
+
+              <div>
+                <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
+                  Reason for Decline (Optional)
+                </label>
+                <textarea
+                  rows={3}
+                  value={tempRejectionReason}
+                  onChange={(e) => setTempRejectionReason(e.target.value)}
+                  placeholder="e.g., Replacement machine required for higher priority job, maintenance planned, wait for permanent asset..."
+                  className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-xl text-xs font-medium text-zinc-900 focus:outline-none focus:border-rose-500"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-zinc-200 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setRejectingTempRequest(null)}
+                  disabled={pendingActionId === rejectingTempRequest.id}
+                  className="px-4 py-2 border border-zinc-300 text-zinc-700 rounded-xl text-xs font-bold hover:bg-zinc-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmRejectTempRequest}
+                  disabled={pendingActionId === rejectingTempRequest.id}
+                  className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow transition disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {pendingActionId === rejectingTempRequest.id ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <UserX className="w-4 h-4" />
+                  )}
+                  <span>Confirm Decline</span>
                 </button>
               </div>
             </div>

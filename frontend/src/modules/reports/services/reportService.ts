@@ -1,5 +1,41 @@
 import apiClient from '../../../api/client';
 
+export function parseStartOfDay(dateStr?: string): number {
+  if (!dateStr) return 0;
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10) - 1;
+    const d = parseInt(parts[2], 10);
+    return new Date(y, m, d, 0, 0, 0, 0).getTime();
+  }
+  const d = new Date(dateStr);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+export function parseEndOfDay(dateStr?: string): number {
+  if (!dateStr) return Infinity;
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10) - 1;
+    const d = parseInt(parts[2], 10);
+    return new Date(y, m, d, 23, 59, 59, 999).getTime();
+  }
+  const d = new Date(dateStr);
+  d.setHours(23, 59, 59, 999);
+  return d.getTime();
+}
+
+export function getItemTimestamp(item: any): number {
+  if (!item) return 0;
+  const ds = item.created_at || item.reported_at || item.breakdown_occurred_at || item.reported_time;
+  if (!ds) return 0;
+  const t = new Date(ds).getTime();
+  return isNaN(t) ? 0 : t;
+}
+
 export interface UserSummary {
   id: string;
   employee_code?: string;
@@ -213,34 +249,41 @@ export async function fetchTechnicianReportData(
   endDate?: string
 ) {
   try {
+    const bdParams: Record<string, any> = {
+      assigned_technician_id: technicianId,
+      limit: 500,
+    };
+    if (startDate) bdParams.start_date = startDate;
+    if (endDate) bdParams.end_date = endDate;
+
     const [woRes, bdRes] = await Promise.all([
       apiClient.get('/work-orders', {
         params: {
           technician_id: technicianId,
-          limit: 100,
+          limit: 500,
         },
       }),
       apiClient.get('/breakdowns', {
-        params: {
-          assigned_technician_id: technicianId,
-          limit: 100,
-        },
+        params: bdParams,
       }),
     ]);
 
     let workOrders: WorkOrderReportItem[] = woRes.data?.data || [];
     let breakdowns: BreakdownReportItem[] = bdRes.data?.data || [];
 
-    // Apply date range filters if present
-    if (startDate) {
-      const start = new Date(startDate).getTime();
-      workOrders = workOrders.filter((w) => new Date(w.created_at).getTime() >= start);
-      breakdowns = breakdowns.filter((b) => new Date(b.created_at).getTime() >= start);
-    }
-    if (endDate) {
-      const end = new Date(endDate).setHours(23, 59, 59, 999);
-      workOrders = workOrders.filter((w) => new Date(w.created_at).getTime() <= end);
-      breakdowns = breakdowns.filter((b) => new Date(b.created_at).getTime() <= end);
+    // Apply robust date range filters if present
+    if (startDate || endDate) {
+      const startMs = parseStartOfDay(startDate);
+      const endMs = parseEndOfDay(endDate);
+
+      workOrders = workOrders.filter((w) => {
+        const t = getItemTimestamp(w);
+        return t >= startMs && t <= endMs;
+      });
+      breakdowns = breakdowns.filter((b) => {
+        const t = getItemTimestamp(b);
+        return t >= startMs && t <= endMs;
+      });
     }
 
     // Compute KPI metrics
@@ -297,12 +340,16 @@ export async function fetchOperatorReportData(
   endDate?: string
 ) {
   try {
+    const bdParams: Record<string, any> = { limit: 500 };
+    if (startDate) bdParams.start_date = startDate;
+    if (endDate) bdParams.end_date = endDate;
+
     const [inspRes, bdRes] = await Promise.all([
       apiClient.get('/inspections/records', {
-        params: { limit: 100 },
+        params: { limit: 500 },
       }),
       apiClient.get('/breakdowns', {
-        params: { limit: 100 },
+        params: bdParams,
       }),
     ]);
 
@@ -317,16 +364,19 @@ export async function fetchOperatorReportData(
       breakdowns = breakdowns.filter((b) => b.reporter_id === operatorId);
     }
 
-    // Apply date range filters if present
-    if (startDate) {
-      const start = new Date(startDate).getTime();
-      inspections = inspections.filter((i) => new Date(i.created_at).getTime() >= start);
-      breakdowns = breakdowns.filter((b) => new Date(b.created_at).getTime() >= start);
-    }
-    if (endDate) {
-      const end = new Date(endDate).setHours(23, 59, 59, 999);
-      inspections = inspections.filter((i) => new Date(i.created_at).getTime() <= end);
-      breakdowns = breakdowns.filter((b) => new Date(b.created_at).getTime() <= end);
+    // Apply robust date range filters if present
+    if (startDate || endDate) {
+      const startMs = parseStartOfDay(startDate);
+      const endMs = parseEndOfDay(endDate);
+
+      inspections = inspections.filter((i) => {
+        const t = getItemTimestamp(i);
+        return t >= startMs && t <= endMs;
+      });
+      breakdowns = breakdowns.filter((b) => {
+        const t = getItemTimestamp(b);
+        return t >= startMs && t <= endMs;
+      });
     }
 
     const totalInspections = inspections.length;
@@ -374,23 +424,30 @@ export async function fetchManagerReportData(
   endDate?: string
 ) {
   try {
+    const bdParams: Record<string, any> = { limit: 500 };
+    if (startDate) bdParams.start_date = startDate;
+    if (endDate) bdParams.end_date = endDate;
+
     const [bdRes, woRes] = await Promise.all([
-      apiClient.get('/breakdowns', { params: { limit: 100 } }),
-      apiClient.get('/work-orders', { params: { limit: 100 } }),
+      apiClient.get('/breakdowns', { params: bdParams }),
+      apiClient.get('/work-orders', { params: { limit: 500 } }),
     ]);
 
     let breakdowns: BreakdownReportItem[] = bdRes.data?.data || [];
     let workOrders: WorkOrderReportItem[] = woRes.data?.data || [];
 
-    if (startDate) {
-      const start = new Date(startDate).getTime();
-      breakdowns = breakdowns.filter((b) => new Date(b.created_at).getTime() >= start);
-      workOrders = workOrders.filter((w) => new Date(w.created_at).getTime() >= start);
-    }
-    if (endDate) {
-      const end = new Date(endDate).setHours(23, 59, 59, 999);
-      breakdowns = breakdowns.filter((b) => new Date(b.created_at).getTime() <= end);
-      workOrders = workOrders.filter((w) => new Date(w.created_at).getTime() <= end);
+    if (startDate || endDate) {
+      const startMs = parseStartOfDay(startDate);
+      const endMs = parseEndOfDay(endDate);
+
+      breakdowns = breakdowns.filter((b) => {
+        const t = getItemTimestamp(b);
+        return t >= startMs && t <= endMs;
+      });
+      workOrders = workOrders.filter((w) => {
+        const t = getItemTimestamp(w);
+        return t >= startMs && t <= endMs;
+      });
     }
 
     const totalComplaintsReceived = breakdowns.length;
@@ -452,11 +509,11 @@ export async function fetchStoreManagerReportData(
   try {
     const [dashRes, txRes, alertRes, prRes] = await Promise.all([
       apiClient.get('/inventory/dashboard').catch(() => ({ data: { data: {} } })),
-      apiClient.get('/inventory/transactions', { params: { limit: 100 } }).catch(() => ({
+      apiClient.get('/inventory/transactions', { params: { limit: 500 } }).catch(() => ({
         data: { data: [] },
       })),
       apiClient.get('/inventory/alerts/low-stock').catch(() => ({ data: { data: [] } })),
-      apiClient.get('/procurement/pr', { params: { limit: 100 } }).catch(() => ({
+      apiClient.get('/procurement/pr', { params: { limit: 500 } }).catch(() => ({
         data: { data: [] },
       })),
     ]);
@@ -466,15 +523,18 @@ export async function fetchStoreManagerReportData(
     let lowStockAlerts: LowStockAlertItem[] = alertRes.data?.data || [];
     let purchaseRequests: any[] = prRes.data?.data || [];
 
-    if (startDate) {
-      const start = new Date(startDate).getTime();
-      transactions = transactions.filter((t) => new Date(t.created_at).getTime() >= start);
-      purchaseRequests = purchaseRequests.filter((p) => new Date(p.created_at).getTime() >= start);
-    }
-    if (endDate) {
-      const end = new Date(endDate).setHours(23, 59, 59, 999);
-      transactions = transactions.filter((t) => new Date(t.created_at).getTime() <= end);
-      purchaseRequests = purchaseRequests.filter((p) => new Date(p.created_at).getTime() <= end);
+    if (startDate || endDate) {
+      const startMs = parseStartOfDay(startDate);
+      const endMs = parseEndOfDay(endDate);
+
+      transactions = transactions.filter((t) => {
+        const time = getItemTimestamp(t);
+        return time >= startMs && time <= endMs;
+      });
+      purchaseRequests = purchaseRequests.filter((p) => {
+        const time = getItemTimestamp(p);
+        return time >= startMs && time <= endMs;
+      });
     }
 
     return {
@@ -506,12 +566,26 @@ export async function fetchAdminReportData(
   endDate?: string
 ) {
   try {
-    const [kpiRes, auditRes, usersRes] = await Promise.all([
-      apiClient.get('/reports/dashboard-kpis').catch(() => ({ data: { data: {} } })),
-      apiClient.get('/audit', { params: { limit: 100 } }).catch(() => ({
+    const kpiParams: Record<string, any> = {};
+    if (startDate) kpiParams.start_date = startDate;
+    if (endDate) kpiParams.end_date = endDate;
+
+    const bdParams: Record<string, any> = { limit: 500 };
+    if (startDate) bdParams.start_date = startDate;
+    if (endDate) bdParams.end_date = endDate;
+
+    const [kpiRes, auditRes, usersRes, woRes, bdRes] = await Promise.all([
+      apiClient.get('/reports/dashboard-kpis', { params: kpiParams }).catch(() => ({ data: { data: {} } })),
+      apiClient.get('/audit', { params: { limit: 500 } }).catch(() => ({
         data: { data: [] },
       })),
-      apiClient.get('/auth/users', { params: { limit: 100 } }).catch(() => ({
+      apiClient.get('/auth/users', { params: { limit: 200 } }).catch(() => ({
+        data: { data: [] },
+      })),
+      apiClient.get('/work-orders', { params: { limit: 500 } }).catch(() => ({
+        data: { data: [] },
+      })),
+      apiClient.get('/breakdowns', { params: bdParams }).catch(() => ({
         data: { data: [] },
       })),
     ]);
@@ -519,26 +593,55 @@ export async function fetchAdminReportData(
     const kpis = kpiRes.data?.data || {};
     let auditLogs: AuditReportItem[] = auditRes.data?.data || [];
     const users: UserSummary[] = usersRes.data?.data || [];
+    let workOrders: any[] = woRes.data?.data || [];
+    let breakdowns: any[] = bdRes.data?.data || [];
 
-    if (startDate) {
-      const start = new Date(startDate).getTime();
-      auditLogs = auditLogs.filter((a) => new Date(a.created_at).getTime() >= start);
+    if (startDate || endDate) {
+      const startMs = parseStartOfDay(startDate);
+      const endMs = parseEndOfDay(endDate);
+
+      auditLogs = auditLogs.filter((a) => {
+        const time = getItemTimestamp(a);
+        return time >= startMs && time <= endMs;
+      });
+
+      workOrders = workOrders.filter((w) => {
+        const time = getItemTimestamp(w);
+        return time >= startMs && time <= endMs;
+      });
+
+      breakdowns = breakdowns.filter((b) => {
+        const time = getItemTimestamp(b);
+        return time >= startMs && time <= endMs;
+      });
     }
-    if (endDate) {
-      const end = new Date(endDate).setHours(23, 59, 59, 999);
-      auditLogs = auditLogs.filter((a) => new Date(a.created_at).getTime() <= end);
-    }
+
+    // When date range is specified, compute counts directly from the date-filtered records
+    const hasDateFilter = Boolean(startDate || endDate);
+    const activeWorkOrders = hasDateFilter
+      ? workOrders.filter((w) => ['ACCEPTED', 'IN_PROGRESS', 'DIAGNOSED', 'PARTS_REQUESTED'].includes(w.status?.toUpperCase())).length
+      : (kpis.active_work_orders || kpis.activeWorkOrders || workOrders.filter((w) => ['ACCEPTED', 'IN_PROGRESS', 'DIAGNOSED', 'PARTS_REQUESTED'].includes(w.status?.toUpperCase())).length);
+
+    const completedWorkOrders = hasDateFilter
+      ? workOrders.filter((w) => ['VERIFIED', 'CLOSED', 'COMPLETED'].includes(w.status?.toUpperCase())).length
+      : (kpis.completed_work_orders || kpis.completedWorkOrders || workOrders.filter((w) => ['VERIFIED', 'CLOSED', 'COMPLETED'].includes(w.status?.toUpperCase())).length);
+
+    const pendingBreakdowns = hasDateFilter
+      ? breakdowns.filter((b) => ['PENDING', 'NEW', 'REPORTED', 'OPEN', 'ACKNOWLEDGED'].includes(b.status?.toUpperCase())).length
+      : (kpis.pending_breakdowns || kpis.pendingBreakdowns || breakdowns.filter((b) => ['PENDING', 'NEW', 'REPORTED', 'OPEN', 'ACKNOWLEDGED'].includes(b.status?.toUpperCase())).length);
 
     return {
       kpis,
       auditLogs,
       users,
+      workOrders,
+      breakdowns,
       stats: {
         totalUsers: users.length,
         totalAuditLogs: auditLogs.length,
-        activeWorkOrders: kpis.active_work_orders || kpis.activeWorkOrders || 0,
-        pendingBreakdowns: kpis.pending_breakdowns || kpis.pendingBreakdowns || 0,
-        completedWorkOrders: kpis.completed_work_orders || kpis.completedWorkOrders || 0,
+        activeWorkOrders,
+        pendingBreakdowns,
+        completedWorkOrders,
         totalMachines: kpis.total_machines || kpis.totalMachines || 0,
       },
     };

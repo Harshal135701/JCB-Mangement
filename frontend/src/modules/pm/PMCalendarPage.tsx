@@ -56,6 +56,7 @@ import { PMVerificationModal } from './components/PMVerificationModal';
 import { PMPlanDetailModal } from './components/PMPlanDetailModal';
 import { PMAnalyticsView } from './components/PMAnalyticsView';
 import { PMExecutionQueueTable } from './components/PMExecutionQueueTable';
+import { PMTechnicianExecutionView } from './components/PMTechnicianExecutionView';
 
 export const PMCalendarPage: React.FC = () => {
   const { user } = useAuth();
@@ -65,8 +66,9 @@ export const PMCalendarPage: React.FC = () => {
 
   // Active Main Tab
   const [activeTab, setActiveTab] = useState<
-    'calendar' | 'queues' | 'plans' | 'executions' | 'verifications' | 'analytics'
-  >(isTechnician ? 'executions' : 'calendar');
+    'calendar' | 'queues' | 'plans' | 'technician_execution' | 'executions' | 'verifications' | 'analytics'
+  >(isTechnician ? 'technician_execution' : 'calendar');
+  const [selectedPlanForExecution, setSelectedPlanForExecution] = useState<string | null>(null);
 
   // Calendar State
   const [selectedMonth, setSelectedMonth] = useState<string>(
@@ -409,15 +411,15 @@ export const PMCalendarPage: React.FC = () => {
       <PMKPISummary data={dashboardData} loading={metricsLoading} />
 
       {/* 3. Navigation Tabs */}
-      <div className="flex items-center gap-2 border-b border-zinc-200 pb-2 overflow-x-auto">
+      <div className="flex items-center gap-2 border-b-2 border-zinc-200 pb-2 overflow-x-auto">
         {/* Calendar View */}
         <button
           type="button"
           onClick={() => setActiveTab('calendar')}
-          className={`px-4 py-2 rounded-lg text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shrink-0 whitespace-nowrap ${
             activeTab === 'calendar'
-              ? 'bg-amber-500 text-black shadow-xs'
-              : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50'
+              ? 'bg-amber-500 text-black shadow-xs font-black border border-amber-600/40'
+              : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50 hover:text-zinc-950 font-bold shadow-2xs'
           }`}
         >
           <Calendar className="w-3.5 h-3.5" />
@@ -428,16 +430,22 @@ export const PMCalendarPage: React.FC = () => {
         <button
           type="button"
           onClick={() => setActiveTab('queues')}
-          className={`px-4 py-2 rounded-lg text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shrink-0 whitespace-nowrap ${
             activeTab === 'queues'
-              ? 'bg-amber-500 text-black shadow-xs'
-              : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50'
+              ? 'bg-amber-500 text-black shadow-xs font-black border border-amber-600/40'
+              : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50 hover:text-zinc-950 font-bold shadow-2xs'
           }`}
         >
           <Clock className="w-3.5 h-3.5" />
           <span>Schedule Queues (Due/Overdue)</span>
           {dueItems.length + overdueItems.length > 0 && (
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-500 text-white font-mono">
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                activeTab === 'queues'
+                  ? 'bg-black text-amber-400'
+                  : 'bg-rose-100 text-rose-700 border border-rose-200'
+              }`}
+            >
               {dueItems.length + overdueItems.length}
             </span>
           )}
@@ -447,16 +455,39 @@ export const PMCalendarPage: React.FC = () => {
         <button
           type="button"
           onClick={() => setActiveTab('plans')}
-          className={`px-4 py-2 rounded-lg text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shrink-0 whitespace-nowrap ${
             activeTab === 'plans'
-              ? 'bg-amber-500 text-black shadow-xs'
-              : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50'
+              ? 'bg-amber-500 text-black shadow-xs font-black border border-amber-600/40'
+              : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50 hover:text-zinc-950 font-bold shadow-2xs'
           }`}
         >
           <Layers className="w-3.5 h-3.5" />
           <span>PM Service Plans</span>
-          <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-zinc-200 text-zinc-700">
+          <span
+            className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+              activeTab === 'plans'
+                ? 'bg-black text-amber-400'
+                : 'bg-zinc-100 text-zinc-700 border border-zinc-200'
+            }`}
+          >
             {plans.length}
+          </span>
+        </button>
+
+        {/* Plan-Based PM Execution */}
+        <button
+          type="button"
+          onClick={() => setActiveTab('technician_execution')}
+          className={`px-4 py-2 rounded-lg text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+            activeTab === 'technician_execution'
+              ? 'bg-amber-500 text-black shadow-xs font-black'
+              : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50'
+          }`}
+        >
+          <ListChecks className="w-3.5 h-3.5" />
+          <span>Plan-Based PM Execution</span>
+          <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-100 text-amber-900 font-bold">
+            Service
           </span>
         </button>
 
@@ -464,10 +495,10 @@ export const PMCalendarPage: React.FC = () => {
         <button
           type="button"
           onClick={() => setActiveTab('executions')}
-          className={`px-4 py-2 rounded-lg text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shrink-0 whitespace-nowrap ${
             activeTab === 'executions'
-              ? 'bg-amber-500 text-black shadow-xs'
-              : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50'
+              ? 'bg-amber-500 text-black shadow-xs font-black border border-amber-600/40'
+              : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50 hover:text-zinc-950 font-bold shadow-2xs'
           }`}
         >
           <Wrench className="w-3.5 h-3.5" />
@@ -479,16 +510,22 @@ export const PMCalendarPage: React.FC = () => {
           <button
             type="button"
             onClick={() => setActiveTab('verifications')}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shrink-0 whitespace-nowrap ${
               activeTab === 'verifications'
-                ? 'bg-amber-500 text-black shadow-xs'
-                : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50'
+                ? 'bg-amber-500 text-black shadow-xs font-black border border-amber-600/40'
+                : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50 hover:text-zinc-950 font-bold shadow-2xs'
             }`}
           >
             <ShieldCheck className="w-3.5 h-3.5" />
             <span>Manager Quality Sign-Off</span>
             {dashboardData?.kpis?.pending_verification_count ? (
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-purple-600 text-white font-mono">
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                  activeTab === 'verifications'
+                    ? 'bg-black text-amber-400'
+                    : 'bg-purple-100 text-purple-700 border border-purple-200'
+                }`}
+              >
                 {dashboardData.kpis.pending_verification_count}
               </span>
             ) : null}
@@ -499,10 +536,10 @@ export const PMCalendarPage: React.FC = () => {
         <button
           type="button"
           onClick={() => setActiveTab('analytics')}
-          className={`px-4 py-2 rounded-lg text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shrink-0 whitespace-nowrap ${
             activeTab === 'analytics'
-              ? 'bg-amber-500 text-black shadow-xs'
-              : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50'
+              ? 'bg-amber-500 text-black shadow-xs font-black border border-amber-600/40'
+              : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50 hover:text-zinc-950 font-bold shadow-2xs'
           }`}
         >
           <Activity className="w-3.5 h-3.5" />
@@ -552,6 +589,10 @@ export const PMCalendarPage: React.FC = () => {
           }}
           onToggleStatus={handleTogglePlanStatus}
           onViewPlanDetail={(plan) => setSelectedPlanDetailId(plan.id)}
+          onExecutePlan={(plan) => {
+            setSelectedPlanForExecution(plan.id);
+            setActiveTab('technician_execution');
+          }}
           onCreateNewPlan={() => {
             setEditingPlan(null);
             setIsCreatePlanModalOpen(true);
@@ -561,7 +602,22 @@ export const PMCalendarPage: React.FC = () => {
         />
       )}
 
-      {/* Tab D: PM Executions Workbench (Technicians & Oversight) */}
+      {/* Tab D: Plan-Based PM Execution for Technicians */}
+      {activeTab === 'technician_execution' && (
+        <PMTechnicianExecutionView
+          plans={plans}
+          executions={executions}
+          selectedPlanIdFromProps={selectedPlanForExecution}
+          onExecutionCompleted={() => {
+            loadExecutions();
+            loadKPIs();
+            loadPlans();
+          }}
+          onViewExecutionDetail={(executionId) => setSelectedExecutionId(executionId)}
+        />
+      )}
+
+      {/* Tab E: PM Executions Workbench (Technicians & Oversight) */}
       {activeTab === 'executions' && (
         <PMExecutionQueueTable
           executions={executions}

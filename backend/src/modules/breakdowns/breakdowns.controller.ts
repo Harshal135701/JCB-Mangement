@@ -21,6 +21,7 @@ import {
   managerManualReassignService,
   getEligibleTechniciansForBreakdownService,
 } from './breakdown-assignment.service';
+import { getOperatorPermittedMachineIds } from '../machines/operator-maintenance-access.service';
 
 import {
   isUUID,
@@ -539,6 +540,16 @@ export const getBreakdownDetails = async (
 
     // Authorization check
     if (req.user?.role !== 'admin') {
+      if (req.user?.role === 'operator') {
+        const permitted = await getOperatorPermittedMachineIds(req.user, activeQuery);
+        if (breakdown.reported_by_id !== req.user.id && !permitted.permittedMachineIds.includes(breakdown.machine_id)) {
+          res.status(403).json({
+            success: false,
+            message: 'Forbidden: You are only authorized to view breakdown requests for your assigned machine(s) or reported by you.',
+          });
+          return;
+        }
+      }
       if (req.user?.plant_id && req.user.plant_id !== breakdown.plant_id) {
         res.status(403).json({
           success: false,
@@ -596,7 +607,7 @@ export const getBreakdownHistory = async (
     }
 
     const checkRes = await activeQuery(
-      `SELECT r.id, s.plant_id, m.shop_id
+      `SELECT r.id, r.reported_by_id, r.machine_id, s.plant_id, m.shop_id
        FROM maintenance_requests r
        JOIN machines m ON r.machine_id = m.id
        JOIN shops s ON m.shop_id = s.id
@@ -615,6 +626,16 @@ export const getBreakdownHistory = async (
     const breakdown = checkRes.rows[0];
 
     if (req.user?.role !== 'admin') {
+      if (req.user?.role === 'operator') {
+        const permitted = await getOperatorPermittedMachineIds(req.user, activeQuery);
+        if (breakdown.reported_by_id !== req.user.id && !permitted.permittedMachineIds.includes(breakdown.machine_id)) {
+          res.status(403).json({
+            success: false,
+            message: 'Forbidden: You are only authorized to view breakdown history for your assigned machine(s) or reported by you.',
+          });
+          return;
+        }
+      }
       if (req.user?.plant_id && req.user.plant_id !== breakdown.plant_id) {
         res.status(403).json({
           success: false,

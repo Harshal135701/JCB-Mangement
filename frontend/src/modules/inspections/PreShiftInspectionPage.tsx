@@ -718,30 +718,30 @@ export const PreShiftInspectionPage: React.FC = () => {
         </div>
 
         {/* Main Tab Switcher */}
-        <div className="flex items-center gap-2 border-b-2 border-slate-200 pb-2">
+        <div className="flex items-center gap-2 border-b-2 border-slate-200 pb-2 overflow-x-auto">
           <button
             type="button"
             onClick={() => setActiveTab('rules')}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shrink-0 whitespace-nowrap ${
               activeTab === 'rules'
-                ? 'bg-zinc-950 text-white shadow-xs'
-                : 'bg-white text-zinc-600 hover:bg-slate-100 border border-slate-200'
+                ? 'bg-amber-500 text-black shadow-xs font-black border border-amber-600/40'
+                : 'bg-white text-zinc-600 hover:bg-zinc-50 hover:text-zinc-950 border border-zinc-200 font-bold shadow-2xs'
             }`}
           >
-            <Layers className="w-4 h-4 text-jcb-yellow" />
+            <Layers className={`w-4 h-4 ${activeTab === 'rules' ? 'text-black' : 'text-amber-500'}`} />
             <span>Checklist Rules</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('history')}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shrink-0 whitespace-nowrap ${
               activeTab === 'history'
-                ? 'bg-zinc-950 text-white shadow-xs'
-                : 'bg-white text-zinc-600 hover:bg-slate-100 border border-slate-200'
+                ? 'bg-amber-500 text-black shadow-xs font-black border border-amber-600/40'
+                : 'bg-white text-zinc-600 hover:bg-zinc-50 hover:text-zinc-950 border border-zinc-200 font-bold shadow-2xs'
             }`}
           >
-            <FileText className="w-4 h-4 text-jcb-yellow" />
+            <FileText className={`w-4 h-4 ${activeTab === 'history' ? 'text-black' : 'text-amber-500'}`} />
             <span>Submitted Records</span>
           </button>
         </div>
@@ -1834,8 +1834,8 @@ export const PreShiftInspectionPage: React.FC = () => {
                     <h4 className="text-[11px] font-black uppercase text-zinc-600 tracking-wider">
                       Itemized Checklist Responses
                     </h4>
-                    <div className="border border-slate-200 rounded-xl overflow-hidden">
-                      <table className="w-full text-left text-xs border-collapse">
+                    <div className="border border-slate-200 rounded-xl overflow-hidden overflow-x-auto">
+                      <table className="w-full min-w-[480px] text-left text-xs border-collapse">
                         <thead className="bg-slate-100 text-[10px] font-black uppercase text-zinc-500">
                           <tr>
                             <th className="p-2.5">Checkpoint</th>

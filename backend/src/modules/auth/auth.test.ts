@@ -26,6 +26,7 @@ import {
   getRegistrationOptions,
   getRegistrationPlants,
   getRegistrationShops,
+  getRegistrationMachines,
   getPendingOperators,
   approveOperator,
   rejectOperator,
@@ -131,6 +132,8 @@ interface MockUser {
   approved_by?: string | null;
   approved_at?: Date | null;
   rejection_reason?: string | null;
+  requested_machine_id?: string | null;
+  permanent_machine_id?: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -148,10 +151,23 @@ interface MockShop {
   shop_name: string;
 }
 
+interface MockMachine {
+  id: string;
+  machine_code: string;
+  name: string;
+  shop_id: string;
+  status: string;
+  category: string;
+  criticality: string;
+  bay_line_location: string | null;
+  operating_hours?: number;
+}
+
 class MockAuthDatabase {
   public users: Map<string, MockUser> = new Map();
   public plants: Map<string, MockPlant> = new Map();
   public shops: Map<string, MockShop> = new Map();
+  public machines: Map<string, MockMachine> = new Map();
   public queryLog: { text: string; params?: any[] }[] = [];
 
   constructor() {
@@ -162,6 +178,7 @@ class MockAuthDatabase {
     this.users.clear();
     this.plants.clear();
     this.shops.clear();
+    this.machines.clear();
     this.queryLog = [];
 
     // Plants
@@ -193,6 +210,68 @@ class MockAuthDatabase {
     };
     this.shops.set(shop1.id, shop1);
     this.shops.set(shop2.id, shop2);
+
+    // Machines
+    const m1: MockMachine = {
+      id: 'd0000000-0000-0000-0000-000000000001',
+      machine_code: 'JCB-MCH-FAB-01',
+      name: 'CNC Plasma Cutter Alpha',
+      shop_id: shop1.id,
+      status: 'active',
+      category: 'Plasma Cutting',
+      criticality: 'critical',
+      bay_line_location: 'Bay 1',
+      operating_hours: 1200,
+    };
+    const m2: MockMachine = {
+      id: 'd0000000-0000-0000-0000-000000000002',
+      machine_code: 'JCB-MCH-FAB-02',
+      name: 'Hydraulic Press Brake Beta',
+      shop_id: shop1.id,
+      status: 'under_maintenance',
+      category: 'Press Brake',
+      criticality: 'medium',
+      bay_line_location: 'Bay 2',
+      operating_hours: 3200,
+    };
+    const m3: MockMachine = {
+      id: 'd0000000-0000-0000-0000-000000000003',
+      machine_code: 'JCB-MCH-FAB-03',
+      name: 'Robotic Welder Gamma',
+      shop_id: shop1.id,
+      status: 'breakdown',
+      category: 'Robotic Welding',
+      criticality: 'high',
+      bay_line_location: 'Bay 3',
+      operating_hours: 4500,
+    };
+    const m4: MockMachine = {
+      id: 'd0000000-0000-0000-0000-000000000004',
+      machine_code: 'JCB-MCH-FAB-04',
+      name: 'Secondary Plate Shear',
+      shop_id: shop1.id,
+      status: 'inactive',
+      category: 'Shearing',
+      criticality: 'low',
+      bay_line_location: 'Bay 4',
+      operating_hours: 500,
+    };
+    const mPune: MockMachine = {
+      id: 'd0000000-0000-0000-0000-000000000005',
+      machine_code: 'JCB-MCH-PUN-01',
+      name: 'Chassis Alignment Rig',
+      shop_id: shop2.id,
+      status: 'active',
+      category: 'Assembly',
+      criticality: 'high',
+      bay_line_location: 'Bay P1',
+      operating_hours: 900,
+    };
+    this.machines.set(m1.id, m1);
+    this.machines.set(m2.id, m2);
+    this.machines.set(m3.id, m3);
+    this.machines.set(m4.id, m4);
+    this.machines.set(mPune.id, mPune);
 
     // Known hashed password for testing: 'ValidPassword123!'
     // Pre-computed bcrypt hash of 'ValidPassword123!' with 10 rounds
@@ -317,6 +396,7 @@ class MockAuthDatabase {
       }
       const plant = match.plant_id ? this.plants.get(match.plant_id) : undefined;
       const shop = match.shop_id ? this.shops.get(match.shop_id) : undefined;
+      const permMachine = match.permanent_machine_id ? this.machines.get(match.permanent_machine_id) : undefined;
       return {
         rows: [
           {
@@ -334,6 +414,12 @@ class MockAuthDatabase {
             is_active: match.is_active,
             plant_name: plant?.plant_name ?? null,
             shop_name: shop?.shop_name ?? null,
+            requested_machine_id: match.requested_machine_id ?? null,
+            permanent_machine_id: match.permanent_machine_id ?? null,
+            permanent_machine_code: permMachine?.machine_code ?? null,
+            permanent_machine_name: permMachine?.name ?? null,
+            permanent_machine_status: permMachine?.status ?? null,
+            permanent_machine_location: permMachine?.bay_line_location ?? null,
           },
         ],
         rowCount: 1,
@@ -387,6 +473,26 @@ class MockAuthDatabase {
       };
     }
 
+    // 5c. Machine queries
+    if (trimmed.includes('FROM machines') && trimmed.includes('WHERE id = $1')) {
+      const machineId = params[0];
+      const m = this.machines.get(machineId);
+      return {
+        rows: m ? [{ ...m }] : [],
+        rowCount: m ? 1 : 0,
+      };
+    }
+    if (trimmed.includes('FROM machines') && trimmed.includes('WHERE shop_id = $1')) {
+      const shopId = params[0];
+      const shopMachines = Array.from(this.machines.values())
+        .filter((m) => m.shop_id === shopId)
+        .sort((a, b) => a.machine_code.localeCompare(b.machine_code));
+      return {
+        rows: shopMachines,
+        rowCount: shopMachines.length,
+      };
+    }
+
     // 5b. Operator registration lookup queries
     if (trimmed.includes('FROM users WHERE UPPER(employee_code) = UPPER($1)')) {
       const code = String(params[0] || '').trim().toUpperCase();
@@ -433,6 +539,7 @@ class MockAuthDatabase {
         rows: pending.map((u) => {
           const plant = u.plant_id ? this.plants.get(u.plant_id) : undefined;
           const shop = u.shop_id ? this.shops.get(u.shop_id) : undefined;
+          const machine = u.requested_machine_id ? this.machines.get(u.requested_machine_id) : undefined;
           return {
             id: u.id,
             employee_code: u.employee_code,
@@ -448,6 +555,12 @@ class MockAuthDatabase {
             approval_status: u.approval_status,
             is_active: u.is_active,
             created_at: u.created_at,
+            requested_machine_id: u.requested_machine_id ?? null,
+            requested_machine_code: machine?.machine_code ?? null,
+            requested_machine_name: machine?.name ?? null,
+            requested_machine_status: machine?.status ?? null,
+            requested_machine_category: machine?.category ?? null,
+            requested_machine_location: machine?.bay_line_location ?? null,
             plant_name: plant?.plant_name ?? 'Ballabgarh Plant',
             plant_code: plant?.plant_code ?? 'PLANT-BLB-01',
             shop_name: shop?.shop_name ?? 'Fabrication Shop',
@@ -467,6 +580,7 @@ class MockAuthDatabase {
         u.is_active = true;
         u.approved_by = approvedBy;
         u.approved_at = new Date();
+        u.permanent_machine_id = u.permanent_machine_id || u.requested_machine_id || null;
         u.rejection_reason = null;
       }
       return {
@@ -628,20 +742,37 @@ class MockAuthDatabase {
       let designation: string | null = null;
       let shift: string | null = null;
       let password_hash: string;
+      let requested_machine_id: string | null = null;
 
       if (isPendingOperator) {
-        // params: [employee_code, full_name, email, phone, plant_id, shop_id, department, designation, shift, password_hash]
-        employee_code = params[0];
-        full_name = params[1];
-        email = params[2];
-        phone = params[3];
-        plant_id = params[4];
-        shop_id = params[5];
-        department = params[6];
-        designation = params[7];
-        shift = params[8];
-        password_hash = params[9];
-        role = 'operator';
+        if (trimmed.includes('requested_machine_id')) {
+          // params: [employee_code, full_name, email, phone, plant_id, shop_id, department, designation, shift, targetMachineId, password_hash]
+          employee_code = params[0];
+          full_name = params[1];
+          email = params[2];
+          phone = params[3];
+          plant_id = params[4];
+          shop_id = params[5];
+          department = params[6];
+          designation = params[7];
+          shift = params[8];
+          requested_machine_id = params[9] || null;
+          password_hash = params[10];
+          role = 'operator';
+        } else {
+          // params: [employee_code, full_name, email, phone, plant_id, shop_id, department, designation, shift, password_hash]
+          employee_code = params[0];
+          full_name = params[1];
+          email = params[2];
+          phone = params[3];
+          plant_id = params[4];
+          shop_id = params[5];
+          department = params[6];
+          designation = params[7];
+          shift = params[8];
+          password_hash = params[9];
+          role = 'operator';
+        }
       } else {
         employee_code = params[0];
         full_name = params[1];
@@ -681,6 +812,7 @@ class MockAuthDatabase {
         department,
         designation,
         shift,
+        requested_machine_id,
         password_hash,
         is_active: !isPendingOperator,
         approval_status: isPendingOperator ? 'pending' : 'approved',
@@ -2424,6 +2556,163 @@ describe('Authentication & User Governance Module (CMMS Module 0)', () => {
       assert.equal(adminApproveCtx.res.statusCode, 200);
       assert.equal(adminApproveCtx.res.responseData.data.approval_status, 'approved');
       assert.equal(adminApproveCtx.res.responseData.data.is_active, true);
+    });
+
+    it('44. getRegistrationMachines returns all machines (active, inactive, maintenance, breakdown) for a valid shop', async () => {
+      // Valid shop1 query
+      const ctx = createMockContext({}, { shopId: shop1Id });
+      await getRegistrationMachines(ctx.req, ctx.res, ctx.next);
+
+      assert.equal(ctx.res.statusCode, 200);
+      assert.equal(ctx.res.responseData.success, true);
+      assert.ok(Array.isArray(ctx.res.responseData.data));
+      // Shop1 has 4 seeded machines: active, under_maintenance, breakdown, inactive
+      assert.equal(ctx.res.responseData.data.length, 4);
+
+      const statuses = ctx.res.responseData.data.map((m: any) => m.status);
+      assert.ok(statuses.includes('active'));
+      assert.ok(statuses.includes('under_maintenance'));
+      assert.ok(statuses.includes('breakdown'));
+      assert.ok(statuses.includes('inactive'));
+
+      // Non-existent shop returns 404
+      const invalidShopCtx = createMockContext({}, { shopId: 'c0000000-0000-0000-0000-999999999999' });
+      await getRegistrationMachines(invalidShopCtx.req, invalidShopCtx.res, invalidShopCtx.next);
+      assert.equal(invalidShopCtx.res.statusCode, 404);
+
+      // Malformed shopId returns 400
+      const malformedCtx = createMockContext({}, { shopId: 'not-a-uuid' });
+      await getRegistrationMachines(malformedCtx.req, malformedCtx.res, malformedCtx.next);
+      assert.equal(malformedCtx.res.statusCode, 400);
+    });
+
+    it('45. Operator self-registration with requested_machine_id persists machine preference without occupying machine', async () => {
+      const targetMachineId = 'd0000000-0000-0000-0000-000000000001'; // JCB-MCH-FAB-01 in shop1
+      const initialMachineStatus = mockDb.machines.get(targetMachineId)!.status;
+
+      const regPayload = {
+        employee_code: 'JCB-OPR-801',
+        full_name: 'Machine Preferring Operator',
+        email: 'mach.opr@jcb.com',
+        phone: '+91 9888877777',
+        plant_id: plant1Id,
+        shop_id: shop1Id,
+        requested_machine_id: targetMachineId,
+        department: 'Fabrication',
+        designation: 'CNC Operator',
+        shift: 'Shift B',
+        password: 'ValidPassword123!',
+      };
+
+      const ctx = createMockContext(regPayload);
+      await registerOperator(ctx.req, ctx.res, ctx.next);
+
+      assert.equal(ctx.res.statusCode, 201);
+      assert.equal(ctx.res.responseData.success, true);
+      assert.equal(ctx.res.responseData.data.requested_machine_id, targetMachineId);
+      assert.equal(ctx.res.responseData.data.approval_status, 'pending');
+
+      // Crucial business rule: Machine status must NOT change on registration
+      const currentMachineStatus = mockDb.machines.get(targetMachineId)!.status;
+      assert.equal(currentMachineStatus, initialMachineStatus);
+    });
+
+    it('46. Operator self-registration with cross-shop requested_machine_id returns HTTP 400', async () => {
+      // Machine 'd0000000-0000-0000-0000-000000000005' belongs to shop2 (Pune), but registration selects shop1 (Fabrication)
+      const crossShopMachineId = 'd0000000-0000-0000-0000-000000000005';
+
+      const regPayload = {
+        employee_code: 'JCB-OPR-802',
+        full_name: 'Cross Shop Operator',
+        email: 'cross.opr@jcb.com',
+        plant_id: plant1Id,
+        shop_id: shop1Id,
+        requested_machine_id: crossShopMachineId,
+        password: 'ValidPassword123!',
+      };
+
+      const ctx = createMockContext(regPayload);
+      await registerOperator(ctx.req, ctx.res, ctx.next);
+
+      assert.equal(ctx.res.statusCode, 400);
+      assert.equal(ctx.res.responseData.success, false);
+      assert.ok(ctx.res.responseData.message.includes('does not belong to the selected shop floor'));
+    });
+
+    it('47. Operator self-registration with non-existent machine ID returns HTTP 404 and malformed UUID returns HTTP 400', async () => {
+      // Non-existent machine UUID
+      const nonExistentMachineId = 'd0000000-0000-0000-0000-999999999999';
+      const ctx404 = createMockContext({
+        employee_code: 'JCB-OPR-803',
+        full_name: 'Non Existent Machine Op',
+        email: 'nonexist.mch@jcb.com',
+        plant_id: plant1Id,
+        shop_id: shop1Id,
+        requested_machine_id: nonExistentMachineId,
+        password: 'ValidPassword123!',
+      });
+      await registerOperator(ctx404.req, ctx404.res, ctx404.next);
+      assert.equal(ctx404.res.statusCode, 404);
+      assert.ok(ctx404.res.responseData.message.includes('Requested machine does not exist'));
+
+      // Malformed machine ID
+      const ctx400 = createMockContext({
+        employee_code: 'JCB-OPR-804',
+        full_name: 'Malformed Machine Op',
+        email: 'malformed.mch@jcb.com',
+        plant_id: plant1Id,
+        shop_id: shop1Id,
+        requested_machine_id: 'invalid-not-a-uuid',
+        password: 'ValidPassword123!',
+      });
+      await registerOperator(ctx400.req, ctx400.res, ctx400.next);
+      assert.equal(ctx400.res.statusCode, 400);
+      assert.ok(ctx400.res.responseData.message.includes('Invalid requested machine ID format'));
+    });
+
+    it('48. getPendingOperators returns joined machine metadata and manager approval does not occupy machine', async () => {
+      const targetMachineId = 'd0000000-0000-0000-0000-000000000002'; // Under maintenance in shop1
+      const initialMachineStatus = mockDb.machines.get(targetMachineId)!.status;
+
+      // 1. Register with machine preference
+      const regCtx = createMockContext({
+        employee_code: 'JCB-OPR-805',
+        full_name: 'Metadata Check Operator',
+        email: 'meta.check@jcb.com',
+        plant_id: plant1Id,
+        shop_id: shop1Id,
+        requested_machine_id: targetMachineId,
+        password: 'ValidPassword123!',
+      });
+      await registerOperator(regCtx.req, regCtx.res, regCtx.next);
+      assert.equal(regCtx.res.statusCode, 201);
+      const newOpId = regCtx.res.responseData.data.id;
+
+      // 2. Manager views pending operators
+      const listCtx = createMockContext({}, {}, {}, {}, plant1Manager);
+      await getPendingOperators(listCtx.req, listCtx.res, listCtx.next);
+
+      assert.equal(listCtx.res.statusCode, 200);
+      const pendingRecord = listCtx.res.responseData.data.find((u: any) => u.id === newOpId);
+      assert.ok(pendingRecord);
+      assert.equal(pendingRecord.requested_machine_id, targetMachineId);
+      assert.equal(pendingRecord.requested_machine_code, 'JCB-MCH-FAB-02');
+      assert.equal(pendingRecord.requested_machine_name, 'Hydraulic Press Brake Beta');
+      assert.equal(pendingRecord.requested_machine_status, 'under_maintenance');
+      assert.equal(pendingRecord.requested_machine_category, 'Press Brake');
+
+      // 3. Manager approves operator registration
+      const approveCtx = createMockContext({}, { id: newOpId }, {}, {}, plant1Manager);
+      await approveOperator(approveCtx.req, approveCtx.res, approveCtx.next);
+
+      assert.equal(approveCtx.res.statusCode, 200);
+      assert.equal(approveCtx.res.responseData.data.is_active, true);
+      assert.equal(approveCtx.res.responseData.data.approval_status, 'approved');
+      assert.equal(approveCtx.res.responseData.data.permanent_machine_id, targetMachineId);
+
+      // 4. Verify machine status is STILL untouched (registration approval does not assign or occupy)
+      const afterApprovalMachineStatus = mockDb.machines.get(targetMachineId)!.status;
+      assert.equal(afterApprovalMachineStatus, initialMachineStatus);
     });
   });
 });

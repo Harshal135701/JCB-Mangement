@@ -158,13 +158,9 @@ export function resolveNotificationRoute(
   if (woMatch || isWoEntity || path === '/work-orders') {
     const extractedId = (woMatch ? woMatch[1] : null) || entityId;
 
-    // Allowed on /work-orders: admin, manager, technician, store_manager
-    if (['admin', 'manager', 'technician', 'store_manager'].includes(userRole as string)) {
+    // Allowed on /work-orders: admin, manager, technician, store_manager, operator
+    if (['admin', 'manager', 'technician', 'store_manager', 'operator'].includes(userRole as string)) {
       return extractedId ? `/work-orders/${extractedId}` : '/work-orders';
-    }
-    // Operator is not allowed on /work-orders; forward to operator dashboard
-    if (userRole === 'operator') {
-      return extractedId ? `/operator/dashboard?ticketId=${extractedId}` : '/operator/dashboard';
     }
     return fallbackHome;
   }
@@ -195,7 +191,17 @@ export function resolveNotificationRoute(
     return fallbackHome;
   }
 
-  // 7. MACHINES
+  // 7. MACHINES & OPERATOR ASSIGNMENT
+  if (entityType === 'operator_machine_assignment') {
+    if (userRole === 'operator') {
+      return '/operator/dashboard';
+    }
+    if (userRole === 'manager' || userRole === 'admin') {
+      return '/dashboard?tab=machine-requests';
+    }
+    return fallbackHome;
+  }
+
   // Paths: /machines, or entity_type = 'machines'
   if (path === '/machines' || path.startsWith('/machines/') || entityType === 'machines') {
     if (['admin', 'manager', 'technician', 'operator'].includes(userRole as string)) {
@@ -228,7 +234,14 @@ export function resolveNotificationRoute(
     entityType === 'users'
   ) {
     if (userRole === 'admin' || userRole === 'manager') {
-      return path.includes('tab=pending') ? '/users?tab=pending' : '/users';
+      if (
+        entityType === 'user_approval' ||
+        queryString.includes('tab=pending') ||
+        rawUrl.includes('tab=pending')
+      ) {
+        return '/users?tab=pending';
+      }
+      return '/users';
     }
     return fallbackHome;
   }

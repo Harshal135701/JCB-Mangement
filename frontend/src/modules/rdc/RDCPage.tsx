@@ -1293,34 +1293,44 @@ export const RDCPage: React.FC = () => {
       {/* ---------------------------------------------------------------------- */}
       {/* 3. NAVIGATION TABS */}
       {/* ---------------------------------------------------------------------- */}
-      <div className="flex items-center gap-2 border-b border-zinc-200">
+      <div className="flex items-center gap-2 border-b-2 border-zinc-200 pb-2 overflow-x-auto">
         <button
+          type="button"
           onClick={() => setActiveTab('challans')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-black uppercase tracking-wider transition cursor-pointer rounded-t-xl ${
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs uppercase tracking-wider transition cursor-pointer rounded-xl shrink-0 whitespace-nowrap ${
             activeTab === 'challans'
-              ? 'bg-zinc-900 text-white shadow-sm'
-              : 'text-zinc-600 hover:text-black hover:bg-zinc-100'
+              ? 'bg-amber-500 text-black shadow-xs font-black border border-amber-600/40'
+              : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50 hover:text-zinc-950 font-bold shadow-2xs'
           }`}
         >
           <FileText className="w-4 h-4" />
-          Delivery Challans
-          <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${activeTab === 'challans' ? 'bg-jcb-yellow text-black' : 'bg-zinc-200 text-zinc-800'}`}>
+          <span>Delivery Challans</span>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] ${
+            activeTab === 'challans'
+              ? 'bg-black text-amber-400 font-black'
+              : 'bg-zinc-100 text-zinc-700 border border-zinc-200 font-bold'
+          }`}>
             {totalCount}
           </span>
         </button>
 
         <button
+          type="button"
           onClick={() => setActiveTab('overdue')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-black uppercase tracking-wider transition cursor-pointer rounded-t-xl ${
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs uppercase tracking-wider transition cursor-pointer rounded-xl shrink-0 whitespace-nowrap ${
             activeTab === 'overdue'
-              ? 'bg-red-600 text-white shadow-sm'
-              : 'text-zinc-600 hover:text-black hover:bg-zinc-100'
+              ? 'bg-rose-600 text-white shadow-xs font-black border border-rose-700'
+              : 'bg-white text-rose-700 border border-rose-200 hover:bg-rose-50 font-bold shadow-2xs'
           }`}
         >
-          <AlertTriangle className={`w-4 h-4 ${activeTab === 'overdue' ? 'text-white' : 'text-red-600'}`} />
-          Overdue Returns
+          <AlertTriangle className={`w-4 h-4 ${activeTab === 'overdue' ? 'text-white' : 'text-rose-600'}`} />
+          <span>Overdue Returns</span>
           {metrics.overdue_returns > 0 && (
-            <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-red-700 text-white font-black animate-pulse">
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+              activeTab === 'overdue'
+                ? 'bg-white text-rose-700'
+                : 'bg-rose-100 text-rose-800 border border-rose-200'
+            }`}>
               {metrics.overdue_returns}
             </span>
           )}
@@ -1739,8 +1749,8 @@ export const RDCPage: React.FC = () => {
             </button>
           </div>
 
-          <div className="bg-white rounded-2xl border-2 border-zinc-200 shadow-sm overflow-hidden">
-            <table className="w-full text-left text-xs border-collapse">
+          <div className="bg-white rounded-2xl border-2 border-zinc-200 shadow-sm overflow-hidden overflow-x-auto">
+            <table className="w-full min-w-[700px] text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-zinc-50 border-b border-zinc-200 text-zinc-600 uppercase font-black tracking-wider text-[11px]">
                   <th className="py-3.5 px-4">Challan / Gate Pass</th>

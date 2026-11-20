@@ -1430,7 +1430,7 @@ export const TriageQueuePage: React.FC = () => {
                       <span className="text-[10px] font-bold uppercase text-amber-900 block mb-2">
                         Reported Gauges & Telemetry
                       </span>
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         {detailComplaint.pressure && (
                           <div className="flex items-center gap-1.5 font-mono">
                             <Gauge className="w-4 h-4 text-blue-600" />

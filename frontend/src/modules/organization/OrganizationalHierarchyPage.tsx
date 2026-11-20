@@ -302,7 +302,7 @@ export const OrganizationalHierarchyPage: React.FC = () => {
           </div>
 
           {/* Quick Metrics Bar */}
-          <div className="grid grid-cols-3 gap-2 sm:gap-3 shrink-0">
+          <div className="grid grid-cols-3 gap-2 sm:gap-3 shrink-0 w-full sm:w-auto">
             <div className="bg-zinc-50 border border-zinc-200 rounded-xl px-3.5 py-2 text-center">
               <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500 block">
                 Plants

@@ -795,8 +795,8 @@ export const AdminSubmittedRecordsView: React.FC<AdminSubmittedRecordsViewProps>
                     <h4 className="text-[11px] font-black uppercase text-zinc-600 tracking-wider">
                       Recorded Checklist Answers & Operator Remarks
                     </h4>
-                    <div className="border border-slate-200 rounded-xl overflow-hidden">
-                      <table className="w-full text-left text-xs border-collapse">
+                    <div className="border border-slate-200 rounded-xl overflow-hidden overflow-x-auto">
+                      <table className="w-full min-w-[500px] text-left text-xs border-collapse">
                         <thead className="bg-slate-100 text-[10px] font-black uppercase text-zinc-500">
                           <tr>
                             <th className="p-2.5">Checklist Question</th>

@@ -37,7 +37,10 @@ import {
   Plane,
   Train,
   Ship,
-  ShieldCheck
+  ShieldCheck,
+  User,
+  UserCheck,
+  Building2,
 } from 'lucide-react';
 import { EditPRModal } from './components/EditPRModal';
 import { DeletePRModal } from './components/DeletePRModal';
@@ -105,10 +108,18 @@ export interface PurchaseRequisition {
   requested_by?: string;
   requested_by_name?: string | null;
   requested_by_code?: string | null;
+  requested_by_role?: string | null;
+  requested_by_email?: string | null;
+  employee_code?: string | null;
   requester_name?: string;
+  requester_employee_code?: string | null;
   requester_role?: string;
+  shop_name?: string | null;
   approved_by?: string | null;
+  approved_by_name?: string | null;
+  approved_by_code?: string | null;
   approver_name?: string | null;
+  part_category?: string | null;
   rejection_reason?: string | null;
   cancellation_reason?: string | null;
   created_at: string;
@@ -442,6 +453,25 @@ export const ProcurementPage: React.FC = () => {
   const isManager = user?.role === 'manager' || isAdmin || isStoreManager;
   const isTechnician = user?.role === 'technician';
   const userPlantId = user?.plantId || (user as any)?.plant_id || '';
+
+  // Roles permitted to raise spare part purchase requisitions: Manager, Store Manager, Technician
+  const canRaisePR = user?.role === 'manager' || user?.role === 'store_manager' || user?.role === 'technician';
+
+  // Helper for role badge styling across listing and details
+  const getRoleBadge = (role?: string | null) => {
+    switch (role?.toLowerCase()) {
+      case 'manager':
+        return { label: 'Plant Manager', color: 'bg-purple-100 text-purple-900 border-purple-300' };
+      case 'store_manager':
+        return { label: 'Store Manager', color: 'bg-emerald-100 text-emerald-900 border-emerald-300' };
+      case 'technician':
+        return { label: 'Technician', color: 'bg-blue-100 text-blue-900 border-blue-300' };
+      case 'admin':
+        return { label: 'Admin', color: 'bg-amber-100 text-amber-900 border-amber-300' };
+      default:
+        return { label: role ? role.replace('_', ' ') : 'Staff', color: 'bg-zinc-100 text-zinc-800 border-zinc-200' };
+    }
+  };
 
   // Navigation tab state
   const [activeTab, setActiveTab] = useState<'prs' | 'pos' | 'vendors' | 'analytics'>('prs');
@@ -781,7 +811,7 @@ export const ProcurementPage: React.FC = () => {
 
   // Open Create PR Modal with appropriate plant preset
   const handleOpenCreateModal = () => {
-    if (isAdmin) return;
+    if (isAdmin || !canRaisePR) return;
     const defaultPlant = !isAdmin && userPlantId ? userPlantId : (createForm.plant_id || (plants.length > 0 ? plants[0].id : ''));
     setCreateForm((prev) => ({
       ...prev,
@@ -1283,23 +1313,26 @@ export const ProcurementPage: React.FC = () => {
       {/* Main Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 bg-white rounded-2xl border-2 border-zinc-200 shadow-sm">
         <div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="bg-jcb-yellow text-black font-black text-xl px-2.5 py-1 rounded-lg border border-amber-500 shadow-sm">
+              JCB
+            </div>
             <h1 className="text-xl sm:text-2xl font-black text-zinc-950 tracking-tight">
-              BUYING &amp; RECEIVING (PR / PO / GRN)
+              SPARE PART PURCHASE REQUISITIONS
             </h1>
             <span className="bg-zinc-900 text-jcb-yellow text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-              Buying Hub
+              Procurement Hub
             </span>
           </div>
-          {/* <p className="text-xs text-zinc-500 font-medium mt-1">
-            Manage requests to buy spare parts, purchase orders, and receive materials (GRN).
-          </p> */}
+          <p className="text-xs text-zinc-500 font-medium mt-1">
+            Manage spare part purchase requests, review requisitions, issue purchase orders, and receive materials (GRN).
+          </p>
         </div>
 
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2.5 flex-wrap">
           <Link
             to="/inventory"
-            className="px-3.5 py-2 bg-white hover:bg-slate-50 text-zinc-800 rounded-xl text-xs font-bold transition border border-zinc-300 shadow-2xs flex items-center gap-1.5"
+            className="px-3.5 py-2.5 bg-white hover:bg-slate-50 text-zinc-800 rounded-xl text-xs font-bold transition border border-zinc-300 shadow-2xs flex items-center gap-1.5"
           >
             <Package className="w-4 h-4 text-amber-600" />
             <span>Spare Parts Catalog</span>
@@ -1307,7 +1340,7 @@ export const ProcurementPage: React.FC = () => {
           {(isManager || user?.role === 'store_manager') && (
             <Link
               to="/store/dashboard"
-              className="px-3.5 py-2 bg-white hover:bg-slate-50 text-zinc-800 rounded-xl text-xs font-bold transition border border-zinc-300 shadow-2xs flex items-center gap-1.5"
+              className="px-3.5 py-2.5 bg-white hover:bg-slate-50 text-zinc-800 rounded-xl text-xs font-bold transition border border-zinc-300 shadow-2xs flex items-center gap-1.5"
             >
               <Truck className="w-4 h-4 text-emerald-600" />
               <span>Store Dashboard</span>
@@ -1322,20 +1355,20 @@ export const ProcurementPage: React.FC = () => {
                 fetchVendors();
               }
             }}
-            className="p-2.5 text-zinc-600 hover:text-black hover:bg-zinc-100 rounded-xl border border-zinc-200 transition cursor-pointer"
+            className="p-2.5 text-zinc-600 hover:text-black hover:bg-zinc-100 rounded-xl border border-zinc-200 transition cursor-pointer shadow-2xs"
             title="Refresh Requisition Data"
           >
             <RefreshCw className="w-4 h-4" />
           </button>
 
-          {!isAdmin && (
+          {!isAdmin && canRaisePR && (
             <button
               type="button"
               onClick={handleOpenCreateModal}
-              className="bg-jcb-yellow hover:bg-amber-400 text-black text-xs font-black px-4 py-2.5 rounded-xl shadow-xs transition-all flex items-center gap-2 border border-amber-500 hover:shadow-md cursor-pointer"
+              className="bg-jcb-yellow hover:bg-jcb-yellowDark text-black text-xs font-black px-4 py-2.5 rounded-xl shadow transition-all flex items-center gap-2 border border-amber-500 hover:shadow-md cursor-pointer uppercase tracking-wider"
             >
               <Plus className="w-4 h-4 stroke-[3]" />
-              <span>New Purchase Request</span>
+              <span>Raise Purchase Requisition</span>
             </button>
           )}
         </div>
@@ -1402,20 +1435,25 @@ export const ProcurementPage: React.FC = () => {
       )}
 
       {/* Navigation Tabs */}
-      <div className="flex items-center gap-2 border-b-2 border-zinc-200 pb-1 overflow-x-auto">
+      <div className="flex items-center gap-2 border-b-2 border-zinc-200 pb-2 overflow-x-auto">
         <button
+          type="button"
           onClick={() => setActiveTab('prs')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${activeTab === 'prs'
-            ? 'bg-zinc-900 text-white shadow'
-            : 'text-zinc-600 hover:text-black hover:bg-zinc-100'
-            }`}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shrink-0 whitespace-nowrap ${
+            activeTab === 'prs'
+              ? 'bg-amber-500 text-black shadow-xs font-black border border-amber-600/40'
+              : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50 hover:text-zinc-950 font-bold shadow-2xs'
+          }`}
         >
           <ShoppingCart className="w-4 h-4" />
           <span>Part Requests (PRs)</span>
           {totalPRCount > 0 && (
             <span
-              className={`px-2 py-0.5 rounded-full text-[10px] ${activeTab === 'prs' ? 'bg-jcb-yellow text-black' : 'bg-zinc-200 text-zinc-700'
-                }`}
+              className={`px-2 py-0.5 rounded-full text-[10px] ${
+                activeTab === 'prs'
+                  ? 'bg-black text-amber-400 font-black'
+                  : 'bg-zinc-100 text-zinc-700 border border-zinc-200 font-bold'
+              }`}
             >
               {totalPRCount}
             </span>
@@ -1423,17 +1461,22 @@ export const ProcurementPage: React.FC = () => {
         </button>
 
         <button
+          type="button"
           onClick={() => setActiveTab('pos')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${activeTab === 'pos'
-            ? 'bg-zinc-900 text-white shadow'
-            : 'text-zinc-600 hover:text-black hover:bg-zinc-100'
-            }`}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shrink-0 whitespace-nowrap ${
+            activeTab === 'pos'
+              ? 'bg-amber-500 text-black shadow-xs font-black border border-amber-600/40'
+              : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50 hover:text-zinc-950 font-bold shadow-2xs'
+          }`}
         >
           <FileText className="w-4 h-4" />
           <span>Purchase Orders (POs)</span>
           <span
-            className={`px-2 py-0.5 rounded-full text-[10px] ${activeTab === 'pos' ? 'bg-blue-400 text-black' : 'bg-zinc-200 text-zinc-700'
-              }`}
+            className={`px-2 py-0.5 rounded-full text-[10px] ${
+              activeTab === 'pos'
+                ? 'bg-black text-amber-400 font-black'
+                : 'bg-zinc-100 text-zinc-700 border border-zinc-200 font-bold'
+            }`}
           >
             {dashboardData?.summary?.active_pos ?? 0}
           </span>
@@ -1441,11 +1484,13 @@ export const ProcurementPage: React.FC = () => {
 
         {isManager && (
           <button
+            type="button"
             onClick={() => setActiveTab('vendors')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${activeTab === 'vendors'
-              ? 'bg-zinc-900 text-white shadow'
-              : 'text-zinc-600 hover:text-black hover:bg-zinc-100'
-              }`}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shrink-0 whitespace-nowrap ${
+              activeTab === 'vendors'
+                ? 'bg-amber-500 text-black shadow-xs font-black border border-amber-600/40'
+                : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50 hover:text-zinc-950 font-bold shadow-2xs'
+            }`}
           >
             <Building className="w-4 h-4" />
             <span>Vendors / Suppliers</span>
@@ -1454,15 +1499,23 @@ export const ProcurementPage: React.FC = () => {
 
         {isManager && (dashboardData?.summary?.overdue_pos ?? 0) > 0 && (
           <button
+            type="button"
             onClick={() => setActiveTab('analytics')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${activeTab === 'analytics'
-              ? 'bg-red-600 text-white shadow'
-              : 'text-red-700 hover:bg-red-50'
-              }`}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shrink-0 whitespace-nowrap ${
+              activeTab === 'analytics'
+                ? 'bg-rose-600 text-white shadow-xs font-black border border-rose-700'
+                : 'bg-white text-rose-700 border border-rose-200 hover:bg-rose-50 font-bold shadow-2xs'
+            }`}
           >
             <AlertTriangle className="w-4 h-4" />
             <span>Overdue Alerts</span>
-            <span className="bg-white text-red-700 px-2 py-0.5 rounded-full text-[10px] font-black">
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                activeTab === 'analytics'
+                  ? 'bg-white text-rose-700'
+                  : 'bg-rose-100 text-rose-800 border border-rose-200'
+              }`}
+            >
               {dashboardData?.summary?.overdue_pos ?? 0}
             </span>
           </button>
@@ -1547,10 +1600,11 @@ export const ProcurementPage: React.FC = () => {
               <table className="w-full text-left text-xs">
                 <thead className="bg-zinc-100 border-b border-zinc-200 text-zinc-700 font-black uppercase tracking-wider">
                   <tr>
-                    <th className="px-5 py-3.5">PR Details</th>
+                    <th className="px-5 py-3.5">Requisition &amp; Date</th>
+                    <th className="px-5 py-3.5">Raised By</th>
                     <th className="px-5 py-3.5">Spare Part Catalog</th>
                     <th className="px-5 py-3.5">Quantities</th>
-                    <th className="px-5 py-3.5">Machine &amp; Plant</th>
+                    <th className="px-5 py-3.5">Plant &amp; Shop</th>
                     <th className="px-5 py-3.5">Urgency</th>
                     <th className="px-5 py-3.5">Workflow Status</th>
                     <th className="px-5 py-3.5 text-right">Actions</th>
@@ -1559,7 +1613,7 @@ export const ProcurementPage: React.FC = () => {
                 <tbody className="divide-y divide-zinc-100">
                   {loadingPRs ? (
                     <tr>
-                      <td colSpan={7} className="px-6 py-12 text-center text-zinc-400">
+                      <td colSpan={8} className="px-6 py-12 text-center text-zinc-400">
                         <div className="flex items-center justify-center gap-2">
                           <RefreshCw className="w-4 h-4 animate-spin text-jcb-yellow" />
                           <span className="font-bold">Loading purchase requisitions...</span>
@@ -1568,19 +1622,20 @@ export const ProcurementPage: React.FC = () => {
                     </tr>
                   ) : prs.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-6 py-12 text-center text-zinc-400">
+                      <td colSpan={8} className="px-6 py-12 text-center text-zinc-400">
                         <div className="max-w-xs mx-auto space-y-2">
                           <ShoppingCart className="w-8 h-8 mx-auto text-zinc-300" />
                           <div className="font-black text-zinc-800">No Purchase Requisitions Found</div>
                           <p className="text-xs text-zinc-500 font-medium">
                             No requisitions match your active search or filter criteria.
                           </p>
-                          {!isAdmin && (
+                          {!isAdmin && canRaisePR && (
                             <button
+                              type="button"
                               onClick={handleOpenCreateModal}
-                              className="bg-jcb-yellow text-black text-xs font-black px-3.5 py-1.5 rounded-lg shadow-sm mt-2 cursor-pointer"
+                              className="bg-jcb-yellow hover:bg-jcb-yellowDark text-black text-xs font-black px-4 py-2 rounded-xl shadow transition border border-amber-500 mt-2 cursor-pointer uppercase tracking-wider"
                             >
-                              Raise PR Now
+                              Raise Purchase Requisition
                             </button>
                           )}
                         </div>
@@ -1604,10 +1659,10 @@ export const ProcurementPage: React.FC = () => {
                         <tr key={pr.id} className="hover:bg-zinc-50/80 transition">
                           {/* PR Details */}
                           <td className="px-5 py-3.5">
-                            <div className="font-mono text-xs font-black text-amber-800">
+                            <div className="font-mono text-xs font-black text-amber-900 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 inline-block">
                               {pr.pr_number}
                             </div>
-                            <div className="text-[10px] text-zinc-400">
+                            <div className="text-[10px] text-zinc-500 mt-1">
                               {new Date(pr.created_at).toLocaleDateString('en-IN', {
                                 day: '2-digit',
                                 month: 'short',
@@ -1619,6 +1674,26 @@ export const ProcurementPage: React.FC = () => {
                                 PO: {pr.po_number}
                               </div>
                             )}
+                          </td>
+
+                          {/* Raised By */}
+                          <td className="px-5 py-3.5">
+                            <div className="font-bold text-xs text-zinc-950 flex items-center gap-1.5">
+                              <User className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+                              <span>{pr.requested_by_name || pr.requester_name || 'Staff Member'}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                              <span className="font-mono text-[10px] font-bold text-zinc-600 bg-zinc-100 px-1.5 py-0.5 rounded border border-zinc-200">
+                                {pr.requested_by_code || pr.requester_employee_code || pr.employee_code || 'ID: —'}
+                              </span>
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border ${
+                                  getRoleBadge(pr.requested_by_role || pr.requester_role).color
+                                }`}
+                              >
+                                {getRoleBadge(pr.requested_by_role || pr.requester_role).label}
+                              </span>
+                            </div>
                           </td>
 
                           {/* Spare Part */}
@@ -1656,16 +1731,20 @@ export const ProcurementPage: React.FC = () => {
                             </div>
                           </td>
 
-                          {/* Machine & Plant */}
+                          {/* Plant & Shop */}
                           <td className="px-5 py-3.5">
-                            <div className="font-semibold text-zinc-900">
-                              {pr.machine_code || 'General Stock'}
+                            <div className="font-bold text-xs text-zinc-900 flex items-center gap-1">
+                              <Building2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                              <span>{pr.plant_name || 'Plant Scoped'}</span>
                             </div>
-                            <div className="text-[10px] text-zinc-500">
-                              {pr.plant_name || 'Plant Scoped'}
+                            <div className="text-[11px] text-zinc-600 font-medium mt-0.5">
+                              Shop: <span className="text-zinc-900 font-bold">{pr.shop_name || 'Central Stores'}</span>
+                            </div>
+                            <div className="text-[10px] text-zinc-400 mt-0.5">
+                              {pr.machine_code ? `Machine: ${pr.machine_code}` : 'General Stock Refill'}
                             </div>
                             {pr.wo_number && (
-                              <div className="font-mono text-[10px] text-amber-700">
+                              <div className="font-mono text-[10px] font-bold text-amber-800 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200 inline-block mt-0.5">
                                 WO: {pr.wo_number}
                               </div>
                             )}
@@ -1978,6 +2057,32 @@ export const ProcurementPage: React.FC = () => {
             </div>
 
             <form onSubmit={handleCreatePR} className="p-6 space-y-4 overflow-y-auto">
+              {/* Authenticated Requester Identity Banner */}
+              <div className="bg-amber-50/70 border border-amber-300/80 rounded-xl p-3 flex items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-1.5 bg-amber-500 text-black rounded-lg font-black shrink-0">
+                    <UserCheck className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="font-black text-zinc-950 flex items-center gap-1.5 flex-wrap">
+                      <span>{user?.fullName || (user as any)?.full_name || 'Authenticated Staff'}</span>
+                      <span className="font-mono text-[10px] font-bold text-zinc-600 bg-white px-1.5 py-0.2 rounded border border-zinc-200">
+                        {user?.employeeCode || (user as any)?.employee_code || 'ID: —'}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-zinc-500 flex items-center gap-1.5 mt-0.5">
+                      <span className={`px-1.5 py-0.2 rounded font-black uppercase text-[9px] border ${getRoleBadge(user?.role).color}`}>
+                        {getRoleBadge(user?.role).label}
+                      </span>
+                      <span>• Authenticated Session ID Auto-Captured</span>
+                    </div>
+                  </div>
+                </div>
+                <span className="hidden sm:inline-block text-[10px] font-bold text-amber-800 bg-amber-200/60 px-2 py-0.5 rounded border border-amber-300 shrink-0">
+                  Auto-Captured
+                </span>
+              </div>
+
               {/* Plant Facility Selector */}
               <div>
                 <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1 flex items-center justify-between">
@@ -2157,7 +2262,7 @@ export const ProcurementPage: React.FC = () => {
                 <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
                   Procurement Urgency *
                 </label>
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {(['critical', 'high', 'medium', 'low'] as PRUrgency[]).map((urg) => (
                     <button
                       type="button"
@@ -2204,7 +2309,7 @@ export const ProcurementPage: React.FC = () => {
                   disabled={actionLoading}
                   className="bg-jcb-yellow hover:bg-jcb-yellowDark text-black font-black px-6 py-2 rounded-xl text-xs uppercase tracking-wider transition shadow border border-amber-500 disabled:opacity-50"
                 >
-                  {actionLoading ? 'Submitting...' : 'Authorize Requisition'}
+                  {actionLoading ? 'Submitting...' : 'Submit Purchase Requisition'}
                 </button>
               </div>
             </form>
@@ -3090,21 +3195,107 @@ export const ProcurementPage: React.FC = () => {
               </div>
 
               <div className="p-6 space-y-6 overflow-y-auto">
-                {/* Header Info Banner */}
-                <div className="flex items-center justify-between p-4 bg-zinc-50 rounded-xl border border-zinc-200 flex-wrap gap-2">
-                  <div>
-                    <span className="text-[10px] font-bold text-zinc-400 uppercase block">Status</span>
-                    <span
-                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${getStatusBadge(selectedPRForDetails.status).color
-                        }`}
-                    >
-                      {getStatusBadge(selectedPRForDetails.status).label}
+                {/* 1. Requester Identity & Governance Banner */}
+                <div className="bg-amber-50/70 border-2 border-amber-300/80 rounded-2xl p-4 shadow-xs">
+                  <div className="flex items-center justify-between mb-3 border-b border-amber-200 pb-2 flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 bg-amber-500 text-black rounded-lg font-black shadow-xs">
+                        <UserCheck className="w-4 h-4" />
+                      </div>
+                      <span className="text-xs font-black text-zinc-950 uppercase tracking-wider">
+                        Requisition Origin &amp; Requester Identity
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-bold text-amber-900 bg-amber-200/80 px-2.5 py-0.5 rounded-full border border-amber-300">
+                      Logged from Authenticated Session
                     </span>
                   </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                    <div>
+                      <span className="text-[10px] text-zinc-500 font-bold uppercase block">Requester Name</span>
+                      <div className="font-black text-zinc-950 text-sm mt-0.5">
+                        {selectedPRForDetails.requested_by_name || selectedPRForDetails.requester_name || 'Staff Member'}
+                      </div>
+                      {selectedPRForDetails.requested_by_email && (
+                        <div className="text-[11px] text-zinc-500 truncate mt-0.5">
+                          {selectedPRForDetails.requested_by_email}
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <span className="text-[10px] text-zinc-500 font-bold uppercase block">Employee ID</span>
+                      <div className="font-mono font-bold text-zinc-900 bg-white px-2 py-1 rounded-lg border border-zinc-200 inline-block mt-0.5 shadow-2xs">
+                        {selectedPRForDetails.requested_by_code || selectedPRForDetails.requester_employee_code || selectedPRForDetails.employee_code || '—'}
+                      </div>
+                    </div>
+
+                    <div>
+                      <span className="text-[10px] text-zinc-500 font-bold uppercase block">Requester Role</span>
+                      <span
+                        className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border mt-0.5 ${
+                          getRoleBadge(selectedPRForDetails.requested_by_role || selectedPRForDetails.requester_role).color
+                        }`}
+                      >
+                        {getRoleBadge(selectedPRForDetails.requested_by_role || selectedPRForDetails.requester_role).label}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="text-[10px] text-zinc-500 font-bold uppercase block">Request Date &amp; Time</span>
+                      <div className="font-bold text-zinc-900 mt-0.5">
+                        {new Date(selectedPRForDetails.created_at).toLocaleString('en-IN', {
+                          dateStyle: 'medium',
+                          timeStyle: 'short',
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Plant, Shop, Requisition Number & Status */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-xs mt-3 pt-3 border-t border-amber-200">
+                    <div>
+                      <span className="text-[10px] text-zinc-500 font-bold uppercase block">Requisition Number</span>
+                      <div className="font-mono font-black text-amber-900 text-sm mt-0.5">
+                        {selectedPRForDetails.pr_number}
+                      </div>
+                    </div>
+
+                    <div>
+                      <span className="text-[10px] text-zinc-500 font-bold uppercase block">Target Plant</span>
+                      <div className="font-bold text-zinc-900 flex items-center gap-1 mt-0.5">
+                        <Building2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                        <span>{selectedPRForDetails.plant_name || 'Assigned Plant'}</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <span className="text-[10px] text-zinc-500 font-bold uppercase block">Target Shop / Area</span>
+                      <div className="font-bold text-zinc-900 mt-0.5">
+                        {selectedPRForDetails.shop_name || 'Central Stores / Maintenance Bay'}
+                      </div>
+                    </div>
+
+                    <div>
+                      <span className="text-[10px] text-zinc-500 font-bold uppercase block">Requisition Status</span>
+                      <span
+                        className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border mt-0.5 ${
+                          getStatusBadge(selectedPRForDetails.status).color
+                        }`}
+                      >
+                        {getStatusBadge(selectedPRForDetails.status).label}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Procurement & Fulfillment Progress */}
+                <div className="flex items-center justify-between p-4 bg-zinc-50 rounded-xl border border-zinc-200 flex-wrap gap-2">
                   <div>
-                    <span className="text-[10px] font-bold text-zinc-400 uppercase block">Urgency</span>
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase block">Procurement Urgency</span>
                     <span
-                      className={`px-2 py-0.5 rounded text-[10px] uppercase ${getUrgencyBadge(
+                      className={`px-2.5 py-0.5 rounded text-[10px] font-black uppercase ${getUrgencyBadge(
                         selectedPRForDetails.urgency
                       )}`}
                     >
@@ -3123,33 +3314,38 @@ export const ProcurementPage: React.FC = () => {
                       {selectedPRForDetails.po_number || 'Not Issued'}
                     </span>
                   </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase block">Approval Authority</span>
+                    <div className="font-bold text-xs text-zinc-900">
+                      {selectedPRForDetails.approved_by_name || selectedPRForDetails.approver_name || 'Pending Review'}
+                    </div>
+                  </div>
                 </div>
 
-                {/* Component & Asset Details */}
-                <div className="grid grid-cols-2 gap-4 text-xs">
+                {/* 3. Component & Machine Asset Specifications */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs p-4 bg-white rounded-xl border border-zinc-200">
                   <div>
-                    <span className="text-[10px] text-zinc-400 font-bold uppercase block">Spare Part</span>
-                    <div className="font-black text-zinc-900">{selectedPRForDetails.part_name}</div>
-                    <div className="font-mono text-zinc-600 font-semibold">{selectedPRForDetails.part_number}</div>
+                    <span className="text-[10px] text-zinc-400 font-bold uppercase block">Spare Part SKU</span>
+                    <div className="font-black text-zinc-900 text-sm">{selectedPRForDetails.part_name}</div>
+                    <div className="font-mono text-zinc-700 font-bold">{selectedPRForDetails.part_number}</div>
                     {selectedPRForDetails.sku && (
-                      <div className="text-[10px] text-zinc-400 font-mono">SKU: {selectedPRForDetails.sku}</div>
+                      <div className="text-[10px] text-zinc-500 font-mono mt-0.5">Catalog SKU: {selectedPRForDetails.sku}</div>
+                    )}
+                    {selectedPRForDetails.part_category && (
+                      <div className="text-[10px] text-zinc-500 mt-0.5">Category: {selectedPRForDetails.part_category}</div>
                     )}
                   </div>
                   <div>
-                    <span className="text-[10px] text-zinc-400 font-bold uppercase block">Target Machine</span>
-                    <div className="font-black text-zinc-900">
+                    <span className="text-[10px] text-zinc-400 font-bold uppercase block">Target Equipment Asset</span>
+                    <div className="font-black text-zinc-900 text-sm">
                       {selectedPRForDetails.machine_code || 'General Stock Refill'}
                     </div>
-                    <div className="text-zinc-500 font-medium">{selectedPRForDetails.machine_name}</div>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-zinc-400 font-bold uppercase block">Requester</span>
-                    <div className="font-bold text-zinc-900">{selectedPRForDetails.requester_name || 'Technician'}</div>
-                    <div className="text-[10px] text-zinc-500 uppercase">{selectedPRForDetails.requester_role}</div>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-zinc-400 font-bold uppercase block">Approved By</span>
-                    <div className="font-bold text-zinc-900">{selectedPRForDetails.approver_name || 'Pending Review'}</div>
+                    <div className="text-zinc-600 font-medium">{selectedPRForDetails.machine_name}</div>
+                    {selectedPRForDetails.wo_number && (
+                      <div className="font-mono text-[11px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 inline-block mt-1">
+                        Work Order: {selectedPRForDetails.wo_number}
+                      </div>
+                    )}
                   </div>
                 </div>
 

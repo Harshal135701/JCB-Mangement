@@ -153,8 +153,8 @@ export const PurchaseOrderPrintView: React.FC<PurchaseOrderPrintViewProps> = ({
           </div>
 
           {/* Line Items Table */}
-          <div className="border border-zinc-300 rounded-xl overflow-hidden mb-6">
-            <table className="w-full text-left text-xs">
+          <div className="border border-zinc-300 rounded-xl overflow-hidden mb-6 overflow-x-auto">
+            <table className="w-full min-w-[600px] text-left text-xs">
               <thead className="bg-zinc-100 border-b border-zinc-300 font-black text-zinc-800 uppercase tracking-wider">
                 <tr>
                   <th className="px-4 py-2.5 text-center w-12">#</th>

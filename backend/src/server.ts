@@ -29,6 +29,18 @@ export const io = new SocketIOServer(server, {
 // Initialize authenticated Socket.IO gateway with JWT validation & secure room routing
 initSocketServer(io);
 
+// Keep-alive settings to prevent ECONNRESET race conditions with reverse proxies & Vite dev proxy
+server.keepAliveTimeout = 65000;
+server.headersTimeout = 66000;
+
+// Process safety: prevent unhandled exceptions or rejected promises from abruptly terminating the process
+process.on('unhandledRejection', (reason: any) => {
+  console.error('[Process Unhandled Rejection]:', reason?.message || reason);
+});
+process.on('uncaughtException', (err: any) => {
+  console.error('[Process Uncaught Exception]:', err?.message || err);
+});
+
 if (require.main === module) {
   server.listen(config.port, () => {
     console.log(`=======================================================`);

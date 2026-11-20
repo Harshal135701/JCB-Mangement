@@ -27,7 +27,8 @@ mobile/android/.gradle/
 mobile/android/app/build/
 mobile/android/build/
 *.keystore
-!debug.keystore
+*.jks
+*.apk
 
 # Editor & OS files
 .DS_Store
@@ -37,5 +38,6 @@ Thumbs.db
 *.swp
 temp_apk/
 window_dump*.xml
+
 
 

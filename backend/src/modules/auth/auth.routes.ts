@@ -11,6 +11,7 @@ import {
   getRegistrationOptions,
   getRegistrationPlants,
   getRegistrationShops,
+  getRegistrationMachines,
   getPendingOperators,
   approveOperator,
   rejectOperator,
@@ -30,6 +31,7 @@ router.post('/register-operator', loginRateLimiter, registerOperator);
 router.get('/registration-options', getRegistrationOptions);
 router.get('/plants', getRegistrationPlants);
 router.get('/plants/:plantId/shops', getRegistrationShops);
+router.get('/shops/:shopId/machines', getRegistrationMachines);
 
 // Authenticated Session Endpoints
 router.get('/profile', authenticateJWT, getProfile);

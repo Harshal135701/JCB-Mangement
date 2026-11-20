@@ -1130,79 +1130,102 @@ export const StoreManagerDashboard: React.FC = () => {
       {/* =========================================================================
           TAB NAVIGATION BAR
           ========================================================================= */}
-      <div className="flex items-center gap-2 border-b-2 border-zinc-200 pb-1 overflow-x-auto">
+      <div className="flex items-center gap-2 border-b-2 border-zinc-200 pb-2 overflow-x-auto">
         <button
+          type="button"
           onClick={() => setActiveTab('low_stock')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shrink-0 whitespace-nowrap ${
             activeTab === 'low_stock'
-              ? 'bg-zinc-950 text-white shadow-xs'
-              : 'text-zinc-600 hover:text-black hover:bg-zinc-100'
+              ? 'bg-amber-500 text-black shadow-xs font-black border border-amber-600/40'
+              : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50 hover:text-zinc-950 font-bold shadow-2xs'
           }`}
         >
-          <AlertTriangle className={`w-4 h-4 ${summary.low_stock_items_count > 0 ? 'text-amber-400' : ''}`} />
+          <AlertTriangle className={`w-4 h-4 ${activeTab === 'low_stock' ? 'text-black' : summary.low_stock_items_count > 0 ? 'text-amber-500' : 'text-zinc-500'}`} />
           <span>Items to Reorder</span>
           {summary.low_stock_items_count > 0 && (
-            <span className="bg-red-600 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold">
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                activeTab === 'low_stock'
+                  ? 'bg-black text-amber-400'
+                  : 'bg-red-600 text-white'
+              }`}
+            >
               {summary.low_stock_items_count}
             </span>
           )}
         </button>
 
         <button
+          type="button"
           onClick={() => setActiveTab('transfers')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shrink-0 whitespace-nowrap ${
             activeTab === 'transfers'
-              ? 'bg-zinc-950 text-white shadow-xs'
-              : 'text-zinc-600 hover:text-black hover:bg-zinc-100'
+              ? 'bg-amber-500 text-black shadow-xs font-black border border-amber-600/40'
+              : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50 hover:text-zinc-950 font-bold shadow-2xs'
           }`}
         >
-          <ArrowRightLeft className="w-4 h-4 text-cyan-400" />
+          <ArrowRightLeft className={`w-4 h-4 ${activeTab === 'transfers' ? 'text-black' : 'text-cyan-600'}`} />
           <span>Move Stock (Bins)</span>
           {(dashboard?.transfers?.active_transfers_count ?? 0) > 0 && (
-            <span className="bg-cyan-600 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold">
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                activeTab === 'transfers'
+                  ? 'bg-black text-amber-400'
+                  : 'bg-cyan-100 text-cyan-800 border border-cyan-200'
+              }`}
+            >
               {dashboard?.transfers?.active_transfers_count}
             </span>
           )}
         </button>
 
         <button
+          type="button"
           onClick={() => setActiveTab('damaged')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shrink-0 whitespace-nowrap ${
             activeTab === 'damaged'
-              ? 'bg-zinc-950 text-white shadow-xs'
-              : 'text-zinc-600 hover:text-black hover:bg-zinc-100'
+              ? 'bg-amber-500 text-black shadow-xs font-black border border-amber-600/40'
+              : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50 hover:text-zinc-950 font-bold shadow-2xs'
           }`}
         >
-          <ShieldAlert className="w-4 h-4 text-purple-400" />
+          <ShieldAlert className={`w-4 h-4 ${activeTab === 'damaged' ? 'text-black' : 'text-purple-600'}`} />
           <span>Damaged Stock</span>
           {summary.total_quarantined_stock > 0 && (
-            <span className="bg-purple-600 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold">
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                activeTab === 'damaged'
+                  ? 'bg-black text-amber-400'
+                  : 'bg-purple-100 text-purple-800 border border-purple-200'
+              }`}
+            >
               {summary.total_quarantined_stock}
             </span>
           )}
         </button>
 
         <button
+          type="button"
           onClick={() => setActiveTab('reports')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shrink-0 whitespace-nowrap ${
             activeTab === 'reports'
-              ? 'bg-zinc-950 text-white shadow-xs'
-              : 'text-zinc-600 hover:text-black hover:bg-zinc-100'
+              ? 'bg-amber-500 text-black shadow-xs font-black border border-amber-600/40'
+              : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50 hover:text-zinc-950 font-bold shadow-2xs'
           }`}
         >
-          <IndianRupee className="w-4 h-4 text-amber-400" />
+          <IndianRupee className={`w-4 h-4 ${activeTab === 'reports' ? 'text-black' : 'text-amber-600'}`} />
           <span>Stock Reports & Value</span>
         </button>
 
         <button
+          type="button"
           onClick={() => setActiveTab('transactions')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer ${
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shrink-0 whitespace-nowrap ${
             activeTab === 'transactions'
-              ? 'bg-zinc-950 text-white shadow-xs'
-              : 'text-zinc-600 hover:text-black hover:bg-zinc-100'
+              ? 'bg-amber-500 text-black shadow-xs font-black border border-amber-600/40'
+              : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50 hover:text-zinc-950 font-bold shadow-2xs'
           }`}
         >
-          <Clock className="w-4 h-4 text-emerald-400" />
+          <Clock className={`w-4 h-4 ${activeTab === 'transactions' ? 'text-black' : 'text-emerald-600'}`} />
           <span>Stock History</span>
         </button>
       </div>
@@ -2156,7 +2179,7 @@ export const StoreManagerDashboard: React.FC = () => {
               </div>
 
               {adjustPart && (
-                <div className="grid grid-cols-4 gap-2 p-3 bg-zinc-100 rounded-xl text-center text-xs">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 bg-zinc-100 rounded-xl text-center text-xs">
                   <div>
                     <div className="text-[10px] font-bold text-zinc-500 uppercase">Physical</div>
                     <div className="font-mono font-black text-sm text-zinc-950">{adjustPart.current_physical_stock}</div>
@@ -2752,7 +2775,7 @@ export const StoreManagerDashboard: React.FC = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
                     Category *
@@ -2797,7 +2820,7 @@ export const StoreManagerDashboard: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
                     Storage Bin Location *
@@ -2895,7 +2918,7 @@ export const StoreManagerDashboard: React.FC = () => {
           ========================================================================= */}
       {selectedPartForDetails && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-xs">
-          <div className="bg-white w-full max-w-lg rounded-2xl border-2 border-zinc-300 shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-white w-full max-w-lg rounded-2xl border-2 border-zinc-300 shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-zinc-200 pb-3">
               <div>
                 <div className="text-[10px] font-mono font-bold text-amber-700 uppercase">Part Master Specification</div>
@@ -2920,7 +2943,7 @@ export const StoreManagerDashboard: React.FC = () => {
               </div>
 
               {/* Stock Balance Quad */}
-              <div className="grid grid-cols-4 gap-2 p-3 bg-zinc-100 rounded-xl text-center">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 bg-zinc-100 rounded-xl text-center">
                 <div>
                   <div className="text-[10px] font-bold text-zinc-500 uppercase">Physical</div>
                   <div className="font-mono font-black text-base text-zinc-950">{selectedPartForDetails.current_physical_stock ?? 0}</div>

@@ -34,6 +34,15 @@ export const createWorkOrderFromComplaint = async (
   next: NextFunction
 ): Promise<void> => {
   try {
+    const userRole = req.user?.role;
+    if (userRole && userRole !== 'admin' && userRole !== 'manager') {
+      res.status(403).json({
+        success: false,
+        message: `Role '${userRole}' is not authorized to create or allocate work orders.`,
+      });
+      return;
+    }
+
     const managerId = req.user?.id;
     const complaint_id = req.body.complaint_id || req.body.ticket_id;
     const { technician_id, sla_hours = 4, work_instructions, is_major_breakdown = false } = req.body || {};

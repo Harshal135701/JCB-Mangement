@@ -11,6 +11,7 @@ import {
   Cpu,
   Filter,
   ListChecks,
+  Wrench,
 } from 'lucide-react';
 import { PMPlan } from '../types';
 
@@ -20,6 +21,7 @@ interface PMPlanManagementTableProps {
   onToggleStatus: (plan: PMPlan) => void;
   onViewPlanDetail: (plan: PMPlan) => void;
   onCreateNewPlan: () => void;
+  onExecutePlan?: (plan: PMPlan) => void;
   canManage: boolean;
   loading?: boolean;
 }
@@ -30,6 +32,7 @@ export const PMPlanManagementTable: React.FC<PMPlanManagementTableProps> = ({
   onToggleStatus,
   onViewPlanDetail,
   onCreateNewPlan,
+  onExecutePlan,
   canManage,
   loading = false,
 }) => {
@@ -176,6 +179,17 @@ export const PMPlanManagementTable: React.FC<PMPlanManagementTableProps> = ({
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1.5">
+                        {onExecutePlan && plan.is_active && (
+                          <button
+                            type="button"
+                            onClick={() => onExecutePlan(plan)}
+                            title="Execute PM Plan on Eligible Machine"
+                            className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-black text-[11px] font-bold rounded flex items-center gap-1 transition shadow-xs cursor-pointer"
+                          >
+                            <Wrench className="w-3.5 h-3.5" />
+                            <span>Execute</span>
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => onViewPlanDetail(plan)}

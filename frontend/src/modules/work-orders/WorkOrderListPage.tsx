@@ -13,6 +13,7 @@ import {
   ArrowUpDown
 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { OperatorMaintenanceStatusView } from './OperatorMaintenanceStatusView';
 
 interface Plant {
   id: string;
@@ -21,7 +22,7 @@ interface Plant {
   status?: string;
 }
 
-export const WorkOrderListPage: React.FC = () => {
+const SupervisorWorkOrderListPage: React.FC = () => {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const userPlantId = user?.plantId || (user as any)?.plant_id || '';
@@ -550,4 +551,12 @@ export const WorkOrderListPage: React.FC = () => {
       </div>
     </div>
   );
+};
+
+export const WorkOrderListPage: React.FC = () => {
+  const { user } = useAuth();
+  if (user?.role === 'operator') {
+    return <OperatorMaintenanceStatusView />;
+  }
+  return <SupervisorWorkOrderListPage />;
 };

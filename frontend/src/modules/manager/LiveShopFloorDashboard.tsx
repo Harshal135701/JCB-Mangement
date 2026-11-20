@@ -1,140 +1,118 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Link } from 'react-router-dom';
 import apiClient from '../../api/client';
+import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import {
-  CheckCircle2,
-  Wrench,
-  ClipboardList,
-  Clock,
-  RefreshCw,
-  AlertCircle,
+  Cpu,
+  Activity,
   AlertOctagon,
-  Package,
-  Radio,
-  HardHat,
-  ArrowRight,
+  Wrench,
+  AlertTriangle,
+  CheckCircle2,
+  AlertCircle,
 } from 'lucide-react';
 
-// Dashboard Components
-import { DashboardHeader } from '../../components/dashboard/DashboardHeader';
+// Reusable Dashboard Components (Matching Admin Dashboard)
 import { TopKPICard } from '../../components/dashboard/TopKPICard';
-import { CriticalAlertsBanner } from '../../components/dashboard/CriticalAlertsBanner';
-import { MachineStatusDonut } from '../../components/dashboard/MachineStatusDonut';
-import { MaintenanceTrendChart, TrendDataPoint } from '../../components/dashboard/MaintenanceTrendChart';
+import { MachineStatusDonut, DonutSegment } from '../../components/dashboard/MachineStatusDonut';
 import { WorkOrderStatusDonut } from '../../components/dashboard/WorkOrderStatusDonut';
-import { StaffAvailabilityCard, StaffMember } from '../../components/dashboard/StaffAvailabilityCard';
-import { SparePartsSummaryCard, SparePartsSummaryData } from '../../components/dashboard/SparePartsSummaryCard';
-import { WorkOrdersQueueTable } from '../../components/dashboard/WorkOrdersQueueTable';
+import { MaintenanceTrendChart, TrendDataPoint } from '../../components/dashboard/MaintenanceTrendChart';
+
+// Expanded Manager Operational Analytics Components
+import { ManagerOperationalSummaryStrip } from './components/ManagerOperationalSummaryStrip';
+import { ManagerFleetDistributionChart } from './components/ManagerFleetDistributionChart';
+import { ManagerPMPerformanceCard } from './components/ManagerPMPerformanceCard';
+import { ManagerTechnicianPerformanceCard, TechnicianWorkloadItem } from './components/ManagerTechnicianPerformanceCard';
 
 export const LiveShopFloorDashboard: React.FC = () => {
-  const { socket, isConnected } = useSocket();
+  const { user } = useAuth();
+  const { socket } = useSocket();
 
-  // Filters
-  const [plant, setPlant] = useState('All Plants');
-  const [timeframe, setTimeframe] = useState('Last 30 Days');
-
-  // Loading & Error States
+  // Live Data States
+  const [kpiStats, setKpiStats] = useState<any>(null);
+  const [trendData, setTrendData] = useState<TrendDataPoint[]>([]);
+  const [machines, setMachines] = useState<any[]>([]);
+  const [workOrders, setWorkOrders] = useState<any[]>([]);
+  const [breakdowns, setBreakdowns] = useState<any[]>([]);
+  const [staffUsers, setStaffUsers] = useState<any[]>([]);
+  const [pmData, setPmData] = useState<any>(null);
+  const [hierarchy, setHierarchy] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Live Telemetry Data
-  const [stats, setStats] = useState<any>(null);
-  const [hierarchy, setHierarchy] = useState<any>(null);
-  const [trendData, setTrendData] = useState<TrendDataPoint[]>([]);
-  const [workOrders, setWorkOrders] = useState<any[]>([]);
-  const [staffUsers, setStaffUsers] = useState<StaffMember[]>([]);
-  const [inventorySummary, setInventorySummary] = useState<SparePartsSummaryData | null>(null);
-  const [pendingOperatorsCount, setPendingOperatorsCount] = useState<number>(0);
+  // Scoped internally to the logged-in manager's authorized plant facility
+  const managerPlantId = useMemo(() => {
+    return user?.plantId || (user as any)?.plant_id || undefined;
+  }, [user]);
 
-  // Selected plant ID lookup
-  const selectedPlantId = useMemo(() => {
-    if (plant === 'All Plants') return undefined;
-    const selected = hierarchy?.plants?.find((p: any) => p.plant_name === plant);
-    return selected?.id || plant;
-  }, [plant, hierarchy]);
-
-  // Fetch telemetry from real backend APIs
+  // Fetch all operational data in parallel using real backend APIs
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const plantParam = selectedPlantId;
+      const params = managerPlantId ? { plant_id: managerPlantId } : {};
 
       const [
         kpiRes,
-        orgRes,
         trendRes,
+        machinesRes,
         workOrdersRes,
+        breakdownsRes,
         usersRes,
-        inventoryRes,
-        pendingRes,
+        pmRes,
+        orgRes,
       ] = await Promise.all([
-        apiClient.get('/reports/dashboard-kpis', { params: { plant_id: plantParam, timeframe } }),
-        apiClient.get('/org/hierarchy'),
-        apiClient.get('/reports/maintenance-trend', { params: { plant_id: plantParam, timeframe } }),
-        apiClient.get('/work-orders', { params: { plant_id: plantParam, limit: 10 } }).catch(() => ({ data: { data: [] } })),
-        apiClient.get('/auth/users', { params: { plant_id: plantParam, limit: 50 } }).catch(() => ({ data: { data: [] } })),
-        apiClient.get('/inventory/dashboard', { params: plantParam ? { plant_id: plantParam } : {} }).catch(() => ({ data: { data: null } })),
-        apiClient.get('/auth/pending-operators').catch(() => ({ data: { data: [] } })),
+        // 1. Core KPIs and telemetry (scoped to manager's plant internally)
+        apiClient.get('/reports/dashboard-kpis', {
+          params: { ...params, timeframe: 'Last 30 Days' },
+        }),
+        // 2. Maintenance trend history (breakdowns vs preventive maintenance over time)
+        apiClient
+          .get('/reports/maintenance-trend', { params })
+          .catch(() => ({ data: { data: [] } })),
+        // 3. Machines roster for plant status and shop distribution
+        apiClient
+          .get('/machines', { params: { limit: 100, ...params } })
+          .catch(() => ({ data: { data: [] } })),
+        // 4. Work orders for active, overdue and technician workload tracking
+        apiClient
+          .get('/work-orders', { params: { limit: 100, ...params } })
+          .catch(() => ({ data: { data: [] } })),
+        // 5. Breakdown complaints for incident tracking
+        apiClient
+          .get('/breakdowns', { params: { limit: 100, ...params } })
+          .catch(() => ({ data: { data: [] } })),
+        // 6. Personnel directory for technician roster
+        apiClient
+          .get('/auth/users', { params: { limit: 100, ...params } })
+          .catch(() => ({ data: { data: [] } })),
+        // 7. PM Dashboard for preventive maintenance compliance
+        apiClient
+          .get('/pm/dashboard', { params })
+          .catch(() => ({ data: { data: null } })),
+        // 8. Hierarchy for shop structure
+        apiClient.get('/org/hierarchy').catch(() => ({ data: { data: null } })),
       ]);
 
-      if (pendingRes.data?.data && Array.isArray(pendingRes.data.data)) {
-        setPendingOperatorsCount(pendingRes.data.data.length);
-      } else {
-        setPendingOperatorsCount(0);
-      }
-
-      if (kpiRes.data?.data) {
-        setStats(kpiRes.data.data);
-      }
-      setHierarchy(orgRes.data?.data || null);
-      setTrendData(trendRes.data?.data || []);
-      setWorkOrders(workOrdersRes.data?.data || []);
-
-      // Staff users mapping
-      if (usersRes.data?.data && Array.isArray(usersRes.data.data)) {
-        const mappedStaff: StaffMember[] = usersRes.data.data.map((u: any) => ({
-          id: u.id,
-          fullName: u.full_name || u.fullName || 'Staff Member',
-          employeeCode: u.employee_code || u.employeeCode || '—',
-          email: u.email || '',
-          role: u.role || 'technician',
-          isActive: u.is_active ?? true,
-          department: u.department,
-          designation: u.designation,
-          shift: u.shift,
-          plantName: u.plant_name || u.plantName,
-          shopName: u.shop_name || u.shopName,
-        }));
-        setStaffUsers(mappedStaff);
-      } else {
-        setStaffUsers([]);
-      }
-
-      // Spare parts inventory mapping
-      if (inventoryRes.data?.data?.summary) {
-        setInventorySummary(inventoryRes.data.data.summary);
-      } else if (kpiRes.data?.data) {
-        setInventorySummary({
-          total_parts: kpiRes.data.data.total_parts ?? 0,
-          total_available_stock: kpiRes.data.data.total_available_stock ?? 0,
-          low_stock_items_count: kpiRes.data.data.low_stock_items_count ?? 0,
-          out_of_stock_count: kpiRes.data.data.out_of_stock_count ?? 0,
-          total_reserved_stock: kpiRes.data.data.total_reserved_parts ?? 0,
-        });
-      }
+      if (kpiRes.data?.data) setKpiStats(kpiRes.data.data);
+      if (trendRes.data?.data) setTrendData(trendRes.data.data);
+      if (machinesRes.data?.data) setMachines(machinesRes.data.data);
+      if (workOrdersRes.data?.data) setWorkOrders(workOrdersRes.data.data);
+      if (breakdownsRes.data?.data) setBreakdowns(breakdownsRes.data.data);
+      if (usersRes.data?.data) setStaffUsers(usersRes.data.data);
+      if (pmRes.data?.data) setPmData(pmRes.data.data);
+      if (orgRes.data?.data) setHierarchy(orgRes.data.data);
     } catch (err: any) {
-      console.error('Failed to load manager dashboard:', err);
+      console.error('Failed to load manager dashboard telemetry:', err);
       setError(
         err.response?.data?.message ||
-        'Failed to connect to shop floor telemetry and database.'
+          'Unable to retrieve operational metrics from the database.'
       );
     } finally {
       setLoading(false);
     }
-  }, [plant, timeframe, selectedPlantId]);
+  }, [managerPlantId]);
 
   useEffect(() => {
     fetchData();
@@ -143,358 +121,374 @@ export const LiveShopFloorDashboard: React.FC = () => {
   // Real-time Socket.IO auto-refresh for live shop floor operations
   useEffect(() => {
     if (!socket) return;
+
     const handleRefresh = () => {
       fetchData();
     };
 
-    socket.on('complaint:created', handleRefresh);
     socket.on('complaint:critical', handleRefresh);
+    socket.on('complaint:created', handleRefresh);
     socket.on('work_order:accepted', handleRefresh);
-    socket.on('work_order:declined', handleRefresh);
-    socket.on('work_order:submitted_verification', handleRefresh);
     socket.on('work_order:closed', handleRefresh);
+    socket.on('pm:updated', handleRefresh);
     socket.on('notification:new', handleRefresh);
 
     return () => {
-      socket.off('complaint:created', handleRefresh);
       socket.off('complaint:critical', handleRefresh);
+      socket.off('complaint:created', handleRefresh);
       socket.off('work_order:accepted', handleRefresh);
-      socket.off('work_order:declined', handleRefresh);
-      socket.off('work_order:submitted_verification', handleRefresh);
       socket.off('work_order:closed', handleRefresh);
+      socket.off('pm:updated', handleRefresh);
       socket.off('notification:new', handleRefresh);
     };
   }, [socket, fetchData]);
 
-  // Dynamic Plant Options from real database hierarchy
-  const plantOptions = useMemo(() => {
-    const list = ['All Plants'];
-    if (hierarchy?.plants && Array.isArray(hierarchy.plants)) {
-      hierarchy.plants.forEach((p: any) => {
-        if (p.plant_name && !list.includes(p.plant_name)) {
-          list.push(p.plant_name);
-        }
-      });
-    }
-    return list;
-  }, [hierarchy]);
+  // 1. Machine Performance Metrics
+  const totalMachines = kpiStats?.total_machines ?? machines.length ?? 0;
+  const runningMachines = kpiStats?.running_machines ?? 0;
+  const idleMachines = kpiStats?.idle_machines ?? 0;
+  const breakdownMachines = kpiStats?.breakdown_machines ?? 0;
+  const maintenanceMachines = kpiStats?.maintenance_machines ?? 0;
+  const machinesDown = breakdownMachines + maintenanceMachines;
 
-  // Real KPIs directly from PostgreSQL
-  const totalMachines = stats?.total_machines ?? 0;
-  const runningMachines = stats?.running_machines ?? 0;
-  const idleMachines = stats?.idle_machines ?? 0;
-  const breakdownMachines = stats?.breakdown_machines ?? 0;
-  const maintenanceMachines = stats?.maintenance_machines ?? 0;
-  const pendingRequests = stats?.pending_requests ?? 0;
-  const activeWorkOrders = stats?.active_work_orders ?? 0;
-  const overdueWorkOrders = stats?.overdue_work_orders ?? 0;
-  const completedWorkOrders = stats?.completed_work_orders ?? 0;
-  const openWorkOrders = stats?.open_work_orders ?? 0;
+  const machineAvailabilityPercent =
+    kpiStats?.machine_availability_percent ??
+    (totalMachines > 0
+      ? parseFloat((((runningMachines + idleMachines) / totalMachines) * 100).toFixed(1))
+      : 0);
 
-  // Real downtime metrics
-  const machineAvailabilityPercent = stats?.machine_availability_percent ?? (totalMachines > 0 ? parseFloat((((runningMachines + idleMachines) / totalMachines) * 100).toFixed(1)) : 0);
-  const avgMTTRMinutes = stats?.avg_mttr_minutes ?? 0;
-
-  // Machine status segments dynamically calculated
-  const statusSegments = useMemo(() => {
+  // Machine status segments for Donut chart
+  const machineStatusSegments: DonutSegment[] = useMemo(() => {
     if (totalMachines === 0) return [];
     return [
       {
-        label: 'Working',
+        label: 'Running',
         count: runningMachines,
         percentage: (runningMachines / totalMachines) * 100,
-        color: '#10B981',
+        color: '#10B981', // Emerald
       },
       {
-        label: 'Idle',
+        label: 'Available / Idle',
         count: idleMachines,
         percentage: (idleMachines / totalMachines) * 100,
-        color: '#F59E0B',
+        color: '#64748B', // Slate
       },
       {
-        label: 'Machine Stopped',
+        label: 'In Breakdown',
         count: breakdownMachines,
         percentage: (breakdownMachines / totalMachines) * 100,
-        color: '#EF4444',
+        color: '#EF4444', // Red
       },
       {
-        label: 'Under Repair',
+        label: 'Under Maintenance',
         count: maintenanceMachines,
         percentage: (maintenanceMachines / totalMachines) * 100,
-        color: '#1E293B',
+        color: '#F59E0B', // Amber
       },
     ];
   }, [totalMachines, runningMachines, idleMachines, breakdownMachines, maintenanceMachines]);
 
-  const lowStockCount =
-    inventorySummary?.low_stock_items_count ?? stats?.low_stock_items_count ?? 0;
+  // 2. Maintenance Performance Metrics
+  const totalWorkOrders =
+    kpiStats?.total_work_orders ?? workOrders.length ?? 0;
+  const activeWorkOrders = kpiStats?.active_work_orders ?? 0;
+  const openWorkOrders = kpiStats?.open_work_orders ?? 0;
+  const inProgressWorkOrders = kpiStats?.in_progress_work_orders ?? 0;
+  const completedWorkOrders = kpiStats?.completed_work_orders ?? 0;
+  const overdueWorkOrders = kpiStats?.overdue_work_orders ?? 0;
+
+  const woCompletionRate =
+    totalWorkOrders > 0
+      ? Math.round((completedWorkOrders / totalWorkOrders) * 100)
+      : 0;
+
+  // 3. Breakdown Performance Metrics
+  const avgMTTRHours =
+    kpiStats?.avg_mttr_hours ??
+    (kpiStats?.avg_mttr_minutes
+      ? (kpiStats.avg_mttr_minutes / 60).toFixed(1)
+      : 0);
+
+  // 4. Preventive Maintenance Metrics
+  const pmKpis = pmData?.kpis;
+  const totalPmPlans = pmKpis?.total_active_plans ?? 0;
+  const pmUpcomingCount = pmKpis?.upcoming_count ?? pmKpis?.due_count ?? 0;
+  const pmCompletedCount = pmKpis?.completed_pm_activities ?? 0;
+  const pmOverdueCount = pmKpis?.overdue_count ?? 0;
+  const pmComplianceRate = pmKpis?.pm_compliance_percentage ?? 100;
+  const pmOnTimeRate = pmKpis?.on_time_completion_percentage ?? 100;
+
+  // 5. Workforce / Technician Performance Metrics
+  const techniciansList = useMemo(() => {
+    return staffUsers.filter(
+      (u: any) => String(u.role || '').toLowerCase() === 'technician'
+    );
+  }, [staffUsers]);
+
+  const totalTechnicians = techniciansList.length;
+
+  const technicianWorkloadItems: TechnicianWorkloadItem[] = useMemo(() => {
+    return techniciansList.map((tech) => {
+      const activeCount = workOrders.filter(
+        (w: any) =>
+          w.assigned_technician_id === tech.id &&
+          !['completed', 'verified_closed', 'cancelled'].includes(
+            String(w.status || '').toLowerCase()
+          )
+      ).length;
+
+      const completedCount = workOrders.filter(
+        (w: any) =>
+          w.assigned_technician_id === tech.id &&
+          ['completed', 'verified_closed'].includes(
+            String(w.status || '').toLowerCase()
+          )
+      ).length;
+
+      return {
+        id: tech.id,
+        name: tech.full_name || 'Technician',
+        employee_code: tech.employee_code,
+        activeCount,
+        completedCount,
+      };
+    }).sort((a, b) => b.activeCount - a.activeCount);
+  }, [techniciansList, workOrders]);
+
+  const activeTechniciansCount = useMemo(() => {
+    return technicianWorkloadItems.filter((t) => t.activeCount > 0).length;
+  }, [technicianWorkloadItems]);
+
+  const unassignedWOCount = useMemo(() => {
+    return workOrders.filter(
+      (w: any) =>
+        !w.assigned_technician_id &&
+        !['completed', 'verified_closed', 'cancelled'].includes(
+          String(w.status || '').toLowerCase()
+        )
+    ).length;
+  }, [workOrders]);
+
+  const avgWOPerTech =
+    totalTechnicians > 0 ? (activeWorkOrders / totalTechnicians).toFixed(1) : 0;
 
   return (
-    <div className="space-y-4 sm:space-y-5 min-h-full pb-8">
+    <div className="space-y-6 min-h-full pb-10">
       {/* =========================================================================
-          TOP HEADER: Clean, Compact Manager Header & Controls
+          HEADER: COMPACT WELCOME HEADER (MATCHING ADMIN DASHBOARD)
           ========================================================================= */}
-      <DashboardHeader
-        title="Manager Dashboard"
-        subtitle="Shop floor operations & equipment telemetry"
-        badge="Plant Operations"
-        plantOptions={plantOptions}
-        selectedPlant={plant}
-        onPlantChange={setPlant}
-        selectedTimeframe={timeframe}
-        onTimeframeChange={setTimeframe}
-        actions={
-          <div className="flex items-center gap-2">
-            {/* Live Socket Status Pill */}
-            <div
-              className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold border ${
-                isConnected !== false
-                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                  : 'bg-amber-50 text-amber-800 border-amber-200'
-              }`}
-            >
-              <Radio
-                className={`w-3 h-3 ${
-                  isConnected !== false ? 'text-emerald-600 animate-pulse' : 'text-amber-600'
-                }`}
-              />
-              <span>{isConnected !== false ? 'Live Telemetry' : 'Synced'}</span>
-            </div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2">
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl sm:text-2xl font-bold text-zinc-950 tracking-tight">
+            Welcome, {user?.fullName || 'Plant Manager'}
+          </h1>
+          <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider bg-jcb-yellow text-black border border-amber-400">
+            Manager
+          </span>
+        </div>
+      </div>
 
-            {/* Manual Refresh Button */}
-            <button
-              onClick={fetchData}
-              disabled={loading}
-              className="flex items-center gap-1 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-zinc-700 hover:bg-slate-50 transition shadow-2xs cursor-pointer"
-              title="Refresh telemetry"
-            >
-              <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin text-amber-600' : 'text-zinc-500'}`} />
-              <span className="hidden sm:inline">Refresh</span>
-            </button>
-          </div>
-        }
-      />
-
-      {/* Error Banner with Retry */}
+      {/* ERROR BANNER */}
       {error && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-center justify-between text-xs text-red-800 shadow-2xs">
+        <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-center justify-between text-xs sm:text-[13px] text-red-800">
           <div className="flex items-center gap-2">
             <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
             <span>{error}</span>
           </div>
+
           <button
             onClick={fetchData}
-            className="px-2.5 py-0.5 bg-white border border-red-300 text-red-700 rounded-lg font-bold hover:bg-red-100 transition cursor-pointer text-xs"
+            className="px-3 py-1 bg-white border border-red-300 text-red-700 rounded-lg text-xs font-semibold hover:bg-red-100 transition cursor-pointer"
           >
             Retry
           </button>
         </div>
       )}
 
-      {/* Operator Registration Request Alert Banner */}
-      {pendingOperatorsCount > 0 && (
-        <div className="bg-amber-500/10 border-2 border-amber-500/40 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm animate-in fade-in">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-amber-500 text-black rounded-xl font-black shadow flex items-center justify-center shrink-0">
-              <HardHat className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs font-black uppercase tracking-wider text-amber-950">
-                  Action Required: Operator Registration Request
-                </span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-red-600 text-white animate-pulse">
-                  {pendingOperatorsCount} Pending
-                </span>
-              </div>
-              <p className="text-xs text-zinc-700 font-medium mt-0.5">
-                {pendingOperatorsCount === 1
-                  ? '1 factory operator has registered and is awaiting your authorization before portal access is granted.'
-                  : `${pendingOperatorsCount} factory operators have registered and are awaiting your authorization before portal access is granted.`}
-              </p>
-            </div>
-          </div>
-          <Link
-            to="/users?tab=pending"
-            className="self-start sm:self-auto px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-black text-xs uppercase tracking-wider rounded-xl shadow transition flex items-center gap-1.5 shrink-0"
-          >
-            <span>Review &amp; Authorize</span>
-            <ArrowRight className="w-4 h-4" />
-          </Link>
-        </div>
-      )}
-
-      {/* Critical Alerts Banner (Compact single-line notice) */}
-      <CriticalAlertsBanner
-        breakdownCount={breakdownMachines}
-        pendingRequestsCount={pendingRequests}
-        overdueWorkOrdersCount={overdueWorkOrders}
-        lowStockPartsCount={lowStockCount}
-      />
-
       {/* =========================================================================
-          ROW 1: COMPACT KPI STRIP (6 Metrics in a single balanced row)
+          SECTION 1: OPERATIONAL OVERVIEW (6 PRIMARY KPIS + SUMMARY STRIP)
           ========================================================================= */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        {/* Card 1: Machines Operating */}
-        <TopKPICard
-          icon={CheckCircle2}
-          iconBgColor="bg-emerald-100"
-          iconColor="text-emerald-800"
-          label="Fleet Running"
-          value={runningMachines}
-          subtitle={`of ${totalMachines} Machines`}
-          trend={`${machineAvailabilityPercent}%`}
-          isPositiveTrend={machineAvailabilityPercent >= 75}
-        />
+      <section aria-label="Operational Key Performance Indicators" className="space-y-4">
+        {/* 6 Primary Executive KPI Cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
+          {/* 1. Total Machines */}
+          <TopKPICard
+            icon={Cpu}
+            iconBgColor="bg-zinc-100"
+            iconColor="text-zinc-800"
+            accentColor="border-l-4 border-l-zinc-800"
+            label="Total Machines"
+            value={loading ? '—' : totalMachines}
+          />
 
-        {/* Card 2: Breakdown Machines */}
-        <TopKPICard
-          icon={AlertOctagon}
-          iconBgColor="bg-red-100"
-          iconColor="text-red-800"
-          label="Breakdowns"
-          value={breakdownMachines}
-          subtitle={breakdownMachines > 0 ? 'Urgent Action' : 'Zero Halts'}
-          trend={breakdownMachines > 0 ? `${breakdownMachines} Down` : 'Nominal'}
-          trendColor={
-            breakdownMachines > 0
-              ? 'bg-red-50 text-red-700 border-red-200'
-              : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-          }
-        />
+          {/* 2. Running Machines */}
+          <TopKPICard
+            icon={Activity}
+            iconBgColor="bg-emerald-100"
+            iconColor="text-emerald-800"
+            accentColor="border-l-4 border-l-emerald-500"
+            label="Running Machines"
+            value={loading ? '—' : runningMachines}
+            trend={totalMachines > 0 ? `${machineAvailabilityPercent}%` : undefined}
+            trendColor="bg-emerald-50 text-emerald-700 border border-emerald-200"
+          />
 
-        {/* Card 3: Pending Problem Reports */}
-        <TopKPICard
-          icon={ClipboardList}
-          iconBgColor="bg-amber-100"
-          iconColor="text-amber-800"
-          label="Pending Triage"
-          value={pendingRequests}
-          subtitle="Needs Technician"
-          trend={pendingRequests > 0 ? 'Action' : 'Clear'}
-          trendColor="bg-amber-50 text-amber-800 border-amber-200"
-        />
+          {/* 3. Machines Under Breakdown / Maintenance */}
+          <TopKPICard
+            icon={AlertOctagon}
+            iconBgColor="bg-red-100"
+            iconColor="text-red-700"
+            accentColor="border-l-4 border-l-red-500"
+            label="Breakdown / Maint."
+            value={loading ? '—' : machinesDown}
+            trend={
+              machinesDown > 0
+                ? `${breakdownMachines} BD • ${maintenanceMachines} Maint`
+                : 'Nominal'
+            }
+            trendColor={
+              machinesDown > 0
+                ? 'bg-red-50 text-red-600 border border-red-200'
+                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+            }
+          />
 
-        {/* Card 4: Active Repair Jobs */}
-        <TopKPICard
-          icon={Wrench}
-          iconBgColor="bg-blue-100"
-          iconColor="text-blue-800"
-          label="Active Repairs"
-          value={activeWorkOrders}
-          subtitle={`${overdueWorkOrders} Overdue`}
-          trend={overdueWorkOrders > 0 ? 'SLA Alert' : 'On Track'}
-          trendColor={
-            overdueWorkOrders > 0
-              ? 'bg-red-50 text-red-700 border-red-200'
-              : 'bg-blue-50 text-blue-700 border-blue-200'
-          }
-        />
+          {/* 4. Active Work Orders */}
+          <TopKPICard
+            icon={Wrench}
+            iconBgColor="bg-blue-100"
+            iconColor="text-blue-800"
+            accentColor="border-l-4 border-l-blue-500"
+            label="Active Work Orders"
+            value={loading ? '—' : activeWorkOrders}
+          />
 
-        {/* Card 5: Mean Time to Repair (MTTR) */}
-        <TopKPICard
-          icon={Clock}
-          iconBgColor="bg-purple-100"
-          iconColor="text-purple-800"
-          label="Avg MTTR"
-          value={`${avgMTTRMinutes}m`}
-          subtitle="Fix Velocity"
-          trend="Telemetry"
-          trendColor="bg-purple-50 text-purple-700 border-purple-200"
-        />
+          {/* 5. Overdue Work Orders */}
+          <TopKPICard
+            icon={AlertTriangle}
+            iconBgColor="bg-amber-100"
+            iconColor="text-amber-800"
+            accentColor="border-l-4 border-l-amber-500"
+            label="Overdue Work Orders"
+            value={loading ? '—' : overdueWorkOrders}
+            trend={overdueWorkOrders > 0 ? 'Action Req.' : 'On Schedule'}
+            trendColor={
+              overdueWorkOrders > 0
+                ? 'bg-red-50 text-red-600 border border-red-200'
+                : 'bg-slate-100 text-zinc-600 border border-slate-200'
+            }
+          />
 
-        {/* Card 6: Spare Parts Alert */}
-        <TopKPICard
-          icon={Package}
-          iconBgColor={lowStockCount > 0 ? 'bg-amber-100' : 'bg-slate-100'}
-          iconColor={lowStockCount > 0 ? 'text-amber-800' : 'text-zinc-800'}
-          label="Low Spares"
-          value={lowStockCount}
-          subtitle="At Reorder Point"
-          trend={lowStockCount > 0 ? 'Restock' : 'Buffer OK'}
-          trendColor={
-            lowStockCount > 0
-              ? 'bg-amber-50 text-amber-800 border-amber-200'
-              : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-          }
-        />
-      </div>
-
-      {/* =========================================================================
-          ROW 2: CORE TELEMETRY CHARTS (Balanced 3-Column Grid)
-          ========================================================================= */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-stretch">
-        {/* Chart 1: Interactive Machine Status Donut */}
-        <div className="h-full">
-          <MachineStatusDonut
-            title="Machine Status"
-            totalLabel="Total Fleet"
-            totalCount={totalMachines}
-            segments={statusSegments}
-            emptyMessage="No machine assets registered"
-            loading={loading}
+          {/* 6. Resolved Work Orders */}
+          <TopKPICard
+            icon={CheckCircle2}
+            iconBgColor="bg-purple-100"
+            iconColor="text-purple-800"
+            accentColor="border-l-4 border-l-purple-500"
+            label="Resolved Work Orders"
+            value={loading ? '—' : completedWorkOrders}
           />
         </div>
 
-        {/* Chart 2: Fixed Maintenance Velocity Trend Spline Chart */}
-        <div className="h-full">
-          <MaintenanceTrendChart
-            title="Maintenance Velocity"
-            series1Name="Corrective"
-            series2Name="Preventive"
-            series1Color="#18181B"
-            series2Color="#EAB308"
-            data={trendData}
-            loading={loading}
-            emptyMessage="No maintenance trend recorded"
-          />
-        </div>
-
-        {/* Chart 3: Work Order Lifecycle Donut */}
-        <div className="h-full">
-          <WorkOrderStatusDonut
-            totalCount={activeWorkOrders + completedWorkOrders}
-            openCount={openWorkOrders}
-            inProgressCount={activeWorkOrders - openWorkOrders > 0 ? activeWorkOrders - openWorkOrders : activeWorkOrders}
-            completedCount={completedWorkOrders}
-            overdueCount={overdueWorkOrders}
-            loading={loading}
-          />
-        </div>
-      </div>
-
-      {/* =========================================================================
-          ROW 3: OPERATIONAL READINESS & RESOURCE HEALTH (Balanced 2-Column Grid)
-          ========================================================================= */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
-        {/* Column 1: Staff on Shift & Availability */}
-        <div className="h-full">
-          <StaffAvailabilityCard
-            users={staffUsers}
-            loading={loading}
-            emptyMessage="No personnel registered for this facility scope"
-          />
-        </div>
-
-        {/* Column 2: Spare Parts & Inventory Health */}
-        <div className="h-full">
-          <SparePartsSummaryCard
-            summary={inventorySummary}
-            loading={loading}
-          />
-        </div>
-      </div>
-
-      {/* =========================================================================
-          ROW 4: LIVE WORK ORDERS & REPAIR QUEUE TABLE (Full Width)
-          ========================================================================= */}
-      <div className="w-full">
-        <WorkOrdersQueueTable
-          workOrders={workOrders}
+        {/* Compact Operational Health Strip */}
+        <ManagerOperationalSummaryStrip
+          machineAvailabilityPercent={machineAvailabilityPercent}
+          woCompletionRate={woCompletionRate}
+          pmComplianceRate={pmComplianceRate}
+          avgMTTRHours={avgMTTRHours}
           loading={loading}
         />
-      </div>
+      </section>
+
+      {/* =========================================================================
+          SECTION 2: MACHINE FLEET PERFORMANCE (DONUT + SHOP DISTRIBUTION)
+          ========================================================================= */}
+      <section aria-label="Machine Fleet Performance">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+          {/* Machine Status Donut Chart (5 cols) */}
+          <div className="lg:col-span-5 h-full">
+            <MachineStatusDonut
+              title="Machine Status Distribution"
+              totalLabel="Total Fleet"
+              totalCount={totalMachines}
+              segments={machineStatusSegments}
+              loading={loading}
+              emptyMessage="No machine assets registered in plant scope"
+            />
+          </div>
+
+          {/* Machine Fleet Distribution by Shop Floor (7 cols) */}
+          <div className="lg:col-span-7 h-full">
+            <ManagerFleetDistributionChart
+              machines={machines}
+              selectedPlant="Plant Operations"
+              hierarchy={hierarchy}
+              loading={loading}
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* =========================================================================
+          SECTION 3: MAINTENANCE OPERATIONS (WORK ORDERS + VELOCITY TREND)
+          ========================================================================= */}
+      <section aria-label="Maintenance Operations">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+          {/* Work-Order Status Analytics (5 cols) */}
+          <div className="lg:col-span-5 h-full">
+            <WorkOrderStatusDonut
+              totalCount={totalWorkOrders}
+              openCount={openWorkOrders}
+              inProgressCount={inProgressWorkOrders}
+              completedCount={completedWorkOrders}
+              overdueCount={overdueWorkOrders}
+              loading={loading}
+            />
+          </div>
+
+          {/* Maintenance Velocity & Trend Chart (7 cols) */}
+          <div className="lg:col-span-7 h-full">
+            <MaintenanceTrendChart
+              title="Operational Maintenance Trends"
+              subtitle=""
+              series1Name="Breakdowns"
+              series2Name="Preventive (PM)"
+              data={trendData}
+              loading={loading}
+              emptyMessage="No maintenance trend recorded"
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* =========================================================================
+          SECTION 4: PREVENTIVE MAINTENANCE PERFORMANCE
+          ========================================================================= */}
+      <section aria-label="Preventive Maintenance Performance">
+        <ManagerPMPerformanceCard
+          totalPlans={totalPmPlans}
+          upcomingCount={pmUpcomingCount}
+          completedCount={pmCompletedCount}
+          overdueCount={pmOverdueCount}
+          complianceRate={pmComplianceRate}
+          onTimeRate={pmOnTimeRate}
+          loading={loading}
+        />
+      </section>
+
+      {/* =========================================================================
+          SECTION 5: WORKFORCE & TECHNICIAN PERFORMANCE
+          ========================================================================= */}
+      <section aria-label="Workforce and Technician Performance">
+        <ManagerTechnicianPerformanceCard
+          technicians={technicianWorkloadItems}
+          totalTechnicians={totalTechnicians}
+          activeTechniciansCount={activeTechniciansCount}
+          unassignedWOCount={unassignedWOCount}
+          avgWOPerTech={avgWOPerTech}
+          loading={loading}
+        />
+      </section>
     </div>
   );
 };

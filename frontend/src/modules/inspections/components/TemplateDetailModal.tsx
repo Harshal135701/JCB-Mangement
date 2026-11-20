@@ -196,8 +196,8 @@ export const TemplateDetailModal: React.FC<TemplateDetailModalProps> = ({
               <span className="text-[10px] font-semibold text-zinc-500">Read-Only Safety Protocol</span>
             </div>
 
-            <div className="border border-slate-200 rounded-xl overflow-hidden">
-              <table className="w-full text-left text-xs border-collapse">
+            <div className="border border-slate-200 rounded-xl overflow-hidden overflow-x-auto">
+              <table className="w-full min-w-[560px] text-left text-xs border-collapse">
                 <thead className="bg-slate-100 text-[10px] font-black uppercase text-zinc-500">
                   <tr>
                     <th className="p-3 w-16">#</th>

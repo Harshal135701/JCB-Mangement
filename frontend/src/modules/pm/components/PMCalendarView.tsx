@@ -236,93 +236,97 @@ export const PMCalendarView: React.FC<PMCalendarViewProps> = ({
         </div>
       </div>
 
-      {/* Weekday Header Row */}
-      <div className="grid grid-cols-7 border-b border-zinc-200 bg-zinc-100/70 text-center text-[11px] font-bold text-zinc-600 py-2">
-        <span>SUN</span>
-        <span>MON</span>
-        <span>TUE</span>
-        <span>WED</span>
-        <span>THU</span>
-        <span>FRI</span>
-        <span>SAT</span>
-      </div>
+      {/* Weekday Header Row & Calendar Grid Matrix */}
+      <div className="overflow-x-auto">
+        <div className="min-w-[650px]">
+          <div className="grid grid-cols-7 border-b border-zinc-200 bg-zinc-100/70 text-center text-[11px] font-bold text-zinc-600 py-2">
+            <span>SUN</span>
+            <span>MON</span>
+            <span>TUE</span>
+            <span>WED</span>
+            <span>THU</span>
+            <span>FRI</span>
+            <span>SAT</span>
+          </div>
 
-      {/* Calendar Grid Matrix */}
-      <div className="grid grid-cols-7 divide-x divide-y divide-zinc-200 bg-zinc-200">
-        {activeDays.map((day) => {
-          const events = calendarData[day.dateString] || [];
-          const hasOverdue = events.some((e) => e.schedule_status === 'overdue');
-          const hasDue = events.some((e) => e.schedule_status === 'due');
+          {/* Calendar Grid Matrix */}
+          <div className="grid grid-cols-7 divide-x divide-y divide-zinc-200 bg-zinc-200">
+            {activeDays.map((day) => {
+              const events = calendarData[day.dateString] || [];
+              const hasOverdue = events.some((e) => e.schedule_status === 'overdue');
+              const hasDue = events.some((e) => e.schedule_status === 'due');
 
-          return (
-            <div
-              key={day.dateString}
-              className={`min-h-[105px] p-2 flex flex-col justify-between transition ${
-                day.isCurrentMonth ? 'bg-white' : 'bg-zinc-50/60 text-zinc-400'
-              } ${day.isToday ? 'ring-2 ring-amber-500 ring-inset bg-amber-50/30' : ''}`}
-            >
-              {/* Day Header */}
-              <div className="flex items-center justify-between">
-                <span
-                  className={`text-xs font-black w-6 h-6 flex items-center justify-center rounded-full ${
-                    day.isToday
-                      ? 'bg-amber-500 text-black shadow-xs'
-                      : day.isCurrentMonth
-                      ? 'text-zinc-900'
-                      : 'text-zinc-400'
-                  }`}
+              return (
+                <div
+                  key={day.dateString}
+                  className={`min-h-[105px] p-2 flex flex-col justify-between transition ${
+                    day.isCurrentMonth ? 'bg-white' : 'bg-zinc-50/60 text-zinc-400'
+                  } ${day.isToday ? 'ring-2 ring-amber-500 ring-inset bg-amber-50/30' : ''}`}
                 >
-                  {day.dayNumber}
-                </span>
+                  {/* Day Header */}
+                  <div className="flex items-center justify-between">
+                    <span
+                      className={`text-xs font-black w-6 h-6 flex items-center justify-center rounded-full ${
+                        day.isToday
+                          ? 'bg-amber-500 text-black shadow-xs'
+                          : day.isCurrentMonth
+                          ? 'text-zinc-900'
+                          : 'text-zinc-400'
+                      }`}
+                    >
+                      {day.dayNumber}
+                    </span>
 
-                {/* Event Count Indicator */}
-                {events.length > 0 && (
-                  <span
-                    className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full border ${
-                      hasOverdue
-                        ? 'bg-rose-50 text-rose-800 border-rose-300'
-                        : hasDue
-                        ? 'bg-amber-50 text-amber-900 border-amber-300'
-                        : 'bg-zinc-100 text-zinc-700 border-zinc-200'
-                    }`}
-                  >
-                    {events.length} {events.length === 1 ? 'task' : 'tasks'}
-                  </span>
-                )}
-              </div>
+                    {/* Event Count Indicator */}
+                    {events.length > 0 && (
+                      <span
+                        className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full border ${
+                          hasOverdue
+                            ? 'bg-rose-50 text-rose-800 border-rose-300'
+                            : hasDue
+                            ? 'bg-amber-50 text-amber-900 border-amber-300'
+                            : 'bg-zinc-100 text-zinc-700 border-zinc-200'
+                        }`}
+                      >
+                        {events.length} {events.length === 1 ? 'task' : 'tasks'}
+                      </span>
+                    )}
+                  </div>
 
-              {/* Events in Day */}
-              <div className="space-y-1 mt-1.5 flex-1 overflow-hidden">
-                {events.slice(0, 3).map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => {
-                      onSelectPMItem(item);
-                      setSelectedDayEvents({ date: day.dateString, items: events });
-                    }}
-                    className={`w-full text-left p-1 rounded border text-[10px] transition cursor-pointer truncate flex items-center gap-1 ${getBadgeStyle(
-                      item.schedule_status
-                    )}`}
-                  >
-                    <span className="font-mono font-bold shrink-0">{item.machine_code}</span>
-                    <span className="truncate">{item.title}</span>
-                  </button>
-                ))}
+                  {/* Events in Day */}
+                  <div className="space-y-1 mt-1.5 flex-1 overflow-hidden">
+                    {events.slice(0, 3).map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => {
+                          onSelectPMItem(item);
+                          setSelectedDayEvents({ date: day.dateString, items: events });
+                        }}
+                        className={`w-full text-left p-1 rounded border text-[10px] transition cursor-pointer truncate flex items-center gap-1 ${getBadgeStyle(
+                          item.schedule_status
+                        )}`}
+                      >
+                        <span className="font-mono font-bold shrink-0">{item.machine_code}</span>
+                        <span className="truncate">{item.title}</span>
+                      </button>
+                    ))}
 
-                {events.length > 3 && (
-                  <button
-                    type="button"
-                    onClick={() => setSelectedDayEvents({ date: day.dateString, items: events })}
-                    className="text-[10px] text-amber-700 font-bold hover:underline block text-center cursor-pointer"
-                  >
-                    +{events.length - 3} more
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        })}
+                    {events.length > 3 && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedDayEvents({ date: day.dateString, items: events })}
+                        className="text-[10px] text-amber-700 font-bold hover:underline block text-center cursor-pointer"
+                      >
+                        +{events.length - 3} more
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {/* Day Events Drawer / Popover if user clicks "+X more" or details */}
