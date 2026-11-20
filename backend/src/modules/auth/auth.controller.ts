@@ -2083,3 +2083,619 @@ export const rejectOperator = async (
     next(err);
   }
 };
+
+export const PREDEFINED_TECHNICIAN_SKILLS = [
+  'Mechanical',
+  'Electrical',
+  'Hydraulic',
+  'PLC',
+  'Robotics',
+  'Welding',
+  'Pneumatics',
+  'Instrumentation',
+] as const;
+
+export const PREDEFINED_TECHNICIAN_DEPARTMENTS = [
+  'Mechanical Maintenance',
+  'Electrical & Automation',
+  'Hydraulics Maintenance',
+  'Robotics Maintenance',
+  'Preventive Maintenance',
+] as const;
+
+export const PREDEFINED_SHIFTS = [
+  'Shift A',
+  'Shift B',
+  'Shift C',
+  'General Shift',
+] as const;
+
+/**
+ * Public Technician Self-Registration
+ * Creates a technician account in 'pending' status, is_active = false, is_available = true, max_active_assignments = 5.
+ * Role is strictly locked to 'technician'. Notifies managers of the assigned plant.
+ */
+export const registerTechnician = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const {
+      employee_code,
+      full_name,
+      email,
+      phone,
+      plant_id,
+      shop_id,
+      department,
+      designation,
+      shift,
+      skills,
+      password,
+    } = req.body || {};
+
+    if (
+      !isNonEmptyString(employee_code) ||
+      !isNonEmptyString(full_name) ||
+      !isNonEmptyString(email) ||
+      !isNonEmptyString(phone) ||
+      !isNonEmptyString(plant_id) ||
+      !isNonEmptyString(shop_id) ||
+      !isNonEmptyString(department) ||
+      !isNonEmptyString(designation) ||
+      !isNonEmptyString(shift) ||
+      typeof password !== 'string' ||
+      password.length === 0
+    ) {
+      res.status(400).json({
+        success: false,
+        message: 'employee_code, full_name, email, phone, plant_id, shop_id, department, designation, shift, and password are required.',
+      });
+      return;
+    }
+
+    const cleanEmployeeCode = employee_code.trim().toUpperCase();
+    const cleanFullName = full_name.trim();
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPhone = phone.trim();
+    const cleanDept = department.trim();
+    const cleanDesig = designation.trim();
+    const cleanShift = shift.trim();
+
+    if (
+      cleanEmployeeCode.length > 50 ||
+      cleanFullName.length > 255 ||
+      cleanEmail.length > 255 ||
+      !isValidEmail(cleanEmail)
+    ) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid employee code, name, or email format.',
+      });
+      return;
+    }
+
+    if (cleanPhone.length < 7 || cleanPhone.length > 50) {
+      res.status(400).json({
+        success: false,
+        message: 'Phone number must be between 7 and 50 characters.',
+      });
+      return;
+    }
+
+    if (cleanDesig.length > 100) {
+      res.status(400).json({
+        success: false,
+        message: 'Designation must not exceed 100 characters.',
+      });
+      return;
+    }
+
+    if (!PREDEFINED_TECHNICIAN_DEPARTMENTS.includes(cleanDept as any)) {
+      res.status(400).json({
+        success: false,
+        message: `Invalid department. Allowed departments: ${PREDEFINED_TECHNICIAN_DEPARTMENTS.join(', ')}.`,
+      });
+      return;
+    }
+
+    if (!PREDEFINED_SHIFTS.includes(cleanShift as any)) {
+      res.status(400).json({
+        success: false,
+        message: `Invalid shift. Allowed shifts: ${PREDEFINED_SHIFTS.join(', ')}.`,
+      });
+      return;
+    }
+
+    if (password.length < 8 || password.length > 128) {
+      res.status(400).json({
+        success: false,
+        message: 'Password must be between 8 and 128 characters.',
+      });
+      return;
+    }
+
+    // Skills validation: array with at least one predefined skill
+    if (!Array.isArray(skills) || skills.length === 0) {
+      res.status(400).json({
+        success: false,
+        message: 'At least one technical skill must be selected.',
+      });
+      return;
+    }
+
+    const normalizedSkills: string[] = [];
+    for (const rawSkill of skills) {
+      if (typeof rawSkill !== 'string') {
+        res.status(400).json({
+          success: false,
+          message: 'All skills must be text values.',
+        });
+        return;
+      }
+      const matched = PREDEFINED_TECHNICIAN_SKILLS.find(
+        (s) => s.toLowerCase() === rawSkill.trim().toLowerCase()
+      );
+      if (!matched) {
+        res.status(400).json({
+          success: false,
+          message: `Invalid skill "${rawSkill}". Allowed skills: ${PREDEFINED_TECHNICIAN_SKILLS.join(', ')}.`,
+        });
+        return;
+      }
+      if (!normalizedSkills.includes(matched)) {
+        normalizedSkills.push(matched);
+      }
+    }
+
+    if (normalizedSkills.length === 0) {
+      res.status(400).json({
+        success: false,
+        message: 'At least one technical skill must be selected.',
+      });
+      return;
+    }
+
+    if (!isUUID(plant_id)) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid plant facility ID.',
+      });
+      return;
+    }
+
+    if (!isUUID(shop_id)) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid shop floor ID.',
+      });
+      return;
+    }
+
+    // Verify plant exists
+    const plantCheck = await activeQuery(
+      `SELECT id, plant_name, plant_code FROM plants WHERE id = $1`,
+      [plant_id]
+    );
+    if (plantCheck.rows.length === 0) {
+      res.status(404).json({
+        success: false,
+        message: 'Specified plant facility does not exist.',
+      });
+      return;
+    }
+    const dbPlant = plantCheck.rows[0];
+
+    // Verify shop exists and belongs to plant
+    const shopCheck = await activeQuery(
+      `SELECT id, plant_id, shop_name, shop_code FROM shops WHERE id = $1`,
+      [shop_id]
+    );
+    if (shopCheck.rows.length === 0) {
+      res.status(404).json({
+        success: false,
+        message: 'Specified shop floor does not exist.',
+      });
+      return;
+    }
+    const dbShop = shopCheck.rows[0];
+    if (dbShop.plant_id !== plant_id) {
+      res.status(400).json({
+        success: false,
+        message: 'Selected shop does not belong to the selected plant facility.',
+      });
+      return;
+    }
+
+    // Check unique employee code
+    const existingCode = await activeQuery(
+      `SELECT id FROM users WHERE UPPER(employee_code) = UPPER($1)`,
+      [cleanEmployeeCode]
+    );
+    if (existingCode.rows.length > 0) {
+      res.status(409).json({
+        success: false,
+        message: 'An account with this Employee ID already exists.',
+      });
+      return;
+    }
+
+    // Check unique email
+    const existingEmail = await activeQuery(
+      `SELECT id FROM users WHERE LOWER(email) = LOWER($1)`,
+      [cleanEmail]
+    );
+    if (existingEmail.rows.length > 0) {
+      res.status(409).json({
+        success: false,
+        message: 'An account with this email address already exists.',
+      });
+      return;
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const skillsJsonString = JSON.stringify(normalizedSkills);
+
+    // Insert new technician with approval_status = 'pending', is_active = false, is_available = true, max_active_assignments = 5
+    const insertRes = await activeQuery(
+      `INSERT INTO users (
+        employee_code, full_name, email, phone, role,
+        plant_id, shop_id, department, designation, shift,
+        skills_json, password_hash, is_active, is_available, max_active_assignments,
+        approval_status, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, 'technician', $5, $6, $7, $8, $9, $10, $11, FALSE, TRUE, 5, 'pending', NOW(), NOW())
+      RETURNING id, employee_code, full_name, email, phone, role, plant_id, shop_id, department, designation, shift, skills_json, is_active, is_available, max_active_assignments, approval_status, created_at`,
+      [
+        cleanEmployeeCode,
+        cleanFullName,
+        cleanEmail,
+        cleanPhone,
+        plant_id,
+        shop_id,
+        cleanDept,
+        cleanDesig,
+        cleanShift,
+        skillsJsonString,
+        passwordHash,
+      ]
+    );
+
+    const newUser = {
+      ...insertRes.rows[0],
+      skills_json: normalizedSkills,
+    };
+
+    // Notify Managers assigned to this plant
+    try {
+      const managersRes = await activeQuery(
+        `SELECT id, email, full_name FROM users WHERE role = 'manager' AND plant_id = $1 AND is_active = TRUE`,
+        [plant_id]
+      );
+
+      for (const mgr of managersRes.rows) {
+        await createAndSendNotification({
+          recipientId: mgr.id,
+          title: 'Technician Registration Pending Approval',
+          message: `New Technician ${cleanFullName} (${cleanEmployeeCode}) has registered for ${dbShop.shop_name} at ${dbPlant.plant_name} and is awaiting your approval.`,
+          type: 'approval',
+          entityType: 'user_approval',
+          entityId: newUser.id,
+          linkUrl: '/users?tab=pending&sub=technicians',
+          plantId: plant_id,
+          shopId: shop_id,
+        });
+      }
+    } catch (notifErr: any) {
+      console.warn('[Technician Registration Notification Warning]:', notifErr.message);
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Technician registration submitted successfully. Your account is pending approval by your Plant Manager.',
+      data: newUser,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Get Pending Technician Registrations
+ * Managers see pending technicians for their plant. Admins see all or can filter by plant_id.
+ */
+export const getPendingTechnicians = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const callerRole = req.user?.role?.trim().toLowerCase();
+    const isManager = callerRole === 'manager';
+
+    const whereClauses: string[] = ["u.role = 'technician'", "u.approval_status = 'pending'"];
+    const params: any[] = [];
+
+    if (isManager) {
+      if (!req.user?.plant_id) {
+        res.json({
+          success: true,
+          data: [],
+          count: 0,
+        });
+        return;
+      }
+      params.push(req.user.plant_id);
+      whereClauses.push(`u.plant_id = $${params.length}`);
+    } else if (req.query.plant_id && isUUID(String(req.query.plant_id))) {
+      params.push(String(req.query.plant_id));
+      whereClauses.push(`u.plant_id = $${params.length}`);
+    }
+
+    const whereSql = whereClauses.join(' AND ');
+
+    const result = await activeQuery(
+      `SELECT u.id, u.employee_code, u.full_name, u.email, u.phone, u.role,
+              u.plant_id, u.shop_id, u.department, u.designation, u.shift,
+              u.skills_json, u.approval_status, u.is_active, u.is_available,
+              u.max_active_assignments, u.created_at,
+              p.plant_name, p.plant_code,
+              s.shop_name, s.shop_code
+       FROM users u
+       LEFT JOIN plants p ON u.plant_id = p.id
+       LEFT JOIN shops s ON u.shop_id = s.id
+       WHERE ${whereSql}
+       ORDER BY u.created_at DESC`,
+      params
+    );
+
+    res.json({
+      success: true,
+      data: result.rows,
+      count: result.rows.length,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Approve Technician Registration
+ * Activates account (is_active = true, approval_status = 'approved') and notifies technician.
+ * Uses atomic conditional update to prevent race conditions.
+ */
+export const approveTechnician = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    if (!id || !isUUID(id)) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid technician user ID.',
+      });
+      return;
+    }
+
+    const userRes = await activeQuery(
+      `SELECT id, employee_code, full_name, email, role, plant_id, shop_id, approval_status, is_active
+       FROM users WHERE id = $1`,
+      [id]
+    );
+
+    if (userRes.rows.length === 0) {
+      res.status(404).json({
+        success: false,
+        message: 'User account not found.',
+      });
+      return;
+    }
+
+    const targetUser = userRes.rows[0];
+
+    if (targetUser.role !== 'technician') {
+      res.status(400).json({
+        success: false,
+        message: 'Only technician registrations can be processed through technician approval.',
+      });
+      return;
+    }
+
+    if (targetUser.approval_status === 'approved' && targetUser.is_active) {
+      res.status(400).json({
+        success: false,
+        message: 'Technician account is already approved and active.',
+      });
+      return;
+    }
+
+    if (targetUser.approval_status !== 'pending') {
+      res.status(400).json({
+        success: false,
+        message: `Cannot approve technician with approval status '${targetUser.approval_status}'. Only pending registrations can be approved.`,
+      });
+      return;
+    }
+
+    const callerRole = req.user?.role?.trim().toLowerCase();
+    if (callerRole === 'manager') {
+      if (!req.user?.plant_id || targetUser.plant_id !== req.user.plant_id) {
+        res.status(403).json({
+          success: false,
+          message: 'Forbidden: Managers can only approve technicians assigned to their own plant facility.',
+        });
+        return;
+      }
+    }
+
+    const updateRes = await activeQuery(
+      `UPDATE users
+       SET approval_status = 'approved',
+           is_active = TRUE,
+           approved_by = $1,
+           approved_at = NOW(),
+           rejection_reason = NULL,
+           updated_at = NOW()
+       WHERE id = $2 AND role = 'technician' AND approval_status = 'pending'
+       RETURNING id, employee_code, full_name, email, phone, role, plant_id, shop_id, department, designation, shift, skills_json, approval_status, is_active, approved_at`,
+      [req.user?.id || null, id]
+    );
+
+    if (updateRes.rows.length === 0) {
+      res.status(409).json({
+        success: false,
+        message: 'Technician registration was already processed by another manager.',
+      });
+      return;
+    }
+
+    const approvedUser = updateRes.rows[0];
+
+    // Notify Technician
+    try {
+      const approverTitle = (req.user as any)?.full_name || (req.user?.employee_code ? `Plant Manager (${req.user.employee_code})` : 'Plant Manager');
+      await createAndSendNotification({
+        recipientId: approvedUser.id,
+        title: 'Technician Account Approved',
+        message: `Welcome to JCB Smart CMMS! Your technician account has been approved by ${approverTitle}. You can now sign in to your dashboard.`,
+        type: 'info',
+        entityType: 'user_approval',
+        entityId: approvedUser.id,
+        linkUrl: '/login',
+        plantId: approvedUser.plant_id,
+        shopId: approvedUser.shop_id,
+      });
+    } catch (notifErr: any) {
+      console.warn('[Technician Approval Notification Warning]:', notifErr.message);
+    }
+
+    res.json({
+      success: true,
+      message: `Technician ${approvedUser.full_name} (${approvedUser.employee_code}) approved and activated successfully.`,
+      data: approvedUser,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * Reject Technician Registration
+ * Sets approval_status = 'rejected', is_active = false, records reason, and notifies technician.
+ * Uses atomic conditional update to prevent race conditions.
+ */
+export const rejectTechnician = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { rejection_reason } = req.body || {};
+
+    if (!id || !isUUID(id)) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid technician user ID.',
+      });
+      return;
+    }
+
+    const userRes = await activeQuery(
+      `SELECT id, employee_code, full_name, email, role, plant_id, shop_id, approval_status, is_active
+       FROM users WHERE id = $1`,
+      [id]
+    );
+
+    if (userRes.rows.length === 0) {
+      res.status(404).json({
+        success: false,
+        message: 'User account not found.',
+      });
+      return;
+    }
+
+    const targetUser = userRes.rows[0];
+
+    if (targetUser.role !== 'technician') {
+      res.status(400).json({
+        success: false,
+        message: 'Only technician registrations can be processed through technician rejection.',
+      });
+      return;
+    }
+
+    if (targetUser.approval_status !== 'pending') {
+      res.status(400).json({
+        success: false,
+        message: `Cannot reject technician with approval status '${targetUser.approval_status}'. Only pending registrations can be rejected.`,
+      });
+      return;
+    }
+
+    const callerRole = req.user?.role?.trim().toLowerCase();
+    if (callerRole === 'manager') {
+      if (!req.user?.plant_id || targetUser.plant_id !== req.user.plant_id) {
+        res.status(403).json({
+          success: false,
+          message: 'Forbidden: Managers can only reject technicians assigned to their own plant facility.',
+        });
+        return;
+      }
+    }
+
+    const cleanReason = rejection_reason && typeof rejection_reason === 'string'
+      ? rejection_reason.trim()
+      : 'Registration request rejected by plant manager.';
+
+    const updateRes = await activeQuery(
+      `UPDATE users
+       SET approval_status = 'rejected',
+           is_active = FALSE,
+           approved_by = $1,
+           approved_at = NOW(),
+           rejection_reason = $2,
+           updated_at = NOW()
+       WHERE id = $3 AND role = 'technician' AND approval_status = 'pending'
+       RETURNING id, employee_code, full_name, email, phone, role, plant_id, shop_id, approval_status, is_active, rejection_reason`,
+      [req.user?.id || null, cleanReason, id]
+    );
+
+    if (updateRes.rows.length === 0) {
+      res.status(409).json({
+        success: false,
+        message: 'Technician registration was already processed by another manager.',
+      });
+      return;
+    }
+
+    const rejectedUser = updateRes.rows[0];
+
+    // Notify Technician
+    try {
+      await createAndSendNotification({
+        recipientId: rejectedUser.id,
+        title: 'Technician Registration Update',
+        message: `Your technician registration was not approved. Reason: ${cleanReason}`,
+        type: 'warning',
+        entityType: 'user_approval',
+        entityId: rejectedUser.id,
+        linkUrl: '/login',
+        plantId: rejectedUser.plant_id,
+        shopId: rejectedUser.shop_id,
+      });
+    } catch (notifErr: any) {
+      console.warn('[Technician Rejection Notification Warning]:', notifErr.message);
+    }
+
+    res.json({
+      success: true,
+      message: `Technician registration for ${rejectedUser.full_name} (${rejectedUser.employee_code}) rejected.`,
+      data: rejectedUser,
+    });
+  } catch (err) {
+    next(err);
+  }
+};

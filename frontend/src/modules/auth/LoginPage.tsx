@@ -299,15 +299,26 @@ export const LoginPage: React.FC = () => {
               )}
             </button>
 
-            {/* Operator Self-Registration Link */}
-            <div className="pt-3 border-t border-zinc-100 text-center">
-              <span className="text-xs text-zinc-500">New factory operator? </span>
-              <Link
-                to="/signup"
-                className="text-xs font-bold text-amber-700 hover:text-amber-900 underline underline-offset-2 transition"
-              >
-                Register for portal access
-              </Link>
+            {/* Self-Registration Links for Operators & Technicians */}
+            <div className="pt-3 border-t border-zinc-100 space-y-1.5 text-center">
+              <div>
+                <span className="text-xs text-zinc-500">New factory operator? </span>
+                <Link
+                  to="/operator/signup"
+                  className="text-xs font-bold text-amber-700 hover:text-amber-900 underline underline-offset-2 transition"
+                >
+                  Register here
+                </Link>
+              </div>
+              <div>
+                <span className="text-xs text-zinc-500">New maintenance technician? </span>
+                <Link
+                  to="/technician/signup"
+                  className="text-xs font-bold text-amber-700 hover:text-amber-900 underline underline-offset-2 transition"
+                >
+                  Register here
+                </Link>
+              </div>
             </div>
           </form>
         </div>

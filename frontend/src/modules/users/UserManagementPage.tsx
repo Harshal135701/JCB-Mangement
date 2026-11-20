@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import apiClient from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
@@ -29,30 +29,75 @@ import {
   Loader2,
   Cpu,
   Repeat,
+  Eye,
 } from 'lucide-react';
+
+const parseSkills = (skills: any): string[] => {
+  if (Array.isArray(skills)) return skills;
+  if (typeof skills === 'string') {
+    try {
+      const parsed = JSON.parse(skills);
+      if (Array.isArray(parsed)) return parsed;
+      if (typeof parsed === 'string') return [parsed];
+    } catch {
+      return skills.split(',').map((s) => s.trim()).filter(Boolean);
+    }
+  }
+  return [];
+};
 
 export const UserManagementPage: React.FC = () => {
   const { user } = useAuth();
   const { socket } = useSocket();
   const location = useLocation();
+  const navigate = useNavigate();
   const isAdmin = user?.role === 'admin';
   const isManager = user?.role === 'manager';
   const canCreate = isAdmin || isManager;
 
+  const searchParams = new URLSearchParams(location.search);
+  const initialTab = searchParams.get('tab') || (location.search.includes('tab=pending') ? 'pending' : 'personnel');
+  const initialSub = searchParams.get('sub');
+
   // Tabs: 'personnel' | 'pending'
   const [activeTab, setActiveTab] = useState<'personnel' | 'pending'>(
-    location.search.includes('tab=pending') ? 'pending' : 'personnel'
+    initialTab === 'pending' ? 'pending' : 'personnel'
   );
 
-  // Sub-tabs under Pending Approvals: 'operators' | 'temporary'
-  const [pendingSubTab, setPendingSubTab] = useState<'operators' | 'temporary'>(
-    location.search.includes('sub=temp') ? 'temporary' : 'operators'
+  // Sub-tabs under Pending Approvals: 'operators' | 'technicians' | 'temporary'
+  const [pendingSubTab, setPendingSubTab] = useState<'operators' | 'technicians' | 'temporary'>(
+    initialSub === 'technicians' || initialSub === 'technician' || initialSub === 'tech' || location.search.includes('sub=tech')
+      ? 'technicians'
+      : initialSub === 'temporary' || initialSub === 'temp' || location.search.includes('sub=temp')
+      ? 'temporary'
+      : 'operators'
   );
+
+  const handleTabChange = (tab: 'personnel' | 'pending') => {
+    setActiveTab(tab);
+    if (tab === 'pending') {
+      navigate(`/users?tab=pending&sub=${pendingSubTab}`, { replace: true });
+    } else {
+      navigate('/users?tab=personnel', { replace: true });
+    }
+  };
+
+  const handleSubTabChange = (sub: 'operators' | 'technicians' | 'temporary') => {
+    setPendingSubTab(sub);
+    navigate(`/users?tab=pending&sub=${sub}`, { replace: true });
+  };
 
   // Pending Operator Approvals state
   const [pendingOperators, setPendingOperators] = useState<any[]>([]);
   const [loadingPending, setLoadingPending] = useState(false);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
+
+  // Pending Technician Approvals state
+  const [pendingTechnicians, setPendingTechnicians] = useState<any[]>([]);
+  const [loadingPendingTech, setLoadingPendingTech] = useState(false);
+  const [rejectingTechnician, setRejectingTechnician] = useState<any | null>(null);
+  const [techRejectionReason, setTechRejectionReason] = useState('');
+  const [reviewingTechnician, setReviewingTechnician] = useState<any | null>(null);
 
   // Pending Temporary Machine Requests state
   const [pendingTempRequests, setPendingTempRequests] = useState<any[]>([]);
@@ -273,6 +318,92 @@ export const UserManagementPage: React.FC = () => {
     }
   };
 
+  const fetchPendingTechnicians = async (plantIdToFilter?: string) => {
+    try {
+      setLoadingPendingTech(true);
+      const targetPlant =
+        plantIdToFilter !== undefined
+          ? plantIdToFilter
+          : isAdmin && selectedPlantId && selectedPlantId !== 'all'
+          ? selectedPlantId
+          : '';
+      const url = targetPlant ? `/auth/pending-technicians?plant_id=${targetPlant}` : '/auth/pending-technicians';
+      const res = await apiClient.get(url);
+      if (res.data.success && Array.isArray(res.data.data)) {
+        setPendingTechnicians(res.data.data);
+      } else {
+        setPendingTechnicians([]);
+      }
+    } catch (e) {
+      console.warn('Failed to load pending technicians:', e);
+      setPendingTechnicians([]);
+    } finally {
+      setLoadingPendingTech(false);
+    }
+  };
+
+  const handleApproveTechnician = async (tech: any) => {
+    if (
+      !window.confirm(
+        `Approve technician ${tech.full_name} (${tech.employee_code})? This will activate their account and grant them access to the technician portal.`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setPendingActionId(tech.id);
+      const res = await apiClient.post(`/auth/technicians/${tech.id}/approve`);
+      if (res.data.success) {
+        setFeedback({
+          type: 'success',
+          text: `Technician ${tech.full_name} (${tech.employee_code}) approved and activated successfully.`,
+        });
+        if (reviewingTechnician?.id === tech.id) {
+          setReviewingTechnician(null);
+        }
+        fetchPendingTechnicians();
+        fetchUsers();
+      }
+    } catch (err: any) {
+      setFeedback({
+        type: 'error',
+        text: err.response?.data?.message || 'Failed to approve technician.',
+      });
+    } finally {
+      setPendingActionId(null);
+    }
+  };
+
+  const handleConfirmRejectTechnician = async () => {
+    if (!rejectingTechnician) return;
+    try {
+      setPendingActionId(rejectingTechnician.id);
+      const res = await apiClient.post(`/auth/technicians/${rejectingTechnician.id}/reject`, {
+        rejection_reason: techRejectionReason.trim() || undefined,
+      });
+      if (res.data.success) {
+        setFeedback({
+          type: 'success',
+          text: `Registration for ${rejectingTechnician.full_name} (${rejectingTechnician.employee_code}) rejected.`,
+        });
+        if (reviewingTechnician?.id === rejectingTechnician.id) {
+          setReviewingTechnician(null);
+        }
+        setRejectingTechnician(null);
+        setTechRejectionReason('');
+        fetchPendingTechnicians();
+      }
+    } catch (err: any) {
+      setFeedback({
+        type: 'error',
+        text: err.response?.data?.message || 'Failed to reject technician.',
+      });
+    } finally {
+      setPendingActionId(null);
+    }
+  };
+
   const fetchPendingTempRequests = async (plantIdToFilter?: string) => {
     try {
       setLoadingPendingTemp(true);
@@ -373,6 +504,7 @@ export const UserManagementPage: React.FC = () => {
     fetchPlants();
     if (isAdmin || isManager) {
       fetchPendingOperators();
+      fetchPendingTechnicians();
       fetchPendingTempRequests();
     }
   }, [isAdmin, isManager]);
@@ -381,31 +513,64 @@ export const UserManagementPage: React.FC = () => {
     fetchUsers();
     if (activeTab === 'pending' && (isAdmin || isManager)) {
       fetchPendingOperators();
+      fetchPendingTechnicians();
       fetchPendingTempRequests();
     }
   }, [selectedPlantId, activeTab]);
 
   useEffect(() => {
-    if (location.search.includes('tab=pending')) {
-      setActiveTab('pending');
-      fetchPendingOperators();
-      fetchPendingTempRequests();
-    }
-    if (location.search.includes('sub=temp')) {
-      setPendingSubTab('temporary');
-    }
-  }, [location.search]);
+    const params = new URLSearchParams(location.search);
+    const tabParam = params.get('tab');
+    const subParam = params.get('sub');
 
-  // Real-time socket notification handler: auto-refresh pending list when an operator signs up or requests a machine
+    if (tabParam === 'pending' || location.search.includes('tab=pending')) {
+      setActiveTab('pending');
+      if (isAdmin || isManager) {
+        fetchPendingOperators();
+        fetchPendingTechnicians();
+        fetchPendingTempRequests();
+      }
+    } else if (tabParam === 'personnel' || location.search.includes('tab=personnel')) {
+      setActiveTab('personnel');
+    }
+
+    if (
+      subParam === 'technicians' ||
+      subParam === 'technician' ||
+      subParam === 'tech' ||
+      location.search.includes('sub=technician') ||
+      location.search.includes('sub=tech')
+    ) {
+      setPendingSubTab('technicians');
+    } else if (
+      subParam === 'temporary' ||
+      subParam === 'temp' ||
+      location.search.includes('sub=temp')
+    ) {
+      setPendingSubTab('temporary');
+    } else if (
+      subParam === 'operators' ||
+      subParam === 'operator' ||
+      subParam === 'op' ||
+      location.search.includes('sub=operator')
+    ) {
+      setPendingSubTab('operators');
+    }
+  }, [location.search, isAdmin, isManager]);
+
+  // Real-time socket notification handler: auto-refresh pending list when an operator or technician signs up
   useEffect(() => {
     if (!socket || (!isAdmin && !isManager)) return;
     const handleNotification = (notif: any) => {
       if (
         notif?.entity_type === 'user_approval' ||
         notif?.type === 'approval' ||
-        (typeof notif?.message === 'string' && notif.message.toLowerCase().includes('operator'))
+        (typeof notif?.message === 'string' &&
+          (notif.message.toLowerCase().includes('operator') ||
+            notif.message.toLowerCase().includes('technician')))
       ) {
         fetchPendingOperators();
+        fetchPendingTechnicians();
       }
     };
 
@@ -756,7 +921,7 @@ export const UserManagementPage: React.FC = () => {
       {/* TABS: Active Personnel vs Pending Operator Approvals */}
       <div className="flex items-center gap-2 border-b border-zinc-200 pb-2">
         <button
-          onClick={() => setActiveTab('personnel')}
+          onClick={() => handleTabChange('personnel')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
             activeTab === 'personnel'
               ? 'bg-zinc-950 text-white shadow'
@@ -768,7 +933,7 @@ export const UserManagementPage: React.FC = () => {
         </button>
 
         <button
-          onClick={() => setActiveTab('pending')}
+          onClick={() => handleTabChange('pending')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
             activeTab === 'pending'
               ? 'bg-amber-500 text-black shadow'
@@ -777,9 +942,9 @@ export const UserManagementPage: React.FC = () => {
         >
           <HardHat className="w-4 h-4" />
           <span>Pending Approvals</span>
-          {pendingOperators.length + pendingTempRequests.length > 0 ? (
+          {pendingOperators.length + pendingTechnicians.length + pendingTempRequests.length > 0 ? (
             <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-red-600 text-white animate-pulse">
-              {pendingOperators.length + pendingTempRequests.length}
+              {pendingOperators.length + pendingTechnicians.length + pendingTempRequests.length}
             </span>
           ) : (
             <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-zinc-200 text-zinc-600">
@@ -1088,11 +1253,11 @@ export const UserManagementPage: React.FC = () => {
       {/* PENDING APPROVALS TAB */}
       {activeTab === 'pending' && (
         <div className="bg-white rounded-2xl border-2 border-zinc-200 overflow-hidden shadow-sm">
-          {/* Sub-tab Switcher: Operator Registrations vs Temporary Machine Requests */}
+          {/* Sub-tab Switcher: Operator Registrations vs Technician Registrations vs Temporary Machine Requests */}
           <div className="flex items-center gap-2 px-5 py-3 bg-zinc-50 border-b border-zinc-200 overflow-x-auto">
             <button
               type="button"
-              onClick={() => setPendingSubTab('operators')}
+              onClick={() => handleSubTabChange('operators')}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shrink-0 whitespace-nowrap ${
                 pendingSubTab === 'operators'
                   ? 'bg-amber-500 text-black shadow-xs font-black border border-amber-600/40'
@@ -1114,7 +1279,29 @@ export const UserManagementPage: React.FC = () => {
 
             <button
               type="button"
-              onClick={() => setPendingSubTab('temporary')}
+              onClick={() => handleSubTabChange('technicians')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shrink-0 whitespace-nowrap ${
+                pendingSubTab === 'technicians'
+                  ? 'bg-amber-500 text-black shadow-xs font-black border border-amber-600/40'
+                  : 'bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50 hover:text-zinc-950 font-bold shadow-2xs'
+              }`}
+            >
+              <Wrench className={`w-4 h-4 ${pendingSubTab === 'technicians' ? 'text-black' : 'text-amber-600'}`} />
+              <span>Technician Registrations</span>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                  pendingSubTab === 'technicians'
+                    ? 'bg-black text-amber-400'
+                    : 'bg-amber-100 text-amber-950 border border-amber-300'
+                }`}
+              >
+                {pendingTechnicians.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleSubTabChange('temporary')}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs uppercase tracking-wider transition cursor-pointer shrink-0 whitespace-nowrap ${
                 pendingSubTab === 'temporary'
                   ? 'bg-amber-500 text-black shadow-xs font-black border border-amber-600/40'
@@ -1349,6 +1536,219 @@ export const UserManagementPage: React.FC = () => {
           )}
         </div>
       )}
+
+          {/* SUB-TAB: TECHNICIAN REGISTRATIONS */}
+          {pendingSubTab === 'technicians' && (
+            <div>
+              {/* PENDING TECHNICIAN HEADER */}
+              <div className="p-5 border-b border-zinc-200 bg-amber-50/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-amber-500 text-black rounded-xl shadow-sm">
+                    <Wrench className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-black text-zinc-950 uppercase tracking-wider">
+                        Pending Technician Registrations
+                      </h3>
+                      <span className="px-2 py-0.5 rounded-full text-[11px] font-black bg-amber-200 text-amber-900 border border-amber-300">
+                        {pendingTechnicians.length} Awaiting Authorization
+                      </span>
+                    </div>
+                    <p className="text-xs text-zinc-500 font-medium mt-0.5">
+                      {isManager
+                        ? 'Self-registered technicians awaiting plant manager qualification review and authorization before portal access is granted.'
+                        : 'All factory technician registrations awaiting plant authorization.'}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => fetchPendingTechnicians()}
+                  disabled={loadingPendingTech}
+                  className="self-start sm:self-auto px-3.5 py-1.5 bg-white hover:bg-zinc-100 text-zinc-700 border border-zinc-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm disabled:opacity-50 cursor-pointer"
+                >
+                  {loadingPendingTech ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600" />
+                  ) : (
+                    <Clock className="w-3.5 h-3.5 text-zinc-500" />
+                  )}
+                  <span>Refresh List</span>
+                </button>
+              </div>
+
+              {/* PENDING TECHNICIANS LIST */}
+              {loadingPendingTech ? (
+                <div className="py-16 text-center text-zinc-500 text-xs font-bold flex flex-col items-center justify-center gap-3">
+                  <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
+                  <span>Loading pending technician registrations...</span>
+                </div>
+              ) : pendingTechnicians.length === 0 ? (
+                <div className="py-16 text-center text-zinc-500 text-xs flex flex-col items-center justify-center gap-3 bg-zinc-50/50">
+                  <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                    <CheckCircle2 className="w-6 h-6" />
+                  </div>
+                  <div className="max-w-sm">
+                    <p className="font-black text-zinc-900 text-sm">No Pending Technician Registrations</p>
+                    <p className="text-zinc-500 text-xs mt-1">
+                      All technician sign-up requests have been reviewed. New technician registrations for your plant facility will appear here in real time.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-zinc-100/80 border-b border-zinc-200 text-zinc-600 uppercase text-[10px] font-black tracking-wider">
+                        <th className="py-3 px-4">Technician Name &amp; ID</th>
+                        <th className="py-3 px-4">Facility &amp; Compulsory Shop</th>
+                        <th className="py-3 px-4">Department &amp; Designation</th>
+                        <th className="py-3 px-4">Technical Skills</th>
+                        <th className="py-3 px-4">Shift &amp; Capacity</th>
+                        <th className="py-3 px-4">Contact Details</th>
+                        <th className="py-3 px-4">Submission Date</th>
+                        <th className="py-3 px-4 text-right">Approval Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-200">
+                      {pendingTechnicians.map((tech) => {
+                        const skills = parseSkills(tech.skills_json);
+                        return (
+                          <tr key={tech.id} className="hover:bg-amber-50/30 transition-colors">
+                            <td className="py-3.5 px-4">
+                              <div className="font-black text-zinc-950 text-xs flex items-center gap-2">
+                                <span>{tech.full_name}</span>
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                                  Pending
+                                </span>
+                              </div>
+                              <div className="text-[11px] font-mono text-zinc-600 font-bold mt-0.5 flex items-center gap-1.5">
+                                <span>ID: {tech.employee_code}</span>
+                                <span className="px-1 py-0.2 bg-zinc-200 text-zinc-700 rounded text-[9px] font-bold">
+                                  TECH
+                                </span>
+                              </div>
+                            </td>
+
+                            <td className="py-3.5 px-4">
+                              <div className="font-bold text-zinc-900 text-xs flex items-center gap-1">
+                                <Building2 className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+                                <span>{tech.plant_name || 'Assigned Plant'}</span>
+                              </div>
+                              <div className="text-[11px] text-zinc-600 font-medium mt-0.5">
+                                Shop: <strong className="text-zinc-900">{tech.shop_name || 'Assigned Shop'}</strong>
+                              </div>
+                            </td>
+
+                            <td className="py-3.5 px-4">
+                              <div className="font-bold text-zinc-900">{tech.designation || 'Technician'}</div>
+                              <div className="text-[11px] text-zinc-600 font-medium">{tech.department}</div>
+                            </td>
+
+                            <td className="py-3.5 px-4">
+                              {skills.length > 0 ? (
+                                <div className="flex flex-wrap gap-1 max-w-[220px]">
+                                  {skills.map((s: string) => (
+                                    <span
+                                      key={s}
+                                      className="px-2 py-0.5 bg-amber-100 text-amber-900 rounded text-[10px] font-bold border border-amber-300"
+                                    >
+                                      {s}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-zinc-400 italic text-[11px]">None specified</span>
+                              )}
+                            </td>
+
+                            <td className="py-3.5 px-4">
+                              <div className="inline-block px-2 py-0.5 bg-blue-100 text-blue-800 rounded font-bold text-[10px] uppercase border border-blue-200">
+                                {tech.shift || 'Shift A'}
+                              </div>
+                              <div className="text-[10px] text-zinc-500 font-medium mt-0.5">
+                                Max concurrent: {tech.max_active_assignments || 5}
+                              </div>
+                            </td>
+
+                            <td className="py-3.5 px-4">
+                              <div className="flex items-center gap-1.5 text-zinc-800 font-medium">
+                                <Mail className="w-3 h-3 text-zinc-400 shrink-0" />
+                                <span className="truncate max-w-[160px]">{tech.email}</span>
+                              </div>
+                              {tech.phone && (
+                                <div className="flex items-center gap-1.5 text-zinc-600 text-[11px] mt-0.5">
+                                  <Phone className="w-3 h-3 text-zinc-400 shrink-0" />
+                                  <span>{tech.phone}</span>
+                                </div>
+                              )}
+                            </td>
+
+                            <td className="py-3.5 px-4 text-zinc-600 text-[11px] font-medium">
+                              <div className="flex items-center gap-1">
+                                <Clock className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                                <span>
+                                  {tech.created_at
+                                    ? new Date(tech.created_at).toLocaleString('en-IN', {
+                                        dateStyle: 'short',
+                                        timeStyle: 'short',
+                                      })
+                                    : 'Recent'}
+                                </span>
+                              </div>
+                            </td>
+
+                            <td className="py-3.5 px-4 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => setReviewingTechnician(tech)}
+                                  className="px-2.5 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 border border-zinc-300 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm cursor-pointer"
+                                  title="Review Technician Profile"
+                                >
+                                  <Eye className="w-3.5 h-3.5 text-zinc-600" />
+                                  <span>Details</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleApproveTechnician(tech)}
+                                  disabled={pendingActionId === tech.id}
+                                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-sm disabled:opacity-50 cursor-pointer"
+                                  title="Approve & Activate Technician"
+                                >
+                                  {pendingActionId === tech.id ? (
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  ) : (
+                                    <UserCheck className="w-3.5 h-3.5" />
+                                  )}
+                                  <span>Approve</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setRejectingTechnician(tech);
+                                    setTechRejectionReason('');
+                                  }}
+                                  disabled={pendingActionId === tech.id}
+                                  className="px-3 py-1.5 bg-zinc-100 hover:bg-rose-50 text-rose-700 hover:text-rose-800 border border-zinc-300 hover:border-rose-300 rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-sm disabled:opacity-50 cursor-pointer"
+                                  title="Reject Registration"
+                                >
+                                  <UserX className="w-3.5 h-3.5" />
+                                  <span>Reject</span>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* SUB-TAB 2: TEMPORARY MACHINE REQUESTS */}
           {pendingSubTab === 'temporary' && (
@@ -2080,6 +2480,265 @@ export const UserManagementPage: React.FC = () => {
                     <UserX className="w-4 h-4" />
                   )}
                   <span>Confirm Decline</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* REJECTION MODAL FOR TECHNICIAN */}
+      {rejectingTechnician && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="bg-rose-50 border-b border-rose-200 p-4 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-rose-800">
+                <AlertCircle className="w-5 h-5 text-rose-600" />
+                <h3 className="text-sm font-black uppercase tracking-wider">
+                  Reject Technician Registration
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRejectingTechnician(null)}
+                className="text-zinc-400 hover:text-zinc-800 p-1 rounded-lg transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <p className="text-xs text-zinc-700 leading-relaxed">
+                You are about to reject the registration request for{' '}
+                <strong className="text-zinc-950 font-black">
+                  {rejectingTechnician.full_name} ({rejectingTechnician.employee_code})
+                </strong>
+                {rejectingTechnician.department && (
+                  <span>
+                    {' '}• Department:{' '}
+                    <strong className="text-zinc-900">{rejectingTechnician.department}</strong>
+                  </span>
+                )}
+                . Their account will remain deactivated and portal access will be denied.
+              </p>
+
+              <div>
+                <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
+                  Reason for Rejection (Optional)
+                </label>
+                <textarea
+                  rows={3}
+                  value={techRejectionReason}
+                  onChange={(e) => setTechRejectionReason(e.target.value)}
+                  placeholder="e.g., Skills qualification mismatch, incorrect plant or shop selected, duplicate profile..."
+                  className="w-full px-3 py-2 bg-zinc-50 border border-zinc-300 rounded-xl text-xs font-medium text-zinc-900 focus:outline-none focus:border-rose-500"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-zinc-200 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setRejectingTechnician(null)}
+                  disabled={pendingActionId === rejectingTechnician.id}
+                  className="px-4 py-2 border border-zinc-300 text-zinc-700 rounded-xl text-xs font-bold hover:bg-zinc-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmRejectTechnician}
+                  disabled={pendingActionId === rejectingTechnician.id}
+                  className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow transition disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                >
+                  {pendingActionId === rejectingTechnician.id ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <UserX className="w-4 h-4" />
+                  )}
+                  <span>Confirm Rejection</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TECHNICIAN REVIEW & DETAILS MODAL */}
+      {reviewingTechnician && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border-2 border-zinc-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="bg-amber-500 text-black px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-black text-amber-400 rounded-xl">
+                  <Wrench className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black uppercase tracking-wider">
+                    Technician Registration Profile
+                  </h3>
+                  <p className="text-xs font-semibold opacity-85">
+                    Review qualifications and operational details prior to authorization
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReviewingTechnician(null)}
+                className="p-1 rounded-lg text-black hover:bg-black/10 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
+              {/* Header Card */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 bg-zinc-50 rounded-xl border border-zinc-200">
+                <div>
+                  <div className="text-lg font-black text-zinc-950 flex items-center gap-2">
+                    <span>{reviewingTechnician.full_name}</span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300">
+                      PENDING APPROVAL
+                    </span>
+                  </div>
+                  <div className="text-xs font-mono text-zinc-600 mt-1">
+                    Employee ID: <strong className="text-zinc-900">{reviewingTechnician.employee_code}</strong>
+                  </div>
+                </div>
+                <div className="px-3 py-1 bg-zinc-900 text-amber-400 font-black text-xs rounded-lg uppercase tracking-wider">
+                  TECHNICIAN (FIXED)
+                </div>
+              </div>
+
+              {/* Grid 1: Personal & Contact */}
+              <div>
+                <h4 className="text-xs font-black uppercase text-zinc-500 tracking-wider mb-2">
+                  Contact Information
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="p-3 bg-white rounded-xl border border-zinc-200 flex items-center gap-3">
+                    <Mail className="w-4 h-4 text-zinc-400 shrink-0" />
+                    <div>
+                      <div className="text-[10px] uppercase font-bold text-zinc-400">Official Email</div>
+                      <div className="text-xs font-bold text-zinc-900">{reviewingTechnician.email}</div>
+                    </div>
+                  </div>
+                  <div className="p-3 bg-white rounded-xl border border-zinc-200 flex items-center gap-3">
+                    <Phone className="w-4 h-4 text-zinc-400 shrink-0" />
+                    <div>
+                      <div className="text-[10px] uppercase font-bold text-zinc-400">Phone Number</div>
+                      <div className="text-xs font-bold text-zinc-900">{reviewingTechnician.phone || 'N/A'}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Grid 2: Work Assignment */}
+              <div>
+                <h4 className="text-xs font-black uppercase text-zinc-500 tracking-wider mb-2">
+                  Facility &amp; Work Assignment
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="p-3 bg-white rounded-xl border border-zinc-200">
+                    <div className="text-[10px] uppercase font-bold text-zinc-400">Plant</div>
+                    <div className="text-xs font-black text-zinc-900 mt-0.5">{reviewingTechnician.plant_name || 'Assigned Plant'}</div>
+                  </div>
+                  <div className="p-3 bg-white rounded-xl border border-zinc-200">
+                    <div className="text-[10px] uppercase font-bold text-zinc-400">Compulsory Shop</div>
+                    <div className="text-xs font-black text-zinc-900 mt-0.5">{reviewingTechnician.shop_name || 'Assigned Shop'}</div>
+                  </div>
+                  <div className="p-3 bg-white rounded-xl border border-zinc-200">
+                    <div className="text-[10px] uppercase font-bold text-zinc-400">Shift</div>
+                    <div className="text-xs font-black text-zinc-900 mt-0.5">{reviewingTechnician.shift || 'Shift A'}</div>
+                  </div>
+                  <div className="p-3 bg-white rounded-xl border border-zinc-200">
+                    <div className="text-[10px] uppercase font-bold text-zinc-400">Department</div>
+                    <div className="text-xs font-black text-zinc-900 mt-0.5">{reviewingTechnician.department}</div>
+                  </div>
+                  <div className="p-3 bg-white rounded-xl border border-zinc-200">
+                    <div className="text-[10px] uppercase font-bold text-zinc-400">Designation</div>
+                    <div className="text-xs font-black text-zinc-900 mt-0.5">{reviewingTechnician.designation}</div>
+                  </div>
+                  <div className="p-3 bg-white rounded-xl border border-zinc-200">
+                    <div className="text-[10px] uppercase font-bold text-zinc-400">Max Active Assignments</div>
+                    <div className="text-xs font-black text-zinc-900 mt-0.5">{reviewingTechnician.max_active_assignments || 5} concurrent tasks</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Grid 3: Technical Skills */}
+              <div>
+                <h4 className="text-xs font-black uppercase text-zinc-500 tracking-wider mb-2">
+                  Technical Skills &amp; Qualifications
+                </h4>
+                <div className="p-4 bg-zinc-50 rounded-xl border border-zinc-200">
+                  {parseSkills(reviewingTechnician.skills_json).length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {parseSkills(reviewingTechnician.skills_json).map((skill: string) => (
+                        <span
+                          key={skill}
+                          className="px-3 py-1 bg-amber-400 text-black text-xs font-black rounded-lg border border-amber-500 shadow-xs flex items-center gap-1.5"
+                        >
+                          <Wrench className="w-3.5 h-3.5 text-black" />
+                          <span>{skill}</span>
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-xs text-zinc-400 italic">No technical skills listed</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Registration timestamp */}
+              <div className="text-xs text-zinc-500 flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5" />
+                <span>Submitted registration on: </span>
+                <span className="font-bold text-zinc-700">
+                  {reviewingTechnician.created_at
+                    ? new Date(reviewingTechnician.created_at).toLocaleString('en-IN', {
+                        dateStyle: 'full',
+                        timeStyle: 'medium',
+                      })
+                    : 'Recent'}
+                </span>
+              </div>
+            </div>
+
+            <div className="p-4 bg-zinc-50 border-t border-zinc-200 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => setReviewingTechnician(null)}
+                className="px-4 py-2 border border-zinc-300 text-zinc-700 rounded-xl text-xs font-bold hover:bg-zinc-100 cursor-pointer"
+              >
+                Close
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const tech = reviewingTechnician;
+                    setRejectingTechnician(tech);
+                    setTechRejectionReason('');
+                  }}
+                  className="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <UserX className="w-4 h-4" />
+                  <span>Reject</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleApproveTechnician(reviewingTechnician)}
+                  disabled={pendingActionId === reviewingTechnician.id}
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow transition disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                >
+                  {pendingActionId === reviewingTechnician.id ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <UserCheck className="w-4 h-4" />
+                  )}
+                  <span>Approve &amp; Activate</span>
                 </button>
               </div>
             </div>

@@ -226,21 +226,74 @@ export function resolveNotificationRoute(
     return fallbackHome;
   }
 
-  // 10. USER MANAGEMENT / DIRECTORY & OPERATOR APPROVALS
-  if (
+  // 10. USER MANAGEMENT / DIRECTORY & OPERATOR / TECHNICIAN REGISTRATION APPROVALS
+  const isUserApprovalEntity =
+    entityType === 'user_approval' ||
+    entityType === 'technician_approval' ||
+    entityType === 'operator_approval' ||
+    entityType === 'users';
+
+  const isUserPath =
     path === '/users' ||
     path.startsWith('/users/') ||
-    entityType === 'user_approval' ||
-    entityType === 'users'
-  ) {
+    rawUrl.includes('/users');
+
+  if (isUserPath || isUserApprovalEntity) {
     if (userRole === 'admin' || userRole === 'manager') {
+      const fullText = `${notification.title || ''} ${notification.message || ''} ${rawUrl} ${entityType}`.toLowerCase();
+
+      // Priority 1: Technician Registration (new with sub=technicians, or existing matching title/message/url)
+      const isTechRegistration =
+        fullText.includes('sub=technician') ||
+        fullText.includes('sub=tech') ||
+        (fullText.includes('technician') &&
+          (fullText.includes('registration') ||
+           fullText.includes('registered') ||
+           fullText.includes('approval') ||
+           fullText.includes('pending') ||
+           fullText.includes('signup')));
+
+      if (isTechRegistration) {
+        return '/users?tab=pending&sub=technicians';
+      }
+
+      // Priority 2: Temporary Machine Replacement Request
+      const isTempRequest =
+        fullText.includes('sub=temp') ||
+        fullText.includes('temporary machine') ||
+        fullText.includes('replacement machine');
+
+      if (isTempRequest) {
+        return '/users?tab=pending&sub=temporary';
+      }
+
+      // Priority 3: Operator Registration
+      const isOpRegistration =
+        fullText.includes('sub=operator') ||
+        (fullText.includes('operator') &&
+          (fullText.includes('registration') ||
+           fullText.includes('registered') ||
+           fullText.includes('approval') ||
+           fullText.includes('pending') ||
+           fullText.includes('signup')));
+
+      if (isOpRegistration) {
+        return '/users?tab=pending&sub=operators';
+      }
+
+      // Priority 4: Generic user approval or query containing tab=pending
       if (
-        entityType === 'user_approval' ||
+        isUserApprovalEntity ||
         queryString.includes('tab=pending') ||
         rawUrl.includes('tab=pending')
       ) {
+        const subVal = getQueryParam(queryString || rawUrl, 'sub');
+        if (subVal) {
+          return `/users?tab=pending&sub=${subVal}`;
+        }
         return '/users?tab=pending';
       }
+
       return '/users';
     }
     return fallbackHome;
