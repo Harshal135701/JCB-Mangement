@@ -29,6 +29,7 @@ import {
   RefreshCw,
   Eye,
   ExternalLink,
+  MoreHorizontal,
   ChevronLeft,
   ChevronRight,
   Gauge,
@@ -190,6 +191,7 @@ export const TriageQueuePage: React.FC = () => {
   const [priorityComplaint, setPriorityComplaint] = useState<any | null>(null);
   const [rejectComplaint, setRejectComplaint] = useState<any | null>(null);
   const [infoComplaint, setInfoComplaint] = useState<any | null>(null);
+  const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
 
   // Technician Assignment Modals State
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
@@ -574,6 +576,27 @@ export const TriageQueuePage: React.FC = () => {
       openDetailModal(targetBreakdownId);
     }
   }, [targetBreakdownId]);
+
+  // Close row action dropdown menu on outside click or Escape
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target?.closest('.action-menu-container')) {
+        setActiveActionMenuId(null);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setActiveActionMenuId(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
 
   // Action 1: Acknowledge Complaint
   const handleAcknowledge = async (complaintId: string) => {
@@ -1062,15 +1085,16 @@ export const TriageQueuePage: React.FC = () => {
                   <th className="py-3.5 px-4">Assigned Technician</th>
                   <th className="py-3.5 px-4">Reported By</th>
                   <th className="py-3.5 px-4">Status</th>
-                  <th className="py-3.5 px-4 text-right">Action</th>
+                  <th className="py-3.5 px-4 pr-6 text-right w-[165px] min-w-[165px]">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs">
-                {breakdowns.map((t) => {
+                {breakdowns.map((t, idx) => {
                   const isNew = t.status === 'new';
                   const isConverted = t.status === 'work_order_created';
                   const isRejected = t.status === 'rejected';
                   const isClosed = t.status === 'closed';
+                  const isNearBottom = idx >= breakdowns.length - 2;
 
                   return (
                     <tr key={t.id} className="hover:bg-amber-50/20 transition group">
@@ -1211,12 +1235,13 @@ export const TriageQueuePage: React.FC = () => {
                       </td>
 
                       {/* Triage Actions */}
-                      <td className="py-3 px-4 text-right">
+                      <td className={`py-3 px-4 pr-6 text-right align-middle w-[165px] min-w-[165px] ${activeActionMenuId === t.id ? 'relative z-30' : 'relative'}`}>
                         <div className="flex items-center justify-end gap-1.5">
                           {/* 1. View Details (Always available) */}
                           <button
+                            type="button"
                             onClick={() => openDetailModal(t.id)}
-                            className="p-1.5 hover:bg-slate-100 text-zinc-600 rounded-lg transition"
+                            className="w-8 h-8 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-zinc-600 hover:text-zinc-950 transition shadow-2xs flex items-center justify-center shrink-0 cursor-pointer"
                             title="Inspect Details & Audit History"
                           >
                             <Eye className="w-4 h-4" />
@@ -1225,68 +1250,138 @@ export const TriageQueuePage: React.FC = () => {
                           {/* 2. Manager Actions (Strictly Manager & Admin only) */}
                           {isManagerOrAdmin && (
                             <>
+                              {/* New Complaint: Primary Quick Action = Approve / Ack */}
                               {isNew && (
                                 <button
+                                  type="button"
                                   onClick={() => handleAcknowledge(t.id)}
                                   disabled={actionLoading}
-                                  className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-800 text-[10px] font-black uppercase rounded-lg border border-blue-200 transition cursor-pointer disabled:opacity-50"
-                                  title="Acknowledge Complaint"
+                                  className="h-8 px-2.5 bg-blue-50 hover:bg-blue-100 text-blue-800 text-[11px] font-bold rounded-lg border border-blue-200 transition cursor-pointer disabled:opacity-50 flex items-center gap-1.5 shadow-2xs shrink-0"
+                                  title="Approve / Acknowledge Complaint"
                                 >
-                                  Ack
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />
+                                  <span>Approve</span>
                                 </button>
                               )}
 
-                              {/* Dispatch Tech strictly hidden for rejected, closed, or converted complaints */}
-                              {!isConverted && !isClosed && !isRejected && (
-                                <>
-                                  <button
-                                    onClick={() => {
-                                      setAssignComplaint(t);
-                                      setAssignForm((prev) => ({
-                                        ...prev,
-                                        is_major_breakdown: t.priority === 'critical',
-                                      }));
-                                    }}
-                                    disabled={actionLoading}
-                                    className="px-3 py-1 bg-jcb-yellow hover:bg-jcb-yellowDark text-black text-[10px] font-black uppercase rounded-lg border border-amber-500 shadow-xs transition cursor-pointer flex items-center gap-1 disabled:opacity-50"
-                                  >
-                                    <UserCheck className="w-3 h-3" />
-                                    <span>Dispatch Tech</span>
-                                  </button>
-
-                                  <button
-                                    onClick={() => {
-                                      setInfoComplaint(t);
-                                      setInfoRemarks('');
-                                    }}
-                                    disabled={actionLoading}
-                                    className="p-1.5 hover:bg-slate-100 text-zinc-500 hover:text-black rounded-lg transition disabled:opacity-50"
-                                    title="Request Additional Information"
-                                  >
-                                    <MessageSquare className="w-3.5 h-3.5" />
-                                  </button>
-
-                                  <button
-                                    onClick={() => {
-                                      setRejectComplaint(t);
-                                      setRejectReason('');
-                                    }}
-                                    disabled={actionLoading}
-                                    className="p-1.5 hover:bg-red-50 text-zinc-400 hover:text-red-700 rounded-lg transition disabled:opacity-50"
-                                    title="Reject Breakdown"
-                                  >
-                                    <X className="w-4 h-4" />
-                                  </button>
-                                </>
+                              {/* Acknowledged / In Triage: Primary Quick Action = Dispatch Tech */}
+                              {!isConverted && !isClosed && !isRejected && !isNew && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setAssignComplaint(t);
+                                    setAssignForm((prev) => ({
+                                      ...prev,
+                                      is_major_breakdown: t.priority === 'critical',
+                                    }));
+                                  }}
+                                  disabled={actionLoading}
+                                  className="h-8 px-2.5 bg-jcb-yellow hover:bg-jcb-yellowDark text-zinc-950 text-[11px] font-bold rounded-lg border border-amber-500 shadow-2xs transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50 shrink-0"
+                                  title="Dispatch Technician & Create Work Order"
+                                >
+                                  <UserCheck className="w-3.5 h-3.5" />
+                                  <span>Dispatch</span>
+                                </button>
                               )}
 
+                              {/* Secondary / Contextual Actions Dropdown Menu */}
+                              {!isConverted && !isClosed && !isRejected && (
+                                <div className="relative inline-block text-left action-menu-container">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setActiveActionMenuId(activeActionMenuId === t.id ? null : t.id);
+                                    }}
+                                    className={`w-8 h-8 rounded-lg border transition shadow-2xs flex items-center justify-center shrink-0 cursor-pointer ${
+                                      activeActionMenuId === t.id
+                                        ? 'border-zinc-400 bg-slate-100 text-zinc-950'
+                                        : 'border-slate-200 bg-white hover:bg-slate-100 text-zinc-500 hover:text-zinc-950'
+                                    }`}
+                                    title="More actions"
+                                  >
+                                    <MoreHorizontal className="w-4 h-4" />
+                                  </button>
+
+                                  {activeActionMenuId === t.id && (
+                                    <div
+                                      className={`absolute right-0 z-50 w-48 bg-white rounded-xl shadow-xl border border-slate-200 py-1 text-left text-xs divide-y divide-slate-100 animate-in fade-in zoom-in-95 duration-100 ${
+                                        isNearBottom ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
+                                      }`}
+                                    >
+                                      <div className="py-1">
+                                        {isNew && (
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setActiveActionMenuId(null);
+                                              setAssignComplaint(t);
+                                              setAssignForm((prev) => ({
+                                                ...prev,
+                                                is_major_breakdown: t.priority === 'critical',
+                                              }));
+                                            }}
+                                            className="w-full px-3 py-2 text-zinc-700 hover:bg-amber-50 hover:text-amber-950 flex items-center gap-2 font-medium transition cursor-pointer"
+                                          >
+                                            <UserCheck className="w-3.5 h-3.5 text-amber-600" />
+                                            <span>Dispatch Technician</span>
+                                          </button>
+                                        )}
+
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setActiveActionMenuId(null);
+                                            setInfoComplaint(t);
+                                            setInfoRemarks('');
+                                          }}
+                                          className="w-full px-3 py-2 text-zinc-700 hover:bg-slate-50 hover:text-zinc-950 flex items-center gap-2 font-medium transition cursor-pointer"
+                                        >
+                                          <MessageSquare className="w-3.5 h-3.5 text-zinc-500" />
+                                          <span>Request Info</span>
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setActiveActionMenuId(null);
+                                            openDetailModal(t.id);
+                                          }}
+                                          className="w-full px-3 py-2 text-zinc-700 hover:bg-slate-50 hover:text-zinc-950 flex items-center gap-2 font-medium transition cursor-pointer"
+                                        >
+                                          <Eye className="w-3.5 h-3.5 text-zinc-500" />
+                                          <span>Inspect Details</span>
+                                        </button>
+                                      </div>
+
+                                      <div className="py-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setActiveActionMenuId(null);
+                                            setRejectComplaint(t);
+                                            setRejectReason('');
+                                          }}
+                                          className="w-full px-3 py-2 text-red-600 hover:bg-red-50 hover:text-red-700 flex items-center gap-2 font-medium transition cursor-pointer"
+                                        >
+                                          <X className="w-3.5 h-3.5 text-red-500" />
+                                          <span>Reject Report</span>
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Converted to Work Order: View Work Order Link */}
                               {isConverted && (
                                 <Link
                                   to="/work-orders"
-                                  className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase rounded-lg border border-emerald-300 transition flex items-center gap-1"
+                                  className="h-8 px-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[11px] font-bold rounded-lg border border-emerald-200 transition flex items-center gap-1.5 shadow-2xs shrink-0"
+                                  title="View Associated Work Order"
                                 >
                                   <span>View WO</span>
-                                  <ExternalLink className="w-3 h-3" />
+                                  <ExternalLink className="w-3.5 h-3.5 text-emerald-600" />
                                 </Link>
                               )}
                             </>
