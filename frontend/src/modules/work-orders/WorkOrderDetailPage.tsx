@@ -522,6 +522,7 @@ export const WorkOrderDetailPage: React.FC = () => {
     else if (stepKey === 'verification') targetRank = 4;
     else if (stepKey === 'closed') targetRank = 5;
 
+    if (stepKey === 'closed' && (isClosed || isCompleted || currentRank >= 5)) return 'completed';
     if (currentRank > targetRank) return 'completed';
     if (currentRank === targetRank) return 'current';
     return 'pending';
