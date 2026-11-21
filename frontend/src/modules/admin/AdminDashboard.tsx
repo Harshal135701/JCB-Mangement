@@ -659,8 +659,8 @@ export const AdminDashboard: React.FC = () => {
         {/* INVENTORY ANALYTICS */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mt-6">
           {/* CATEGORY DISTRIBUTION */}
-          <div className="border border-slate-200 rounded-xl p-4">
-            <div className="flex items-center justify-between mb-4">
+          <div className="border border-slate-200 rounded-xl p-4 flex flex-col h-[460px] overflow-hidden">
+            <div className="flex items-center justify-between mb-4 shrink-0">
               <h4 className="text-[15px] sm:text-base font-semibold text-zinc-800">
                 Spare Parts Categories
               </h4>
@@ -670,55 +670,57 @@ export const AdminDashboard: React.FC = () => {
             </div>
 
             {loading ? (
-              <div className="py-12 text-center text-[13px] text-zinc-400 font-normal">
+              <div className="flex-1 flex items-center justify-center py-12 text-center text-[13px] text-zinc-400 font-normal">
                 Loading categories...
               </div>
             ) : inventoryCategories.length === 0 ? (
-              <div className="py-12 text-center text-[13px] text-zinc-400 font-normal">
+              <div className="flex-1 flex items-center justify-center py-12 text-center text-[13px] text-zinc-400 font-normal">
                 No spare part categories found
               </div>
             ) : (
-              <div className="grid grid-cols-1 min-[420px]:grid-cols-2 sm:grid-cols-3 gap-3">
-                {inventoryCategories.map((category: any, index: number) => {
-                  const colors = [
-                    'bg-blue-50 border-blue-200 text-blue-700',
-                    'bg-emerald-50 border-emerald-200 text-emerald-700',
-                    'bg-amber-50 border-amber-200 text-amber-700',
-                    'bg-purple-50 border-purple-200 text-purple-700',
-                    'bg-cyan-50 border-cyan-200 text-cyan-700',
-                    'bg-rose-50 border-rose-200 text-rose-700',
-                  ];
+              <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 pr-1.5">
+                <div className="grid grid-cols-1 min-[420px]:grid-cols-2 sm:grid-cols-3 gap-3">
+                  {inventoryCategories.map((category: any, index: number) => {
+                    const colors = [
+                      'bg-blue-50 border-blue-200 text-blue-700',
+                      'bg-emerald-50 border-emerald-200 text-emerald-700',
+                      'bg-amber-50 border-amber-200 text-amber-700',
+                      'bg-purple-50 border-purple-200 text-purple-700',
+                      'bg-cyan-50 border-cyan-200 text-cyan-700',
+                      'bg-rose-50 border-rose-200 text-rose-700',
+                    ];
 
-                  return (
-                    <div
-                      key={`${category.category}-${index}`}
-                      className={`rounded-xl border p-4 ${colors[index % colors.length]
-                        }`}
-                    >
-                      <p className="text-[13px] sm:text-sm font-semibold truncate">
-                        {category.category || 'Uncategorized'}
-                      </p>
-                      <p className="text-2xl font-bold font-mono mt-2 leading-none">
-                        {formatNumber(Number(category.part_count ?? 0))}
-                      </p>
-                      <p className="text-xs font-normal opacity-85 mt-1">
-                        Spare Part SKUs
-                      </p>
-                      <div className="mt-3 pt-2 border-t border-current/10">
-                        <p className="text-xs font-semibold">
-                          {formatNumber(Number(category.available_stock ?? 0))} units available
+                    return (
+                      <div
+                        key={`${category.category}-${index}`}
+                        className={`rounded-xl border p-4 ${colors[index % colors.length]
+                          }`}
+                      >
+                        <p className="text-[13px] sm:text-sm font-semibold truncate">
+                          {category.category || 'Uncategorized'}
                         </p>
+                        <p className="text-2xl font-bold font-mono mt-2 leading-none">
+                          {formatNumber(Number(category.part_count ?? 0))}
+                        </p>
+                        <p className="text-xs font-normal opacity-85 mt-1">
+                          Spare Part SKUs
+                        </p>
+                        <div className="mt-3 pt-2 border-t border-current/10">
+                          <p className="text-xs font-semibold">
+                            {formatNumber(Number(category.available_stock ?? 0))} units available
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>
 
           {/* AVAILABLE STOCK BY CATEGORY */}
-          <div className="border border-slate-200 rounded-xl p-4">
-            <div className="flex items-center justify-between mb-4">
+          <div className="border border-slate-200 rounded-xl p-4 flex flex-col h-[460px] overflow-hidden">
+            <div className="flex items-center justify-between mb-4 shrink-0">
               <h4 className="text-[15px] sm:text-base font-semibold text-zinc-800">
                 Available Stock by Category
               </h4>
@@ -728,55 +730,57 @@ export const AdminDashboard: React.FC = () => {
             </div>
 
             {loading ? (
-              <div className="py-12 text-center text-[13px] text-zinc-400 font-normal">
+              <div className="flex-1 flex items-center justify-center py-12 text-center text-[13px] text-zinc-400 font-normal">
                 Loading category stock...
               </div>
             ) : inventoryCategories.length === 0 ? (
-              <div className="py-12 text-center text-[13px] text-zinc-400 font-normal">
+              <div className="flex-1 flex items-center justify-center py-12 text-center text-[13px] text-zinc-400 font-normal">
                 No category inventory data available
               </div>
             ) : (
-              <div className="space-y-5">
-                {inventoryCategories.map((category: any, index: number) => {
-                  const stock = Number(category.available_stock ?? 0);
-                  const percentage =
-                    maxCategoryStock > 0
-                      ? (stock / maxCategoryStock) * 100
-                      : 0;
+              <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 pr-1.5">
+                <div className="space-y-5">
+                  {inventoryCategories.map((category: any, index: number) => {
+                    const stock = Number(category.available_stock ?? 0);
+                    const percentage =
+                      maxCategoryStock > 0
+                        ? (stock / maxCategoryStock) * 100
+                        : 0;
 
-                  return (
-                    <div key={`${category.category}-${index}`}>
-                      <div className="flex items-center justify-between gap-3 mb-2">
-                        <span className="text-[13px] sm:text-sm font-semibold text-zinc-700 truncate">
-                          {category.category || 'Uncategorized'}
-                        </span>
-                        <span className="text-[13px] sm:text-sm font-bold font-mono text-zinc-900 whitespace-nowrap">
-                          {formatNumber(stock)}
-                        </span>
-                      </div>
+                    return (
+                      <div key={`${category.category}-${index}`}>
+                        <div className="flex items-center justify-between gap-3 mb-2">
+                          <span className="text-[13px] sm:text-sm font-semibold text-zinc-700 truncate">
+                            {category.category || 'Uncategorized'}
+                          </span>
+                          <span className="text-[13px] sm:text-sm font-bold font-mono text-zinc-900 whitespace-nowrap">
+                            {formatNumber(stock)}
+                          </span>
+                        </div>
 
-                      <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all duration-500"
-                          style={{
-                            width: `${percentage}%`,
-                            backgroundColor:
-                              categoryColors[index % categoryColors.length],
-                          }}
-                        />
-                      </div>
+                        <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-500"
+                            style={{
+                              width: `${percentage}%`,
+                              backgroundColor:
+                                categoryColors[index % categoryColors.length],
+                            }}
+                          />
+                        </div>
 
-                      <div className="flex justify-between mt-1.5">
-                        <span className="text-xs text-zinc-500">
-                          {formatNumber(Number(category.part_count ?? 0))} SKUs
-                        </span>
-                        <span className="text-xs text-zinc-500">
-                          {formatNumber(Number(category.physical_stock ?? 0))} physical units
-                        </span>
+                        <div className="flex justify-between mt-1.5">
+                          <span className="text-xs text-zinc-500">
+                            {formatNumber(Number(category.part_count ?? 0))} SKUs
+                          </span>
+                          <span className="text-xs text-zinc-500">
+                            {formatNumber(Number(category.physical_stock ?? 0))} physical units
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>

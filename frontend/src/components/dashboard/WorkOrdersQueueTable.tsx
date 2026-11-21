@@ -137,10 +137,10 @@ export const WorkOrdersQueueTable: React.FC<WorkOrdersQueueTableProps> = ({
   });
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-xs flex flex-col justify-between h-full">
+    <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-xs flex flex-col h-[460px] overflow-hidden">
       {/* Top Header & Action */}
-      <div>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+      <div className="shrink-0">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-purple-50 border border-purple-200 flex items-center justify-center shrink-0">
               <Wrench className="w-4 h-4 text-purple-700" />
@@ -164,7 +164,7 @@ export const WorkOrdersQueueTable: React.FC<WorkOrdersQueueTableProps> = ({
         </div>
 
         {/* Tabs & Search Filter Bar */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-100">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-3 pb-3 border-b border-slate-100">
           {/* Filter Pills */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
             {(
@@ -205,95 +205,95 @@ export const WorkOrdersQueueTable: React.FC<WorkOrdersQueueTableProps> = ({
             />
           </div>
         </div>
+      </div>
 
-        {/* Responsive Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-slate-200/80 text-[13px] font-semibold text-zinc-600">
-                <th className="py-2.5 px-3">WO #</th>
-                <th className="py-2.5 px-3">Type</th>
-                <th className="py-2.5 px-3">Machine</th>
-                <th className="py-2.5 px-3">Priority</th>
-                <th className="py-2.5 px-3">Status</th>
-                <th className="py-2.5 px-3">Assigned To</th>
-                <th className="py-2.5 px-3">Due Date</th>
-                <th className="py-2.5 px-3 text-right">Actions</th>
+      {/* Responsive Table Scroll Container */}
+      <div className="flex-1 overflow-y-auto overflow-x-auto min-h-0 pr-1">
+        <table className="w-full text-left border-collapse">
+          <thead className="sticky top-0 bg-white z-10 shadow-2xs">
+            <tr className="border-b border-slate-200 text-[13px] font-semibold text-zinc-600 bg-white">
+              <th className="py-2.5 px-3 bg-white">WO #</th>
+              <th className="py-2.5 px-3 bg-white">Type</th>
+              <th className="py-2.5 px-3 bg-white">Machine</th>
+              <th className="py-2.5 px-3 bg-white">Priority</th>
+              <th className="py-2.5 px-3 bg-white">Status</th>
+              <th className="py-2.5 px-3 bg-white">Assigned To</th>
+              <th className="py-2.5 px-3 bg-white">Due Date</th>
+              <th className="py-2.5 px-3 text-right bg-white">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 text-sm text-zinc-800">
+            {loading ? (
+              <tr>
+                <td colSpan={8} className="py-8 text-center text-[13px] text-zinc-400 font-normal">
+                  Loading work orders queue...
+                </td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-sm text-zinc-800">
-              {loading ? (
-                <tr>
-                  <td colSpan={8} className="py-8 text-center text-[13px] text-zinc-400 font-normal">
-                    Loading work orders queue...
+            ) : filteredOrders.length === 0 ? (
+              <tr>
+                <td colSpan={8} className="py-8 text-center text-[13px] text-zinc-400 font-normal">
+                  No work orders found matching the filter criteria.
+                </td>
+              </tr>
+            ) : (
+              filteredOrders.map((wo) => (
+                <tr key={wo.id} className="hover:bg-slate-50/70 transition group">
+                  <td className="py-3 px-3 font-mono font-bold text-zinc-950">
+                    <Link
+                      to={`/work-orders/${wo.id}`}
+                      className="hover:text-amber-600 transition flex items-center gap-1"
+                    >
+                      <span>{wo.woNumber}</span>
+                    </Link>
+                  </td>
+                  <td className="py-3 px-3 text-zinc-600 font-normal">
+                    {wo.type}
+                  </td>
+                  <td className="py-3 px-3 font-semibold text-zinc-900">
+                    {wo.machine}
+                  </td>
+                  <td className="py-3 px-3">
+                    <span
+                      className={`inline-block px-2.5 py-0.5 rounded-md text-xs font-semibold border ${getPriorityBadge(
+                        wo.priority
+                      )}`}
+                    >
+                      {wo.priority}
+                    </span>
+                  </td>
+                  <td className="py-3 px-3">
+                    <span
+                      className={`inline-block px-2.5 py-0.5 rounded-md text-xs font-semibold border ${getStatusBadge(
+                        wo.status
+                      )}`}
+                    >
+                      {wo.status}
+                    </span>
+                  </td>
+                  <td className="py-3 px-3 text-zinc-700 font-normal">
+                    {wo.assignedTo}
+                  </td>
+                  <td className="py-3 px-3 font-mono text-zinc-500 text-xs">
+                    {wo.dueDate}
+                  </td>
+                  <td className="py-3 px-3 text-right">
+                    <Link
+                      to={`/work-orders/${wo.id}`}
+                      className="inline-flex items-center justify-center p-1.5 text-zinc-400 hover:text-black hover:bg-slate-100 rounded-lg transition"
+                      title="View Details"
+                    >
+                      <MoreHorizontal className="w-4 h-4" />
+                    </Link>
                   </td>
                 </tr>
-              ) : filteredOrders.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="py-8 text-center text-[13px] text-zinc-400 font-normal">
-                    No work orders found matching the filter criteria.
-                  </td>
-                </tr>
-              ) : (
-                filteredOrders.map((wo) => (
-                  <tr key={wo.id} className="hover:bg-slate-50/70 transition group">
-                    <td className="py-3 px-3 font-mono font-bold text-zinc-950">
-                      <Link
-                        to={`/work-orders/${wo.id}`}
-                        className="hover:text-amber-600 transition flex items-center gap-1"
-                      >
-                        <span>{wo.woNumber}</span>
-                      </Link>
-                    </td>
-                    <td className="py-3 px-3 text-zinc-600 font-normal">
-                      {wo.type}
-                    </td>
-                    <td className="py-3 px-3 font-semibold text-zinc-900">
-                      {wo.machine}
-                    </td>
-                    <td className="py-3 px-3">
-                      <span
-                        className={`inline-block px-2.5 py-0.5 rounded-md text-xs font-semibold border ${getPriorityBadge(
-                          wo.priority
-                        )}`}
-                      >
-                        {wo.priority}
-                      </span>
-                    </td>
-                    <td className="py-3 px-3">
-                      <span
-                        className={`inline-block px-2.5 py-0.5 rounded-md text-xs font-semibold border ${getStatusBadge(
-                          wo.status
-                        )}`}
-                      >
-                        {wo.status}
-                      </span>
-                    </td>
-                    <td className="py-3 px-3 text-zinc-700 font-normal">
-                      {wo.assignedTo}
-                    </td>
-                    <td className="py-3 px-3 font-mono text-zinc-500 text-xs">
-                      {wo.dueDate}
-                    </td>
-                    <td className="py-3 px-3 text-right">
-                      <Link
-                        to={`/work-orders/${wo.id}`}
-                        className="inline-flex items-center justify-center p-1.5 text-zinc-400 hover:text-black hover:bg-slate-100 rounded-lg transition"
-                        title="View Details"
-                      >
-                        <MoreHorizontal className="w-4 h-4" />
-                      </Link>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
 
       {/* Footer count */}
-      <div className="pt-4 mt-5 border-t border-slate-100 flex items-center justify-between text-[13px] text-zinc-500 font-normal">
+      <div className="pt-3 mt-2 border-t border-slate-100 flex items-center justify-between text-[13px] text-zinc-500 font-normal shrink-0">
         <span>
           Showing <strong className="text-zinc-900 font-semibold">{filteredOrders.length}</strong> of{' '}
           <strong className="text-zinc-900 font-semibold">{orders.length}</strong> work orders
