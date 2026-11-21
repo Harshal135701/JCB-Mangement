@@ -1061,19 +1061,30 @@ export const MachineMasterScreen = ({ navigation }: any) => {
       </Modal>
 
       {/* Create / Edit Modal */}
-      <Modal visible={isModalOpen} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
+      <Modal visible={isModalOpen} animationType="slide" transparent onRequestClose={() => setIsModalOpen(false)}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalOverlay}
+        >
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
                 {editingMachine ? `EDIT MACHINE: ${formData.machine_code}` : 'REGISTER NEW MACHINE MASTER'}
               </Text>
-              <TouchableOpacity onPress={() => setIsModalOpen(false)}>
+              <TouchableOpacity
+                onPress={() => setIsModalOpen(false)}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
                 <Text style={styles.closeIcon}>✕</Text>
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalBody}>
+            <ScrollView
+              style={styles.modalBody}
+              contentContainerStyle={{ paddingBottom: 28 }}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={true}
+            >
               <Text style={styles.fieldLabel}>Machine Code *</Text>
               <TextInput
                 style={styles.modalInput}
@@ -1189,24 +1200,34 @@ export const MachineMasterScreen = ({ navigation }: any) => {
                 keyboardType="numeric"
                 placeholderTextColor="#94A3B8"
               />
-
-              <View style={styles.modalActions}>
-                <TouchableOpacity style={styles.cancelBtn} onPress={() => setIsModalOpen(false)}>
-                  <Text style={styles.cancelBtnText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={actionLoading}>
-                  {actionLoading ? (
-                    <ActivityIndicator color="#000000" />
-                  ) : (
-                    <Text style={styles.saveBtnText}>
-                      {editingMachine ? 'UPDATE MACHINE' : 'CREATE MACHINE'}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              </View>
             </ScrollView>
+
+            {/* Pinned Sticky Footer Actions - ALWAYS VISIBLE & ACCESSIBLE */}
+            <View style={styles.modalActionsPinned}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => setIsModalOpen(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.saveBtn}
+                onPress={handleSave}
+                disabled={actionLoading}
+                activeOpacity={0.8}
+              >
+                {actionLoading ? (
+                  <ActivityIndicator color="#000000" />
+                ) : (
+                  <Text style={styles.saveBtnText}>
+                    {editingMachine ? 'UPDATE MACHINE' : 'CREATE MACHINE'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -1738,6 +1759,18 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: '#E2E8F0',
+  },
+  modalActionsPinned: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === 'android' ? 24 : 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
   },
   cancelBtn: {
     paddingVertical: 10,

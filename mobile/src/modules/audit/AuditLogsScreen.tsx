@@ -83,8 +83,11 @@ export const AuditLogsScreen = () => {
         icon="shield-check-outline"
         sectionTitle="Audit & Security Ledger"
         sectionSubtitle="Immutable ISO 9001 compliance activity trail"
-        showBack={canGoBack}
-        onBack={() => navigation.goBack()}
+        showBack={true}
+        onBack={() => {
+          if (navigation?.canGoBack?.()) navigation.goBack();
+          else navigation?.navigate?.('MainTabs');
+        }}
         rightAction={
           <View style={styles.isoBadge}>
             <Text style={styles.isoBadgeText}>ISO 9001</Text>

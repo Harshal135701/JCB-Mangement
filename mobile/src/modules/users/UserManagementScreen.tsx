@@ -10,6 +10,8 @@ import {
   Alert,
   ActivityIndicator,
   RefreshControl,
+  Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -273,8 +275,11 @@ export const UserManagementScreen = () => {
         icon="account-group-outline"
         sectionTitle="Staff Management"
         sectionSubtitle="Operators, technicians & line managers roster"
-        showBack={canGoBack}
-        onBack={() => navigation.goBack()}
+        showBack={true}
+        onBack={() => {
+          if (navigation?.canGoBack?.()) navigation.goBack();
+          else navigation?.navigate?.('MainTabs');
+        }}
         rightAction={
           isAdmin ? (
             <TouchableOpacity
@@ -457,6 +462,14 @@ export const UserManagementScreen = () => {
                       <MaterialCommunityIcons name="clock-time-four-outline" size={14} color="#64748B" />
                       <Text style={styles.detailText}>{p.shift || 'Shift A'}</Text>
                     </View>
+                    {p.requested_machine_code ? (
+                      <View style={styles.detailRow}>
+                        <MaterialCommunityIcons name="tractor" size={14} color="#D97706" />
+                        <Text style={[styles.detailText, { color: '#B45309', fontWeight: '700' }]}>
+                          Requested: {p.requested_machine_code} {p.requested_machine_name ? `(${p.requested_machine_name})` : ''}
+                        </Text>
+                      </View>
+                    ) : null}
                   </View>
 
                   {/* Approve / Reject Actions */}
@@ -598,7 +611,10 @@ export const UserManagementScreen = () => {
 
       {/* Enroll / Edit Modal */}
       <Modal visible={isModalOpen} animationType="slide" transparent onRequestClose={() => setIsModalOpen(false)}>
-        <View style={styles.modalBackdrop}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalBackdrop}
+        >
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <View>
@@ -616,7 +632,12 @@ export const UserManagementScreen = () => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              style={styles.modalScroll}
+              contentContainerStyle={{ paddingBottom: 24 }}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={true}
+            >
               <Text style={styles.inputLabel}>Employee Code *</Text>
               <TextInput
                 style={styles.textInput}
@@ -714,32 +735,32 @@ export const UserManagementScreen = () => {
                   />
                 </>
               )}
-
-              <View style={styles.modalBtnRow}>
-                <TouchableOpacity
-                  style={styles.cancelBtn}
-                  onPress={() => setIsModalOpen(false)}
-                >
-                  <Text style={styles.cancelBtnText}>Cancel</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.saveBtn}
-                  onPress={handleSubmit}
-                  disabled={actionLoading}
-                >
-                  {actionLoading ? (
-                    <ActivityIndicator color="#000000" size="small" />
-                  ) : (
-                    <Text style={styles.saveBtnText}>
-                      {editingUser ? 'Save Changes' : 'Enroll Personnel'}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              </View>
             </ScrollView>
+
+            <View style={styles.modalBtnRowPinned}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => setIsModalOpen(false)}
+              >
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.saveBtn}
+                onPress={handleSubmit}
+                disabled={actionLoading}
+              >
+                {actionLoading ? (
+                  <ActivityIndicator color="#000000" size="small" />
+                ) : (
+                  <Text style={styles.saveBtnText}>
+                    {editingUser ? 'Save Changes' : 'Enroll Personnel'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Operator Rejection Modal */}
@@ -1087,13 +1108,14 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: '85%',
-    padding: 20,
+    paddingTop: 18,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
+    paddingHorizontal: 18,
     paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
@@ -1117,7 +1139,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   modalScroll: {
-    marginBottom: 10,
+    paddingHorizontal: 18,
+    marginBottom: 0,
   },
   inputLabel: {
     fontSize: 11.5,
@@ -1196,6 +1219,16 @@ const styles = StyleSheet.create({
     gap: 10,
     marginTop: 20,
     marginBottom: 10,
+  },
+  modalBtnRowPinned: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === 'android' ? 24 : 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
   },
   cancelBtn: {
     flex: 1,

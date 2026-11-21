@@ -10,6 +10,8 @@ import {
   Alert,
   ActivityIndicator,
   RefreshControl,
+  Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -192,8 +194,11 @@ export const RDCScreen = () => {
         icon="truck-fast-outline"
         sectionTitle="Returnable Gate Passes (RDC)"
         sectionSubtitle="Factory outward repair & vendor movement"
-        showBack={canGoBack}
-        onBack={() => navigation.goBack()}
+        showBack={true}
+        onBack={() => {
+          if (navigation?.canGoBack?.()) navigation.goBack();
+          else navigation?.navigate?.('MainTabs');
+        }}
         rightAction={
           <TouchableOpacity
             style={styles.newBtn}
@@ -471,7 +476,10 @@ export const RDCScreen = () => {
 
       {/* New RDC Modal */}
       <Modal visible={isModalOpen} animationType="slide" transparent onRequestClose={() => setIsModalOpen(false)}>
-        <View style={styles.modalBackdrop}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalBackdrop}
+        >
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <View>
@@ -487,7 +495,12 @@ export const RDCScreen = () => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              style={styles.modalScroll}
+              contentContainerStyle={{ paddingBottom: 24 }}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={true}
+            >
               <Text style={styles.inputLabel}>Vendor / Service Partner *</Text>
               <TextInput
                 style={styles.textInput}
@@ -544,30 +557,33 @@ export const RDCScreen = () => {
                 placeholder="YYYY-MM-DD"
                 placeholderTextColor="#94A3B8"
               />
-
-              <View style={styles.modalBtnRow}>
-                <TouchableOpacity
-                  style={styles.cancelBtn}
-                  onPress={() => setIsModalOpen(false)}
-                >
-                  <Text style={styles.cancelBtnText}>Cancel</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.saveBtn}
-                  onPress={handleCreateRDC}
-                  disabled={actionLoading}
-                >
-                  {actionLoading ? (
-                    <ActivityIndicator color="#000000" size="small" />
-                  ) : (
-                    <Text style={styles.saveBtnText}>Issue Gate Pass</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
             </ScrollView>
+
+            {/* Pinned Sticky Footer Actions - NEVER CUT OFF */}
+            <View style={styles.modalBtnRowPinned}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => setIsModalOpen(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.saveBtn}
+                onPress={handleCreateRDC}
+                disabled={actionLoading}
+                activeOpacity={0.8}
+              >
+                {actionLoading ? (
+                  <ActivityIndicator color="#000000" size="small" />
+                ) : (
+                  <Text style={styles.saveBtnText}>Issue Gate Pass</Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -1057,6 +1073,16 @@ const styles = StyleSheet.create({
     gap: 10,
     marginTop: 20,
     marginBottom: 10,
+  },
+  modalBtnRowPinned: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === 'android' ? 24 : 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
   },
   cancelBtn: {
     flex: 1,

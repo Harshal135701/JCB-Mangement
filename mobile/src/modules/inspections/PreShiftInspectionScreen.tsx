@@ -391,8 +391,11 @@ export const PreShiftInspectionScreen = ({ navigation }: any) => {
         icon="clipboard-check"
         sectionTitle="OPERATIONAL EXCELLENCE"
         sectionSubtitle="Pre-shift machinery safety & sensor clearance"
-        showBack={canGoBack}
-        onBack={() => navigation?.goBack?.()}
+        showBack={true}
+        onBack={() => {
+          if (navigation?.canGoBack?.()) navigation.goBack();
+          else navigation?.navigate?.('MainTabs');
+        }}
         rightAction={
           <TouchableOpacity
             style={styles.headerActionBtn}

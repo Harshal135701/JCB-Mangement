@@ -70,8 +70,11 @@ export const DowntimeAnalyticsScreen = () => {
         icon="chart-timeline-variant"
         sectionTitle="Plant Downtime & Reliability"
         sectionSubtitle="MTTR, MTBF availability & 80/20 root cause analysis"
-        showBack={canGoBack}
-        onBack={() => navigation.goBack()}
+        showBack={true}
+        onBack={() => {
+          if (navigation?.canGoBack?.()) navigation.goBack();
+          else navigation?.navigate?.('MainTabs');
+        }}
       />
 
       {/* Time Period Filter Chips */}

@@ -124,7 +124,10 @@ export const ReportBreakdownScreen = ({ navigation, route }: any) => {
         sectionTitle="Report Machine Breakdown"
         sectionSubtitle="Alert Maintenance Line Supervisor Immediately"
         showBack={true}
-        onBack={() => navigation.goBack()}
+        onBack={() => {
+          if (navigation?.canGoBack?.()) navigation.goBack();
+          else navigation?.navigate?.('MainTabs');
+        }}
       />
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>

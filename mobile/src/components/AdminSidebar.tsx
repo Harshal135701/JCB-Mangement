@@ -66,7 +66,23 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
   const handleNavigate = (screenName: string, params?: any) => {
     onClose();
     setTimeout(() => {
-      navigation?.navigate?.(screenName, params);
+      const target =
+        screenName === 'ShopfloorTab' || screenName === 'OperatorTab'
+          ? 'MainTabs'
+          : screenName === 'MachinesTab'
+          ? 'MachinesMaster'
+          : screenName === 'WorkOrdersTab'
+          ? 'WorkOrders'
+          : screenName === 'SparesTab'
+          ? 'InventoryCatalog'
+          : screenName === 'TriageTab'
+          ? 'TriageQueue'
+          : screenName === 'OperationsTab'
+          ? 'OperationsHub'
+          : screenName === 'ReportBreakdownTab'
+          ? 'ReportBreakdown'
+          : screenName;
+      navigation?.navigate?.(target, params);
     }, 120);
   };
 

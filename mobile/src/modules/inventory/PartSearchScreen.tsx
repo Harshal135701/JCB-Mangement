@@ -80,7 +80,10 @@ export const PartSearchScreen = ({ route }: any) => {
         sectionTitle="Spare Parts Search"
         sectionSubtitle={workOrderId ? 'Reserve parts for Work Order' : 'Search workshop catalog & bin racks'}
         showBack={true}
-        onBack={() => navigation.goBack()}
+        onBack={() => {
+          if (navigation?.canGoBack?.()) navigation.goBack();
+          else navigation?.navigate?.('MainTabs');
+        }}
       />
 
       {/* Search Bar */}

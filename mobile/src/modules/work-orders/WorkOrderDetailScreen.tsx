@@ -70,7 +70,10 @@ export const WorkOrderDetailScreen = ({ route, navigation }: any) => {
         sectionTitle="Work Order Execution"
         sectionSubtitle="Step-by-step repair, parts usage & LOTO compliance"
         showBack={true}
-        onBack={() => navigation.goBack()}
+        onBack={() => {
+          if (navigation?.canGoBack?.()) navigation.goBack();
+          else navigation?.navigate?.('MainTabs');
+        }}
       />
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>

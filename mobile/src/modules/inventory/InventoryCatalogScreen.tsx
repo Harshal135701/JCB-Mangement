@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -456,8 +457,11 @@ export const InventoryCatalogScreen = ({ navigation }: any) => {
 
       {/* Adjust Stock Modal */}
       {isAdjustModalOpen && adjustingPart && (
-        <Modal visible={isAdjustModalOpen} animationType="slide" transparent>
-          <View style={styles.modalOverlay}>
+        <Modal visible={isAdjustModalOpen} animationType="slide" transparent onRequestClose={() => setIsAdjustModalOpen(false)}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.modalOverlay}
+          >
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>ADJUST STOCK: {adjustingPart.part_number}</Text>
@@ -466,7 +470,11 @@ export const InventoryCatalogScreen = ({ navigation }: any) => {
                 </TouchableOpacity>
               </View>
 
-              <ScrollView style={styles.modalBody}>
+              <ScrollView
+                style={styles.modalBody}
+                contentContainerStyle={{ paddingBottom: 24 }}
+                keyboardShouldPersistTaps="handled"
+              >
                 <View style={styles.summaryBox}>
                   <Text style={styles.boldText}>{adjustingPart.name}</Text>
                   <Text style={styles.summarySub}>
@@ -498,32 +506,36 @@ export const InventoryCatalogScreen = ({ navigation }: any) => {
                   placeholder="e.g. Physical stock audit count"
                   placeholderTextColor="#94A3B8"
                 />
-
-                <View style={styles.modalActions}>
-                  <TouchableOpacity style={styles.cancelBtn} onPress={() => setIsAdjustModalOpen(false)}>
-                    <Text style={styles.cancelBtnText}>Cancel</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.applyBtn}
-                    onPress={handleAdjustSubmit}
-                    disabled={actionLoading || adjustQty === 0}
-                  >
-                    {actionLoading ? (
-                      <ActivityIndicator color="#000000" />
-                    ) : (
-                      <Text style={styles.applyBtnText}>APPLY STOCK ADJUSTMENT</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
               </ScrollView>
+
+              {/* Sticky Action Footer */}
+              <View style={styles.modalActionsPinned}>
+                <TouchableOpacity style={styles.cancelBtn} onPress={() => setIsAdjustModalOpen(false)}>
+                  <Text style={styles.cancelBtnText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.applyBtn}
+                  onPress={handleAdjustSubmit}
+                  disabled={actionLoading || adjustQty === 0}
+                >
+                  {actionLoading ? (
+                    <ActivityIndicator color="#000000" />
+                  ) : (
+                    <Text style={styles.applyBtnText}>APPLY STOCK ADJUSTMENT</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
+          </KeyboardAvoidingView>
         </Modal>
       )}
 
       {/* Add / Edit Part Modal */}
-      <Modal visible={isModalOpen} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
+      <Modal visible={isModalOpen} animationType="slide" transparent onRequestClose={() => setIsModalOpen(false)}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalOverlay}
+        >
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
@@ -534,7 +546,12 @@ export const InventoryCatalogScreen = ({ navigation }: any) => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalBody}>
+            <ScrollView
+              style={styles.modalBody}
+              contentContainerStyle={{ paddingBottom: 28 }}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={true}
+            >
               <Text style={styles.fieldLabel}>JCB Part Number *</Text>
               <TextInput
                 style={styles.modalInput}
@@ -614,22 +631,23 @@ export const InventoryCatalogScreen = ({ navigation }: any) => {
                   />
                 </View>
               </View>
-
-              <View style={styles.modalActions}>
-                <TouchableOpacity style={styles.cancelBtn} onPress={() => setIsModalOpen(false)}>
-                  <Text style={styles.cancelBtnText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.applyBtn} onPress={handleSavePart} disabled={actionLoading}>
-                  {actionLoading ? (
-                    <ActivityIndicator color="#000000" />
-                  ) : (
-                    <Text style={styles.applyBtnText}>{editingPart ? 'UPDATE PART' : 'ADD PART'}</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
             </ScrollView>
+
+            {/* Pinned Sticky Footer Actions - NEVER CUT OFF */}
+            <View style={styles.modalActionsPinned}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setIsModalOpen(false)}>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.applyBtn} onPress={handleSavePart} disabled={actionLoading}>
+                {actionLoading ? (
+                  <ActivityIndicator color="#000000" />
+                ) : (
+                  <Text style={styles.applyBtnText}>{editingPart ? 'UPDATE PART' : 'ADD PART'}</Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -1095,6 +1113,18 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: '#E2E8F0',
+  },
+  modalActionsPinned: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === 'android' ? 24 : 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
   },
   cancelBtn: {
     paddingVertical: 10,

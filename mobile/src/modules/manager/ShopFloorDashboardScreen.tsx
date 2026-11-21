@@ -13,6 +13,7 @@ import {
   Dimensions,
   Animated,
   PanResponder,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -47,6 +48,13 @@ export const ShopFloorDashboardScreen = ({ navigation }: any) => {
   const [selectedPlant, setSelectedPlant] = useState('All Plants');
   const [selectedShift, setSelectedShift] = useState('Shift A');
   const [plantsList, setPlantsList] = useState<string[]>(['All Plants', 'Chakan', 'PCMC', 'Talegaon']);
+
+  // Harshal's Operator Machine Sign-In Requests States
+  const [pendingMachineRequests, setPendingMachineRequests] = useState<any[]>([]);
+  const [showMachineRequestsModal, setShowMachineRequestsModal] = useState(false);
+  const [actingReqId, setActingReqId] = useState<string | null>(null);
+  const [rejectModalReq, setRejectModalReq] = useState<any | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
 
   // Swipe-to-dismiss states for Action Required alert banner
   const [isAlertDismissed, setIsAlertDismissed] = useState(false);
@@ -92,8 +100,8 @@ export const ShopFloorDashboardScreen = ({ navigation }: any) => {
   const userRoleBadge = isAdmin
     ? 'ADMIN'
     : isManager
-    ? 'MANAGER'
-    : (user?.role ? user.role.toUpperCase() : 'USER');
+      ? 'MANAGER'
+      : (user?.role ? user.role.toUpperCase() : 'USER');
 
   const fetchData = async (silent = false) => {
     try {
@@ -101,7 +109,7 @@ export const ShopFloorDashboardScreen = ({ navigation }: any) => {
         setLoading(true);
         setIsAlertDismissed(false);
       }
-      const [kpiRes, machinesRes, dtRes, pmRes, woRes, pendingRes, orgRes]: any[] = await Promise.allSettled([
+      const [kpiRes, machinesRes, dtRes, pmRes, woRes, pendingRes, orgRes, machReqRes]: any[] = await Promise.allSettled([
         apiClient.get('/reports/dashboard-kpis'),
         apiClient.get('/machines?limit=100'),
         apiClient.get('/downtime'),
@@ -109,6 +117,7 @@ export const ShopFloorDashboardScreen = ({ navigation }: any) => {
         apiClient.get('/work-orders?limit=50'),
         apiClient.get('/auth/pending-operators'),
         apiClient.get('/auth/plants'),
+        apiClient.get('/machines/operator/requests/pending'),
       ]);
 
       if (kpiRes.status === 'fulfilled' && kpiRes.value) {
@@ -129,6 +138,9 @@ export const ShopFloorDashboardScreen = ({ navigation }: any) => {
       if (pendingRes.status === 'fulfilled' && Array.isArray(pendingRes.value?.data)) {
         setPendingOperatorsCount(pendingRes.value.data.length);
       }
+      if (machReqRes.status === 'fulfilled' && Array.isArray(machReqRes.value?.data)) {
+        setPendingMachineRequests(machReqRes.value.data);
+      }
       if (orgRes.status === 'fulfilled' && Array.isArray(orgRes.value?.data)) {
         const pNames = ['All Plants', ...orgRes.value.data.map((p: any) => p.plant_name)];
         setPlantsList(pNames);
@@ -139,6 +151,48 @@ export const ShopFloorDashboardScreen = ({ navigation }: any) => {
       console.warn('Dashboard fetch error:', err);
     } finally {
       if (!silent) setLoading(false);
+    }
+  };
+
+  const handleApproveMachineRequest = async (item: any) => {
+    try {
+      setActingReqId(item.id);
+      const res: any = await apiClient.post(`/machines/operator/requests/${item.id}/approve`, {
+        operator_id: item.operator_id,
+        machine_id: item.machine_id,
+        shift: item.shift,
+      });
+      if (res?.success) {
+        Alert.alert(
+          'Sign-In Approved',
+          `Operator ${item.operator_name || item.employee_code} is now assigned to ${item.machine_code}.`
+        );
+        fetchData(true);
+      }
+    } catch (err: any) {
+      Alert.alert('Approval Error', err.message || 'Failed to approve operator sign-in request.');
+    } finally {
+      setActingReqId(null);
+    }
+  };
+
+  const handleConfirmReject = async () => {
+    if (!rejectModalReq) return;
+    try {
+      setActingReqId(rejectModalReq.id);
+      const res: any = await apiClient.post(`/machines/operator/requests/${rejectModalReq.id}/reject`, {
+        rejection_reason: rejectReason.trim() || undefined,
+      });
+      if (res?.success) {
+        Alert.alert('Request Rejected', 'The sign-in request has been rejected.');
+        setRejectModalReq(null);
+        setRejectReason('');
+        fetchData(true);
+      }
+    } catch (err: any) {
+      Alert.alert('Rejection Error', err.message || 'Failed to reject sign-in request.');
+    } finally {
+      setActingReqId(null);
     }
   };
 
@@ -315,28 +369,17 @@ export const ShopFloorDashboardScreen = ({ navigation }: any) => {
 
           <View style={styles.headerTitleCol}>
             <Text style={styles.smartCmmsTitle}>SMART CMMS</Text>
-            <Text style={styles.smartCmmsSub}>JCB Intelligent Work</Text>
           </View>
         </View>
 
-        {/* Right: User Chip */}
+        {/* Right: Bell Notification */}
         <TouchableOpacity
-          style={styles.userProfileChip}
-          onPress={openSidebar}
-          activeOpacity={0.8}
+          style={styles.bellBtn}
+          onPress={() => navigation.navigate('Notifications')}
+          activeOpacity={0.7}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <View style={styles.userAvatarCircle}>
-            <MaterialCommunityIcons name="account" size={18} color="#0F172A" />
-          </View>
-          <View style={styles.userInfoCol}>
-            <Text style={styles.userNameText} numberOfLines={1}>
-              {user?.fullName?.split(' ')[0] || (isAdmin ? 'Admin' : 'Specialist')}
-            </Text>
-            <View style={styles.userRoleRow}>
-              <Text style={styles.userRoleText}>{userRoleBadge}</Text>
-              <MaterialCommunityIcons name="chevron-down" size={12} color="#94A3B8" />
-            </View>
-          </View>
+          <MaterialCommunityIcons name="bell-outline" size={22} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
 
@@ -449,6 +492,38 @@ export const ShopFloorDashboardScreen = ({ navigation }: any) => {
               </View>
             </TouchableOpacity>
           </Animated.View>
+        )}
+
+        {/* Harshal Feature: Operator Machine Sign-In Requests Banner */}
+        {pendingMachineRequests.length > 0 && (
+          <TouchableOpacity
+            style={styles.machReqAlertCard}
+            onPress={() => setShowMachineRequestsModal(true)}
+            activeOpacity={0.9}
+          >
+            <View style={styles.machReqAlertLeft}>
+              <View style={styles.machReqIconCircle}>
+                <MaterialCommunityIcons name="tractor" size={22} color="#000000" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={styles.alertHeaderRow}>
+                  <Text style={styles.machReqAlertTag}>SIGN-IN REQUESTS</Text>
+                  <View style={styles.machReqCountBadge}>
+                    <Text style={styles.machReqCountText}>{pendingMachineRequests.length} PENDING</Text>
+                  </View>
+                </View>
+                <Text style={styles.machReqDescText}>
+                  {pendingMachineRequests.length === 1
+                    ? '1 operator requested daily machine authorization.'
+                    : `${pendingMachineRequests.length} operators requested daily machine authorization.`}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.machReqReviewBtn}>
+              <Text style={styles.machReqReviewBtnText}>Review</Text>
+              <MaterialCommunityIcons name="chevron-right" size={16} color="#000000" />
+            </View>
+          </TouchableOpacity>
         )}
 
         {/* Metric Cards - Access-based */}
@@ -900,8 +975,8 @@ export const ShopFloorDashboardScreen = ({ navigation }: any) => {
                     item.status === 'running'
                       ? '#10B981'
                       : item.status === 'breakdown'
-                      ? '#EF4444'
-                      : '#F59E0B',
+                        ? '#EF4444'
+                        : '#F59E0B',
                 },
               ]}
             />
@@ -916,8 +991,8 @@ export const ShopFloorDashboardScreen = ({ navigation }: any) => {
                         item.status === 'running'
                           ? '#ECFDF5'
                           : item.status === 'breakdown'
-                          ? '#FEF2F2'
-                          : '#FFFBEB',
+                            ? '#FEF2F2'
+                            : '#FFFBEB',
                     },
                   ]}
                 >
@@ -929,8 +1004,8 @@ export const ShopFloorDashboardScreen = ({ navigation }: any) => {
                           item.status === 'running'
                             ? '#047857'
                             : item.status === 'breakdown'
-                            ? '#DC2626'
-                            : '#B45309',
+                              ? '#DC2626'
+                              : '#B45309',
                       },
                     ]}
                   >
@@ -996,6 +1071,147 @@ export const ShopFloorDashboardScreen = ({ navigation }: any) => {
           </View>
         </Modal>
       )}
+
+      {/* Harshal Feature: Operator Machine Requests Review Modal */}
+      <Modal
+        visible={showMachineRequestsModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowMachineRequestsModal(false)}
+      >
+        <View style={styles.reqModalOverlay}>
+          <View style={[styles.reqModalContent, { paddingBottom: insets.bottom + 16 }]}>
+            <View style={styles.reqModalHeader}>
+              <View>
+                <Text style={styles.reqModalTitle}>Operator Machine Requests</Text>
+                <Text style={styles.reqModalSub}>
+                  {pendingMachineRequests.length} operator sign-in request(s) awaiting review
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowMachineRequestsModal(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <MaterialCommunityIcons name="close" size={24} color="#0F172A" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+              {pendingMachineRequests.length === 0 ? (
+                <View style={styles.emptyReqBox}>
+                  <MaterialCommunityIcons name="check-circle" size={40} color="#16A34A" />
+                  <Text style={styles.emptyReqTitle}>All Clear</Text>
+                  <Text style={styles.emptyReqDesc}>No pending operator machine sign-in requests.</Text>
+                </View>
+              ) : (
+                pendingMachineRequests.map((req) => {
+                  const isActing = actingReqId === req.id;
+                  return (
+                    <View key={req.id} style={styles.reqItemCard}>
+                      <View style={styles.reqItemTop}>
+                        <View style={styles.reqItemAvatar}>
+                          <Text style={styles.reqItemAvatarText}>
+                            {(req.operator_name || req.operator_code || 'O')[0].toUpperCase()}
+                          </Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.reqItemOpName}>{req.operator_name || req.operator_code}</Text>
+                          <Text style={styles.reqItemEmpCode}>{req.operator_code || req.employee_code}</Text>
+                        </View>
+                        <View style={styles.reqShiftBadge}>
+                          <Text style={styles.reqShiftBadgeText}>{req.shift || 'Shift A'}</Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.reqMachineBox}>
+                        <MaterialCommunityIcons name="tractor" size={16} color="#B45309" />
+                        <Text style={styles.reqMachCode}>{req.machine_code || 'Mach'}</Text>
+                        {req.machine_name ? (
+                          <Text style={styles.reqMachName} numberOfLines={1}>• {req.machine_name}</Text>
+                        ) : null}
+                      </View>
+
+                      {req.hour_meter_reading ? (
+                        <Text style={styles.reqMeterText}>Meter: {req.hour_meter_reading} hrs</Text>
+                      ) : null}
+                      {req.notes ? (
+                        <Text style={styles.reqNotesText}>"{req.notes}"</Text>
+                      ) : null}
+
+                      <View style={styles.reqActionRow}>
+                        <TouchableOpacity
+                          style={styles.reqRejectBtn}
+                          onPress={() => setRejectModalReq(req)}
+                          disabled={isActing}
+                          activeOpacity={0.8}
+                        >
+                          <MaterialCommunityIcons name="close" size={16} color="#DC2626" />
+                          <Text style={styles.reqRejectBtnText}>Reject</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.reqApproveBtn}
+                          onPress={() => handleApproveMachineRequest(req)}
+                          disabled={isActing}
+                          activeOpacity={0.85}
+                        >
+                          {isActing ? (
+                            <ActivityIndicator size="small" color="#000000" />
+                          ) : (
+                            <>
+                              <MaterialCommunityIcons name="check" size={16} color="#000000" />
+                              <Text style={styles.reqApproveBtnText}>Approve Sign-In</Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  );
+                })
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Reject Reason Dialog */}
+      <Modal
+        visible={!!rejectModalReq}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setRejectModalReq(null)}
+      >
+        <View style={styles.reqModalOverlay}>
+          <View style={styles.rejectDialogCard}>
+            <Text style={styles.rejectDialogTitle}>Reject Sign-In Request</Text>
+            <Text style={styles.rejectDialogDesc}>
+              Provide an optional reason for rejecting {rejectModalReq?.operator_name || 'this operator'}'s request.
+            </Text>
+            <TextInput
+              style={styles.rejectReasonInput}
+              placeholder="e.g. Machine under maintenance, wrong shift"
+              placeholderTextColor="#94A3B8"
+              value={rejectReason}
+              onChangeText={setRejectReason}
+              multiline
+            />
+            <View style={styles.rejectDialogActions}>
+              <TouchableOpacity
+                style={styles.rejectCancelBtn}
+                onPress={() => setRejectModalReq(null)}
+              >
+                <Text style={styles.rejectCancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.rejectConfirmBtn}
+                onPress={handleConfirmReject}
+              >
+                <Text style={styles.rejectConfirmBtnText}>Confirm Reject</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -1041,6 +1257,15 @@ const styles = StyleSheet.create({
   hamburgerBtn: {
     padding: 6,
     marginRight: 6,
+  },
+  bellBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
   },
   brandBadgeWrap: {
     width: 58,
@@ -2037,5 +2262,292 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#0F172A',
     textAlign: 'center',
+  },
+  // Machine Requests Banner Styles
+  machReqAlertCard: {
+    backgroundColor: '#FFFBEB',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 14,
+    borderWidth: 1.5,
+    borderColor: '#FDE68A',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    elevation: 2,
+  },
+  machReqAlertLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  machReqIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  machReqAlertTag: {
+    fontSize: 9.5,
+    fontWeight: '900',
+    color: '#B45309',
+    letterSpacing: 0.5,
+  },
+  machReqCountBadge: {
+    backgroundColor: '#DC2626',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    marginLeft: 6,
+  },
+  machReqCountText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#FFFFFF',
+  },
+  machReqDescText: {
+    fontSize: 11,
+    color: '#92400E',
+    marginTop: 2,
+  },
+  machReqReviewBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F9B101',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    gap: 2,
+  },
+  machReqReviewBtnText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#000000',
+  },
+  // Machine Requests Modal Styles
+  reqModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    justifyContent: 'flex-end',
+  },
+  reqModalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 16,
+    maxHeight: '80%',
+  },
+  reqModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    marginBottom: 12,
+  },
+  reqModalTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  reqModalSub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  emptyReqBox: {
+    alignItems: 'center',
+    paddingVertical: 32,
+    gap: 6,
+  },
+  emptyReqTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  emptyReqDesc: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  reqItemCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 12,
+    marginBottom: 10,
+  },
+  reqItemTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 8,
+  },
+  reqItemAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reqItemAvatarText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#000000',
+  },
+  reqItemOpName: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  reqItemEmpCode: {
+    fontSize: 10.5,
+    color: '#64748B',
+  },
+  reqShiftBadge: {
+    backgroundColor: '#FEF3C7',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  reqShiftBadgeText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#92400E',
+  },
+  reqMachineBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 6,
+  },
+  reqMachCode: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  reqMachName: {
+    fontSize: 11,
+    color: '#64748B',
+    flex: 1,
+  },
+  reqMeterText: {
+    fontSize: 11,
+    color: '#475569',
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  reqNotesText: {
+    fontSize: 11,
+    color: '#64748B',
+    fontStyle: 'italic',
+    marginBottom: 8,
+  },
+  reqActionRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+    marginTop: 6,
+  },
+  reqRejectBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    backgroundColor: '#FEF2F2',
+  },
+  reqRejectBtnText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
+  reqApproveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#F9B101',
+  },
+  reqApproveBtnText: {
+    fontSize: 11.5,
+    fontWeight: '900',
+    color: '#000000',
+  },
+  // Reject Dialog
+  rejectDialogCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginHorizontal: 20,
+    alignSelf: 'center',
+    width: '90%',
+  },
+  rejectDialogTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 4,
+  },
+  rejectDialogDesc: {
+    fontSize: 12,
+    color: '#64748B',
+    marginBottom: 10,
+  },
+  rejectReasonInput: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 13,
+    color: '#0F172A',
+    minHeight: 60,
+    textAlignVertical: 'top',
+    marginBottom: 12,
+  },
+  rejectDialogActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+  },
+  rejectCancelBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  rejectCancelBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  rejectConfirmBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#DC2626',
+  },
+  rejectConfirmBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

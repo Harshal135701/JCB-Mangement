@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, ActivityIndicator, StyleSheet, Platform, TouchableOpacity } from 'react-native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -427,26 +427,7 @@ const MainTabNavigator = ({ navigation }: any) => {
             </TouchableOpacity>
           );
         })}
-
-        {/* More Tab Button to open Sidebar */}
-        <TouchableOpacity
-          style={navStyles.tabButton}
-          onPress={openSidebar}
-          activeOpacity={0.7}
-        >
-          <MaterialCommunityIcons name="dots-horizontal" size={22} color="#64748B" />
-          <Text style={navStyles.tabLabel}>More</Text>
-        </TouchableOpacity>
       </View>
-
-      {/* Global Admin Sidebar */}
-      <AdminSidebar
-        visible={isOpen}
-        onClose={closeSidebar}
-        navigation={tabNavigation}
-        user={user}
-        logout={logout}
-      />
     </View>
   );
 };
@@ -459,6 +440,123 @@ const AuthNavigator = () => {
   }
 
   return <LoginScreen onNavigateToRegister={() => setAuthView('register')} />;
+};
+
+const AuthenticatedApp = ({ user }: { user: any }) => {
+  const { isOpen, closeSidebar } = useSidebar();
+  const { logout } = useAuth();
+  const navigation = useNavigation<any>();
+
+  return (
+    <View style={{ flex: 1 }}>
+      <Stack.Navigator
+        screenOptions={{
+          headerShown: false,
+        }}
+      >
+        <Stack.Screen
+          name="MainTabs"
+          component={MainTabNavigator}
+          options={{ headerShown: false }}
+        />
+        {/* Extended Enterprise CMMS Screens */}
+        <Stack.Screen
+          name="Procurement"
+          component={ProcurementScreen}
+          options={{ title: 'Spare Parts Purchase Request' }}
+        />
+        <Stack.Screen
+          name="RDC"
+          component={RDCScreen}
+          options={{ title: 'Gate Pass' }}
+        />
+        <Stack.Screen
+          name="DailyInspection"
+          component={PreShiftInspectionScreen}
+          options={{ title: 'Daily AM Checklist' }}
+        />
+        <Stack.Screen
+          name="InventoryCatalog"
+          component={InventoryCatalogScreen}
+          options={{ title: 'Spare Parts Management' }}
+        />
+        <Stack.Screen
+          name="TriageQueue"
+          component={TriageQueueScreen}
+          options={{ title: 'Fault Reports' }}
+        />
+        <Stack.Screen
+          name="OperationsHub"
+          component={OperationsHubScreen}
+          options={{ title: 'Reports' }}
+        />
+        <Stack.Screen
+          name="Reports"
+          component={OperationsHubScreen}
+          options={{ title: 'Reports' }}
+        />
+        <Stack.Screen
+          name="MachinesMaster"
+          component={MachineMasterScreen}
+          options={{ title: 'Machines Management' }}
+        />
+        <Stack.Screen
+          name="PMCalendar"
+          component={PMCalendarScreen}
+          options={{ title: 'Maintenance Schedule' }}
+        />
+        <Stack.Screen
+          name="DowntimeAnalytics"
+          component={DowntimeAnalyticsScreen}
+          options={{ title: 'Machine Status' }}
+        />
+        <Stack.Screen
+          name="AuditLogs"
+          component={AuditLogsScreen}
+          options={{ title: 'Activity Logs' }}
+        />
+        <Stack.Screen
+          name="UserManagement"
+          component={UserManagementScreen}
+          options={{ title: 'Staff Management' }}
+        />
+        <Stack.Screen
+          name="WorkOrders"
+          component={WorkOrdersScreen}
+          options={{ title: 'Maintenance Status' }}
+        />
+        <Stack.Screen
+          name="WorkOrderDetail"
+          component={WorkOrderDetailScreen}
+          options={{ title: 'Work Order Execution' }}
+        />
+        <Stack.Screen
+          name="PartSearch"
+          component={PartSearchScreen}
+          options={{ title: 'Spare Parts Catalog' }}
+        />
+        <Stack.Screen
+          name="ReportBreakdown"
+          component={ReportBreakdownScreen}
+          options={{ title: 'Report Breakdown' }}
+        />
+        <Stack.Screen
+          name="Notifications"
+          component={NotificationsScreen}
+          options={{ title: 'Notifications' }}
+        />
+      </Stack.Navigator>
+
+      {/* Global Root Sidebar - Overlays across ALL screens (Tabs + Stacks) */}
+      <AdminSidebar
+        visible={isOpen}
+        onClose={closeSidebar}
+        navigation={navigation}
+        user={user}
+        logout={logout}
+      />
+    </View>
+  );
 };
 
 export const AppNavigator = () => {
@@ -476,103 +574,7 @@ export const AppNavigator = () => {
   return (
     <SidebarProvider>
       <NavigationContainer>
-        <Stack.Navigator
-          screenOptions={{
-            headerShown: false,
-          }}
-        >
-          <Stack.Screen
-            name="MainTabs"
-            component={MainTabNavigator}
-            options={{ headerShown: false }}
-          />
-          {/* Extended Enterprise CMMS Screens */}
-          <Stack.Screen
-            name="Procurement"
-            component={ProcurementScreen}
-            options={{ title: 'Spare Parts Purchase Request' }}
-          />
-          <Stack.Screen
-            name="RDC"
-            component={RDCScreen}
-            options={{ title: 'Gate Pass' }}
-          />
-          <Stack.Screen
-            name="DailyInspection"
-            component={PreShiftInspectionScreen}
-            options={{ title: 'Daily AM Checklist' }}
-          />
-          <Stack.Screen
-            name="InventoryCatalog"
-            component={InventoryCatalogScreen}
-            options={{ title: 'Spare Parts Management' }}
-          />
-          <Stack.Screen
-            name="TriageQueue"
-            component={TriageQueueScreen}
-            options={{ title: 'Fault Reports' }}
-          />
-          <Stack.Screen
-            name="OperationsHub"
-            component={OperationsHubScreen}
-            options={{ title: 'Reports' }}
-          />
-          <Stack.Screen
-            name="Reports"
-            component={OperationsHubScreen}
-            options={{ title: 'Reports' }}
-          />
-          <Stack.Screen
-            name="MachinesMaster"
-            component={MachineMasterScreen}
-            options={{ title: 'Machines Management' }}
-          />
-          <Stack.Screen
-            name="PMCalendar"
-            component={PMCalendarScreen}
-            options={{ title: 'Maintenance Schedule' }}
-          />
-          <Stack.Screen
-            name="DowntimeAnalytics"
-            component={DowntimeAnalyticsScreen}
-            options={{ title: 'Machine Status' }}
-          />
-          <Stack.Screen
-            name="AuditLogs"
-            component={AuditLogsScreen}
-            options={{ title: 'Activity Logs' }}
-          />
-          <Stack.Screen
-            name="UserManagement"
-            component={UserManagementScreen}
-            options={{ title: 'Staff Management' }}
-          />
-          <Stack.Screen
-            name="WorkOrders"
-            component={WorkOrdersScreen}
-            options={{ title: 'Maintenance Status' }}
-          />
-          <Stack.Screen
-            name="WorkOrderDetail"
-            component={WorkOrderDetailScreen}
-            options={{ title: 'Work Order Execution' }}
-          />
-          <Stack.Screen
-            name="PartSearch"
-            component={PartSearchScreen}
-            options={{ title: 'Spare Parts Catalog' }}
-          />
-          <Stack.Screen
-            name="ReportBreakdown"
-            component={ReportBreakdownScreen}
-            options={{ title: 'Report Breakdown' }}
-          />
-          <Stack.Screen
-            name="Notifications"
-            component={NotificationsScreen}
-            options={{ title: 'Notifications' }}
-          />
-        </Stack.Navigator>
+        <AuthenticatedApp user={user} />
       </NavigationContainer>
     </SidebarProvider>
   );

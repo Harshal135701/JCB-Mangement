@@ -32,7 +32,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   icon = 'home-outline',
   sectionTitle,
   sectionSubtitle,
-  showBack = false,
+  showBack,
   onBack,
   rightAction,
   onBreadcrumbPress,
@@ -43,6 +43,41 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   const { openSidebar } = useSidebar();
 
   const [unreadCount, setUnreadCount] = React.useState(0);
+
+  // Determine back button visibility:
+  // Visible on any screen other than root dashboard, or when canGoBack is true, or when explicitly requested
+  const isRootDashboard =
+    title === 'SMART CMMS' ||
+    title === 'Dashboard' ||
+    title === 'Shop Floor' ||
+    title === 'Home' ||
+    title === 'Shopfloor';
+  const canGoBack = Boolean(navigation?.canGoBack && navigation.canGoBack());
+  const isBackVisible = showBack !== undefined ? showBack : (!isRootDashboard || canGoBack);
+
+  const handleBack = () => {
+    if (onBack) {
+      try {
+        onBack();
+      } catch {
+        if (navigation?.canGoBack?.()) {
+          navigation.goBack();
+        } else {
+          navigation?.navigate?.('MainTabs');
+        }
+      }
+    } else if (navigation?.canGoBack?.()) {
+      navigation.goBack();
+    } else {
+      // Safe fallback: return to dashboard/home tab
+      try {
+        navigation?.navigate?.('MainTabs');
+        navigation?.navigate?.(user?.role === 'operator' ? 'OperatorTab' : 'ShopfloorTab');
+      } catch {
+        // Non-blocking
+      }
+    }
+  };
 
   // Poll for live unread notification count
   React.useEffect(() => {
@@ -85,25 +120,15 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
 
         {/* Left Side: Navigation & Brand */}
         <View style={styles.headerLeft}>
-          {showBack ? (
-            <TouchableOpacity
-              style={styles.navBtn}
-              onPress={onBack}
-              activeOpacity={0.7}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <MaterialCommunityIcons name="arrow-left" size={24} color="#FFFFFF" />
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              style={styles.navBtn}
-              onPress={openSidebar}
-              activeOpacity={0.7}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <MaterialCommunityIcons name="menu" size={24} color="#FFFFFF" />
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={styles.navBtn}
+            onPress={openSidebar}
+            activeOpacity={0.7}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityLabel="Open menu"
+          >
+            <MaterialCommunityIcons name="menu" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
 
           <View style={styles.brandBadgeWrap}>
             <Image
@@ -117,11 +142,10 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
 
           <View style={styles.headerTitleCol}>
             <Text style={styles.smartCmmsTitle}>SMART CMMS</Text>
-            <Text style={styles.smartCmmsSub}>JCB Intelligent Work</Text>
           </View>
         </View>
 
-        {/* Right Side: Bell & User Profile Chip */}
+        {/* Right Side: Bell Notification Button */}
         <View style={styles.headerRightCol}>
           <TouchableOpacity
             style={styles.bellButton}
@@ -138,45 +162,45 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
               </View>
             )}
           </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.userProfileChip}
-            onPress={openSidebar}
-            activeOpacity={0.8}
-          >
-            <View style={styles.userAvatarCircle}>
-              <MaterialCommunityIcons name="account" size={17} color="#0F172A" />
-            </View>
-            <View style={styles.userInfoCol}>
-              <Text style={styles.userNameText} numberOfLines={1}>
-                {displayName}
-              </Text>
-              <View style={styles.userRoleRow}>
-                <Text style={styles.userRoleText}>{roleName}</Text>
-                <MaterialCommunityIcons name="chevron-down" size={11} color="#94A3B8" />
-              </View>
-            </View>
-          </TouchableOpacity>
         </View>
       </View>
 
       {/* Yellow Breadcrumb Banner */}
-      <TouchableOpacity
-        style={styles.breadcrumbBanner}
-        activeOpacity={0.9}
-        onPress={onBreadcrumbPress}
-      >
+      <View style={styles.breadcrumbBanner}>
         <View style={styles.breadcrumbLeft}>
           <MaterialCommunityIcons name={icon} size={20} color="#000000" />
           <Text style={styles.breadcrumbTitle}>{title}</Text>
         </View>
-        <MaterialCommunityIcons name="chevron-right" size={20} color="#000000" />
-      </TouchableOpacity>
+        {!sectionTitle && isBackVisible ? (
+          <TouchableOpacity
+            style={styles.sectionBackPill}
+            onPress={handleBack}
+            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <MaterialCommunityIcons name="arrow-left" size={15} color="#0F172A" />
+            <Text style={styles.sectionBackText}>Back</Text>
+          </TouchableOpacity>
+        ) : (
+          <MaterialCommunityIcons name="chevron-right" size={20} color="#000000" />
+        )}
+      </View>
 
       {/* Section Title Header (Optional) */}
       {sectionTitle && (
         <View style={styles.sectionTitleBlock}>
           <View style={styles.sectionTitleRow}>
+            {isBackVisible && (
+              <TouchableOpacity
+                style={styles.sectionBackPill}
+                onPress={handleBack}
+                activeOpacity={0.7}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <MaterialCommunityIcons name="arrow-left" size={15} color="#0F172A" />
+                <Text style={styles.sectionBackText}>Back</Text>
+              </TouchableOpacity>
+            )}
             <View style={styles.yellowIndicatorBar} />
             <Text style={styles.sectionMainTitle}>{sectionTitle}</Text>
             {rightAction && <View style={styles.rightActionWrap}>{rightAction}</View>}
@@ -226,6 +250,25 @@ const styles = StyleSheet.create({
   navBtn: {
     padding: 4,
     marginRight: 8,
+  },
+  navBtnsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 6,
+    gap: 4,
+  },
+  backNavPill: {
+    backgroundColor: '#F9B101',
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#F9B101',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 2,
   },
   brandBadgeWrap: {
     marginRight: 8,
@@ -365,6 +408,23 @@ const styles = StyleSheet.create({
   sectionTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  sectionBackPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    gap: 3,
+  },
+  sectionBackText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
   },
   yellowIndicatorBar: {
     width: 4,
