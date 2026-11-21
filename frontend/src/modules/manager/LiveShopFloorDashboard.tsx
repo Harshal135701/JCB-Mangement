@@ -23,6 +23,7 @@ import { ManagerOperationalSummaryStrip } from './components/ManagerOperationalS
 import { ManagerFleetDistributionChart } from './components/ManagerFleetDistributionChart';
 import { ManagerPMPerformanceCard } from './components/ManagerPMPerformanceCard';
 import { ManagerTechnicianPerformanceCard, TechnicianWorkloadItem } from './components/ManagerTechnicianPerformanceCard';
+import { MaintenancePriorityDonut } from './components/MaintenancePriorityDonut';
 
 export const LiveShopFloorDashboard: React.FC = () => {
   const { user } = useAuth();
@@ -401,12 +402,12 @@ export const LiveShopFloorDashboard: React.FC = () => {
       </section>
 
       {/* =========================================================================
-          SECTION 2: MACHINE FLEET PERFORMANCE (DONUT + SHOP DISTRIBUTION)
+          SECTION 2 & 3: OPERATIONAL & MAINTENANCE ANALYTICS (UNIFIED GRID)
           ========================================================================= */}
-      <section aria-label="Machine Fleet Performance">
+      <section aria-label="Operational and Maintenance Analytics">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
-          {/* Machine Status Donut Chart (5 cols) */}
-          <div className="lg:col-span-5 h-full">
+          {/* Left Column (5 cols): 3 Analytics Cards */}
+          <div className="lg:col-span-5 flex flex-col gap-5">
             <MachineStatusDonut
               title="Machine Status Distribution"
               totalLabel="Total Fleet"
@@ -414,28 +415,15 @@ export const LiveShopFloorDashboard: React.FC = () => {
               segments={machineStatusSegments}
               loading={loading}
               emptyMessage="No machine assets registered in plant scope"
+              layout="horizontal"
             />
-          </div>
 
-          {/* Machine Fleet Distribution by Shop Floor (7 cols) */}
-          <div className="lg:col-span-7 h-full">
-            <ManagerFleetDistributionChart
-              machines={machines}
-              selectedPlant="Plant Operations"
-              hierarchy={hierarchy}
+            <MaintenancePriorityDonut
+              breakdowns={breakdowns}
+              workOrders={workOrders}
               loading={loading}
             />
-          </div>
-        </div>
-      </section>
 
-      {/* =========================================================================
-          SECTION 3: MAINTENANCE OPERATIONS (WORK ORDERS + VELOCITY TREND)
-          ========================================================================= */}
-      <section aria-label="Maintenance Operations">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
-          {/* Work-Order Status Analytics (5 cols) */}
-          <div className="lg:col-span-5 h-full">
             <WorkOrderStatusDonut
               totalCount={totalWorkOrders}
               openCount={openWorkOrders}
@@ -443,20 +431,33 @@ export const LiveShopFloorDashboard: React.FC = () => {
               completedCount={completedWorkOrders}
               overdueCount={overdueWorkOrders}
               loading={loading}
+              layout="horizontal"
             />
           </div>
 
-          {/* Maintenance Velocity & Trend Chart (7 cols) */}
-          <div className="lg:col-span-7 h-full">
-            <MaintenanceTrendChart
-              title="Operational Maintenance Trends"
-              subtitle=""
-              series1Name="Breakdowns"
-              series2Name="Preventive (PM)"
-              data={trendData}
-              loading={loading}
-              emptyMessage="No maintenance trend recorded"
-            />
+          {/* Right Column (7 cols): Fleet Allocation + Operational Trends */}
+          <div className="lg:col-span-7 flex flex-col gap-5">
+            <div className="flex-1 flex flex-col">
+              <ManagerFleetDistributionChart
+                machines={machines}
+                selectedPlant="Plant Operations"
+                hierarchy={hierarchy}
+                loading={loading}
+              />
+            </div>
+
+            <div className="flex-1 flex flex-col">
+              <MaintenanceTrendChart
+                title="Operational Maintenance Trends"
+                subtitle=""
+                series1Name="Breakdowns"
+                series2Name="Preventive (PM)"
+                data={trendData}
+                loading={loading}
+                emptyMessage="No maintenance trend recorded"
+                height={210}
+              />
+            </div>
           </div>
         </div>
       </section>

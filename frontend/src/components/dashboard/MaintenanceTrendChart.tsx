@@ -19,6 +19,7 @@ interface MaintenanceTrendChartProps {
   maxY?: number;
   loading?: boolean;
   emptyMessage?: string;
+  height?: number;
 }
 
 export const MaintenanceTrendChart: React.FC<MaintenanceTrendChartProps> = ({
@@ -32,16 +33,17 @@ export const MaintenanceTrendChart: React.FC<MaintenanceTrendChartProps> = ({
   maxY,
   loading = false,
   emptyMessage = 'No maintenance trend recorded',
+  height: customHeight,
 }) => {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
-  // SVG Canvas dimensions (clean compact ratio)
-  const width = 360;
-  const height = 144;
+  // SVG Canvas dimensions (clean wide ratio, customizable for dashboard alignment)
+  const width = 460;
+  const height = customHeight || 180;
   const paddingLeft = 28;
   const paddingRight = 14;
-  const paddingTop = 14;
-  const paddingBottom = 24;
+  const paddingTop = 12;
+  const paddingBottom = 26;
 
   const chartWidth = width - paddingLeft - paddingRight;
   const chartHeight = height - paddingTop - paddingBottom;
@@ -105,8 +107,8 @@ export const MaintenanceTrendChart: React.FC<MaintenanceTrendChartProps> = ({
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs flex flex-col justify-between h-full overflow-hidden">
-      {/* Header */}
-      <div>
+      {/* Header & Legend */}
+      <div className="shrink-0">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0">
@@ -143,8 +145,10 @@ export const MaintenanceTrendChart: React.FC<MaintenanceTrendChartProps> = ({
             </span>
           </div>
         </div>
+      </div>
 
-        {/* Chart Visualization Area */}
+      {/* Chart Visualization Area */}
+      <div className="flex-1 flex flex-col justify-center my-auto min-h-0">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-12 text-xs text-zinc-400 font-medium">
             <div className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mb-2" />
@@ -155,10 +159,10 @@ export const MaintenanceTrendChart: React.FC<MaintenanceTrendChartProps> = ({
             <span className="text-xs text-zinc-400 font-medium">{emptyMessage}</span>
           </div>
         ) : (
-          <div className="w-full relative mt-2 select-none">
+          <div className="w-full relative select-none flex-1 flex items-center justify-center min-h-0 py-1">
             <svg
               viewBox={`0 0 ${width} ${height}`}
-              className="w-full h-auto overflow-visible select-none"
+              className="w-full h-auto overflow-visible select-none max-h-[285px]"
             >
               <defs>
                 <linearGradient id="trendAreaGrad" x1="0" y1="0" x2="0" y2="1">
@@ -182,10 +186,10 @@ export const MaintenanceTrendChart: React.FC<MaintenanceTrendChartProps> = ({
                       strokeDasharray={val === 0 ? undefined : '2 2'}
                     />
                     <text
-                      x={paddingLeft - 6}
+                      x={paddingLeft - 7}
                       y={yPos + 3.5}
                       textAnchor="end"
-                      className="text-[9px] fill-zinc-400 font-mono font-medium"
+                      className="text-[10px] fill-zinc-500 font-mono font-semibold"
                     >
                       {val}
                     </text>
@@ -202,7 +206,7 @@ export const MaintenanceTrendChart: React.FC<MaintenanceTrendChartProps> = ({
                   d={pathSeries1}
                   fill="none"
                   stroke={series1Color}
-                  strokeWidth="2.2"
+                  strokeWidth="2.8"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 />
@@ -214,7 +218,7 @@ export const MaintenanceTrendChart: React.FC<MaintenanceTrendChartProps> = ({
                   d={pathSeries2}
                   fill="none"
                   stroke={series2Color}
-                  strokeWidth="2.2"
+                  strokeWidth="2.8"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 />
@@ -250,29 +254,29 @@ export const MaintenanceTrendChart: React.FC<MaintenanceTrendChartProps> = ({
                     <circle
                       cx={xPos}
                       cy={yPos1}
-                      r={isHovered ? 4.5 : 3.5}
+                      r={isHovered ? 5.5 : 4.5}
                       fill={series1Color}
                       stroke="#FFFFFF"
-                      strokeWidth="1.5"
+                      strokeWidth="2"
                     />
 
                     {/* Point 2 */}
                     <circle
                       cx={xPos}
                       cy={yPos2}
-                      r={isHovered ? 4.5 : 3.5}
+                      r={isHovered ? 5.5 : 4.5}
                       fill={series2Color}
                       stroke="#FFFFFF"
-                      strokeWidth="1.5"
+                      strokeWidth="2"
                     />
 
                     {/* X-Axis Label */}
                     <text
                       x={xPos}
-                      y={height - 4}
+                      y={height - 5}
                       textAnchor="middle"
-                      className={`text-[9.5px] font-medium transition-colors ${
-                        isHovered ? 'fill-zinc-950 font-bold' : 'fill-zinc-500'
+                      className={`text-[11px] font-semibold transition-colors ${
+                        isHovered ? 'fill-zinc-950 font-bold' : 'fill-zinc-600'
                       }`}
                     >
                       {item.label}
@@ -304,7 +308,7 @@ export const MaintenanceTrendChart: React.FC<MaintenanceTrendChartProps> = ({
       </div>
 
       {/* Footer */}
-      <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between text-xs text-zinc-500">
+      <div className="shrink-0 pt-3 mt-auto border-t border-slate-100 flex items-center justify-between text-xs text-zinc-500">
         <span>Velocity Ratio</span>
         <span className="font-semibold text-zinc-800 font-mono">
           {totalCorrective + totalPreventive > 0

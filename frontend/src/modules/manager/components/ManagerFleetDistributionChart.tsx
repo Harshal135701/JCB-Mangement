@@ -114,31 +114,31 @@ export const ManagerFleetDistributionChart: React.FC<ManagerFleetDistributionCha
   }, [groups]);
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs flex flex-col justify-between h-full">
+    <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs flex flex-col justify-between h-full min-h-0">
       {/* Header */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-amber-500 text-black flex items-center justify-center shrink-0 font-black shadow-2xs">
-              {isAllPlants ? <Building2 className="w-4 h-4" /> : <Layers className="w-4 h-4" />}
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-zinc-950 tracking-tight">
-                {isAllPlants ? 'Fleet Allocation by Plant Facility' : `Shop Floor Fleet Distribution (${selectedPlant})`}
-              </h3>
-              <p className="text-2xs text-zinc-500 font-medium">
-                {isAllPlants
-                  ? 'Equipment distribution across authorized manufacturing sites'
-                  : 'Operational equipment allocated across shop floor departments'}
-              </p>
-            </div>
+      <div className="flex items-center justify-between mb-3 shrink-0">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl bg-amber-500 text-black flex items-center justify-center shrink-0 font-black shadow-2xs">
+            {isAllPlants ? <Building2 className="w-4 h-4" /> : <Layers className="w-4 h-4" />}
           </div>
-          <span className="text-[11px] font-mono font-bold text-zinc-600 bg-slate-100 px-2.5 py-1 rounded-lg shrink-0">
-            {groups.length} {isAllPlants ? 'Plants' : 'Shops'}
-          </span>
+          <div>
+            <h3 className="text-sm font-bold text-zinc-950 tracking-tight">
+              {isAllPlants ? 'Fleet Allocation by Plant Facility' : `Shop Floor Fleet Distribution (${selectedPlant})`}
+            </h3>
+            {isAllPlants && (
+              <p className="text-2xs text-zinc-500 font-medium">
+                Equipment distribution across authorized manufacturing sites
+              </p>
+            )}
+          </div>
         </div>
+        <span className="text-[11px] font-mono font-bold text-zinc-600 bg-slate-100 px-2.5 py-1 rounded-lg shrink-0">
+          {groups.length} {isAllPlants ? 'Plants' : 'Shops'}
+        </span>
+      </div>
 
-        {/* Content */}
+      {/* Content */}
+      <div className="flex-1 flex flex-col justify-center my-auto min-h-0">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-12 text-xs text-zinc-400 font-medium">
             <div className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mb-2" />
@@ -149,7 +149,7 @@ export const ManagerFleetDistributionChart: React.FC<ManagerFleetDistributionCha
             <span className="text-xs text-zinc-400 font-medium">No machine distribution data available</span>
           </div>
         ) : (
-          <div className="space-y-3.5 my-1">
+          <div className="flex-1 flex flex-col justify-around py-1 space-y-4 my-auto">
             {groups.map((group) => {
               const widthPct = Math.max(8, Math.round((group.total / maxCount) * 100));
               const operationalWidthPct =
@@ -195,11 +195,6 @@ export const ManagerFleetDistributionChart: React.FC<ManagerFleetDistributionCha
                       )}
                     </div>
                   </div>
-
-                  <div className="flex items-center justify-between text-[10px] text-zinc-400 font-medium mt-1">
-                    <span>Uptime: <strong className="text-zinc-700">{group.uptimePct}%</strong></span>
-                    <span>Share of fleet: <strong className="text-zinc-700">{Math.round(group.pctOfTotal)}%</strong></span>
-                  </div>
                 </div>
               );
             })}
@@ -208,7 +203,7 @@ export const ManagerFleetDistributionChart: React.FC<ManagerFleetDistributionCha
       </div>
 
       {/* Legend Footer */}
-      <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between text-2xs text-zinc-500 font-medium">
+      <div className="shrink-0 pt-3 mt-auto border-t border-slate-100 flex items-center justify-between text-2xs text-zinc-500 font-medium">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block" />

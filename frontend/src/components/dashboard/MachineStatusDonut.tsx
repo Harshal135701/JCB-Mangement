@@ -15,6 +15,7 @@ interface MachineStatusDonutProps {
   segments?: DonutSegment[];
   emptyMessage?: string;
   loading?: boolean;
+  layout?: 'stacked' | 'horizontal';
 }
 
 export const MachineStatusDonut: React.FC<MachineStatusDonutProps> = ({
@@ -24,12 +25,15 @@ export const MachineStatusDonut: React.FC<MachineStatusDonutProps> = ({
   segments = [],
   emptyMessage = 'No machine assets recorded',
   loading = false,
+  layout = 'stacked',
 }) => {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
-  // SVG donut math (compact, perfectly proportioned)
-  const size = 144;
-  const baseStrokeWidth = 18;
+  const isHorizontal = layout === 'horizontal';
+
+  // SVG donut math: Well-proportioned size (200px) and bolder stroke (24px) on desktop for horizontal layout; compact (144px/18px) for stacked
+  const size = isHorizontal ? 200 : 144;
+  const baseStrokeWidth = isHorizontal ? 24 : 18;
   const radius = (size - baseStrokeWidth - 6) / 2;
   const circumference = 2 * Math.PI * radius;
 
@@ -56,10 +60,14 @@ export const MachineStatusDonut: React.FC<MachineStatusDonutProps> = ({
   let accumulatedOffset = 0;
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs flex flex-col justify-between h-full">
+    <div
+      className={`bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs flex flex-col ${
+        isHorizontal ? '' : 'justify-between h-full'
+      }`}
+    >
       {/* Header */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
+      <div className="shrink-0">
+        <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0">
               <PieChart className="w-4 h-4 text-amber-600" />
@@ -74,25 +82,28 @@ export const MachineStatusDonut: React.FC<MachineStatusDonutProps> = ({
             {totalCount} Units
           </span>
         </div>
+      </div>
 
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-12 text-xs text-zinc-400 font-medium">
-            <div className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mb-2" />
-            Loading status telemetry...
-          </div>
-        ) : !hasData ? (
-          <div className="flex flex-col items-center justify-center py-8 text-center border border-dashed border-slate-200 rounded-xl bg-slate-50/50 my-2">
-            <span className="text-xs text-zinc-400 font-medium">{emptyMessage}</span>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center">
-            {/* SVG Donut with Hover Interactivity */}
-            <div className="relative flex items-center justify-center my-2 shrink-0">
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-10 text-xs text-zinc-400 font-medium">
+          <div className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mb-2" />
+          Loading status telemetry...
+        </div>
+      ) : !hasData ? (
+        <div className="flex flex-col items-center justify-center py-8 text-center border border-dashed border-slate-200 rounded-xl bg-slate-50/50 my-2">
+          <span className="text-xs text-zinc-400 font-medium">{emptyMessage}</span>
+        </div>
+      ) : isHorizontal ? (
+        /* Compact, Natural-Height Horizontal Layout for Manager Dashboard (200px Donut, Side-by-Side Legend) */
+        <div className="my-3 w-full">
+          <div className="flex flex-col sm:flex-row items-center justify-center sm:justify-between xl:justify-center gap-4 sm:gap-6 xl:gap-8 w-full">
+            {/* Well-proportioned Donut (200px desktop, responsive 170-185px tablet/mobile) */}
+            <div className="relative flex items-center justify-center shrink-0">
               <svg
                 width={size}
                 height={size}
                 viewBox={`0 0 ${size} ${size}`}
-                className="transform -rotate-90 overflow-visible select-none"
+                className="w-[170px] h-[170px] sm:w-[185px] sm:h-[185px] xl:w-[200px] xl:h-[200px] transform -rotate-90 overflow-visible select-none shrink-0"
               >
                 {/* Background Ring */}
                 <circle
@@ -138,37 +149,40 @@ export const MachineStatusDonut: React.FC<MachineStatusDonutProps> = ({
               </svg>
 
               {/* Dynamic Interactive Center Label */}
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none transition-all duration-200">
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none transition-all duration-200 px-2">
                 {activeSegment ? (
                   <>
                     <span
-                      className="text-2xl font-black font-mono tracking-tight leading-none transition-all"
+                      className="text-2xl xl:text-3xl font-black font-mono tracking-tight leading-none transition-all"
                       style={{ color: activeSegment.color }}
                     >
                       {activeSegment.count}
                     </span>
-                    <span className="text-[11px] font-bold text-zinc-700 truncate max-w-[95px] mt-0.5">
+                    <span className="text-2xs xl:text-xs font-bold text-zinc-700 truncate max-w-[105px] mt-1">
                       {activeSegment.label}
                     </span>
-                    <span className="text-[10px] font-mono text-zinc-400 font-semibold">
+                    <span className="text-[10px] xl:text-[11px] font-mono text-zinc-500 font-semibold">
                       {activeSegment.percentage.toFixed(1)}%
                     </span>
                   </>
                 ) : (
                   <>
-                    <span className="text-2xl font-black text-zinc-950 font-mono tracking-tight leading-none">
+                    <span className="text-2xl xl:text-3xl font-black text-zinc-950 font-mono tracking-tight leading-none">
                       {totalCount}
                     </span>
-                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-0.5">
+                    <span className="text-[9px] xl:text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-1">
                       {totalLabel}
+                    </span>
+                    <span className="text-[9px] xl:text-[10px] font-mono text-zinc-400 font-medium">
+                      Machines
                     </span>
                   </>
                 )}
               </div>
             </div>
 
-            {/* 2-Column Compact Grid Legend - Immune to text overlapping */}
-            <div className="grid grid-cols-2 gap-2 w-full mt-2">
+            {/* Vertical Legend beside Donut */}
+            <div className="flex flex-col gap-2 w-full sm:w-auto sm:min-w-[190px] sm:max-w-[245px] flex-1">
               {computedSegments.map((seg, i) => {
                 const isHovered = hoveredIndex === i;
 
@@ -177,24 +191,24 @@ export const MachineStatusDonut: React.FC<MachineStatusDonutProps> = ({
                     key={i}
                     onMouseEnter={() => setHoveredIndex(i)}
                     onMouseLeave={() => setHoveredIndex(null)}
-                    className={`flex items-center justify-between gap-1.5 px-2 py-1.5 rounded-xl border transition-all cursor-pointer ${
+                    className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl border transition-all cursor-pointer ${
                       isHovered
-                        ? 'bg-slate-100 border-slate-300 shadow-2xs'
+                        ? 'bg-slate-100 border-slate-300 shadow-2xs scale-[1.01]'
                         : 'bg-slate-50/70 border-slate-200/80 hover:bg-slate-100/60'
                     }`}
                   >
-                    <div className="flex items-center gap-1.5 min-w-0">
+                    <div className="flex items-center gap-2 min-w-0">
                       <span
-                        className="w-2.5 h-2.5 rounded-full shrink-0"
+                        className="w-2.5 h-2.5 rounded-full shrink-0 shadow-2xs"
                         style={{ backgroundColor: seg.color }}
                       />
                       <span className="text-xs font-semibold text-zinc-800 truncate">
                         {seg.label}
                       </span>
                     </div>
-                    <div className="flex items-center gap-1 shrink-0 font-mono text-xs">
+                    <div className="flex items-center gap-1.5 shrink-0 font-mono text-xs">
                       <span className="font-bold text-zinc-950">{seg.count}</span>
-                      <span className="text-[10px] text-zinc-400">
+                      <span className="text-[10px] text-zinc-500 bg-slate-200/70 px-1.5 py-0.5 rounded font-medium">
                         {seg.percentage.toFixed(0)}%
                       </span>
                     </div>
@@ -203,15 +217,135 @@ export const MachineStatusDonut: React.FC<MachineStatusDonutProps> = ({
               })}
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        /* Legacy Compact Stacked Layout (Maintains exact backward-compatibility for Operator Dashboard) */
+        <div className="flex flex-col items-center">
+          {/* SVG Donut with Hover Interactivity */}
+          <div className="relative flex items-center justify-center my-2 shrink-0">
+            <svg
+              width={size}
+              height={size}
+              viewBox={`0 0 ${size} ${size}`}
+              className="transform -rotate-90 overflow-visible select-none"
+            >
+              {/* Background Ring */}
+              <circle
+                cx={size / 2}
+                cy={size / 2}
+                r={radius}
+                fill="transparent"
+                stroke="#F1F5F9"
+                strokeWidth={baseStrokeWidth}
+              />
 
-      {/* Footer Info */}
-      <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between text-xs text-zinc-500">
+              {/* Segments */}
+              {computedSegments.map((seg, i) => {
+                const segLength = (seg.percentage / 100) * circumference;
+                const offset = -accumulatedOffset;
+                accumulatedOffset += segLength;
+
+                if (seg.count <= 0) return null;
+
+                const isHovered = hoveredIndex === i;
+                const strokeWidth = isHovered ? baseStrokeWidth + 4 : baseStrokeWidth;
+
+                return (
+                  <circle
+                    key={i}
+                    cx={size / 2}
+                    cy={size / 2}
+                    r={radius}
+                    fill="transparent"
+                    stroke={seg.color}
+                    strokeWidth={strokeWidth}
+                    strokeDasharray={`${segLength} ${circumference}`}
+                    strokeDashoffset={offset}
+                    className="transition-all duration-300 cursor-pointer"
+                    onMouseEnter={() => setHoveredIndex(i)}
+                    onMouseLeave={() => setHoveredIndex(null)}
+                    style={{
+                      filter: isHovered ? 'drop-shadow(0px 0px 4px rgba(0,0,0,0.25))' : 'none',
+                    }}
+                  />
+                );
+              })}
+            </svg>
+
+            {/* Dynamic Interactive Center Label */}
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none transition-all duration-200">
+              {activeSegment ? (
+                <>
+                  <span
+                    className="text-2xl font-black font-mono tracking-tight leading-none transition-all"
+                    style={{ color: activeSegment.color }}
+                  >
+                    {activeSegment.count}
+                  </span>
+                  <span className="text-[11px] font-bold text-zinc-700 truncate max-w-[95px] mt-0.5">
+                    {activeSegment.label}
+                  </span>
+                  <span className="text-[10px] font-mono text-zinc-400 font-semibold">
+                    {activeSegment.percentage.toFixed(1)}%
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="text-2xl font-black text-zinc-950 font-mono tracking-tight leading-none">
+                    {totalCount}
+                  </span>
+                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-0.5">
+                    {totalLabel}
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* 2-Column Compact Grid Legend */}
+          <div className="grid grid-cols-2 gap-2 w-full mt-2">
+            {computedSegments.map((seg, i) => {
+              const isHovered = hoveredIndex === i;
+
+              return (
+                <div
+                  key={i}
+                  onMouseEnter={() => setHoveredIndex(i)}
+                  onMouseLeave={() => setHoveredIndex(null)}
+                  className={`flex items-center justify-between gap-1.5 px-2 py-1.5 rounded-xl border transition-all cursor-pointer ${
+                    isHovered
+                      ? 'bg-slate-100 border-slate-300 shadow-2xs'
+                      : 'bg-slate-50/70 border-slate-200/80 hover:bg-slate-100/60'
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span
+                      className="w-2.5 h-2.5 rounded-full shrink-0"
+                      style={{ backgroundColor: seg.color }}
+                    />
+                    <span className="text-xs font-semibold text-zinc-800 truncate">
+                      {seg.label}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0 font-mono text-xs">
+                    <span className="font-bold text-zinc-950">{seg.count}</span>
+                    <span className="text-[10px] text-zinc-400">
+                      {seg.percentage.toFixed(0)}%
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Footer Info Directly Below Content */}
+      <div className="pt-3.5 mt-2 border-t border-slate-100 flex items-center justify-between text-xs text-zinc-500 shrink-0">
         <span>Fleet Health</span>
         <span className="font-semibold text-emerald-700 font-mono">
           {totalCount > 0
-            ? `${(((computedSegments.find((s) => s.label === 'Working')?.count || 0) / totalCount) * 100).toFixed(0)}% Working`
+            ? `${(((computedSegments.find((s) => s.label === 'Working' || s.label === 'Running')?.count || 0) / totalCount) * 100).toFixed(0)}% Working`
             : '0%'}
         </span>
       </div>
