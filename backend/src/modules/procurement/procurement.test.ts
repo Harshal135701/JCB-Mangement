@@ -883,6 +883,12 @@ class MockProcurementDatabase implements DbPoolLike {
       return { rows: mgrs.map((m) => ({ id: m.id })), rowCount: mgrs.length };
     }
 
+    // 14b. Store managers query for notifications
+    if (trimmed.includes("FROM users WHERE role = 'store_manager'") || trimmed.includes("role = 'store_manager'")) {
+      const storeMgrs = this.users.filter((u) => u.role === 'store_manager' && u.is_active);
+      return { rows: storeMgrs.map((m) => ({ id: m.id })), rowCount: storeMgrs.length };
+    }
+
     // 15. Lock PR row FOR UPDATE (by ID)
     if (trimmed.includes('FROM purchase_requisitions pr') && trimmed.includes('WHERE pr.id = $1')) {
       if (trimmed.includes('FOR UPDATE')) {
@@ -2618,6 +2624,74 @@ describe('Procurement & Purchase Requisition Module (CMMS Module 4)', () => {
       // Verify Socket.IO emission
       const socketEvent = mockIo.emissions.find((e) => e.event === 'pr:status_changed');
       assert.ok(socketEvent);
+    });
+
+    it('32b. Store Manager receives in-app notification and real-time Socket.IO alert when technician places spare part purchase request', async () => {
+      mockDb.notifications = [];
+      mockIo.emissions = [];
+
+      const { req, res, next } = createMockContext(
+        {
+          part_id: '30000000-0000-0000-0000-000000000001',
+          quantity_required: 4,
+          urgency: 'high',
+          technical_justification: 'Critical breakdown replacement for CNC spindle hydraulic seal',
+        },
+        {},
+        {},
+        {},
+        tech1User
+      );
+
+      await createPurchaseRequisition(req, res, next);
+      assert.equal(res.statusCode, 201);
+
+      // Verify notification created for Store Manager Pune (EMP-STR-01: '00000000-0000-0000-0000-000000000007')
+      const storeMgrNotif = mockDb.notifications.find(
+        (n) => n.recipient_id === '00000000-0000-0000-0000-000000000007'
+      );
+      assert.ok(storeMgrNotif, 'Store manager must receive in-app notification for spare part purchase request');
+      assert.match(storeMgrNotif.title, /New Spare Part Purchase Request/i);
+      assert.match(storeMgrNotif.message, /raised a spare part purchase request/i);
+
+      // Verify Socket.IO notification:new emitted to store manager
+      const socketNotif = mockIo.emissions.find(
+        (e) => e.event === 'notification:new' && e.room === 'user:00000000-0000-0000-0000-000000000007'
+      );
+      assert.ok(socketNotif, 'Real-time notification:new must be emitted to store manager socket room');
+    });
+
+    it('32c. Store Manager receives in-app notification and real-time Socket.IO alert when spare part request comes for review (under_review)', async () => {
+      mockDb.notifications = [];
+      mockIo.emissions = [];
+
+      const { req, res, next } = createMockContext(
+        {
+          status: 'under_review',
+          remarks: 'Technician manager placed spare part purchase request under review',
+        },
+        { id: '70000000-0000-0000-0000-000000000001' },
+        {},
+        {},
+        puneManagerUser
+      );
+
+      await updatePRStatus(req, res, next);
+      assert.equal(res.statusCode, 200);
+
+      // Verify notification created for Store Manager Pune
+      const storeMgrReviewNotif = mockDb.notifications.find(
+        (n) => n.recipient_id === '00000000-0000-0000-0000-000000000007' && n.title.includes('Review')
+      );
+      assert.ok(storeMgrReviewNotif, 'Store manager must receive notification when spare part request comes for review');
+      assert.match(storeMgrReviewNotif.title, /Spare Part Request For Review/i);
+      assert.match(storeMgrReviewNotif.message, /has come for review/i);
+
+      // Verify Socket.IO notification:new emitted to store manager
+      const socketReviewNotif = mockIo.emissions.find(
+        (e) => e.event === 'notification:new' && e.room === 'user:00000000-0000-0000-0000-000000000007'
+      );
+      assert.ok(socketReviewNotif, 'Real-time notification:new must be emitted to store manager for under_review');
     });
 
     it('33. Transaction rollback: Database failures abort state changes and revert', async () => {

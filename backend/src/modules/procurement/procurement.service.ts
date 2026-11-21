@@ -626,6 +626,43 @@ export async function createPurchaseRequisitionService(
       }
     }
 
+    // 9b. Dispatch in-app notifications specifically to Store Managers for review & fulfillment
+    const storeMgrParams: any[] = [];
+    let storeMgrQuery = `SELECT id FROM users WHERE role = 'store_manager' AND is_active = true`;
+    if (effectivePlantId) {
+      storeMgrParams.push(effectivePlantId);
+      storeMgrQuery += ` AND (plant_id = $1 OR plant_id IS NULL)`;
+    }
+
+    const notifiedStoreManagerIds: string[] = [];
+    try {
+      const storeManagersRes = await client.query(storeMgrQuery, storeMgrParams);
+      for (const sm of storeManagersRes.rows) {
+        if (sm.id !== user.id) {
+          notifiedStoreManagerIds.push(sm.id);
+          const storeNotifTitle = `New Spare Part Purchase Request: ${pr.pr_number}`;
+          const storeNotifMessage = `${(user as any).full_name || user.employee_code || 'An employee'} raised a spare part purchase request for ${quantity}x ${part.name} (${part.part_number}). Please review.`;
+          const storeNotifLink = `/procurement?prId=${pr.id}`;
+
+          try {
+            await client.query(
+              `INSERT INTO notifications (recipient_id, title, message, type, link_url, entity_type, entity_id, plant_id, created_at)
+               VALUES ($1, $2, $3, 'approval', $4, 'purchase_requisitions', $5, $6, NOW())`,
+              [sm.id, storeNotifTitle, storeNotifMessage, storeNotifLink, pr.id, effectivePlantId || null]
+            );
+          } catch {
+            await client.query(
+              `INSERT INTO notifications (recipient_id, title, message, type, link_url, created_at)
+               VALUES ($1, $2, $3, 'approval', $4, NOW())`,
+              [sm.id, storeNotifTitle, storeNotifMessage, storeNotifLink]
+            );
+          }
+        }
+      }
+    } catch {
+      // Graceful fallback for mock DB or non-configured environment
+    }
+
     await client.query('COMMIT');
 
     // 10. Real-time scoped Socket.IO emission (strictly room-scoped, no cross-plant leaks)
@@ -641,6 +678,38 @@ export async function createPurchaseRequisitionService(
         emitToRole('admin', 'pr:created', payload, io);
       }
       emitToUser(user.id, 'pr:created', payload, io);
+
+      // Real-time notification delivery to Store Manager(s)
+      for (const smId of notifiedStoreManagerIds) {
+        const notifPayload = {
+          recipient_id: smId,
+          title: `New Spare Part Purchase Request: ${pr.pr_number}`,
+          message: `${(user as any).full_name || user.employee_code || 'An employee'} raised a spare part purchase request for ${quantity}x ${part.name} (${part.part_number}). Please review.`,
+          type: 'approval',
+          link_url: `/procurement?prId=${pr.id}`,
+          action_url: `/procurement?prId=${pr.id}`,
+          entity_type: 'purchase_requisitions',
+          entity_id: pr.id,
+          plant_id: effectivePlantId || null,
+          created_at: new Date().toISOString(),
+          is_read: false,
+        };
+        emitToUser(smId, 'notification:new', notifPayload, io);
+        emitToUser(smId, 'notification', notifPayload, io);
+        emitToUser(smId, 'pr:created', payload, io);
+
+        // Update live unread count
+        try {
+          const countRes = await client.query(
+            `SELECT COUNT(*)::int as unread_count FROM notifications WHERE recipient_id = $1 AND is_read = false`,
+            [smId]
+          );
+          const unreadCount = Number(countRes.rows[0]?.unread_count || 1);
+          emitToUser(smId, 'notification:unread-count', { unread_count: unreadCount }, io);
+        } catch {
+          // Non-blocking
+        }
+      }
     }
 
     return pr;
@@ -1156,6 +1225,60 @@ export async function updatePRStatusService(
       }
     }
 
+    // Notify Store Manager(s) when spare part request comes for review
+    const notifiedReviewStoreManagerIds: string[] = [];
+    if (nextStatus === 'under_review') {
+      if (!partNumber && currentPR.part_id) {
+        try {
+          const partRes = await client.query(
+            `SELECT name, part_number FROM spare_parts WHERE id = $1`,
+            [currentPR.part_id]
+          );
+          if (partRes.rows.length > 0) {
+            partName = partRes.rows[0].name || partName;
+            partNumber = partRes.rows[0].part_number || '';
+          }
+        } catch {
+          // Graceful fallback
+        }
+      }
+
+      const storeMgrParams: any[] = [];
+      let storeMgrQuery = `SELECT id FROM users WHERE role = 'store_manager' AND is_active = true`;
+      if (effectivePlantId) {
+        storeMgrParams.push(effectivePlantId);
+        storeMgrQuery += ` AND (plant_id = $1 OR plant_id IS NULL)`;
+      }
+
+      try {
+        const storeMgrsRes = await client.query(storeMgrQuery, storeMgrParams);
+        for (const sm of storeMgrsRes.rows) {
+          if (sm.id !== user.id) {
+            notifiedReviewStoreManagerIds.push(sm.id);
+            const reviewTitle = `Spare Part Request For Review: ${currentPR.pr_number}`;
+            const reviewMsg = `Purchase Requisition ${currentPR.pr_number} for ${partName}${partNumber ? ` (${partNumber})` : ''} has come for review by ${(user as any).full_name || user.employee_code || 'staff'}.`;
+            const reviewLink = `/procurement?prId=${id}`;
+
+            try {
+              await client.query(
+                `INSERT INTO notifications (recipient_id, title, message, type, link_url, entity_type, entity_id, plant_id, created_at)
+                 VALUES ($1, $2, $3, 'approval', $4, 'purchase_requisitions', $5, $6, NOW())`,
+                [sm.id, reviewTitle, reviewMsg, reviewLink, id, effectivePlantId || null]
+              );
+            } catch {
+              await client.query(
+                `INSERT INTO notifications (recipient_id, title, message, type, link_url, created_at)
+                 VALUES ($1, $2, $3, 'approval', $4, NOW())`,
+                [sm.id, reviewTitle, reviewMsg, reviewLink]
+              );
+            }
+          }
+        }
+      } catch {
+        // Non-blocking fallback
+      }
+    }
+
     await client.query('COMMIT');
 
     const io = getProcurementServiceIo();
@@ -1170,6 +1293,39 @@ export async function updatePRStatusService(
       }
       if (currentPR.requested_by) {
         emitToUser(currentPR.requested_by, 'pr:status_changed', payload, io);
+      }
+
+      // Real-time socket notification delivery to Store Manager(s) for review
+      if (notifiedReviewStoreManagerIds.length > 0) {
+        for (const smId of notifiedReviewStoreManagerIds) {
+          const reviewPayload = {
+            recipient_id: smId,
+            title: `Spare Part Request For Review: ${currentPR.pr_number}`,
+            message: `Purchase Requisition ${currentPR.pr_number} for ${partName}${partNumber ? ` (${partNumber})` : ''} has come for review by ${(user as any).full_name || user.employee_code || 'staff'}.`,
+            type: 'approval',
+            link_url: `/procurement?prId=${id}`,
+            action_url: `/procurement?prId=${id}`,
+            entity_type: 'purchase_requisitions',
+            entity_id: id,
+            plant_id: effectivePlantId || null,
+            created_at: new Date().toISOString(),
+            is_read: false,
+          };
+          emitToUser(smId, 'notification:new', reviewPayload, io);
+          emitToUser(smId, 'notification', reviewPayload, io);
+          emitToUser(smId, 'pr:status_changed', payload, io);
+
+          try {
+            const countRes = await client.query(
+              `SELECT COUNT(*)::int as unread_count FROM notifications WHERE recipient_id = $1 AND is_read = false`,
+              [smId]
+            );
+            const unreadCount = Number(countRes.rows[0]?.unread_count || 1);
+            emitToUser(smId, 'notification:unread-count', { unread_count: unreadCount }, io);
+          } catch {
+            // Non-blocking
+          }
+        }
       }
 
       // If inventory availability notification was generated, emit dedicated real-time socket events to the technician
