@@ -310,7 +310,7 @@ export const LiveShopFloorDashboard: React.FC = () => {
           ========================================================================= */}
       <section aria-label="Operational Key Performance Indicators" className="space-y-4">
         {/* 6 Primary Executive KPI Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
+        <div className="grid grid-cols-1 min-[420px]:grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
           {/* 1. Total Machines */}
           <TopKPICard
             icon={Cpu}

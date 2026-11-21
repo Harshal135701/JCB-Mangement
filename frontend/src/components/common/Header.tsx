@@ -117,28 +117,28 @@ export const Header: React.FC<HeaderProps> = ({ onMobileMenuToggle }) => {
   };
 
   return (
-    <header className="bg-white border-b-2 border-slate-200 h-16 px-4 sm:px-6 flex items-center justify-between shrink-0 shadow-xs z-30">
+    <header className="bg-white border-b-2 border-slate-200 h-16 px-3 sm:px-6 flex items-center justify-between shrink-0 shadow-xs z-30 min-w-0">
       {/* Left: Mobile Menu Toggle & Left-Aligned Search Box */}
-      <div className="flex items-center gap-3 w-full max-w-md">
+      <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0 max-w-xs sm:max-w-sm md:max-w-md">
         <button
           onClick={onMobileMenuToggle}
-          className="lg:hidden p-2 rounded-lg text-zinc-600 hover:text-black hover:bg-zinc-100 transition shrink-0"
+          className="xl:hidden p-1.5 sm:p-2 rounded-lg text-zinc-600 hover:text-black hover:bg-zinc-100 transition shrink-0"
           aria-label="Toggle navigation menu"
         >
           <Menu className="w-5 h-5" />
         </button>
 
         {/* Global Search Bar (Left-aligned with main content margin) */}
-        <div className="w-full">
+        <div className="w-full min-w-0">
           <div className="group relative w-full flex items-center bg-slate-100/70 hover:bg-slate-100 focus-within:bg-white border border-slate-200/90 hover:border-slate-300 focus-within:border-amber-500 rounded-xl shadow-[inset_0_1px_2px_rgba(0,0,0,0.03)] focus-within:shadow-md focus-within:ring-2 focus-within:ring-amber-400/60 transition-all duration-200 ease-in-out">
-            <Search className="w-4 h-4 text-zinc-400 group-hover:text-zinc-600 group-focus-within:text-amber-600 absolute left-3 transition-colors pointer-events-none shrink-0" />
+            <Search className="w-4 h-4 text-zinc-400 group-hover:text-zinc-600 group-focus-within:text-amber-600 absolute left-2.5 sm:left-3 transition-colors pointer-events-none shrink-0" />
             <input
               ref={searchInputRef}
               type="text"
-              placeholder="Search machines, repair jobs..."
-              className="w-full pl-9 pr-14 py-2 bg-transparent text-xs font-medium text-zinc-900 placeholder:text-zinc-400 focus:outline-none"
+              placeholder="Search..."
+              className="w-full pl-8 sm:pl-9 pr-3 sm:pr-14 py-2 bg-transparent text-xs font-medium text-zinc-900 placeholder:text-zinc-400 focus:outline-none min-w-0"
             />
-            <div className="absolute right-2.5 flex items-center pointer-events-none select-none">
+            <div className="hidden sm:flex absolute right-2.5 items-center pointer-events-none select-none">
               <kbd className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-mono font-bold text-zinc-400 bg-white border border-slate-200 rounded-md shadow-2xs group-hover:text-zinc-600 group-hover:border-slate-300 group-focus-within:border-amber-300 group-focus-within:text-amber-800 group-focus-within:bg-amber-50/60 transition-all">
                 <span className="text-[11px] leading-none">⌘</span>K
               </kbd>
@@ -148,7 +148,7 @@ export const Header: React.FC<HeaderProps> = ({ onMobileMenuToggle }) => {
       </div>
 
       {/* Right: Notifications, LIVE Indicator & User Profile Menu */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-1.5 sm:gap-3 shrink-0 ml-2">
         {/* Verified Facility Indicator (if present) */}
         {(user?.plantName || user?.shopName) ? (
           <div className="hidden xl:flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-950 border border-amber-300 rounded-lg text-xs font-black uppercase tracking-wider">
@@ -307,7 +307,7 @@ export const Header: React.FC<HeaderProps> = ({ onMobileMenuToggle }) => {
           </button>
 
           {isProfileOpen && (
-            <div className="absolute right-0 mt-2 w-64 bg-white border border-zinc-200 rounded-2xl shadow-xl z-50 overflow-hidden divide-y divide-zinc-100">
+            <div className="absolute right-0 mt-2 w-64 max-w-[calc(100vw-2rem)] bg-white border border-zinc-200 rounded-2xl shadow-xl z-50 overflow-hidden divide-y divide-zinc-100">
               <div className="p-4 bg-zinc-50">
                 <p className="text-xs font-black text-zinc-950">{user?.fullName}</p>
                 <p className="text-[11px] text-zinc-500 truncate">{user?.email}</p>

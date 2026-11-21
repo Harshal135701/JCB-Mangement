@@ -15,12 +15,12 @@ export const Layout: React.FC = () => {
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col overflow-hidden bg-slate-50">
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0 bg-slate-50">
         {/* Dynamic Header */}
         <Header onMobileMenuToggle={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)} />
 
         {/* Content Body */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0 p-3 sm:p-4 md:p-6 bg-slate-50">
           <Outlet />
         </main>
       </div>

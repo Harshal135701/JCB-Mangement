@@ -403,7 +403,7 @@ export const AdminDashboard: React.FC = () => {
       )}
 
       {/* ROW 1: EXECUTIVE KPI STRIP (7 CARDS) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-7 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 min-[420px]:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-7 gap-3 sm:gap-4">
         <TopKPICard
           icon={Building2}
           iconBgColor="bg-blue-100"
@@ -678,7 +678,7 @@ export const AdminDashboard: React.FC = () => {
                 No spare part categories found
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 min-[420px]:grid-cols-2 sm:grid-cols-3 gap-3">
                 {inventoryCategories.map((category: any, index: number) => {
                   const colors = [
                     'bg-blue-50 border-blue-200 text-blue-700',

@@ -81,7 +81,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
       { name: 'Dashboard', path: '/technician/dashboard', icon: LayoutDashboard, roles: ['technician'] },
       { name: 'Machines Management', path: '/machines', icon: Cpu, roles: ['technician'] },
       { name: 'Spare Parts Management', path: '/inventory', icon: Package, roles: ['technician'] },
-      { name: 'Spare Parts Purchase Request', path: '/procurement', icon: ShoppingCart, roles: ['technician'] },
+      // { name: 'Spare Parts Purchase Request', path: '/procurement', icon: ShoppingCart, roles: ['technician'] },
       // { name: 'Daily AM Checklist', path: '/inspections', icon: ClipboardCheck, roles: ['technician'] },
       { name: 'Maintenance Status', path: '/work-orders', icon: Wrench, roles: ['technician'] },
       { name: 'Spare Parts Purchase Request', path: '/procurement', icon: ShoppingCart, roles: ['technician'] },
@@ -129,14 +129,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
       {/* Mobile Backdrop */}
       {isMobileOpen && (
         <div
-          className="fixed inset-0 bg-black/60 z-40 lg:hidden backdrop-blur-xs"
+          className="fixed inset-0 bg-black/60 z-40 xl:hidden backdrop-blur-xs"
           onClick={onMobileClose}
         />
       )}
 
       {/* Sidebar Aside: Full-height JCB Excavator Background softly faded */}
       <aside
-        className={`fixed lg:static inset-y-0 left-0 z-50 w-64 lg:w-[268px] h-screen text-white flex flex-col justify-between shrink-0 border-r border-zinc-800 transition-transform duration-200 ease-in-out select-none shadow-2xl overflow-hidden relative bg-[#0b131e] ${isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+        className={`fixed xl:static inset-y-0 left-0 z-50 w-64 xl:w-[268px] h-screen text-white flex flex-col justify-between shrink-0 border-r border-zinc-800 transition-transform duration-200 ease-in-out select-none shadow-2xl overflow-hidden relative bg-[#0b131e] ${isMobileOpen ? 'translate-x-0' : '-translate-x-full xl:translate-x-0'
           }`}
       >
         {/* Faded JCB Excavator background image layer */}
@@ -162,7 +162,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
             {/* Mobile Close Button */}
             <button
               onClick={onMobileClose}
-              className="lg:hidden absolute top-2 right-2 p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition cursor-pointer z-30"
+              className="xl:hidden absolute top-2 right-2 p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition cursor-pointer z-30"
               aria-label="Close menu"
             >
               <X className="w-5 h-5" />

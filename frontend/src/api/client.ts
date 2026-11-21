@@ -75,13 +75,30 @@ const processQueue = (error: any, token: string | null = null) => {
   failedQueue = [];
 };
 
-// Request interceptor: Attach current valid token
+// Request interceptor: Attach current valid token and safeguard pagination parameters
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const token = getStoredToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    // Ensure pagination parameters (if provided) strictly conform to backend validation contracts:
+    // - page: positive integer >= 1 (defaults to 1 if present but invalid)
+    // - limit: integer between 1 and 100 (clamped to 1..100)
+    if (config.params && typeof config.params === 'object') {
+      if ('limit' in config.params && config.params.limit !== undefined) {
+        const parsedLimit = parseInt(String(config.params.limit), 10);
+        config.params.limit = !isNaN(parsedLimit)
+          ? Math.max(1, Math.min(100, parsedLimit))
+          : 10;
+      }
+      if ('page' in config.params && config.params.page !== undefined) {
+        const parsedPage = parseInt(String(config.params.page), 10);
+        config.params.page = !isNaN(parsedPage) && parsedPage >= 1 ? parsedPage : 1;
+      }
+    }
+
     return config;
   },
   (error) => Promise.reject(error)

@@ -36,6 +36,82 @@ export function getItemTimestamp(item: any): number {
   return isNaN(t) ? 0 : t;
 }
 
+/**
+ * Validates and normalizes pagination parameters for API requests.
+ * Ensures page is a positive integer >= 1 (defaults to 1).
+ * Ensures limit is an integer between 1 and 100 (defaults to 100 or specified default, clamped to 1..100).
+ */
+export function normalizePaginationParams(
+  params?: Record<string, any>,
+  defaultLimit: number = 100
+): Record<string, any> {
+  const clean: Record<string, any> = { ...(params || {}) };
+
+  // 1. Normalize page: must be a positive integer >= 1
+  const rawPage = clean.page;
+  const parsedPage = parseInt(String(rawPage ?? 1), 10);
+  clean.page = !isNaN(parsedPage) && parsedPage >= 1 ? parsedPage : 1;
+
+  // 2. Normalize limit: must strictly be an integer between 1 and 100
+  const rawLimit = clean.limit;
+  const parsedLimit = parseInt(String(rawLimit ?? defaultLimit), 10);
+  const clampedLimit = !isNaN(parsedLimit)
+    ? Math.max(1, Math.min(100, parsedLimit))
+    : Math.max(1, Math.min(100, defaultLimit));
+  clean.limit = clampedLimit;
+
+  return clean;
+}
+
+/**
+ * Safely fetches paginated report items while strictly respecting the
+ * backend contract of page >= 1 and 1 <= limit <= 100 per request.
+ * Fetches up to maxPages (default: 5 pages = up to 500 records) to aggregate full reports.
+ */
+export async function fetchPaginatedReportItems<T = any>(
+  url: string,
+  params: Record<string, any> = {},
+  maxPages: number = 5
+): Promise<T[]> {
+  try {
+    const normalized = normalizePaginationParams(params, 100);
+    const firstRes = await apiClient.get(url, { params: normalized });
+    const firstPageItems: T[] = firstRes.data?.data || [];
+    const totalPages = Number(firstRes.data?.pagination?.totalPages) || 1;
+
+    if (totalPages <= 1 || maxPages <= 1) {
+      return firstPageItems;
+    }
+
+    const pagesToFetch: number[] = [];
+    const targetPages = Math.min(totalPages, maxPages);
+    for (let p = 2; p <= targetPages; p++) {
+      pagesToFetch.push(p);
+    }
+
+    const nextResponses = await Promise.all(
+      pagesToFetch.map((p) =>
+        apiClient
+          .get(url, { params: { ...normalized, page: p } })
+          .catch((err) => {
+            console.warn(`[Reports] Failed to fetch page ${p} for ${url}:`, err);
+            return { data: { data: [] } };
+          })
+      )
+    );
+
+    const aggregated = [...firstPageItems];
+    for (const r of nextResponses) {
+      const pageData: T[] = r.data?.data || [];
+      aggregated.push(...pageData);
+    }
+    return aggregated;
+  } catch (err: any) {
+    console.error(`[Reports] Error fetching paginated data from ${url}:`, err);
+    return [];
+  }
+}
+
 export interface UserSummary {
   id: string;
   employee_code?: string;
@@ -181,7 +257,7 @@ export interface MachineReportData {
  */
 export async function fetchMachines(search?: string, plantId?: string): Promise<MachineSummary[]> {
   try {
-    const params: Record<string, any> = { limit: 100 };
+    const params: Record<string, any> = normalizePaginationParams({ limit: 100, page: 1 });
     if (search && search.trim()) {
       params.search = search.trim();
     }
@@ -225,7 +301,7 @@ export async function fetchMachineReportData(
  */
 export async function fetchUsersByRole(role: string, search?: string, plantId?: string): Promise<UserSummary[]> {
   try {
-    const params: Record<string, any> = { role, limit: 100 };
+    const params: Record<string, any> = normalizePaginationParams({ role, limit: 100, page: 1 });
     if (search && search.trim()) {
       params.search = search.trim();
     }
@@ -251,25 +327,23 @@ export async function fetchTechnicianReportData(
   try {
     const bdParams: Record<string, any> = {
       assigned_technician_id: technicianId,
-      limit: 500,
+      limit: 100,
+      page: 1,
     };
     if (startDate) bdParams.start_date = startDate;
     if (endDate) bdParams.end_date = endDate;
 
-    const [woRes, bdRes] = await Promise.all([
-      apiClient.get('/work-orders', {
-        params: {
-          technician_id: technicianId,
-          limit: 500,
-        },
+    const [workOrdersRaw, breakdownsRaw] = await Promise.all([
+      fetchPaginatedReportItems<WorkOrderReportItem>('/work-orders', {
+        technician_id: technicianId,
+        limit: 100,
+        page: 1,
       }),
-      apiClient.get('/breakdowns', {
-        params: bdParams,
-      }),
+      fetchPaginatedReportItems<BreakdownReportItem>('/breakdowns', bdParams),
     ]);
 
-    let workOrders: WorkOrderReportItem[] = woRes.data?.data || [];
-    let breakdowns: BreakdownReportItem[] = bdRes.data?.data || [];
+    let workOrders: WorkOrderReportItem[] = workOrdersRaw || [];
+    let breakdowns: BreakdownReportItem[] = breakdownsRaw || [];
 
     // Apply robust date range filters if present
     if (startDate || endDate) {
@@ -340,21 +414,17 @@ export async function fetchOperatorReportData(
   endDate?: string
 ) {
   try {
-    const bdParams: Record<string, any> = { limit: 500 };
+    const bdParams: Record<string, any> = { limit: 100, page: 1 };
     if (startDate) bdParams.start_date = startDate;
     if (endDate) bdParams.end_date = endDate;
 
-    const [inspRes, bdRes] = await Promise.all([
-      apiClient.get('/inspections/records', {
-        params: { limit: 500 },
-      }),
-      apiClient.get('/breakdowns', {
-        params: bdParams,
-      }),
+    const [inspectionsRaw, breakdownsRaw] = await Promise.all([
+      fetchPaginatedReportItems<InspectionReportItem>('/inspections/records', { limit: 100, page: 1 }),
+      fetchPaginatedReportItems<BreakdownReportItem>('/breakdowns', bdParams),
     ]);
 
-    let inspections: InspectionReportItem[] = inspRes.data?.data || [];
-    let breakdowns: BreakdownReportItem[] = bdRes.data?.data || [];
+    let inspections: InspectionReportItem[] = inspectionsRaw || [];
+    let breakdowns: BreakdownReportItem[] = breakdownsRaw || [];
 
     // Filter strictly to this operator's inspections
     if (operatorId) {
@@ -424,17 +494,17 @@ export async function fetchManagerReportData(
   endDate?: string
 ) {
   try {
-    const bdParams: Record<string, any> = { limit: 500 };
+    const bdParams: Record<string, any> = { limit: 100, page: 1 };
     if (startDate) bdParams.start_date = startDate;
     if (endDate) bdParams.end_date = endDate;
 
-    const [bdRes, woRes] = await Promise.all([
-      apiClient.get('/breakdowns', { params: bdParams }),
-      apiClient.get('/work-orders', { params: { limit: 500 } }),
+    const [breakdownsRaw, workOrdersRaw] = await Promise.all([
+      fetchPaginatedReportItems<BreakdownReportItem>('/breakdowns', bdParams),
+      fetchPaginatedReportItems<WorkOrderReportItem>('/work-orders', { limit: 100, page: 1 }),
     ]);
 
-    let breakdowns: BreakdownReportItem[] = bdRes.data?.data || [];
-    let workOrders: WorkOrderReportItem[] = woRes.data?.data || [];
+    let breakdowns: BreakdownReportItem[] = breakdownsRaw || [];
+    let workOrders: WorkOrderReportItem[] = workOrdersRaw || [];
 
     if (startDate || endDate) {
       const startMs = parseStartOfDay(startDate);
@@ -507,21 +577,17 @@ export async function fetchStoreManagerReportData(
   endDate?: string
 ) {
   try {
-    const [dashRes, txRes, alertRes, prRes] = await Promise.all([
+    const [dashRes, transactionsRaw, alertRes, purchaseRequestsRaw] = await Promise.all([
       apiClient.get('/inventory/dashboard').catch(() => ({ data: { data: {} } })),
-      apiClient.get('/inventory/transactions', { params: { limit: 500 } }).catch(() => ({
-        data: { data: [] },
-      })),
+      fetchPaginatedReportItems<InventoryTransactionItem>('/inventory/transactions', { limit: 100, page: 1 }),
       apiClient.get('/inventory/alerts/low-stock').catch(() => ({ data: { data: [] } })),
-      apiClient.get('/procurement/pr', { params: { limit: 500 } }).catch(() => ({
-        data: { data: [] },
-      })),
+      fetchPaginatedReportItems('/procurement/pr', { limit: 100, page: 1 }),
     ]);
 
     const dashboard = dashRes.data?.data || {};
-    let transactions: InventoryTransactionItem[] = txRes.data?.data || [];
+    let transactions: InventoryTransactionItem[] = transactionsRaw || [];
     let lowStockAlerts: LowStockAlertItem[] = alertRes.data?.data || [];
-    let purchaseRequests: any[] = prRes.data?.data || [];
+    let purchaseRequests: any[] = purchaseRequestsRaw || [];
 
     if (startDate || endDate) {
       const startMs = parseStartOfDay(startDate);
@@ -570,31 +636,23 @@ export async function fetchAdminReportData(
     if (startDate) kpiParams.start_date = startDate;
     if (endDate) kpiParams.end_date = endDate;
 
-    const bdParams: Record<string, any> = { limit: 500 };
+    const bdParams: Record<string, any> = { limit: 100, page: 1 };
     if (startDate) bdParams.start_date = startDate;
     if (endDate) bdParams.end_date = endDate;
 
-    const [kpiRes, auditRes, usersRes, woRes, bdRes] = await Promise.all([
+    const [kpiRes, auditLogsRaw, usersRaw, workOrdersRaw, breakdownsRaw] = await Promise.all([
       apiClient.get('/reports/dashboard-kpis', { params: kpiParams }).catch(() => ({ data: { data: {} } })),
-      apiClient.get('/audit', { params: { limit: 500 } }).catch(() => ({
-        data: { data: [] },
-      })),
-      apiClient.get('/auth/users', { params: { limit: 200 } }).catch(() => ({
-        data: { data: [] },
-      })),
-      apiClient.get('/work-orders', { params: { limit: 500 } }).catch(() => ({
-        data: { data: [] },
-      })),
-      apiClient.get('/breakdowns', { params: bdParams }).catch(() => ({
-        data: { data: [] },
-      })),
+      fetchPaginatedReportItems<AuditReportItem>('/audit', { limit: 100, page: 1 }),
+      fetchPaginatedReportItems<UserSummary>('/auth/users', { limit: 100, page: 1 }),
+      fetchPaginatedReportItems('/work-orders', { limit: 100, page: 1 }),
+      fetchPaginatedReportItems('/breakdowns', bdParams),
     ]);
 
     const kpis = kpiRes.data?.data || {};
-    let auditLogs: AuditReportItem[] = auditRes.data?.data || [];
-    const users: UserSummary[] = usersRes.data?.data || [];
-    let workOrders: any[] = woRes.data?.data || [];
-    let breakdowns: any[] = bdRes.data?.data || [];
+    let auditLogs: AuditReportItem[] = auditLogsRaw || [];
+    const users: UserSummary[] = usersRaw || [];
+    let workOrders: any[] = workOrdersRaw || [];
+    let breakdowns: any[] = breakdownsRaw || [];
 
     if (startDate || endDate) {
       const startMs = parseStartOfDay(startDate);

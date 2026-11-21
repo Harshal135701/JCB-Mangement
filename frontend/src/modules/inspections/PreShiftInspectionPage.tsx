@@ -1813,7 +1813,7 @@ export const PreShiftInspectionPage: React.FC = () => {
                     <h4 className="text-[11px] font-black uppercase text-zinc-600 tracking-wider mb-2">
                       Recorded Telemetry Readings
                     </h4>
-                    <div className="grid grid-cols-3 gap-2 text-xs font-mono">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs font-mono">
                       <div className="p-2 bg-white rounded border border-slate-200">
                         <span className="text-[10px] text-zinc-400 block uppercase">Pressure</span>
                         <strong className="text-zinc-900">{selectedRecordDetail.pressure !== null ? `${selectedRecordDetail.pressure} Bar` : 'N/A'}</strong>

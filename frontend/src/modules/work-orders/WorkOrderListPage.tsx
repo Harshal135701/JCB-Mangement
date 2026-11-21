@@ -267,7 +267,7 @@ const SupervisorWorkOrderListPage: React.FC = () => {
             />
           </div>
 
-          <div className="flex flex-wrap sm:flex-nowrap gap-2">
+          <div className="flex flex-wrap gap-2">
             {/* Plant Filter */}
             <select
               value={plantFilter}

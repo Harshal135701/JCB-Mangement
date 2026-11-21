@@ -2338,7 +2338,7 @@ export const StoreManagerDashboard: React.FC = () => {
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
                     Source Bin *
@@ -2367,7 +2367,7 @@ export const StoreManagerDashboard: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
                     Transfer Quantity *
@@ -2470,7 +2470,7 @@ export const StoreManagerDashboard: React.FC = () => {
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
                     Defective Quantity (Units) *
@@ -2647,7 +2647,7 @@ export const StoreManagerDashboard: React.FC = () => {
             </div>
 
             <form onSubmit={handlePRSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
                     Reorder Quantity Required *
@@ -2733,7 +2733,7 @@ export const StoreManagerDashboard: React.FC = () => {
             </div>
 
             <form onSubmit={handleCreatePartSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
                     JCB Part SKU / Number *

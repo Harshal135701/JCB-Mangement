@@ -417,7 +417,7 @@ export const OperatorDashboard: React.FC = () => {
       {/* =========================================================================
           ROW 1: 6 OPERATIONAL STATISTIC CARDS (Meeting Requirement 1)
           ========================================================================= */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 min-[420px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
         {/* Card 1: Permanent / Default Asset */}
         <TopKPICard
           icon={ShieldCheck}

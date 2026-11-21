@@ -162,7 +162,7 @@ export const LoginPage: React.FC = () => {
       <main className="relative z-10 w-full flex-1 flex items-center justify-center lg:justify-end px-4 py-6 sm:px-8 lg:pr-12 xl:pr-20">
 
         {/* ── White login card (design completely unchanged) ─────────────── */}
-        <div className="w-full max-w-[420px] bg-white rounded-2xl shadow-[0_15px_45px_rgba(0,0,0,0.12)] border border-[#E5E7EB] p-8 sm:p-10 animate-in fade-in duration-200">
+        <div className="w-full max-w-[420px] bg-white rounded-2xl shadow-[0_15px_45px_rgba(0,0,0,0.12)] border border-[#E5E7EB] p-5 sm:p-8 md:p-10 animate-in fade-in duration-200">
 
           {/* Card Header */}
           <div className="mb-6">

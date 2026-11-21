@@ -348,7 +348,7 @@ export const OperatorSignUpPage: React.FC = () => {
       <main className="relative z-10 w-full flex-1 flex items-center justify-center lg:justify-end px-4 py-6 sm:px-8 lg:pr-12 xl:pr-20">
         {submittedUser ? (
           /* ── SUCCESS BANNER CARD ───────────────────────────────────────── */
-          <div className="w-full max-w-[540px] bg-white rounded-2xl shadow-[0_15px_45px_rgba(0,0,0,0.12)] border border-[#E5E7EB] p-8 sm:p-10 animate-in fade-in duration-200 text-center">
+          <div className="w-full max-w-[540px] bg-white rounded-2xl shadow-[0_15px_45px_rgba(0,0,0,0.12)] border border-[#E5E7EB] p-5 sm:p-8 md:p-10 animate-in fade-in duration-200 text-center">
             <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4 border-2 border-amber-300">
               <HardHat className="w-8 h-8 text-amber-700" />
             </div>
@@ -411,7 +411,7 @@ export const OperatorSignUpPage: React.FC = () => {
           </div>
         ) : (
           /* ── REGISTRATION FORM CARD ────────────────────────────────────── */
-          <div className="w-full max-w-[620px] bg-white rounded-2xl shadow-[0_15px_45px_rgba(0,0,0,0.12)] border border-[#E5E7EB] p-6 sm:p-8 animate-in fade-in duration-200">
+          <div className="w-full max-w-[620px] bg-white rounded-2xl shadow-[0_15px_45px_rgba(0,0,0,0.12)] border border-[#E5E7EB] p-4 sm:p-6 md:p-8 animate-in fade-in duration-200">
             {/* Card Header */}
             <div className="mb-5">
               <div className="flex items-center gap-2.5 mb-2">

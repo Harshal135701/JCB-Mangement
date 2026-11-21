@@ -1826,7 +1826,7 @@ export const InventoryCatalogPage: React.FC = () => {
                 {/* If Editing, display current physical / available stock notice */}
                 {editingPart && (
                   <div className="pt-2 border-t border-slate-200/80">
-                    <div className="grid grid-cols-4 gap-2 text-center font-mono text-[11px]">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center font-mono text-[11px]">
                       <div>Physical: <strong>{editingPart.current_physical_stock}</strong></div>
                       <div>Reserved: <strong className="text-amber-700">{editingPart.reserved_stock}</strong></div>
                       <div>Quarantined: <strong className="text-purple-700">{editingPart.quarantined_stock}</strong></div>
@@ -2111,7 +2111,7 @@ export const InventoryCatalogPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-4 gap-2 pt-2 border-t border-slate-200 text-center font-mono">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-200 text-center font-mono">
                   <div className="bg-white p-1.5 rounded border border-slate-200">
                     <div className="text-[9px] uppercase text-zinc-400 font-bold">Physical</div>
                     <div className="font-bold text-zinc-900">{adjustingPart.current_physical_stock}</div>
@@ -2338,7 +2338,7 @@ export const InventoryCatalogPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
                   <label className="block text-[11px] font-black text-zinc-700 uppercase mb-1">
                     Quantity Required *

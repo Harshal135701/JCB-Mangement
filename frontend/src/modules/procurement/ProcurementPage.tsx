@@ -1311,7 +1311,7 @@ export const ProcurementPage: React.FC = () => {
       )}
 
       {/* Main Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 bg-white rounded-2xl border-2 border-zinc-200 shadow-sm">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 p-6 bg-white rounded-2xl border-2 border-zinc-200 shadow-sm">
         <div>
           <div className="flex items-center gap-3 flex-wrap">
             <div className="bg-jcb-yellow text-black font-black text-xl px-2.5 py-1 rounded-lg border border-amber-500 shadow-sm">
@@ -1346,6 +1346,18 @@ export const ProcurementPage: React.FC = () => {
               <span>Store Dashboard</span>
             </Link>
           )}
+
+          {!isAdmin && canRaisePR && (
+            <button
+              type="button"
+              onClick={handleOpenCreateModal}
+              className="bg-jcb-yellow hover:bg-jcb-yellowDark text-black text-xs font-black px-4 py-2.5 rounded-xl shadow transition-all flex items-center gap-2 border border-amber-500 hover:shadow-md cursor-pointer uppercase tracking-wider whitespace-nowrap"
+            >
+              <Plus className="w-4 h-4 stroke-[3]" />
+              <span>Raise Purchase Requisition</span>
+            </button>
+          )}
+
           <button
             onClick={() => {
               fetchPRs();
@@ -1360,17 +1372,6 @@ export const ProcurementPage: React.FC = () => {
           >
             <RefreshCw className="w-4 h-4" />
           </button>
-
-          {!isAdmin && canRaisePR && (
-            <button
-              type="button"
-              onClick={handleOpenCreateModal}
-              className="bg-jcb-yellow hover:bg-jcb-yellowDark text-black text-xs font-black px-4 py-2.5 rounded-xl shadow transition-all flex items-center gap-2 border border-amber-500 hover:shadow-md cursor-pointer uppercase tracking-wider"
-            >
-              <Plus className="w-4 h-4 stroke-[3]" />
-              <span>Raise Purchase Requisition</span>
-            </button>
-          )}
         </div>
       </div>
 

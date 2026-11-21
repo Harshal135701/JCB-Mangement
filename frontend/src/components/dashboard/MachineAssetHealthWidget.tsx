@@ -147,7 +147,7 @@ export const MachineAssetHealthWidget: React.FC<MachineAssetHealthWidgetProps> =
         </div>
 
         {/* Key Metrics Strip (Run hours, Service count, Open WOs) */}
-        <div className="grid grid-cols-3 gap-2.5 mb-4">
+        <div className="grid grid-cols-1 min-[380px]:grid-cols-3 gap-2 sm:gap-2.5 mb-4">
           <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-center">
             <Clock className="w-3.5 h-3.5 text-zinc-400 mx-auto mb-1" />
             <div className="text-xs sm:text-sm font-black text-zinc-950 font-mono">

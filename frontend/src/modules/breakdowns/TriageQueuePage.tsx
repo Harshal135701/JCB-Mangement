@@ -885,7 +885,7 @@ export const TriageQueuePage: React.FC = () => {
         </form>
 
         {/* Filter Dropdowns Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5 pt-2 border-t border-slate-100 text-xs">
+        <div className="grid grid-cols-1 min-[420px]:grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5 pt-2 border-t border-slate-100 text-xs">
           {/* Status */}
           <div>
             <label className="block text-[10px] font-black text-zinc-400 uppercase mb-1">Status</label>
@@ -1411,7 +1411,7 @@ export const TriageQueuePage: React.FC = () => {
                   </div>
 
                   {/* Machine Details */}
-                  <div className="grid grid-cols-2 gap-3 p-3.5 bg-slate-50 rounded-xl border border-slate-200">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-slate-50 rounded-xl border border-slate-200">
                     <div>
                       <span className="text-[10px] font-bold uppercase text-zinc-400">Target Machine</span>
                       <p className="font-bold text-zinc-900">{detailComplaint.machine_code} - {detailComplaint.machine_name}</p>
@@ -1454,7 +1454,7 @@ export const TriageQueuePage: React.FC = () => {
                   )}
 
                   {/* Reported By Info */}
-                  <div className="grid grid-cols-2 gap-3 py-2 border-t border-slate-100">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-2 border-t border-slate-100">
                     <div>
                       <span className="text-[10px] font-bold uppercase text-zinc-400">Reported By</span>
                       <p className="font-bold text-zinc-900">{detailComplaint.reported_by_name || 'Operator'}</p>
