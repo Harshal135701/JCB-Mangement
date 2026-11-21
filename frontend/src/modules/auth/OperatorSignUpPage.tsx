@@ -42,10 +42,13 @@ interface MachineOption {
   machine_code: string;
   name: string;
   status: string;
-  category: string;
-  criticality: string;
-  bay_line_location: string | null;
+  category?: string;
+  criticality?: string;
+  bay_line_location?: string | null;
   shop_id: string;
+  is_assigned?: boolean;
+  is_available?: boolean;
+  availability_status?: 'Assigned' | 'Available' | string;
 }
 
 // Format readable machine status for display
@@ -183,7 +186,7 @@ export const OperatorSignUpPage: React.FC = () => {
     setSelectedMachineId('');
   };
 
-  // Fetch machines for selected shop (all statuses: active, inactive, breakdown, under_maintenance)
+  // Fetch machines for selected shop and plant
   const fetchMachinesForShop = async (targetShopId: string) => {
     if (!targetShopId) {
       setMachines([]);
@@ -192,7 +195,9 @@ export const OperatorSignUpPage: React.FC = () => {
     }
     try {
       setLoadingMachines(true);
-      const res = await apiClient.get(`/auth/shops/${targetShopId}/machines`);
+      const res = await apiClient.get(`/auth/shops/${targetShopId}/machines`, {
+        params: plantId ? { plant_id: plantId } : undefined,
+      });
       if (res.data.success && Array.isArray(res.data.data)) {
         setMachines(res.data.data);
       } else {
@@ -206,7 +211,7 @@ export const OperatorSignUpPage: React.FC = () => {
     }
   };
 
-  // Whenever selected shop changes, reload the machine list
+  // Whenever selected shop or plant changes, reload the machine list
   useEffect(() => {
     if (shopId) {
       fetchMachinesForShop(shopId);
@@ -215,7 +220,7 @@ export const OperatorSignUpPage: React.FC = () => {
       setMachines([]);
       setSelectedMachineId('');
     }
-  }, [shopId]);
+  }, [shopId, plantId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -261,6 +266,17 @@ export const OperatorSignUpPage: React.FC = () => {
       return;
     }
 
+    // Verify machine is not already assigned
+    if (selectedMachineId) {
+      const chosen = machines.find((m) => m.id === selectedMachineId);
+      if (chosen && (chosen.is_assigned || chosen.is_available === false)) {
+        setError(
+          `Machine ${chosen.name} (${chosen.machine_code}) is already assigned to another operator. Please select an available machine.`
+        );
+        return;
+      }
+    }
+
     try {
       setLoading(true);
       const payload = {
@@ -286,7 +302,7 @@ export const OperatorSignUpPage: React.FC = () => {
           plantName: plants.find((p) => p.id === plantId)?.plant_name,
           shopName: shops.find((s) => s.id === shopId)?.shop_name,
           requestedMachine: pickedMachine
-            ? `${pickedMachine.machine_code} - ${pickedMachine.name} [${formatReadableStatus(pickedMachine.status)}]`
+            ? `${pickedMachine.name} (${pickedMachine.machine_code})`
             : 'None specified (General shift pool)',
         });
       }
@@ -569,44 +585,162 @@ export const OperatorSignUpPage: React.FC = () => {
                 {/* Preferred Machine Selection */}
                 <div className="sm:col-span-2">
                   <div className="flex items-center justify-between mb-1.5">
-                    <label className="block text-[11px] font-bold text-zinc-700 uppercase tracking-wider">
+                    <label className="block text-[11px] font-bold text-zinc-700 uppercase tracking-wider flex items-center gap-1.5">
+                      <Cpu className="w-3.5 h-3.5 text-zinc-500" />
                       Preferred Machine Request
                     </label>
                     <span className="text-[10px] text-zinc-500 font-medium">
-                      Preference only • Manager confirms on shift sign-in
+                      Preference only • Manager confirms on approval
                     </span>
                   </div>
-                  <div className="relative">
-                    <Cpu className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    <select
-                      disabled={loading || loadingOrg || loadingMachines || !shopId}
-                      value={selectedMachineId}
-                      onChange={(e) => setSelectedMachineId(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2 bg-white border border-[#D1D5DB] rounded-xl text-xs font-medium text-zinc-900 focus:outline-none focus:border-[#F9B101] focus:ring-2 focus:ring-[#F9B101]/20 transition shadow-2xs"
+
+                  {/* Clean, compact machine selection interface */}
+                  <div className="border border-[#D1D5DB] rounded-xl overflow-hidden bg-white shadow-2xs">
+                    {/* General shift pool option */}
+                    <div
+                      onClick={() => setSelectedMachineId('')}
+                      className={`px-3 py-2 border-b border-zinc-100 flex items-center justify-between text-xs cursor-pointer transition ${
+                        selectedMachineId === ''
+                          ? 'bg-[#F9B101]/10 font-bold text-zinc-900'
+                          : 'hover:bg-zinc-50 text-zinc-700'
+                      }`}
                     >
-                      <option value="">-- No specific machine (General shift pool) --</option>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="preferredMachineSelection"
+                          checked={selectedMachineId === ''}
+                          onChange={() => setSelectedMachineId('')}
+                          className="w-3.5 h-3.5 accent-[#F9B101] text-[#F9B101] cursor-pointer"
+                        />
+                        <span>No specific machine (General shift pool)</span>
+                      </div>
+                      <span className="text-[10px] text-zinc-400 font-normal">Default</span>
+                    </div>
+
+                    {/* Table Header */}
+                    <div className="bg-zinc-50 border-b border-zinc-200 px-3 py-1.5 grid grid-cols-12 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+                      <div className="col-span-6 sm:col-span-7">Machine</div>
+                      <div className="col-span-3 sm:col-span-3">Status</div>
+                      <div className="col-span-3 sm:col-span-2 text-right">Selection</div>
+                    </div>
+
+                    {/* Table Content */}
+                    <div className="max-h-48 overflow-y-auto divide-y divide-zinc-100">
                       {loadingMachines ? (
-                        <option value="" disabled>Loading shop machines...</option>
+                        <div className="py-6 text-center text-zinc-400 text-xs flex items-center justify-center gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin text-[#F9B101]" />
+                          <span>Loading shop machines...</span>
+                        </div>
+                      ) : !shopId ? (
+                        <div className="py-6 text-center text-zinc-500 text-xs">
+                          Please select a shop floor to view machines.
+                        </div>
                       ) : machines.length === 0 ? (
-                        <option value="" disabled>No machines registered under this shop</option>
+                        <div className="py-6 text-center text-zinc-500 text-xs">
+                          No machines registered under this shop.
+                        </div>
                       ) : (
-                        machines.map((m) => {
-                          const readableStatus = formatReadableStatus(m.status);
-                          const locationText = m.bay_line_location
-                            ? ` • Location: ${m.bay_line_location}`
-                            : ' • Location: Shop Floor';
-                          return (
-                            <option key={m.id} value={m.id}>
-                              {m.machine_code} — {m.name} [{readableStatus}]{locationText}
-                            </option>
-                          );
-                        })
+                        <>
+                          {machines.filter((m) => !m.is_assigned && m.is_available !== false).length === 0 && (
+                            <div className="p-2.5 bg-amber-50 text-amber-900 text-xs font-semibold text-center border-b border-amber-200">
+                              No available machines in this shop.
+                            </div>
+                          )}
+                          {machines.map((m) => {
+                            const isAssigned = Boolean(m.is_assigned || m.is_available === false);
+                            const isSelectable = !isAssigned;
+                            const isSelected = selectedMachineId === m.id;
+
+                            return (
+                              <div
+                                key={m.id}
+                                onClick={() => {
+                                  if (isSelectable) {
+                                    setSelectedMachineId(m.id);
+                                  }
+                                }}
+                                className={`px-3 py-2 grid grid-cols-12 items-center text-xs transition ${
+                                  isAssigned
+                                    ? 'opacity-60 bg-zinc-50/70 cursor-not-allowed select-none'
+                                    : isSelected
+                                    ? 'bg-[#F9B101]/15 font-semibold text-zinc-900 cursor-pointer'
+                                    : 'hover:bg-zinc-50 text-zinc-800 cursor-pointer'
+                                }`}
+                              >
+                                {/* Machine Name & Code */}
+                                <div className="col-span-6 sm:col-span-7 pr-2 flex items-center gap-1.5 truncate">
+                                  <span className="font-bold text-zinc-900 truncate">{m.name}</span>
+                                  {m.machine_code && (
+                                    <span className="text-[11px] font-mono text-zinc-500 shrink-0">
+                                      ({m.machine_code})
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Status */}
+                                <div className="col-span-3 sm:col-span-3">
+                                  {isAssigned ? (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-zinc-200 text-zinc-700">
+                                      Assigned
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                      Available
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Selection */}
+                                <div className="col-span-3 sm:col-span-2 text-right">
+                                  {isAssigned ? (
+                                    <span className="text-[11px] font-semibold text-zinc-400">
+                                      Disabled
+                                    </span>
+                                  ) : (
+                                    <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                                      <span className="text-[11px] font-bold text-emerald-700 hidden sm:inline">
+                                        {isSelected ? 'Selected' : 'Select'}
+                                      </span>
+                                      <input
+                                        type="radio"
+                                        name="preferredMachineSelection"
+                                        checked={isSelected}
+                                        disabled={isAssigned}
+                                        onChange={() => setSelectedMachineId(m.id)}
+                                        className="w-3.5 h-3.5 accent-[#F9B101] text-[#F9B101] cursor-pointer"
+                                      />
+                                    </label>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </>
                       )}
-                    </select>
+                    </div>
                   </div>
-                  <p className="mt-1 text-[10px] text-zinc-500">
-                    Shows all shop equipment including active, maintenance, and breakdown units. Selecting does not occupy or reserve the machine.
-                  </p>
+
+                  {/* Accessible select element kept in sync */}
+                  <select
+                    name="requested_machine_id"
+                    disabled={loading || loadingOrg || loadingMachines || !shopId}
+                    value={selectedMachineId}
+                    onChange={(e) => setSelectedMachineId(e.target.value)}
+                    className="sr-only"
+                    tabIndex={-1}
+                    aria-hidden="true"
+                  >
+                    <option value="">-- No specific machine (General shift pool) --</option>
+                    {machines.map((m) => {
+                      const isAssigned = Boolean(m.is_assigned || m.is_available === false);
+                      return (
+                        <option key={m.id} value={m.id} disabled={isAssigned}>
+                          {m.name} ({m.machine_code}) — {isAssigned ? 'Assigned' : 'Available'}
+                        </option>
+                      );
+                    })}
+                  </select>
                 </div>
 
                 {/* Department */}

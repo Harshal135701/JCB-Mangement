@@ -489,14 +489,47 @@ class MockAuthDatabase {
         rowCount: m ? 1 : 0,
       };
     }
-    if (trimmed.includes('FROM machines') && trimmed.includes('WHERE shop_id = $1')) {
+    if (trimmed.includes('FROM machines') && (trimmed.includes('WHERE shop_id = $1') || trimmed.includes('WHERE m.shop_id = $1'))) {
       const shopId = params[0];
       const shopMachines = Array.from(this.machines.values())
         .filter((m) => m.shop_id === shopId)
-        .sort((a, b) => a.machine_code.localeCompare(b.machine_code));
+        .sort((a, b) => a.machine_code.localeCompare(b.machine_code))
+        .map((m) => {
+          const assignedUser = Array.from(this.users.values()).find(
+            (u) =>
+              u.role === 'operator' &&
+              u.approval_status !== 'rejected' &&
+              (u.permanent_machine_id === m.id || (u.requested_machine_id === m.id && u.approval_status === 'pending'))
+          );
+          const isAssigned = !!assignedUser;
+          return {
+            ...m,
+            is_assigned: isAssigned,
+            is_available: !isAssigned,
+            availability_status: isAssigned ? 'Assigned' : 'Available',
+          };
+        });
       return {
         rows: shopMachines,
         rowCount: shopMachines.length,
+      };
+    }
+
+    if (
+      trimmed.includes('FROM users') &&
+      (trimmed.includes('permanent_machine_id = $1') || trimmed.includes('requested_machine_id = $1'))
+    ) {
+      const machineId = params[0];
+      const match = Array.from(this.users.values()).find(
+        (u) =>
+          u.role === 'operator' &&
+          u.approval_status !== 'rejected' &&
+          (u.permanent_machine_id === machineId ||
+            (u.requested_machine_id === machineId && u.approval_status === 'pending'))
+      );
+      return {
+        rows: match ? [{ ...match }] : [],
+        rowCount: match ? 1 : 0,
       };
     }
 
@@ -2787,6 +2820,195 @@ describe('Authentication & User Governance Module (CMMS Module 0)', () => {
       // 4. Verify machine status is STILL untouched (registration approval does not assign or occupy)
       const afterApprovalMachineStatus = mockDb.machines.get(targetMachineId)!.status;
       assert.equal(afterApprovalMachineStatus, initialMachineStatus);
+    });
+
+    it('49. Preferred Machine Request: Shop contains CNC 1, CNC 2, CNC 3; CNC 1 assigned to Operator A, CNC 3 assigned to Operator B; only CNC 2 is available and selectable', async () => {
+      // 1. Setup shop and 3 machines: CNC 1, CNC 2, CNC 3
+      const cncShopId = 'c0000000-0000-0000-0000-000000000099';
+      mockDb.shops.set(cncShopId, {
+        id: cncShopId,
+        plant_id: plant1Id,
+        shop_code: 'SHOP-CNC-99',
+        shop_name: 'CNC Machining Bay',
+      });
+
+      const cnc1Id = 'd0000000-0000-0000-0000-000000000091';
+      const cnc2Id = 'd0000000-0000-0000-0000-000000000092';
+      const cnc3Id = 'd0000000-0000-0000-0000-000000000093';
+
+      mockDb.machines.set(cnc1Id, {
+        id: cnc1Id,
+        machine_code: 'CNC-01',
+        name: 'CNC 1',
+        shop_id: cncShopId,
+        status: 'active',
+        category: 'CNC',
+        criticality: 'high',
+        bay_line_location: 'Bay 1',
+        operating_hours: 500,
+      });
+
+      mockDb.machines.set(cnc2Id, {
+        id: cnc2Id,
+        machine_code: 'CNC-02',
+        name: 'CNC 2',
+        shop_id: cncShopId,
+        status: 'active',
+        category: 'CNC',
+        criticality: 'medium',
+        bay_line_location: 'Bay 2',
+        operating_hours: 300,
+      });
+
+      mockDb.machines.set(cnc3Id, {
+        id: cnc3Id,
+        machine_code: 'CNC-03',
+        name: 'CNC 3',
+        shop_id: cncShopId,
+        status: 'active',
+        category: 'CNC',
+        criticality: 'high',
+        bay_line_location: 'Bay 3',
+        operating_hours: 450,
+      });
+
+      // 2. CNC 1 is assigned to Operator A (approved operator with permanent_machine_id)
+      const opAId = 'f0000000-0000-0000-0000-000000000081';
+      mockDb.users.set(opAId, {
+        id: opAId,
+        employee_code: 'JCB-OPR-A',
+        full_name: 'Operator A',
+        email: 'operator.a@jcb.com',
+        phone: '+91 9111111111',
+        role: 'operator',
+        plant_id: plant1Id,
+        shop_id: cncShopId,
+        department: 'Production',
+        designation: 'CNC Operator',
+        shift: 'Shift A',
+        password_hash: 'hashed',
+        is_active: true,
+        approval_status: 'approved',
+        permanent_machine_id: cnc1Id,
+        requested_machine_id: cnc1Id,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+
+      // 3. CNC 3 is assigned to Operator B (operator with permanent_machine_id)
+      const opBId = 'f0000000-0000-0000-0000-000000000082';
+      mockDb.users.set(opBId, {
+        id: opBId,
+        employee_code: 'JCB-OPR-B',
+        full_name: 'Operator B',
+        email: 'operator.b@jcb.com',
+        phone: '+91 9222222222',
+        role: 'operator',
+        plant_id: plant1Id,
+        shop_id: cncShopId,
+        department: 'Production',
+        designation: 'CNC Operator',
+        shift: 'Shift A',
+        password_hash: 'hashed',
+        is_active: true,
+        approval_status: 'approved',
+        permanent_machine_id: cnc3Id,
+        requested_machine_id: cnc3Id,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+
+      // 4. A new operator opens registration and fetches machines for the shop
+      const fetchCtx = createMockContext({}, { shopId: cncShopId }, { plant_id: plant1Id });
+      await getRegistrationMachines(fetchCtx.req, fetchCtx.res, fetchCtx.next);
+
+      assert.equal(fetchCtx.res.statusCode, 200);
+      assert.equal(fetchCtx.res.responseData.success, true);
+      const machinesList = fetchCtx.res.responseData.data;
+      assert.equal(machinesList.length, 3);
+
+      const mCNC1 = machinesList.find((m: any) => m.id === cnc1Id);
+      const mCNC2 = machinesList.find((m: any) => m.id === cnc2Id);
+      const mCNC3 = machinesList.find((m: any) => m.id === cnc3Id);
+
+      // 5. CNC 1 and CNC 3 appear disabled/assigned; CNC 2 is available
+      assert.equal(mCNC1.is_assigned, true);
+      assert.equal(mCNC1.is_available, false);
+      assert.equal(mCNC1.availability_status, 'Assigned');
+
+      assert.equal(mCNC3.is_assigned, true);
+      assert.equal(mCNC3.is_available, false);
+      assert.equal(mCNC3.availability_status, 'Assigned');
+
+      assert.equal(mCNC2.is_assigned, false);
+      assert.equal(mCNC2.is_available, true);
+      assert.equal(mCNC2.availability_status, 'Available');
+
+      // 7. Attempting to submit CNC 1 or CNC 3 manually via API must be rejected (HTTP 409)
+      const tryCNC1Ctx = createMockContext({
+        employee_code: 'JCB-OPR-C1',
+        full_name: 'Operator Trying CNC1',
+        email: 'try1@jcb.com',
+        plant_id: plant1Id,
+        shop_id: cncShopId,
+        requested_machine_id: cnc1Id,
+        password: 'ValidPassword123!',
+      });
+      await registerOperator(tryCNC1Ctx.req, tryCNC1Ctx.res, tryCNC1Ctx.next);
+      assert.equal(tryCNC1Ctx.res.statusCode, 409);
+      assert.equal(tryCNC1Ctx.res.responseData.success, false);
+      assert.ok(tryCNC1Ctx.res.responseData.message.includes('already assigned to another operator'));
+
+      const tryCNC3Ctx = createMockContext({
+        employee_code: 'JCB-OPR-C3',
+        full_name: 'Operator Trying CNC3',
+        email: 'try3@jcb.com',
+        plant_id: plant1Id,
+        shop_id: cncShopId,
+        requested_machine_id: cnc3Id,
+        password: 'ValidPassword123!',
+      });
+      await registerOperator(tryCNC3Ctx.req, tryCNC3Ctx.res, tryCNC3Ctx.next);
+      assert.equal(tryCNC3Ctx.res.statusCode, 409);
+      assert.equal(tryCNC3Ctx.res.responseData.success, false);
+      assert.ok(tryCNC3Ctx.res.responseData.message.includes('already assigned to another operator'));
+
+      // 6 & 8. Only CNC 2 can be selected: Registration with CNC 2 succeeds
+      const regCNC2Ctx = createMockContext({
+        employee_code: 'JCB-OPR-C2',
+        full_name: 'Operator C (CNC 2)',
+        email: 'op.c2@jcb.com',
+        plant_id: plant1Id,
+        shop_id: cncShopId,
+        requested_machine_id: cnc2Id,
+        password: 'ValidPassword123!',
+      });
+      await registerOperator(regCNC2Ctx.req, regCNC2Ctx.res, regCNC2Ctx.next);
+      assert.equal(regCNC2Ctx.res.statusCode, 201);
+      assert.equal(regCNC2Ctx.res.responseData.success, true);
+      assert.equal(regCNC2Ctx.res.responseData.data.requested_machine_id, cnc2Id);
+      const newOpId = regCNC2Ctx.res.responseData.data.id;
+
+      // 8. Manager approval continues working correctly
+      const approveCtx = createMockContext({}, { id: newOpId }, {}, {}, plant1Manager);
+      await approveOperator(approveCtx.req, approveCtx.res, approveCtx.next);
+      assert.equal(approveCtx.res.statusCode, 200);
+      assert.equal(approveCtx.res.responseData.success, true);
+      assert.equal(approveCtx.res.responseData.data.approval_status, 'approved');
+      assert.equal(approveCtx.res.responseData.data.permanent_machine_id, cnc2Id);
+
+      // Now CNC 2 is also assigned, so registering with CNC 2 again is rejected
+      const tryCNC2AgainCtx = createMockContext({
+        employee_code: 'JCB-OPR-C4',
+        full_name: 'Another Operator Trying CNC2',
+        email: 'try2again@jcb.com',
+        plant_id: plant1Id,
+        shop_id: cncShopId,
+        requested_machine_id: cnc2Id,
+        password: 'ValidPassword123!',
+      });
+      await registerOperator(tryCNC2AgainCtx.req, tryCNC2AgainCtx.res, tryCNC2AgainCtx.next);
+      assert.equal(tryCNC2AgainCtx.res.statusCode, 409);
     });
   });
 

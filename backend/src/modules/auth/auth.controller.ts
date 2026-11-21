@@ -1486,7 +1486,7 @@ export const getRegistrationShops = async (
 
 /**
  * Public Operator Registration: Fetch machines for a selected shop
- * Returns all active, inactive, breakdown, and maintenance machines in the shop floor.
+ * Returns machines in the shop floor with availability status (Available vs Assigned).
  */
 export const getRegistrationMachines = async (
   req: Request,
@@ -1495,6 +1495,8 @@ export const getRegistrationMachines = async (
 ): Promise<void> => {
   try {
     const { shopId } = req.params;
+    const targetPlantId = (req.query.plant_id || req.query.plantId) as string | undefined;
+
     if (!shopId || !isUUID(shopId)) {
       res.status(400).json({
         success: false,
@@ -1503,8 +1505,16 @@ export const getRegistrationMachines = async (
       return;
     }
 
-    // Verify shop exists
-    const shopCheck = await activeQuery(`SELECT id, shop_name FROM shops WHERE id = $1`, [shopId]);
+    if (targetPlantId && !isUUID(targetPlantId)) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid plant facility ID.',
+      });
+      return;
+    }
+
+    // Verify shop exists and belongs to plant if plant filter supplied
+    const shopCheck = await activeQuery(`SELECT id, shop_name, plant_id FROM shops WHERE id = $1`, [shopId]);
     if (shopCheck.rows.length === 0) {
       res.status(404).json({
         success: false,
@@ -1513,19 +1523,93 @@ export const getRegistrationMachines = async (
       return;
     }
 
-    // Return all machines belonging to this shop: active, inactive, maintenance, breakdown
-    const result = await activeQuery(
-      `SELECT id, machine_code, name, category, status, criticality, operating_hours, bay_line_location, shop_id
-       FROM machines
-       WHERE shop_id = $1
-       ORDER BY machine_code ASC`,
-      [shopId]
-    );
+    const dbShop = shopCheck.rows[0];
+    if (targetPlantId && dbShop.plant_id !== targetPlantId) {
+      res.status(400).json({
+        success: false,
+        message: 'Specified shop floor does not belong to the selected plant facility.',
+      });
+      return;
+    }
+
+    // Return machines belonging to this shop with calculated assignment and availability status
+    let result;
+    try {
+      result = await activeQuery(
+        `SELECT 
+          id, 
+          machine_code, 
+          name, 
+          category, 
+          status, 
+          criticality, 
+          operating_hours, 
+          bay_line_location, 
+          shop_id,
+          CASE 
+            WHEN EXISTS (
+              SELECT 1 FROM users u 
+              WHERE (u.permanent_machine_id = machines.id OR (u.requested_machine_id = machines.id AND u.approval_status = 'pending'))
+                AND u.role = 'operator'
+                AND u.approval_status != 'rejected'
+            ) THEN TRUE
+            WHEN EXISTS (
+              SELECT 1 FROM operator_machine_assignments oma 
+              WHERE oma.machine_id = machines.id 
+                AND oma.status IN ('pending', 'approved')
+            ) THEN TRUE
+            WHEN machines.current_operator_id IS NOT NULL THEN TRUE
+            ELSE FALSE
+          END AS is_assigned
+        FROM machines
+        WHERE shop_id = $1
+        ORDER BY machine_code ASC`,
+        [shopId]
+      );
+    } catch {
+      result = await activeQuery(
+        `SELECT id, machine_code, name, category, status, criticality, operating_hours, bay_line_location, shop_id
+         FROM machines
+         WHERE shop_id = $1
+         ORDER BY machine_code ASC`,
+        [shopId]
+      );
+    }
+
+    // Resolve assignment status fallback if simple mock or columns did not include is_assigned
+    let fallbackAssignedIds = new Set<string>();
+    if (result.rows.length > 0 && result.rows[0].is_assigned === undefined) {
+      try {
+        const assignedUsers = await activeQuery(
+          `SELECT permanent_machine_id, requested_machine_id, approval_status
+           FROM users
+           WHERE role = 'operator' AND approval_status != 'rejected'`
+        );
+        for (const u of assignedUsers.rows) {
+          if (u.permanent_machine_id) fallbackAssignedIds.add(u.permanent_machine_id);
+          if (u.requested_machine_id && u.approval_status === 'pending') fallbackAssignedIds.add(u.requested_machine_id);
+        }
+      } catch {
+        // Fallback for minimal schemas
+      }
+    }
+
+    const data = result.rows.map((row: any) => {
+      const isAssigned = row.is_assigned !== undefined
+        ? Boolean(row.is_assigned)
+        : fallbackAssignedIds.has(row.id);
+      return {
+        ...row,
+        is_assigned: isAssigned,
+        is_available: !isAssigned,
+        availability_status: isAssigned ? 'Assigned' : 'Available',
+      };
+    });
 
     res.json({
       success: true,
-      data: result.rows,
-      count: result.rows.length,
+      data,
+      count: data.length,
     });
   } catch (err) {
     next(err);
@@ -1681,6 +1765,54 @@ export const registerOperator = async (
         res.status(400).json({
           success: false,
           message: 'Requested machine does not belong to the selected shop floor.',
+        });
+        return;
+      }
+
+      // Check if machine is already assigned as permanent machine or pending requested machine to another operator
+      const assignedCheck = await activeQuery(
+        `SELECT id, full_name, employee_code, approval_status, permanent_machine_id, requested_machine_id
+         FROM users
+         WHERE (permanent_machine_id = $1 OR (requested_machine_id = $1 AND approval_status = 'pending'))
+           AND role = 'operator'
+           AND approval_status != 'rejected'`,
+        [targetMachineId]
+      );
+
+      if (assignedCheck.rows.length > 0) {
+        const assignedOp = assignedCheck.rows[0];
+        res.status(409).json({
+          success: false,
+          message: `Machine ${dbMachine.name || dbMachine.machine_code} is already assigned to another operator.`,
+        });
+        return;
+      }
+
+      // Also check active assignments in operator_machine_assignments if present
+      try {
+        const omaCheck = await activeQuery(
+          `SELECT oma.id, u.full_name, u.employee_code
+           FROM operator_machine_assignments oma
+           LEFT JOIN users u ON u.id = oma.operator_id
+           WHERE oma.machine_id = $1 AND oma.status IN ('pending', 'approved')`,
+          [targetMachineId]
+        );
+        if (omaCheck.rows.length > 0) {
+          res.status(409).json({
+            success: false,
+            message: `Machine ${dbMachine.name || dbMachine.machine_code} is already assigned to another operator.`,
+          });
+          return;
+        }
+      } catch {
+        // Fallback for minimal schemas
+      }
+
+      // Check if machine currently has active operator tracking
+      if (dbMachine.current_operator_id) {
+        res.status(409).json({
+          success: false,
+          message: `Machine ${dbMachine.name || dbMachine.machine_code} is already assigned to another operator.`,
         });
         return;
       }
