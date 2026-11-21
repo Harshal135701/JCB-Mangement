@@ -456,13 +456,15 @@ export const getBreakdowns = async (
              s.id AS shop_id, s.shop_name, s.plant_id,
              p.plant_name,
              u.full_name AS reported_by_name, u.employee_code AS reported_by_code,
-             tech.full_name AS assigned_technician_name, tech.employee_code AS assigned_technician_code
+             tech.full_name AS assigned_technician_name, tech.employee_code AS assigned_technician_code,
+             wo.id AS work_order_id, wo.wo_number, wo.status AS work_order_status
       FROM maintenance_requests r
       JOIN machines m ON r.machine_id = m.id
       JOIN shops s ON m.shop_id = s.id
       JOIN plants p ON s.plant_id = p.id
       JOIN users u ON r.reported_by_id = u.id
       LEFT JOIN users tech ON r.assigned_technician_id = tech.id
+      LEFT JOIN work_orders wo ON wo.complaint_id = r.id
       ${whereSql}
       ORDER BY r.${cleanSortBy} ${cleanSortOrder}
       LIMIT $${limitIdx} OFFSET $${offsetIdx}

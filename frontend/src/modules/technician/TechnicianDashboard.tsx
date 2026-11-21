@@ -165,9 +165,12 @@ export const TechnicianDashboard: React.FC = () => {
       if (res.success) {
         setAssignmentNotice({
           type: 'success',
-          message: res.message || `Assignment for ${breakdown.complaint_number} accepted. You are now responsible for this breakdown.`,
+          message: res.message || `Assignment for ${breakdown.complaint_number} accepted. Repair job created and ready in Maintenance Status.`,
         });
-        await fetchTechnicianAssignments();
+        await Promise.all([
+          fetchTechnicianAssignments(),
+          fetchWorkOrders(),
+        ]);
         setAssignmentTab('accepted');
       }
     } catch (err: any) {
@@ -746,10 +749,10 @@ export const TechnicianDashboard: React.FC = () => {
                       </span>
 
                       <Link
-                        to="/work-orders"
+                        to={b.work_order_id ? `/work-orders/${b.work_order_id}` : '/work-orders'}
                         className="px-3.5 py-1.5 bg-zinc-900 hover:bg-black text-white rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer"
                       >
-                        <span>Open Repair Jobs</span>
+                        <span>Start Repair (Maintenance Status)</span>
                         <ArrowRight className="w-3.5 h-3.5" />
                       </Link>
                     </div>

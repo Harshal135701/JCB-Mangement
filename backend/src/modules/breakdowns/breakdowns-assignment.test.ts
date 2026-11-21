@@ -557,6 +557,75 @@ class MockAssignmentDatabase {
       return { rows: [{ count }], rowCount: 1 };
     }
 
+    // Advisory lock
+    if (trimmed.includes('pg_advisory_xact_lock')) {
+      return { rows: [], rowCount: 1 };
+    }
+
+    // Work orders query for complaint
+    if (trimmed.includes('FROM work_orders') && trimmed.includes('WHERE complaint_id = $1')) {
+      const bId = params[0];
+      const found = Array.from(this.work_orders.values()).filter((wo) => wo.complaint_id === bId);
+      return { rows: found, rowCount: found.length };
+    }
+
+    // Next WO seq
+    if (trimmed.includes('MAX(SUBSTRING(wo_number')) {
+      const count = this.work_orders.size + 1;
+      return { rows: [{ next_seq: count }], rowCount: 1 };
+    }
+
+    // Insert work_orders
+    if (trimmed.startsWith('INSERT INTO work_orders')) {
+      const [
+        wo_number,
+        complaint_id,
+        machine_id,
+        assigned_technician_id,
+        priority,
+        is_major_breakdown,
+        sla_deadline,
+        work_instructions,
+        breakdown_time,
+        reported_time,
+      ] = params;
+      const woId = `wo-${this.work_orders.size + 1}`;
+      const newWo = {
+        id: woId,
+        wo_number,
+        complaint_id,
+        machine_id,
+        assigned_technician_id,
+        priority,
+        status: 'assigned',
+        is_major_breakdown,
+        sla_deadline,
+        work_instructions,
+        breakdown_time,
+        reported_time,
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+      this.work_orders.set(woId, newWo);
+      return { rows: [newWo], rowCount: 1 };
+    }
+
+    // Update work_orders
+    if (trimmed.startsWith('UPDATE work_orders')) {
+      const targetId = params[params.length - 1];
+      const wo = this.work_orders.get(targetId) || Array.from(this.work_orders.values()).find((w) => w.id === targetId || w.complaint_id === targetId);
+      if (wo) {
+        wo.assigned_technician_id = params[0];
+        wo.updated_at = new Date();
+      }
+      return { rows: wo ? [wo] : [], rowCount: wo ? 1 : 0 };
+    }
+
+    // Insert work_order_events
+    if (trimmed.startsWith('INSERT INTO work_order_events')) {
+      return { rows: [{ id: 'evt-1' }], rowCount: 1 };
+    }
+
     // Workload: count active work orders
     if (trimmed.includes('FROM work_orders') && trimmed.includes('WHERE assigned_technician_id = $1')) {
       const techId = params[0];
@@ -725,9 +794,27 @@ class MockAssignmentDatabase {
           r.assignment_status = 'pending';
           r.current_assignment_id = params[1];
         }
+        if (trimmed.includes("status = 'work_order_created'")) {
+          r.status = 'work_order_created';
+        }
         r.updated_at = new Date();
       }
       return { rows: r ? [r] : [], rowCount: r ? 1 : 0 };
+    }
+
+    // Update machines
+    if (trimmed.startsWith('UPDATE machines')) {
+      const mId = params[params.length - 1];
+      const m = this.machines.get(mId);
+      if (m) {
+        if (trimmed.includes("status = 'under_maintenance'")) {
+          m.status = 'under_maintenance';
+        } else if (trimmed.includes("status = 'breakdown'")) {
+          m.status = 'breakdown';
+        }
+        m.updated_at = new Date();
+      }
+      return { rows: m ? [m] : [], rowCount: m ? 1 : 0 };
     }
 
     // Lookup breakdown with machine details
@@ -1531,6 +1618,91 @@ describe('Automatic Technician Assignment Module (CMMS Backend)', () => {
       assert.equal(data.assigned_technician_id, 'f0000000-0000-0000-0000-000000000010');
       assert.equal(data.assigned_technician_name, 'Designated Technician Dev');
       assert.equal(data.assigned_technician_code, 'EMP-TCH-DES');
+    });
+  });
+
+  // ==========================================
+  // SECTION 5: SIMPLIFIED WORKFLOW END-TO-END
+  // ==========================================
+  describe('5. Simplified Breakdown Maintenance End-to-End Workflow', () => {
+    it('23. Complete simplified workflow: Operator reports -> System auto-assigns -> Tech accepts -> WO auto-created under Maintenance Status -> Manager reassigns', async () => {
+      // Step 1: Operator raises machine breakdown
+      const opr = mockDb.users.get('f0000000-0000-0000-0000-000000000004'); // Operator at Pune Plant 1
+      const createCtx = createMockContext(
+        {
+          machine_id: '10000000-0000-0000-0000-000000000001',
+          issue_category: 'mechanical',
+          priority: 'critical',
+          problem_title: 'Hydraulic Cylinder Leakage',
+          description: 'High pressure hydraulic fluid leaking from cylinder arm.',
+        },
+        {},
+        {},
+        {},
+        opr
+      );
+
+      await reportBreakdown(createCtx.req, createCtx.res, createCtx.next);
+      assert.equal(createCtx.res.statusCode, 201);
+      const breakdown = createCtx.res.responseData.data;
+      assert.ok(breakdown.id);
+
+      // Step 2: System automatically assigned to available technician in same shop
+      assert.equal(breakdown.assignment_status, 'pending');
+      const assignedTechId = breakdown.assigned_technician_id;
+      assert.ok(assignedTechId);
+      const assignedTech = mockDb.users.get(assignedTechId);
+      assert.ok(assignedTech);
+
+      // Verify machine status changed to breakdown
+      const machine = mockDb.machines.get('10000000-0000-0000-0000-000000000001');
+      assert.equal(machine.status, 'breakdown');
+
+      // Step 3: Technician accepts the assigned breakdown
+      const acceptCtx = createMockContext({}, { id: breakdown.id }, {}, {}, assignedTech);
+      await acceptBreakdownAssignment(acceptCtx.req, acceptCtx.res, acceptCtx.next);
+
+      assert.equal(acceptCtx.res.statusCode, 200);
+      assert.equal(acceptCtx.res.responseData.success, true);
+
+      // Step 4: Immediately after acceptance, work order must exist with complete details
+      const responseWo = acceptCtx.res.responseData.data.work_order;
+      assert.ok(responseWo, 'Work order must be returned in response');
+      assert.ok(responseWo.wo_number.startsWith('WO-'), 'Work order number must follow WO-YYYY-XXXXX format');
+      assert.equal(responseWo.assigned_technician_id, assignedTechId);
+      assert.equal(responseWo.status, 'assigned');
+      assert.equal(responseWo.priority, 'critical');
+      assert.equal(responseWo.is_major_breakdown, true);
+
+      // Verify maintenance_requests status transitioned to work_order_created
+      const updatedComplaint = mockDb.maintenance_requests.get(breakdown.id);
+      assert.equal(updatedComplaint.status, 'work_order_created');
+      assert.equal(updatedComplaint.assignment_status, 'accepted');
+
+      // Verify machine status updated to under_maintenance
+      assert.equal(machine.status, 'under_maintenance');
+
+      // Step 5: Manager reassigns technician when required
+      const targetTech = mockDb.users.get('f0000000-0000-0000-0000-000000000011'); // Secondary technician
+      const mgr = mockDb.users.get('f0000000-0000-0000-0000-000000000002'); // Plant manager
+      const reassignCtx = createMockContext(
+        {
+          technician_id: targetTech.id,
+          reason: 'Senior hydraulic specialist needed for seal replacement',
+        },
+        { id: breakdown.id },
+        {},
+        {},
+        mgr
+      );
+
+      await managerManualReassign(reassignCtx.req, reassignCtx.res, reassignCtx.next);
+      assert.equal(reassignCtx.res.statusCode, 200);
+
+      // Verify both breakdown and work order are synchronized to new technician
+      assert.equal(updatedComplaint.assigned_technician_id, targetTech.id);
+      const synchronizedWo = mockDb.work_orders.get(responseWo.id);
+      assert.equal(synchronizedWo.assigned_technician_id, targetTech.id);
     });
   });
 });

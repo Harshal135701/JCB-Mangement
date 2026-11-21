@@ -718,6 +718,119 @@ export async function acceptBreakdownAssignmentService(
     [assignment.technician_id, breakdownId]
   );
 
+  // Automatically create or synchronize Work Order for Maintenance Status
+  let activeWorkOrder: any = null;
+  const existingWoRes = await client.query(
+    `SELECT * FROM work_orders WHERE complaint_id = $1`,
+    [breakdownId]
+  );
+
+  if (existingWoRes.rows.length > 0) {
+    activeWorkOrder = existingWoRes.rows[0];
+    if (activeWorkOrder.assigned_technician_id !== assignment.technician_id) {
+      const updWo = await client.query(
+        `UPDATE work_orders
+         SET assigned_technician_id = $1,
+             technician_assigned_time = NOW(),
+             updated_at = NOW()
+         WHERE id = $2
+         RETURNING *`,
+        [assignment.technician_id, activeWorkOrder.id]
+      );
+      activeWorkOrder = updWo.rows[0];
+    }
+  } else {
+    // 1. Transaction-level advisory lock for concurrency-safe sequential numbering
+    const currentYear = new Date().getFullYear();
+    const woLockKey = `wo_seq:${currentYear}`;
+    await client.query(
+      `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
+      [woLockKey]
+    );
+
+    // 2. Determine sequence
+    const countRes = await client.query(
+      `SELECT COALESCE(MAX(SUBSTRING(wo_number FROM '[0-9]+$')::int), 0) + 1 AS next_seq
+       FROM work_orders
+       WHERE wo_number LIKE $1`,
+      [`WO-${currentYear}-%`]
+    );
+    const nextSeq = countRes.rows[0]?.next_seq || 1;
+    const wo_number = `WO-${currentYear}-${String(nextSeq).padStart(5, '0')}`;
+
+    // 3. Compute SLA & priority defaults
+    const slaHours = breakdown.priority === 'critical' ? 2 : 4;
+    const slaDeadline = new Date(Date.now() + slaHours * 3600 * 1000);
+    const isMajor = breakdown.priority === 'critical';
+    const instructions = breakdown.description
+      ? breakdown.description.trim()
+      : 'Diagnose and restore machine operation following JCB safety SOPs.';
+
+    // 4. Insert work order
+    const woRes = await client.query(
+      `INSERT INTO work_orders (
+         wo_number, complaint_id, machine_id, assigned_technician_id,
+         priority, status, is_major_breakdown, sla_deadline, work_instructions,
+         breakdown_time, reported_time, manager_ack_time, technician_assigned_time,
+         created_at, updated_at
+       )
+       VALUES ($1, $2, $3, $4, $5, 'assigned', $6, $7, $8, $9, $10, NOW(), NOW(), NOW(), NOW())
+       RETURNING *`,
+      [
+        wo_number,
+        breakdownId,
+        breakdown.machine_id,
+        assignment.technician_id,
+        breakdown.priority,
+        isMajor,
+        slaDeadline,
+        instructions,
+        breakdown.breakdown_occurred_at || new Date(),
+        breakdown.reported_at || new Date(),
+      ]
+    );
+    activeWorkOrder = woRes.rows[0];
+
+    // 5. Update maintenance_requests status to work_order_created
+    await client.query(
+      `UPDATE maintenance_requests
+       SET status = 'work_order_created',
+           updated_at = NOW()
+       WHERE id = $1`,
+      [breakdownId]
+    );
+
+    // 6. Update machine status to under_maintenance
+    await client.query(
+      `UPDATE machines
+       SET status = 'under_maintenance',
+           updated_at = NOW()
+       WHERE id = $1`,
+      [breakdown.machine_id]
+    );
+
+    // 7. Record lifecycle milestone in work_order_events
+    await client.query(
+      `INSERT INTO work_order_events (work_order_id, event_type, performed_by, notes, timestamp)
+       VALUES ($1, 'ASSIGNED', $2, $3, NOW())`,
+      [
+        activeWorkOrder.id,
+        user.id,
+        `Work order created automatically from complaint ${breakdown.complaint_number} upon technician acceptance.`,
+      ]
+    );
+
+    // 8. Immutable audit log for work order generation
+    await recordAssignmentAuditLog(
+      client,
+      breakdownId,
+      'WORK_ORDER_AUTO_CREATED',
+      user.id,
+      null,
+      { work_order_id: activeWorkOrder.id, wo_number: activeWorkOrder.wo_number }
+    );
+  }
+
   // Immutable audit log
   await recordAssignmentAuditLog(
     client,
@@ -725,7 +838,7 @@ export async function acceptBreakdownAssignmentService(
     'ASSIGNMENT_ACCEPTED',
     user.id,
     { status: 'PENDING' },
-    { status: 'ACCEPTED', technician_id: assignment.technician_id, assignment_id: assignment.id }
+    { status: 'ACCEPTED', technician_id: assignment.technician_id, assignment_id: assignment.id, work_order_id: activeWorkOrder?.id }
   );
 
   // Notify plant/shop managers
@@ -739,7 +852,7 @@ export async function acceptBreakdownAssignmentService(
   );
 
   const techName = (user as any).full_name || user.employee_code || 'Technician';
-  const acceptMsg = `Technician ${techName} accepted assignment for breakdown ${breakdown.complaint_number} (Machine: ${breakdown.machine_code}).`;
+  const acceptMsg = `Technician ${techName} accepted assignment for breakdown ${breakdown.complaint_number} (Machine: ${breakdown.machine_code}). Repair job created.`;
 
   for (const mgr of mgrsRes.rows) {
     await sendAssignmentNotification(
@@ -748,20 +861,38 @@ export async function acceptBreakdownAssignmentService(
       'Technician Accepted Assignment',
       acceptMsg,
       'info',
-      `/triage?breakdownId=${breakdownId}`,
+      `/work-orders/${activeWorkOrder?.id || ''}`,
       'assignment:accepted',
       {
         breakdown_id: breakdownId,
         technician_id: assignment.technician_id,
         assignment_id: assignment.id,
+        work_order_id: activeWorkOrder?.id,
       },
       ioInstance
     );
   }
 
+  // Emit real-time Socket.IO events for Maintenance Status
+  if (ioInstance && typeof ioInstance.to === 'function') {
+    const woPayload = {
+      workOrder: activeWorkOrder,
+      message: `Work Order ${activeWorkOrder?.wo_number} created automatically upon technician acceptance.`,
+    };
+    if (breakdown.plant_id) {
+      ioInstance.to(`plant:${breakdown.plant_id}`).emit('workorder:created', woPayload);
+    }
+    if (breakdown.shop_id) {
+      ioInstance.to(`shop:${breakdown.shop_id}`).emit('workorder:created', woPayload);
+    }
+    ioInstance.to(`user:${assignment.technician_id}`).emit('workorder:assigned', woPayload);
+    ioInstance.to('role:manager').emit('workorder:created', woPayload);
+    ioInstance.to('role:admin').emit('workorder:created', woPayload);
+  }
+
   return {
     success: true,
-    message: 'Assignment accepted successfully. You are now responsible for this breakdown.',
+    message: 'Assignment accepted successfully. Repair job created and ready under Maintenance Status.',
     data: {
       assignment: updatedAssignment,
       breakdown: {
@@ -770,7 +901,9 @@ export async function acceptBreakdownAssignmentService(
         machine_code: breakdown.machine_code,
         assignment_status: 'accepted',
         assigned_technician_id: assignment.technician_id,
+        work_order_id: activeWorkOrder?.id,
       },
+      work_order: activeWorkOrder,
     },
   };
 }
@@ -1366,6 +1499,36 @@ export async function managerManualReassignService(
      WHERE id = $3`,
     [targetTechId, newAssignment.id, breakdownId]
   );
+
+  // Synchronize Work Order if already generated
+  const woRes = await client.query(
+    `SELECT id, wo_number FROM work_orders WHERE complaint_id = $1`,
+    [breakdownId]
+  );
+  if (woRes.rows.length > 0) {
+    const existingWo = woRes.rows[0];
+    await client.query(
+      `UPDATE work_orders
+       SET assigned_technician_id = $1,
+           technician_assigned_time = NOW(),
+           updated_at = NOW()
+       WHERE id = $2`,
+      [targetTechId, existingWo.id]
+    );
+
+    await client.query(
+      `INSERT INTO work_order_events (work_order_id, event_type, performed_by, notes, timestamp)
+       VALUES ($1, 'REASSIGNED', $2, $3, NOW())`,
+      [existingWo.id, user.id, `Breakdown reassigned by manager to technician: ${reason}`]
+    );
+
+    if (ioInstance && typeof ioInstance.to === 'function') {
+      ioInstance.to(`user:${targetTechId}`).emit('workorder:assigned', {
+        workOrder: { id: existingWo.id, wo_number: existingWo.wo_number },
+        message: `Work Order ${existingWo.wo_number} has been reassigned to you.`,
+      });
+    }
+  }
 
   // Audit log
   await recordAssignmentAuditLog(

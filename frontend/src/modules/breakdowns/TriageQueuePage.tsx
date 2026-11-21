@@ -187,7 +187,6 @@ export const TriageQueuePage: React.FC = () => {
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailComplaint, setDetailComplaint] = useState<any | null>(null);
 
-  const [assignComplaint, setAssignComplaint] = useState<any | null>(null);
   const [priorityComplaint, setPriorityComplaint] = useState<any | null>(null);
   const [rejectComplaint, setRejectComplaint] = useState<any | null>(null);
   const [infoComplaint, setInfoComplaint] = useState<any | null>(null);
@@ -220,13 +219,6 @@ export const TriageQueuePage: React.FC = () => {
   const [assignmentDetailLoading, setAssignmentDetailLoading] = useState(false);
 
   // Form States
-  const [assignForm, setAssignForm] = useState({
-    technician_id: '',
-    sla_hours: 2,
-    work_instructions: 'Diagnose machine fault, isolate hydraulic pressure lines, verify LOTO safety interlocks, and restore machine cycle time tolerances.',
-    is_major_breakdown: false,
-  });
-
   const [newPriority, setNewPriority] = useState('critical');
   const [rejectReason, setRejectReason] = useState('');
   const [infoRemarks, setInfoRemarks] = useState('');
@@ -243,12 +235,7 @@ export const TriageQueuePage: React.FC = () => {
           (u: any) => u.role === 'technician' && u.is_active !== false
         );
         setTechnicians(activeTechs);
-        if (activeTechs.length > 0) {
-          setAssignForm((prev) => ({
-            ...prev,
-            technician_id: prev.technician_id || activeTechs[0].id,
-          }));
-        } else {
+        if (activeTechs.length === 0) {
           setTechnicianFetchError('No active technicians currently available in directory.');
         }
       } else {
@@ -642,41 +629,7 @@ export const TriageQueuePage: React.FC = () => {
     }
   };
 
-  // Action 3: Convert Breakdown to Work Order / Dispatch Technician
-  const handleAssignSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (actionLoading || !assignComplaint || !assignForm.technician_id) return;
-
-    try {
-      setActionLoading(true);
-      setError('');
-      setSuccessMsg('');
-
-      const res = await apiClient.post(`/breakdowns/${assignComplaint.id}/convert-to-work-order`, {
-        technician_id: assignForm.technician_id,
-        sla_hours: Number(assignForm.sla_hours) || 2,
-        work_instructions: assignForm.work_instructions,
-        is_major_breakdown: Boolean(assignForm.is_major_breakdown),
-      });
-
-      if (res.data?.success) {
-        const woNumber = res.data.data?.workOrder?.wo_number || 'WO-CREATED';
-        const woId = res.data.data?.workOrder?.id;
-        setSuccessMsg(`Work Order ${woNumber} generated and dispatched! Technician notified.`);
-        if (woId) {
-          setRedirectWorkOrder({ id: woId, number: woNumber });
-        }
-        setAssignComplaint(null);
-        fetchBreakdowns();
-      }
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to convert complaint to work order.');
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  // Action 4: Reject Breakdown
+  // Action 3: Reject Breakdown
   const handleRejectSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (actionLoading || !rejectComplaint || !rejectReason.trim()) {
@@ -1250,42 +1203,34 @@ export const TriageQueuePage: React.FC = () => {
                           {/* 2. Manager Actions (Strictly Manager & Admin only) */}
                           {isManagerOrAdmin && (
                             <>
-                              {/* New Complaint: Primary Quick Action = Approve / Ack */}
-                              {isNew && (
+                              {/* Reassign Technician Action */}
+                              {!isClosed && !isRejected && (
                                 <button
                                   type="button"
-                                  onClick={() => handleAcknowledge(t.id)}
+                                  onClick={() => openManualReassignModal(t)}
                                   disabled={actionLoading}
-                                  className="h-8 px-2.5 bg-blue-50 hover:bg-blue-100 text-blue-800 text-[11px] font-bold rounded-lg border border-blue-200 transition cursor-pointer disabled:opacity-50 flex items-center gap-1.5 shadow-2xs shrink-0"
-                                  title="Approve / Acknowledge Complaint"
+                                  className="h-8 px-2.5 bg-amber-50 hover:bg-amber-100 text-amber-900 text-[11px] font-bold rounded-lg border border-amber-200 transition cursor-pointer disabled:opacity-50 flex items-center gap-1.5 shadow-2xs shrink-0"
+                                  title="Reassign Technician"
                                 >
-                                  <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />
-                                  <span>Approve</span>
+                                  <RotateCcw className="w-3.5 h-3.5 text-amber-600" />
+                                  <span>Reassign</span>
                                 </button>
                               )}
 
-                              {/* Acknowledged / In Triage: Primary Quick Action = Dispatch Tech */}
-                              {!isConverted && !isClosed && !isRejected && !isNew && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setAssignComplaint(t);
-                                    setAssignForm((prev) => ({
-                                      ...prev,
-                                      is_major_breakdown: t.priority === 'critical',
-                                    }));
-                                  }}
-                                  disabled={actionLoading}
-                                  className="h-8 px-2.5 bg-jcb-yellow hover:bg-jcb-yellowDark text-zinc-950 text-[11px] font-bold rounded-lg border border-amber-500 shadow-2xs transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50 shrink-0"
-                                  title="Dispatch Technician & Create Work Order"
+                              {/* View Work Order in Maintenance Status if created */}
+                              {(t.work_order_id || isConverted) && (
+                                <Link
+                                  to={t.work_order_id ? `/work-orders/${t.work_order_id}` : '/work-orders'}
+                                  className="h-8 px-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[11px] font-bold rounded-lg border border-emerald-200 transition flex items-center gap-1.5 shadow-2xs shrink-0"
+                                  title="View Repair Job in Maintenance Status"
                                 >
-                                  <UserCheck className="w-3.5 h-3.5" />
-                                  <span>Dispatch</span>
-                                </button>
+                                  <ExternalLink className="w-3.5 h-3.5 text-emerald-600" />
+                                  <span>View Job</span>
+                                </Link>
                               )}
 
                               {/* Secondary / Contextual Actions Dropdown Menu */}
-                              {!isConverted && !isClosed && !isRejected && (
+                              {!isClosed && !isRejected && (
                                 <div className="relative inline-block text-left action-menu-container">
                                   <button
                                     type="button"
@@ -1310,23 +1255,17 @@ export const TriageQueuePage: React.FC = () => {
                                       }`}
                                     >
                                       <div className="py-1">
-                                        {isNew && (
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              setActiveActionMenuId(null);
-                                              setAssignComplaint(t);
-                                              setAssignForm((prev) => ({
-                                                ...prev,
-                                                is_major_breakdown: t.priority === 'critical',
-                                              }));
-                                            }}
-                                            className="w-full px-3 py-2 text-zinc-700 hover:bg-amber-50 hover:text-amber-950 flex items-center gap-2 font-medium transition cursor-pointer"
-                                          >
-                                            <UserCheck className="w-3.5 h-3.5 text-amber-600" />
-                                            <span>Dispatch Technician</span>
-                                          </button>
-                                        )}
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setActiveActionMenuId(null);
+                                            openManualReassignModal(t);
+                                          }}
+                                          className="w-full px-3 py-2 text-zinc-700 hover:bg-amber-50 hover:text-amber-950 flex items-center gap-2 font-medium transition cursor-pointer"
+                                        >
+                                          <RotateCcw className="w-3.5 h-3.5 text-amber-600" />
+                                          <span>Reassign Technician</span>
+                                        </button>
 
                                         <button
                                           type="button"
@@ -1371,18 +1310,6 @@ export const TriageQueuePage: React.FC = () => {
                                     </div>
                                   )}
                                 </div>
-                              )}
-
-                              {/* Converted to Work Order: View Work Order Link */}
-                              {isConverted && (
-                                <Link
-                                  to="/work-orders"
-                                  className="h-8 px-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-[11px] font-bold rounded-lg border border-emerald-200 transition flex items-center gap-1.5 shadow-2xs shrink-0"
-                                  title="View Associated Work Order"
-                                >
-                                  <span>View WO</span>
-                                  <ExternalLink className="w-3.5 h-3.5 text-emerald-600" />
-                                </Link>
                               )}
                             </>
                           )}
@@ -1695,137 +1622,30 @@ export const TriageQueuePage: React.FC = () => {
                 Close
               </button>
 
-              {isManagerOrAdmin && detailComplaint && detailComplaint.status !== 'work_order_created' && detailComplaint.status !== 'closed' && detailComplaint.status !== 'rejected' && (
+              {detailComplaint && (detailComplaint.work_order_id || detailComplaint.status === 'work_order_created') && (
+                <Link
+                  to={detailComplaint.work_order_id ? `/work-orders/${detailComplaint.work_order_id}` : '/work-orders'}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow flex items-center gap-1.5"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>View Maintenance Status</span>
+                </Link>
+              )}
+
+              {isManagerOrAdmin && detailComplaint && detailComplaint.status !== 'closed' && detailComplaint.status !== 'rejected' && (
                 <button
                   type="button"
                   onClick={() => {
-                    setAssignComplaint(detailComplaint);
                     setDetailModalOpen(false);
+                    openManualReassignModal(detailComplaint);
                   }}
-                  className="px-4 py-2 bg-jcb-yellow hover:bg-jcb-yellowDark text-black rounded-xl text-xs font-black uppercase tracking-wider shadow"
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-black rounded-xl text-xs font-black uppercase tracking-wider shadow flex items-center gap-1.5 cursor-pointer"
                 >
-                  Dispatch Technician
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Reassign Technician</span>
                 </button>
               )}
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL 2: Convert to Work Order & Assign Technician */}
-      {assignComplaint && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-lg w-full border-2 border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="p-4 bg-white text-zinc-950 flex items-center justify-between border-b border-zinc-200">
-              <div className="flex items-center gap-2">
-                <UserCheck className="w-5 h-5 text-amber-600" />
-                <h3 className="text-sm font-black uppercase tracking-wider text-zinc-950">
-                  Assign Repair Job to Technician
-                </h3>
-              </div>
-              <button onClick={() => setAssignComplaint(null)} className="text-zinc-400 hover:text-zinc-800 hover:bg-zinc-100 p-1.5 rounded-xl transition cursor-pointer">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleAssignSubmit} className="p-5 space-y-4 text-xs">
-              {technicianFetchError && (
-                <div className="p-3 bg-red-50 border border-red-200 text-red-800 rounded-xl text-xs flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
-                  <span>{technicianFetchError}</span>
-                </div>
-              )}
-
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-0.5">
-                <span className="font-mono font-bold text-zinc-400 text-[10px]">Problem Report: {assignComplaint.complaint_number}</span>
-                <p className="font-black text-zinc-900">{assignComplaint.problem_title}</p>
-                <p className="text-zinc-500 font-medium">Machine: {assignComplaint.machine_code} ({assignComplaint.machine_name})</p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1">
-                  Assign Technician *
-                </label>
-                {technicians.length === 0 ? (
-                  <div className="p-2.5 bg-red-50 text-red-800 rounded-lg text-xs font-bold border border-red-200">
-                    No active technicians available. Work order allocation disabled.
-                  </div>
-                ) : (
-                  <select
-                    required
-                    value={assignForm.technician_id}
-                    onChange={(e) => setAssignForm({ ...assignForm, technician_id: e.target.value })}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
-                  >
-                    {technicians.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.full_name} ({t.employee_code}) {t.department ? `- ${t.department}` : ''}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1">
-                  Estimated Fix Time *
-                </label>
-                <select
-                  value={assignForm.sla_hours}
-                  onChange={(e) => setAssignForm({ ...assignForm, sla_hours: Number(e.target.value) })}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-zinc-900 focus:outline-none focus:border-jcb-yellow"
-                >
-                  <option value={1}>1 Hour (Critical Line Stop)</option>
-                  <option value={2}>2 Hours (Standard Problem)</option>
-                  <option value={4}>4 Hours (Complex Electrical / Hydraulic Repair)</option>
-                  <option value={8}>8 Hours (Full Shift Diagnostic)</option>
-                  <option value={24}>24 Hours (Major Overhaul)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1">
-                  Repair Instructions
-                </label>
-                <textarea
-                  rows={2}
-                  value={assignForm.work_instructions}
-                  onChange={(e) => setAssignForm({ ...assignForm, work_instructions: e.target.value })}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-medium text-zinc-900 focus:outline-none focus:border-jcb-yellow"
-                />
-              </div>
-
-              <div className="flex items-center gap-2 p-3 bg-amber-50/50 rounded-xl border border-amber-200">
-                <input
-                  type="checkbox"
-                  id="majorBreakdown"
-                  checked={assignForm.is_major_breakdown}
-                  onChange={(e) => setAssignForm({ ...assignForm, is_major_breakdown: e.target.checked })}
-                  className="w-4 h-4 text-jcb-yellow rounded border-slate-300 focus:ring-amber-400"
-                />
-                <label htmlFor="majorBreakdown" className="text-xs font-bold text-amber-950">
-                  Major Breakdown (Entire Line Stopped)
-                </label>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setAssignComplaint(null)}
-                  disabled={actionLoading}
-                  className="px-4 py-2 border border-slate-300 rounded-xl text-xs font-bold text-zinc-700 hover:bg-slate-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={actionLoading || technicians.length === 0 || !assignForm.technician_id}
-                  className="px-5 py-2 bg-jcb-yellow hover:bg-jcb-yellowDark text-black rounded-xl text-xs font-black uppercase tracking-wider shadow disabled:opacity-50"
-                >
-                  {actionLoading ? 'Assigning...' : 'Create Repair Job & Assign'}
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}

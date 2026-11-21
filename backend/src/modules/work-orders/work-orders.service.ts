@@ -1194,6 +1194,17 @@ export async function reassignWorkOrderService(
       notes || `Work order reassigned to technician ${techRes.rows[0].full_name}.`
     );
 
+    // Keep linked breakdown complaint synchronized
+    if (wo.complaint_id) {
+      await client.query(
+        `UPDATE maintenance_requests
+         SET assigned_technician_id = $1,
+             updated_at = NOW()
+         WHERE id = $2`,
+        [new_technician_id, wo.complaint_id]
+      );
+    }
+
     await recordAuditLog(
       client,
       id,
