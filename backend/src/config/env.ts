@@ -66,13 +66,15 @@ function parseAllowedOrigins(nodeEnv: string): string[] {
     process.env.CORS_ORIGIN || process.env.ALLOWED_ORIGINS;
 
   if (!configuredOrigins?.trim()) {
-    if (nodeEnv === 'production') {
-      throw new Error(
-        '[Security Startup Error]: Configure CORS_ORIGIN or ALLOWED_ORIGINS in production.'
-      );
-    }
+    return [
+      ...DEVELOPMENT_ORIGINS,
+      'https://jcb-cmms.vercel.app',
+      'https://jcb-n4yqr.ondigitalocean.app',
+    ];
+  }
 
-    return DEVELOPMENT_ORIGINS;
+  if (configuredOrigins.trim() === '*') {
+    return ['*'];
   }
 
   const origins = configuredOrigins
@@ -81,6 +83,8 @@ function parseAllowedOrigins(nodeEnv: string): string[] {
     .filter(Boolean);
 
   const validatedOrigins = origins.map((origin) => {
+    if (origin === '*') return '*';
+
     let parsed: URL;
 
     try {

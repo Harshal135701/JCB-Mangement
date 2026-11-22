@@ -34,12 +34,14 @@ const corsOptions: cors.CorsOptions = {
     if (!origin) {
       return callback(null, true);
     }
-    if (config.allowedOrigins.includes(origin)) {
+    if (config.allowedOrigins.includes('*') || config.allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
-    // Dynamically permit any localhost / 127.0.0.1 port for local development & testing
-    const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
-    if (isLocalhost) {
+    // Dynamically permit any Vercel, DigitalOcean, or localhost origins
+    if (
+      /^https:\/\/[\w-]+\.(vercel\.app|ondigitalocean\.app)$/.test(origin) ||
+      /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)
+    ) {
       return callback(null, true);
     }
     // Origin not allowed: omit CORS headers

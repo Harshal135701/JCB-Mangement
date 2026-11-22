@@ -10,14 +10,14 @@ const server = http.createServer(app);
 export const io = new SocketIOServer(server, {
   cors: {
     origin: (origin, callback) => {
-      if (!origin || config.allowedOrigins.includes(origin)) {
+      if (!origin || config.allowedOrigins.includes('*') || config.allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
-      if (config.nodeEnv !== 'production') {
-        const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
-        if (isLocalhost) {
-          return callback(null, true);
-        }
+      if (
+        /^https:\/\/[\w-]+\.(vercel\.app|ondigitalocean\.app)$/.test(origin) ||
+        /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)
+      ) {
+        return callback(null, true);
       }
       return callback(new Error('Not allowed by CORS'), false);
     },
