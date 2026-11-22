@@ -133,6 +133,17 @@ export function createRateLimiter(options: RateLimiterOptions = {}) {
     res.on('finish', () => {
       if (res.statusCode >= 200 && res.statusCode < 300) {
         store.delete(`account:${compositeKey}`);
+      } else if (res.statusCode >= 500) {
+        // If the request failed due to an internal server error (e.g. database unreachable),
+        // do not penalize the user with a rate limit penalty.
+        const acc = store.get(`account:${compositeKey}`);
+        if (acc && acc.count > 0) {
+          acc.count -= 1;
+        }
+        const ipRec = store.get(`ip:${ip}`);
+        if (ipRec && ipRec.count > 0) {
+          ipRec.count -= 1;
+        }
       }
     });
 

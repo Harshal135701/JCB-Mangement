@@ -21,10 +21,12 @@ import reportRoutes from './modules/reports/reports.routes';
 
 const app: Application = express();
 
-// Trust reverse proxy only when explicitly configured via TRUST_PROXY (e.g. 1, true, or loopback)
+// Trust reverse proxy (DigitalOcean, Cloudflare, Vercel load balancers)
 if (process.env.TRUST_PROXY) {
   const trustVal = process.env.TRUST_PROXY.trim();
   app.set('trust proxy', trustVal === 'true' ? true : !isNaN(Number(trustVal)) ? Number(trustVal) : trustVal);
+} else if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
 }
 
 // Secure CORS configuration using environment-configurable origin allowlist
