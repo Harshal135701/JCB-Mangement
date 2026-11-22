@@ -4,7 +4,6 @@
   "private": true,
   "description": "JCB Smart Machine Maintenance Management System (CMMS)",
   "workspaces": [
-    "backend",
     "frontend",
     "mobile"
   ],
