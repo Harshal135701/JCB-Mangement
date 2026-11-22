@@ -74,7 +74,7 @@ app.get('/health', async (req: Request, res: Response) => {
     ? DATABASE_URL.replace(/:\/\/([^:]+):([^@]+)@/, '://$1:***@')
     : 'NOT_SET';
 
-  res.status(dbError ? 503 : 200).json({
+  res.status(200).json({
     status: dbError ? 'DEGRADED' : 'HEALTHY',
     database: {
       status: dbStatus,
