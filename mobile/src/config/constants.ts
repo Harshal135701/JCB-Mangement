@@ -6,8 +6,8 @@
  */
 
 export const CONFIG = {
-  API_BASE_URL: 'https://jcb-smart-cmms-api.onrender.com/api/v1',
-  SOCKET_URL: 'https://jcb-smart-cmms-api.onrender.com',
+  API_BASE_URL: 'https://jcb-n4yqr.ondigitalocean.app/api/v1',
+  SOCKET_URL: 'https://jcb-n4yqr.ondigitalocean.app',
   APP_NAME: 'JCB CMMS',
   VERSION: '1.0.0',
 };

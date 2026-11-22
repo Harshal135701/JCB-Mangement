@@ -1,7 +1,7 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
-// API Base URL: Uses Render backend in production and Vite proxy in local dev to prevent CORS issues
-const RENDER_API_ORIGIN = 'https://jcb-smart-cmms-api.onrender.com';
+// API Base URL: Uses DigitalOcean backend in production and Vite proxy in local dev to prevent CORS issues
+const PRODUCTION_API_ORIGIN = 'https://jcb-n4yqr.ondigitalocean.app';
 
 export const API_URL = (() => {
   const envUrl = import.meta.env.VITE_API_URL;
@@ -9,7 +9,7 @@ export const API_URL = (() => {
   if (import.meta.env.DEV) {
     return '/api/v1';
   }
-  return envUrl || `${RENDER_API_ORIGIN}/api/v1`;
+  return envUrl || `${PRODUCTION_API_ORIGIN}/api/v1`;
 })();
 
 export const apiClient = axios.create({

@@ -35,14 +35,14 @@ interface SocketContextType {
 
 const SocketContext = createContext<SocketContextType>({} as SocketContextType);
 
-const RENDER_SOCKET_ORIGIN = 'https://jcb-smart-cmms-api.onrender.com';
+const DIGITALOCEAN_SOCKET_ORIGIN = 'https://jcb-n4yqr.ondigitalocean.app';
 
 const getSocketUrl = (): string => {
   if (import.meta.env.DEV) {
     // In local development, route through Vite dev proxy ('/') to forward /socket.io without CORS issues
     return '/';
   }
-  return import.meta.env.VITE_SOCKET_URL || RENDER_SOCKET_ORIGIN;
+  return import.meta.env.VITE_SOCKET_URL || DIGITALOCEAN_SOCKET_ORIGIN;
 };
 
 export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
