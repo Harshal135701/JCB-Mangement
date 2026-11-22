@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const passHash = '$2a$12$g1l6RDlhupTVLSasbUQk8ueD5vZNSlSFrkPFwu3GUnKjwcUYN2m4e'; // password123
+const passHash = '$2a$10$5C1rOX7ZPCq5e3RjDFPxiOzRF6AIpkZIS0IuZqrF0LnqYwIJOCRgC'; // password123
 
 let sql = `-- =====================================================================
 -- JCB SMART CMMS: COMPREHENSIVE 30 MAHARASHTRIAN DATASET FOR ALL TABLES
@@ -390,7 +390,7 @@ sql += `INSERT INTO work_orders (
   id, wo_number, complaint_id, machine_id, assigned_technician_id, assigned_manager_id, 
   priority, status, classification, is_major_breakdown, work_instructions, 
   breakdown_time, reported_time, manager_ack_time, technician_assigned_time, 
-  travel_started_time, arrival_time, completed_at
+  travel_started_time, arrival_time, repair_completed_time
 ) VALUES
 ${workOrders.map(w => `  ('${w.id}', '${w.wo_number}', '${w.complaint_id}', '${w.machine_id}', '${w.tech_id}', '${w.mgr_id}', '${w.priority}', '${w.status}', '${w.classification}', ${w.is_major}, '${w.instructions}', ${w.breakdown_time}, ${w.reported_time}, ${w.ack_time}, ${w.assigned_time}, ${w.travel_time}, ${w.arrival_time}, ${w.completed_time})`).join(',\n')}
 ON CONFLICT (wo_number) DO NOTHING;
@@ -578,19 +578,20 @@ for (let i = 1; i <= 30; i++) {
     shop_id: shop.id,
     plant_id: 'b0000000-0000-0000-0000-000000000002',
     shift: 'Shift A',
-    status: 'approved',
+    status: i <= 10 ? 'approved' : 'released',
     approved_by: mgrId,
     approved_at: `NOW() - INTERVAL '${daysAgo} days 7 hours 45 minutes'`,
     signed_in_at: `NOW() - INTERVAL '${daysAgo} days 7 hours 30 minutes'`,
+    signed_out_at: i <= 10 ? 'NULL' : `NOW() - INTERVAL '${daysAgo} days'`,
     assignment_type: i <= 10 ? 'permanent' : 'shift',
     notes: `Shift operational sign-in approved by Plant Maintenance Manager ${users[mgrIdx].name}. Machine safe for production.`
   });
 }
 
 sql += `INSERT INTO operator_machine_assignments (
-  id, operator_id, machine_id, shop_id, plant_id, shift, status, approved_by, approved_at, signed_in_at, assignment_type, notes
+  id, operator_id, machine_id, shop_id, plant_id, shift, status, approved_by, approved_at, signed_in_at, signed_out_at, assignment_type, notes
 ) VALUES
-${assignments.map(a => `  ('${a.id}', '${a.operator_id}', '${a.machine_id}', '${a.shop_id}', '${a.plant_id}', '${a.shift}', '${a.status}', '${a.approved_by}', ${a.approved_at}, ${a.signed_in_at}, '${a.assignment_type}', '${a.notes}')`).join(',\n')}
+${assignments.map(a => `  ('${a.id}', '${a.operator_id}', '${a.machine_id}', '${a.shop_id}', '${a.plant_id}', '${a.shift}', '${a.status}', '${a.approved_by}', ${a.approved_at}, ${a.signed_in_at}, ${a.signed_out_at}, '${a.assignment_type}', '${a.notes}')`).join(',\n')}
 ON CONFLICT (id) DO NOTHING;
 
 -- 13. Backfill Current Operator and Assignment References on Machines
