@@ -2,6 +2,7 @@ import express, { Application, Request, Response } from 'express';
 import cors from 'cors';
 import { config } from './config/env';
 import { errorHandler } from './middlewares/error.middleware';
+import { pool, DATABASE_URL } from './config/db';
 
 // All 14 Enterprise Modules
 import authRoutes from './modules/auth/auth.routes';
@@ -59,9 +60,27 @@ app.use(express.json({ limit: '15mb' }));
 app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
 // Health & Root Status
-app.get('/health', (req: Request, res: Response) => {
-  res.json({
-    status: 'HEALTHY',
+app.get('/health', async (req: Request, res: Response) => {
+  let dbStatus = 'CONNECTED';
+  let dbError: string | null = null;
+  try {
+    await pool.query('SELECT 1 as connected');
+  } catch (err: any) {
+    dbStatus = 'ERROR';
+    dbError = err?.message || String(err);
+  }
+
+  const maskedDbUrl = DATABASE_URL
+    ? DATABASE_URL.replace(/:\/\/([^:]+):([^@]+)@/, '://$1:***@')
+    : 'NOT_SET';
+
+  res.status(dbError ? 503 : 200).json({
+    status: dbError ? 'DEGRADED' : 'HEALTHY',
+    database: {
+      status: dbStatus,
+      target: maskedDbUrl,
+      error: dbError,
+    },
     service: 'JCB Smart Machine Maintenance Management System (CMMS) Backend API',
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),

@@ -15,9 +15,11 @@ export const errorHandler = (
       ? err.statusCode
       : 500;
 
-  // Return safe, consistent error messages without exposing internals or stack traces
+  // Return safe, consistent error messages with details to identify root cause
   const clientMessage =
-    statusCode >= 500 ? 'Internal Enterprise Server Error' : safeMessage;
+    statusCode >= 500
+      ? (err?.message ? `Internal Enterprise Server Error: ${err.message}` : 'Internal Enterprise Server Error')
+      : safeMessage;
 
   res.status(statusCode).json({
     success: false,

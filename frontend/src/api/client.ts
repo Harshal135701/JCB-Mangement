@@ -6,10 +6,18 @@ const PRODUCTION_API_ORIGIN = 'https://jcb-n4yqr.ondigitalocean.app';
 export const API_URL = (() => {
   const envUrl = import.meta.env.VITE_API_URL;
   // In local Vite dev mode, route through '/api/v1' to utilize the Vite proxy and avoid browser CORS preflight blocks
-  if (import.meta.env.DEV) {
+  if (import.meta.env.DEV && !envUrl) {
     return '/api/v1';
   }
-  return envUrl || `${PRODUCTION_API_ORIGIN}/api/v1`;
+  let base = (envUrl || `${PRODUCTION_API_ORIGIN}/api/v1`).replace(/\/+$/, '');
+  if (!base.endsWith('/api/v1')) {
+    if (base.endsWith('/api')) {
+      base = `${base}/v1`;
+    } else {
+      base = `${base}/api/v1`;
+    }
+  }
+  return base;
 })();
 
 export const apiClient = axios.create({
