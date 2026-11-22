@@ -1,7 +1,14 @@
 
-import dotenv from 'dotenv';
-
-dotenv.config();
+// Safely load .env file for local development.
+// In cloud container environments (e.g. Render, Railway, DigitalOcean, Docker),
+// environment variables are injected directly into process.env by the host.
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const dotenv = require('dotenv');
+  dotenv.config();
+} catch (_err) {
+  // dotenv is optional in containerized production environments
+}
 
 export interface AppConfig {
   port: number;

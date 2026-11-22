@@ -30,9 +30,13 @@ const SAVED_IDENTIFIER_KEY = '@jcb_saved_identifier';
 
 interface LoginScreenProps {
   onNavigateToRegister?: () => void;
+  onNavigateToTechRegister?: () => void;
 }
 
-export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigateToRegister }) => {
+export const LoginScreen: React.FC<LoginScreenProps> = ({
+  onNavigateToRegister,
+  onNavigateToTechRegister,
+}) => {
   const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
   const { login } = useAuth();
@@ -290,18 +294,34 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigateToRegister }
                 )}
               </TouchableOpacity>
 
-              {/* Register Operator Link */}
-              {onNavigateToRegister && (
-                <TouchableOpacity
-                  style={styles.registerLinkBtn}
-                  onPress={onNavigateToRegister}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.registerLinkText}>
-                    New factory operator? <Text style={styles.registerLinkHighlight}>Register for access</Text>
-                  </Text>
-                </TouchableOpacity>
-              )}
+              {/* Register Links: Operator & Technician */}
+              <View style={styles.registerButtonsRow}>
+                {onNavigateToRegister && (
+                  <TouchableOpacity
+                    style={styles.registerLinkBtn}
+                    onPress={onNavigateToRegister}
+                    activeOpacity={0.7}
+                  >
+                    <MaterialCommunityIcons name="hard-hat" size={15} color="#D97706" />
+                    <Text style={styles.registerLinkText}>
+                      Operator <Text style={styles.registerLinkHighlight}>Register</Text>
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
+                {onNavigateToTechRegister && (
+                  <TouchableOpacity
+                    style={styles.registerLinkBtn}
+                    onPress={onNavigateToTechRegister}
+                    activeOpacity={0.7}
+                  >
+                    <MaterialCommunityIcons name="wrench" size={15} color="#2563EB" />
+                    <Text style={styles.registerLinkText}>
+                      Technician <Text style={[styles.registerLinkHighlight, { color: '#2563EB' }]}>Register</Text>
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
 
               {/* Bottom Brand Divider */}
               <View style={styles.cardFooterDivider}>
@@ -627,15 +647,27 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     letterSpacing: 0.5,
   },
+  registerButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 8,
+    gap: 8,
+  },
   registerLinkBtn: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    marginTop: 4,
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   registerLinkText: {
-    fontSize: 12.5,
+    fontSize: 12,
     fontWeight: '600',
-    color: '#64748B',
+    color: '#475569',
   },
   registerLinkHighlight: {
     color: '#0F172A',

@@ -140,6 +140,7 @@ export const PreShiftInspectionScreen = ({ navigation }: any) => {
   const [vibration, setVibration] = useState('1.4');
   const [shift, setShift] = useState<'Shift A' | 'Shift B' | 'Shift C'>('Shift A');
   const [isCertified, setIsCertified] = useState(false);
+  const [operatorSignatureName, setOperatorSignatureName] = useState(user?.fullName || user?.employeeCode || '');
   const [escalateOnFail, setEscalateOnFail] = useState(true);
 
   // Submission State
@@ -351,7 +352,9 @@ export const PreShiftInspectionScreen = ({ navigation }: any) => {
         pressure: pressure.trim() ? parseFloat(pressure) : null,
         vibration: vibration.trim() ? parseFloat(vibration) : null,
         responses: payloadResponses,
-        operator_signature_url: `SIGNATURE_VERIFIED_OPERATOR_${user?.employeeCode || 'OPR'}_${Date.now()}`,
+        operator_signature_url: operatorSignatureName.trim()
+          ? `SIGNATURE_VERIFIED_${operatorSignatureName.trim().replace(/\s+/g, '_').toUpperCase()}_${user?.employeeCode || 'OPR'}_${Date.now()}`
+          : `SIGNATURE_VERIFIED_OPERATOR_${user?.employeeCode || 'OPR'}_${Date.now()}`,
         escalate_on_fail: escalateOnFail,
       };
 
@@ -921,9 +924,44 @@ export const PreShiftInspectionScreen = ({ navigation }: any) => {
             />
             <Text style={styles.certificationText}>
               I solemnly certify that I have conducted physical inspection of this machinery asset in
-              accordance with JCB standard safety &amp; operational audit procedures.
+              accordance with JCB standard safety & operational audit procedures.
             </Text>
           </TouchableOpacity>
+
+          {/* OPERATOR DIGITAL SIGNATURE / SIGN-OFF BLOCK */}
+          <View style={styles.signatureCard}>
+            <View style={styles.signatureHeaderRow}>
+              <View style={styles.signatureTitleWrap}>
+                <MaterialCommunityIcons name="draw-pen" size={18} color="#000000" />
+                <Text style={styles.signatureTitle}>Digital Operator Signature</Text>
+              </View>
+              <View style={styles.signatureBadge}>
+                <MaterialCommunityIcons name="shield-check" size={12} color="#059669" />
+                <Text style={styles.signatureBadgeText}>AUTHENTICATED</Text>
+              </View>
+            </View>
+            <Text style={styles.signatureHelperText}>
+              Enter or confirm full name / operator identity to seal this safety checklist digitally:
+            </Text>
+            <View style={styles.signatureInputBox}>
+              <MaterialCommunityIcons name="account-edit-outline" size={18} color="#64748B" style={{ marginRight: 8 }} />
+              <TextInput
+                style={styles.signatureInput}
+                value={operatorSignatureName}
+                onChangeText={setOperatorSignatureName}
+                placeholder="Operator signature / full name..."
+                placeholderTextColor="#94A3B8"
+              />
+              {operatorSignatureName.length > 0 && (
+                <MaterialCommunityIcons name="check-circle" size={18} color="#10B981" />
+              )}
+            </View>
+            <View style={styles.signatureAuditMeta}>
+              <Text style={styles.signatureAuditMetaText}>
+                Emp Code: {user?.employeeCode || 'OPR-LIVE'} • Shift: {shift} • Date: {new Date().toLocaleDateString()}
+              </Text>
+            </View>
+          </View>
 
           {/* AUTO ESCALATE OPTION */}
           <TouchableOpacity
@@ -1759,6 +1797,83 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     color: '#334155',
     lineHeight: 16,
+    fontWeight: '600',
+  },
+  signatureCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 14,
+    marginTop: 12,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+  },
+  signatureHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  signatureTitleWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  signatureTitle: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#0F172A',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  signatureBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+  },
+  signatureBadgeText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#15803D',
+    letterSpacing: 0.3,
+  },
+  signatureHelperText: {
+    fontSize: 11,
+    color: '#64748B',
+    marginBottom: 8,
+    lineHeight: 15,
+  },
+  signatureInputBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    borderWidth: 1.2,
+    borderColor: '#CBD5E1',
+    paddingHorizontal: 12,
+    height: 44,
+  },
+  signatureInput: {
+    flex: 1,
+    fontSize: 12.5,
+    color: '#0F172A',
+    fontWeight: '600',
+    paddingVertical: 0,
+  },
+  signatureAuditMeta: {
+    marginTop: 8,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  signatureAuditMetaText: {
+    fontSize: 10,
+    color: '#94A3B8',
     fontWeight: '600',
   },
   escalateRow: {

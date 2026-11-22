@@ -45,6 +45,7 @@ export const ShopFloorDashboardScreen = ({ navigation }: any) => {
 
   // Enterprise Multi-Plant & Operator Authorization States
   const [pendingOperatorsCount, setPendingOperatorsCount] = useState(0);
+  const [pendingTechniciansCount, setPendingTechniciansCount] = useState(0);
   const [selectedPlant, setSelectedPlant] = useState('All Plants');
   const [selectedShift, setSelectedShift] = useState('Shift A');
   const [plantsList, setPlantsList] = useState<string[]>(['All Plants', 'Chakan', 'PCMC', 'Talegaon']);
@@ -109,7 +110,7 @@ export const ShopFloorDashboardScreen = ({ navigation }: any) => {
         setLoading(true);
         setIsAlertDismissed(false);
       }
-      const [kpiRes, machinesRes, dtRes, pmRes, woRes, pendingRes, orgRes, machReqRes]: any[] = await Promise.allSettled([
+      const [kpiRes, machinesRes, dtRes, pmRes, woRes, pendingRes, orgRes, machReqRes, pendingTechRes]: any[] = await Promise.allSettled([
         apiClient.get('/reports/dashboard-kpis'),
         apiClient.get('/machines?limit=100'),
         apiClient.get('/downtime'),
@@ -118,6 +119,7 @@ export const ShopFloorDashboardScreen = ({ navigation }: any) => {
         apiClient.get('/auth/pending-operators'),
         apiClient.get('/auth/plants'),
         apiClient.get('/machines/operator/requests/pending'),
+        apiClient.get('/auth/pending-technicians'),
       ]);
 
       if (kpiRes.status === 'fulfilled' && kpiRes.value) {
@@ -137,6 +139,9 @@ export const ShopFloorDashboardScreen = ({ navigation }: any) => {
       }
       if (pendingRes.status === 'fulfilled' && Array.isArray(pendingRes.value?.data)) {
         setPendingOperatorsCount(pendingRes.value.data.length);
+      }
+      if (pendingTechRes?.status === 'fulfilled' && Array.isArray(pendingTechRes.value?.data)) {
+        setPendingTechniciansCount(pendingTechRes.value.data.length);
       }
       if (machReqRes.status === 'fulfilled' && Array.isArray(machReqRes.value?.data)) {
         setPendingMachineRequests(machReqRes.value.data);
@@ -425,8 +430,8 @@ export const ShopFloorDashboardScreen = ({ navigation }: any) => {
           </View>
         )}
 
-        {/* Operator Registration Action Alert Banner with Swipe-to-Dismiss */}
-        {pendingOperatorsCount > 0 && !isAlertDismissed && (
+        {/* Staff Registration Action Alert Banner with Swipe-to-Dismiss */}
+        {(pendingOperatorsCount > 0 || pendingTechniciansCount > 0) && !isAlertDismissed && (
           <Animated.View
             {...panResponder.panHandlers}
             style={[
@@ -448,19 +453,23 @@ export const ShopFloorDashboardScreen = ({ navigation }: any) => {
             >
               <View style={styles.pendingAlertLeft}>
                 <View style={styles.alertIconBadge}>
-                  <MaterialCommunityIcons name="hard-hat" size={22} color="#000000" />
+                  <MaterialCommunityIcons name="account-clock" size={22} color="#000000" />
                 </View>
                 <View style={{ flex: 1 }}>
                   <View style={styles.alertHeaderRow}>
                     <Text style={styles.alertTagText}>ACTION REQUIRED</Text>
                     <View style={styles.pulseCountBadge}>
-                      <Text style={styles.pulseCountText}>{pendingOperatorsCount} PENDING</Text>
+                      <Text style={styles.pulseCountText}>{pendingOperatorsCount + pendingTechniciansCount} PENDING</Text>
                     </View>
                   </View>
                   <Text style={styles.alertDescText}>
-                    {pendingOperatorsCount === 1
-                      ? '1 factory operator registered & awaiting authorization.'
-                      : `${pendingOperatorsCount} factory operators registered & awaiting authorization.`}
+                    {pendingOperatorsCount > 0 && pendingTechniciansCount > 0
+                      ? `${pendingOperatorsCount} operator(s) & ${pendingTechniciansCount} technician(s) awaiting authorization.`
+                      : pendingTechniciansCount > 0
+                        ? `${pendingTechniciansCount} maintenance technician(s) awaiting authorization.`
+                        : pendingOperatorsCount === 1
+                          ? '1 factory operator registered & awaiting authorization.'
+                          : `${pendingOperatorsCount} factory operators registered & awaiting authorization.`}
                   </Text>
                   <View style={styles.swipeHintRow}>
                     <MaterialCommunityIcons name="gesture-swipe-horizontal" size={13} color="#D97706" />

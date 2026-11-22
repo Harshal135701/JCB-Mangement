@@ -13,6 +13,7 @@ import { COLORS } from '../config/constants';
 // Screens
 import { LoginScreen } from '../modules/auth/LoginScreen';
 import { OperatorSignUpScreen } from '../modules/auth/OperatorSignUpScreen';
+import { TechnicianSignUpScreen } from '../modules/auth/TechnicianSignUpScreen';
 import { ShopFloorDashboardScreen } from '../modules/manager/ShopFloorDashboardScreen';
 import { TriageQueueScreen } from '../modules/breakdowns/TriageQueueScreen';
 import { MachineMasterScreen } from '../modules/machines/MachineMasterScreen';
@@ -433,13 +434,22 @@ const MainTabNavigator = ({ navigation }: any) => {
 };
 
 const AuthNavigator = () => {
-  const [authView, setAuthView] = React.useState<'login' | 'register'>('login');
+  const [authView, setAuthView] = React.useState<'login' | 'register_operator' | 'register_technician'>('login');
 
-  if (authView === 'register') {
+  if (authView === 'register_operator') {
     return <OperatorSignUpScreen onBackToLogin={() => setAuthView('login')} />;
   }
 
-  return <LoginScreen onNavigateToRegister={() => setAuthView('register')} />;
+  if (authView === 'register_technician') {
+    return <TechnicianSignUpScreen onBackToLogin={() => setAuthView('login')} />;
+  }
+
+  return (
+    <LoginScreen
+      onNavigateToRegister={() => setAuthView('register_operator')}
+      onNavigateToTechRegister={() => setAuthView('register_technician')}
+    />
+  );
 };
 
 const AuthenticatedApp = ({ user }: { user: any }) => {

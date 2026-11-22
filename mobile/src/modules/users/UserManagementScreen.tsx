@@ -36,7 +36,9 @@ export const UserManagementScreen = () => {
 
   // Segmented Tabs: 'personnel' | 'pending'
   const [activeTab, setActiveTab] = useState<'personnel' | 'pending'>('personnel');
+  const [pendingCategory, setPendingCategory] = useState<'operators' | 'technicians'>('operators');
   const [pendingList, setPendingList] = useState<any[]>([]);
+  const [pendingTechList, setPendingTechList] = useState<any[]>([]);
   const [loadingPending, setLoadingPending] = useState(false);
   const [rejectModalUser, setRejectModalUser] = useState<any | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
@@ -91,6 +93,23 @@ export const UserManagementScreen = () => {
     }
   };
 
+  const fetchPendingTechnicians = async () => {
+    try {
+      setLoadingPending(true);
+      const res: any = await apiClient.get('/auth/pending-technicians');
+      if (res?.success && Array.isArray(res.data)) {
+        setPendingTechList(res.data);
+      } else {
+        setPendingTechList([]);
+      }
+    } catch (e) {
+      console.warn('Failed to load pending technicians:', e);
+      setPendingTechList([]);
+    } finally {
+      setLoadingPending(false);
+    }
+  };
+
   const handleApprove = async (opId: string, opName: string) => {
     try {
       setActionPendingId(opId);
@@ -107,11 +126,36 @@ export const UserManagementScreen = () => {
     }
   };
 
+  const handleApproveTechnician = async (techId: string, techName: string) => {
+    try {
+      setActionPendingId(techId);
+      const res: any = await apiClient.post(`/auth/technicians/${techId}/approve`, {});
+      if (res?.success) {
+        Alert.alert('Approved', `${techName} has been authorized as Maintenance Technician.`);
+        fetchPendingTechnicians();
+        fetchUsers();
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to approve technician.');
+    } finally {
+      setActionPendingId(null);
+    }
+  };
+
   const handleReject = async () => {
     if (!rejectModalUser) return;
     try {
       setActionPendingId(rejectModalUser.id);
-      const res: any = await apiClient.post(`/auth/operators/${rejectModalUser.id}/reject`, {
+      const isTech =
+        rejectModalUser.role === 'technician' ||
+        pendingCategory === 'technicians' ||
+        rejectModalUser.department?.toLowerCase().includes('maintenance');
+
+      const endpoint = isTech
+        ? `/auth/technicians/${rejectModalUser.id}/reject`
+        : `/auth/operators/${rejectModalUser.id}/reject`;
+
+      const res: any = await apiClient.post(endpoint, {
         rejection_reason: rejectionReason.trim() || 'Details could not be verified by Plant Manager.',
       });
       if (res?.success) {
@@ -119,9 +163,10 @@ export const UserManagementScreen = () => {
         setRejectModalUser(null);
         setRejectionReason('');
         fetchPendingOperators();
+        fetchPendingTechnicians();
       }
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to reject operator.');
+      Alert.alert('Error', err.message || 'Failed to reject registration.');
     } finally {
       setActionPendingId(null);
     }
@@ -130,6 +175,7 @@ export const UserManagementScreen = () => {
   useEffect(() => {
     fetchUsers();
     fetchPendingOperators();
+    fetchPendingTechnicians();
   }, []);
 
   const openCreateModal = (presetRole: string = 'technician') => {
@@ -324,9 +370,9 @@ export const UserManagementScreen = () => {
           <Text style={[styles.segmentTabLabel, activeTab === 'pending' && styles.segmentTabLabelActive]}>
             Pending Approvals
           </Text>
-          {pendingList.length > 0 && (
+          {pendingList.length + pendingTechList.length > 0 && (
             <View style={styles.pendingTabBadge}>
-              <Text style={styles.pendingTabBadgeText}>{pendingList.length}</Text>
+              <Text style={styles.pendingTabBadgeText}>{pendingList.length + pendingTechList.length}</Text>
             </View>
           )}
         </TouchableOpacity>
@@ -415,95 +461,258 @@ export const UserManagementScreen = () => {
         }
       >
         {activeTab === 'pending' ? (
-          pendingList.length === 0 ? (
-            <View style={styles.emptyState}>
-              <View style={[styles.emptyIconCircle, { backgroundColor: '#DCFCE7' }]}>
-                <MaterialCommunityIcons name="check-decagram" size={36} color="#16A34A" />
-              </View>
-              <Text style={styles.emptyTitle}>All Registrations Cleared</Text>
-              <Text style={styles.emptySubtitle}>No pending operator authorization requests.</Text>
+          <>
+            {/* Sub-category pills: Operators vs Technicians */}
+            <View style={styles.subCategoryPillsRow}>
+              <TouchableOpacity
+                style={[
+                  styles.subCategoryPill,
+                  pendingCategory === 'operators' && styles.subCategoryPillActive,
+                ]}
+                onPress={() => setPendingCategory('operators')}
+                activeOpacity={0.7}
+              >
+                <MaterialCommunityIcons
+                  name="hard-hat"
+                  size={15}
+                  color={pendingCategory === 'operators' ? '#000000' : '#64748B'}
+                />
+                <Text
+                  style={[
+                    styles.subCategoryPillText,
+                    pendingCategory === 'operators' && styles.subCategoryPillTextActive,
+                  ]}
+                >
+                  Operators ({pendingList.length})
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.subCategoryPill,
+                  pendingCategory === 'technicians' && styles.subCategoryPillActive,
+                ]}
+                onPress={() => setPendingCategory('technicians')}
+                activeOpacity={0.7}
+              >
+                <MaterialCommunityIcons
+                  name="wrench"
+                  size={15}
+                  color={pendingCategory === 'technicians' ? '#000000' : '#64748B'}
+                />
+                <Text
+                  style={[
+                    styles.subCategoryPillText,
+                    pendingCategory === 'technicians' && styles.subCategoryPillTextActive,
+                  ]}
+                >
+                  Technicians ({pendingTechList.length})
+                </Text>
+              </TouchableOpacity>
             </View>
-          ) : (
-            pendingList.map((p) => {
-              const isActing = actionPendingId === p.id;
-              return (
-                <View key={p.id} style={styles.pendingCard}>
-                  <View style={styles.pendingTopRow}>
-                    <View style={styles.pendingAvatarBox}>
-                      <Text style={styles.pendingAvatarText}>{(p.full_name || 'O')[0].toUpperCase()}</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <View style={styles.nameRow}>
-                        <Text style={styles.userName}>{p.full_name}</Text>
-                        <View style={styles.pendingBadgePill}>
-                          <Text style={styles.pendingBadgePillText}>PENDING</Text>
+
+            {pendingCategory === 'operators' ? (
+              pendingList.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <View style={[styles.emptyIconCircle, { backgroundColor: '#DCFCE7' }]}>
+                    <MaterialCommunityIcons name="check-decagram" size={36} color="#16A34A" />
+                  </View>
+                  <Text style={styles.emptyTitle}>All Operators Cleared</Text>
+                  <Text style={styles.emptySubtitle}>No pending operator authorization requests.</Text>
+                </View>
+              ) : (
+                pendingList.map((p) => {
+                  const isActing = actionPendingId === p.id;
+                  return (
+                    <View key={p.id} style={styles.pendingCard}>
+                      <View style={styles.pendingTopRow}>
+                        <View style={styles.pendingAvatarBox}>
+                          <Text style={styles.pendingAvatarText}>{(p.full_name || 'O')[0].toUpperCase()}</Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <View style={styles.nameRow}>
+                            <Text style={styles.userName}>{p.full_name}</Text>
+                            <View style={styles.pendingBadgePill}>
+                              <Text style={styles.pendingBadgePillText}>PENDING</Text>
+                            </View>
+                          </View>
+                          <Text style={styles.empCode}>{p.employee_code}</Text>
                         </View>
                       </View>
-                      <Text style={styles.empCode}>{p.employee_code}</Text>
-                    </View>
-                  </View>
 
-                  <View style={styles.detailsBox}>
-                    <View style={styles.detailRow}>
-                      <MaterialCommunityIcons name="factory" size={14} color="#64748B" />
-                      <Text style={styles.detailText}>{p.plant_name || 'Plant'} • {p.shop_name || 'Shop'}</Text>
-                    </View>
-                    <View style={styles.detailRow}>
-                      <MaterialCommunityIcons name="email-outline" size={14} color="#64748B" />
-                      <Text style={styles.detailText}>{p.email}</Text>
-                    </View>
-                    {p.phone ? (
-                      <View style={styles.detailRow}>
-                        <MaterialCommunityIcons name="phone-outline" size={14} color="#64748B" />
-                        <Text style={styles.detailText}>{p.phone}</Text>
+                      <View style={styles.detailsBox}>
+                        <View style={styles.detailRow}>
+                          <MaterialCommunityIcons name="factory" size={14} color="#64748B" />
+                          <Text style={styles.detailText}>{p.plant_name || 'Plant'} • {p.shop_name || 'Shop'}</Text>
+                        </View>
+                        <View style={styles.detailRow}>
+                          <MaterialCommunityIcons name="email-outline" size={14} color="#64748B" />
+                          <Text style={styles.detailText}>{p.email}</Text>
+                        </View>
+                        {p.phone ? (
+                          <View style={styles.detailRow}>
+                            <MaterialCommunityIcons name="phone-outline" size={14} color="#64748B" />
+                            <Text style={styles.detailText}>{p.phone}</Text>
+                          </View>
+                        ) : null}
+                        <View style={styles.detailRow}>
+                          <MaterialCommunityIcons name="clock-time-four-outline" size={14} color="#64748B" />
+                          <Text style={styles.detailText}>{p.shift || 'Shift A'}</Text>
+                        </View>
+                        {p.requested_machine_code ? (
+                          <View style={styles.detailRow}>
+                            <MaterialCommunityIcons name="tractor" size={14} color="#D97706" />
+                            <Text style={[styles.detailText, { color: '#B45309', fontWeight: '700' }]}>
+                              Requested: {p.requested_machine_code} {p.requested_machine_name ? `(${p.requested_machine_name})` : ''}
+                            </Text>
+                          </View>
+                        ) : null}
                       </View>
-                    ) : null}
-                    <View style={styles.detailRow}>
-                      <MaterialCommunityIcons name="clock-time-four-outline" size={14} color="#64748B" />
-                      <Text style={styles.detailText}>{p.shift || 'Shift A'}</Text>
-                    </View>
-                    {p.requested_machine_code ? (
-                      <View style={styles.detailRow}>
-                        <MaterialCommunityIcons name="tractor" size={14} color="#D97706" />
-                        <Text style={[styles.detailText, { color: '#B45309', fontWeight: '700' }]}>
-                          Requested: {p.requested_machine_code} {p.requested_machine_name ? `(${p.requested_machine_name})` : ''}
-                        </Text>
+
+                      {/* Approve / Reject Actions */}
+                      <View style={styles.pendingActionRow}>
+                        <TouchableOpacity
+                          style={styles.rejectBtn}
+                          onPress={() => setRejectModalUser(p)}
+                          disabled={isActing}
+                          activeOpacity={0.8}
+                        >
+                          <MaterialCommunityIcons name="close" size={16} color="#DC2626" />
+                          <Text style={styles.rejectBtnText}>Reject</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.approveBtn}
+                          onPress={() => handleApprove(p.id, p.full_name)}
+                          disabled={isActing}
+                          activeOpacity={0.85}
+                        >
+                          {isActing ? (
+                            <ActivityIndicator color="#000000" size="small" />
+                          ) : (
+                            <>
+                              <MaterialCommunityIcons name="check" size={16} color="#000000" />
+                              <Text style={styles.approveBtnText}>Approve & Authorize</Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
                       </View>
-                    ) : null}
+                    </View>
+                  );
+                })
+              )
+            ) : (
+              /* Pending Technicians */
+              pendingTechList.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <View style={[styles.emptyIconCircle, { backgroundColor: '#DCFCE7' }]}>
+                    <MaterialCommunityIcons name="check-decagram" size={36} color="#16A34A" />
                   </View>
-
-                  {/* Approve / Reject Actions */}
-                  <View style={styles.pendingActionRow}>
-                    <TouchableOpacity
-                      style={styles.rejectBtn}
-                      onPress={() => setRejectModalUser(p)}
-                      disabled={isActing}
-                      activeOpacity={0.8}
-                    >
-                      <MaterialCommunityIcons name="close" size={16} color="#DC2626" />
-                      <Text style={styles.rejectBtnText}>Reject</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.approveBtn}
-                      onPress={() => handleApprove(p.id, p.full_name)}
-                      disabled={isActing}
-                      activeOpacity={0.85}
-                    >
-                      {isActing ? (
-                        <ActivityIndicator color="#000000" size="small" />
-                      ) : (
-                        <>
-                          <MaterialCommunityIcons name="check" size={16} color="#000000" />
-                          <Text style={styles.approveBtnText}>Approve & Authorize</Text>
-                        </>
-                      )}
-                    </TouchableOpacity>
-                  </View>
+                  <Text style={styles.emptyTitle}>All Technicians Cleared</Text>
+                  <Text style={styles.emptySubtitle}>No pending maintenance technician registration requests.</Text>
                 </View>
-              );
-            })
-          )
+              ) : (
+                pendingTechList.map((t) => {
+                  const isActing = actionPendingId === t.id;
+                  const skillsArr = Array.isArray(t.skills)
+                    ? t.skills
+                    : typeof t.skills === 'string'
+                    ? t.skills.split(',').map((s: string) => s.trim()).filter(Boolean)
+                    : [];
+
+                  return (
+                    <View key={t.id} style={styles.pendingCard}>
+                      <View style={styles.pendingTopRow}>
+                        <View style={[styles.pendingAvatarBox, { backgroundColor: '#DBEAFE' }]}>
+                          <Text style={[styles.pendingAvatarText, { color: '#1E40AF' }]}>
+                            {(t.full_name || 'T')[0].toUpperCase()}
+                          </Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <View style={styles.nameRow}>
+                            <Text style={styles.userName}>{t.full_name}</Text>
+                            <View style={[styles.pendingBadgePill, { backgroundColor: '#DBEAFE' }]}>
+                              <Text style={[styles.pendingBadgePillText, { color: '#1E40AF' }]}>
+                                TECH PENDING
+                              </Text>
+                            </View>
+                          </View>
+                          <Text style={styles.empCode}>{t.employee_code}</Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.detailsBox}>
+                        <View style={styles.detailRow}>
+                          <MaterialCommunityIcons name="factory" size={14} color="#64748B" />
+                          <Text style={styles.detailText}>{t.plant_name || 'Plant'} • {t.shop_name || 'Shop'}</Text>
+                        </View>
+                        <View style={styles.detailRow}>
+                          <MaterialCommunityIcons name="wrench-outline" size={14} color="#64748B" />
+                          <Text style={styles.detailText}>{t.department || 'Maintenance'} • {t.designation || 'Technician'}</Text>
+                        </View>
+                        <View style={styles.detailRow}>
+                          <MaterialCommunityIcons name="email-outline" size={14} color="#64748B" />
+                          <Text style={styles.detailText}>{t.email}</Text>
+                        </View>
+                        {t.phone ? (
+                          <View style={styles.detailRow}>
+                            <MaterialCommunityIcons name="phone-outline" size={14} color="#64748B" />
+                            <Text style={styles.detailText}>{t.phone}</Text>
+                          </View>
+                        ) : null}
+                        <View style={styles.detailRow}>
+                          <MaterialCommunityIcons name="clock-time-four-outline" size={14} color="#64748B" />
+                          <Text style={styles.detailText}>{t.shift || 'Shift A'}</Text>
+                        </View>
+
+                        {/* Skills Chips */}
+                        {skillsArr.length > 0 && (
+                          <View style={{ marginTop: 6 }}>
+                            <Text style={styles.techSkillsLabel}>TECHNICAL SKILLS:</Text>
+                            <View style={styles.skillsTagRow}>
+                              {skillsArr.map((sk: string, sIdx: number) => (
+                                <View key={sIdx} style={styles.techSkillBadge}>
+                                  <Text style={styles.techSkillBadgeText}>{sk}</Text>
+                                </View>
+                              ))}
+                            </View>
+                          </View>
+                        )}
+                      </View>
+
+                      <View style={styles.pendingActionRow}>
+                        <TouchableOpacity
+                          style={styles.rejectBtn}
+                          onPress={() => setRejectModalUser(t)}
+                          disabled={isActing}
+                          activeOpacity={0.8}
+                        >
+                          <MaterialCommunityIcons name="close" size={16} color="#DC2626" />
+                          <Text style={styles.rejectBtnText}>Reject</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.approveBtn}
+                          onPress={() => handleApproveTechnician(t.id, t.full_name)}
+                          disabled={isActing}
+                          activeOpacity={0.85}
+                        >
+                          {isActing ? (
+                            <ActivityIndicator color="#000000" size="small" />
+                          ) : (
+                            <>
+                              <MaterialCommunityIcons name="check" size={16} color="#000000" />
+                              <Text style={styles.approveBtnText}>Approve Technician</Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  );
+                })
+              )
+            )}
+          </>
         ) : filtered.length === 0 ? (
           <View style={styles.emptyState}>
             <View style={styles.emptyIconCircle}>
@@ -1383,5 +1592,61 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     fontWeight: '900',
     color: '#000000',
+  },
+  // Sub-category switcher styles
+  subCategoryPillsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  subCategoryPill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  subCategoryPillActive: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#F9B101',
+  },
+  subCategoryPillText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  subCategoryPillTextActive: {
+    color: '#000000',
+    fontWeight: '900',
+  },
+  techSkillsLabel: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#64748B',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  skillsTagRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+  },
+  techSkillBadge: {
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  techSkillBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#1E40AF',
   },
 });
