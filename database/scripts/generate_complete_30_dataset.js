@@ -5,18 +5,18 @@ const passHash = '$2a$12$g1l6RDlhupTVLSasbUQk8ueD5vZNSlSFrkPFwu3GUnKjwcUYN2m4e';
 
 let sql = `-- =====================================================================
 -- JCB SMART CMMS: COMPREHENSIVE 30 MAHARASHTRIAN DATASET FOR ALL TABLES
--- Fully Populates EVERY Field in Every Table:
+-- Fully Populates EVERY Field in Every Table with Exact Schema Enums:
 -- 1. Plants (Pune Talegaon Industrial Hub)
 -- 2. Shops (5 Specialized Precision Manufacturing Bays)
 -- 3. 30 Users (2 Admins, 4 Managers, 4 Store Managers, 10 Technicians, 10 Operators)
 -- 4. 30 Machines (All 19+ Fields Fully Populated with Genuine OEM Specs)
 -- 5. 30 Spare Parts (All 13 Fields: SKUs, Bin Locations, Stocks, Unit Costs)
 -- 6. 30 Maharashtra MIDC Industrial Vendors (Chakan, Bhosari, Pimpri, Talegaon)
--- 7. 30 Breakdown Complaints / Maintenance Requests (All 15 Fields)
--- 8. 30 Work Orders (All 22 Fields with Precision SLA Timestamps)
+-- 7. 30 Breakdown Complaints / Maintenance Requests (Status: new, pending_review, work_order_created)
+-- 8. 30 Work Orders (Status: completed, verified_closed, in_progress, assigned, waiting_for_parts, under_diagnosis)
 -- 9. 30 Operator Pre-Shift Machine Inspection Records (Temp, Vibration, Pressure Sensor Readings)
 -- 10. 30 PM Plans (Checklists, Thresholds, Frequencies, Next Due Dates)
--- 11. 30 Inventory & Spare Parts Transactions (Issuance, Receipts, Reservations)
+-- 11. 30 Inventory & Spare Parts Transactions (STOCK_IN, ISSUE, RESERVATION)
 -- 12. 30 Operator-Machine Active Shift Assignments & Sign-Ins
 -- =====================================================================
 
@@ -101,7 +101,7 @@ ON CONFLICT (email) DO UPDATE SET
   approval_status = 'approved',
   password_hash = EXCLUDED.password_hash;
 
--- 4. 30 Industrial Machines (ALL 19+ Fields Fully Populated with Detailed OEM Specs)
+-- 4. 30 Industrial Machines (ALL 19+ Fields Fully Populated with Genuine OEM Specs)
 `;
 
 const machineDetails = [
@@ -210,7 +210,7 @@ ON CONFLICT (part_number) DO UPDATE SET
   current_physical_stock = EXCLUDED.current_physical_stock,
   unit_cost = EXCLUDED.unit_cost;
 
--- 6. 30 Industrial Vendors Across Maharashtra MIDC Belts (Chakan, Bhosari, Pimpri, Talegaon, Aurangabad)
+-- 6. 30 Industrial Vendors Across Maharashtra MIDC Belts (Chakan, Bhosari, Pimpri, Talegaon)
 `;
 
 const vendorNames = [
@@ -256,7 +256,7 @@ sql += `INSERT INTO vendors (id, vendor_code, name, contact_person, email, phone
 ${vendorNames.map((v, i) => `  ('${vendorIds[i]}', '${v.code}', '${v.name}', '${v.contact}', '${v.email}', '${v.phone}', '${v.addr}', '${v.gstin}', 'active', 'b0000000-0000-0000-0000-000000000002')`).join(',\n')}
 ON CONFLICT (vendor_code) DO NOTHING;
 
--- 7. 30 Breakdown Complaints / Maintenance Requests (Reported by Maharashtrian Operators)
+-- 7. 30 Breakdown Complaints (Using Valid complaint_status Enum: new, pending_review, work_order_created)
 `;
 
 const complaints = [];
@@ -301,7 +301,6 @@ for (let i = 1; i <= 30; i++) {
   const cnum = `CMP-2026-${String(100 + i).padStart(5, '0')}`;
   const mc = machineDetails[i - 1];
   const mid = machineIds[i - 1];
-  // Reported by Maharashtrian operators (indices 20 to 29 in users array)
   const oprIdx = 20 + ((i - 1) % 10);
   const opr = users[oprIdx];
   const oprId = userIds[oprIdx];
@@ -309,7 +308,8 @@ for (let i = 1; i <= 30; i++) {
   const priority = compPriorities[(i - 1) % compPriorities.length];
   const title = compTitles[i - 1];
   const daysAgo = (30 - i) % 14;
-  const status = i <= 20 ? 'converted_to_wo' : i <= 26 ? 'in_review' : 'new';
+  // Valid enum values: 'work_order_created', 'pending_review', 'new'
+  const status = i <= 20 ? 'work_order_created' : i <= 26 ? 'pending_review' : 'new';
 
   complaints.push({
     id: cid,
@@ -338,11 +338,12 @@ sql += `INSERT INTO maintenance_requests (
 ${complaints.map(c => `  ('${c.id}', '${c.number}', '${c.machine_id}', '${c.reported_by_id}', 'Shift A', '${c.category}', '${c.priority}', '${c.status}', ${c.breakdown_time}, ${c.reported_at}, ${c.meter}, ${c.temp}, ${c.pressure}, '${c.title}', '${c.desc}', '${c.remarks}')`).join(',\n')}
 ON CONFLICT (complaint_number) DO NOTHING;
 
--- 8. 30 Real Work Orders (Assigned to Maharashtrian Technicians & Managers)
+-- 8. 30 Real Work Orders (Using Valid work_order_status Enum)
 `;
 
 const workOrders = [];
-const woStatuses = ['completed', 'completed', 'in_progress', 'assigned', 'pending_parts', 'closed'];
+// Valid work_order_status enum values:
+const woStatuses = ['completed', 'verified_closed', 'in_progress', 'assigned', 'waiting_for_parts', 'under_diagnosis'];
 
 for (let i = 1; i <= 30; i++) {
   const hex = i.toString(16).padStart(12, '0');
@@ -351,11 +352,9 @@ for (let i = 1; i <= 30; i++) {
   const comp = complaints[i - 1];
   const mc = machineDetails[i - 1];
   const mid = machineIds[i - 1];
-  // Technicians: index 10 to 19
   const techIdx = 10 + ((i - 1) % 10);
   const tech = users[techIdx];
   const techId = userIds[techIdx];
-  // Managers: index 2 to 5
   const mgrIdx = 2 + ((i - 1) % 4);
   const mgr = users[mgrIdx];
   const mgrId = userIds[mgrIdx];
@@ -383,7 +382,7 @@ for (let i = 1; i <= 30; i++) {
     assigned_time: `NOW() - INTERVAL '${daysAgo} days 3 hours'`,
     travel_time: `NOW() - INTERVAL '${daysAgo} days 2 hours 45 minutes'`,
     arrival_time: `NOW() - INTERVAL '${daysAgo} days 2 hours 30 minutes'`,
-    completed_time: st === 'completed' || st === 'closed' ? `NOW() - INTERVAL '${daysAgo} days 30 minutes'` : 'NULL'
+    completed_time: st === 'completed' || st === 'verified_closed' ? `NOW() - INTERVAL '${daysAgo} days 30 minutes'` : 'NULL'
   });
 }
 
@@ -396,7 +395,7 @@ sql += `INSERT INTO work_orders (
 ${workOrders.map(w => `  ('${w.id}', '${w.wo_number}', '${w.complaint_id}', '${w.machine_id}', '${w.tech_id}', '${w.mgr_id}', '${w.priority}', '${w.status}', '${w.classification}', ${w.is_major}, '${w.instructions}', ${w.breakdown_time}, ${w.reported_time}, ${w.ack_time}, ${w.assigned_time}, ${w.travel_time}, ${w.arrival_time}, ${w.completed_time})`).join(',\n')}
 ON CONFLICT (wo_number) DO NOTHING;
 
--- 9. 30 Operator Pre-Shift Machine Inspections (With Real Temperature, Vibration & Pressure Sensor Readings)
+-- 9. 30 Operator Pre-Shift Machine Inspections (Sensor Readings)
 `;
 
 const inspections = [];
@@ -442,7 +441,7 @@ sql += `INSERT INTO inspection_records (
 ${inspections.map(ins => `  ('${ins.id}', '${ins.machine_id}', '${ins.operator_id}', '${ins.shift}', '${ins.status}', ${ins.temp}, ${ins.press}, ${ins.vib}, '${ins.responses}'::jsonb, '${ins.sig}', ${ins.created_at})`).join(',\n')}
 ON CONFLICT (id) DO NOTHING;
 
--- 10. 30 Preventive Maintenance (PM) Plans (Checklists, Thresholds, Frequencies & Due Dates)
+-- 10. 30 Preventive Maintenance (PM) Plans
 `;
 
 const pmPlans = [];
@@ -486,7 +485,7 @@ sql += `INSERT INTO pm_plans (
 ${pmPlans.map(p => `  ('${p.id}', '${p.plan_code}', '${p.machine_id}', '${p.title}', '${p.freq}', ${p.interval}, ${p.threshold}, '${p.checklist}'::jsonb, ${p.last_date}, ${p.next_date}, ${p.grace}, TRUE)`).join(',\n')}
 ON CONFLICT (plan_code) DO NOTHING;
 
--- 11. 30 Real Stock / Inventory Issuance & Receipt Transactions (Managed by Maharashtrian Store Managers)
+-- 11. 30 Real Stock & Spare Part Transactions (part_id, transaction_type, quantity, performed_by)
 `;
 
 const invTrans = [];
@@ -494,14 +493,14 @@ for (let i = 1; i <= 30; i++) {
   const hex = i.toString(16).padStart(12, '0');
   const tid = '60000000-0000-0000-0000-' + hex;
   const sp = partDefs[i - 1];
-  // Store Managers: index 6 to 9
   const stmIdx = 6 + ((i - 1) % 4);
   const stm = users[stmIdx];
   const stmId = userIds[stmIdx];
   const wo = workOrders[i - 1];
   const qty = 1 + (i % 3);
   const daysAgo = (30 - i) % 10;
-  const txnType = i % 4 === 0 ? 'receipt' : 'issue';
+  // Valid types: 'STOCK_IN', 'ISSUE', 'RESERVATION'
+  const txnType = i % 4 === 0 ? 'STOCK_IN' : 'ISSUE';
 
   invTrans.push({
     id: tid,
@@ -509,34 +508,55 @@ for (let i = 1; i <= 30; i++) {
     txn_type: txnType,
     qty,
     performed_by: stmId,
-    ref: `REF-PUN-${202600 + i}`,
+    src: txnType === 'ISSUE' ? sp.bin : 'Supplier Truck Bay 1',
+    dst: txnType === 'ISSUE' ? `${wo.wo_number} Bay Location` : sp.bin,
     wo_id: wo.id,
-    notes: `${txnType === 'issue' ? 'Issued spare part to Maintenance Technician for' : 'Received genuine OEM consignment for'} Work Order ${wo.wo_number}. Authorized by Store In-Charge ${stm.name}.`,
+    remarks: `${txnType === 'ISSUE' ? 'Issued spare part to Maintenance Technician for' : 'Received genuine OEM consignment for'} Work Order ${wo.wo_number}. Authorized by Store In-Charge ${stm.name}.`,
     created_at: `NOW() - INTERVAL '${daysAgo} days 2 hours'`
   });
 }
 
 sql += `INSERT INTO inventory_transactions (
-  id, spare_part_id, transaction_type, quantity, performed_by_id, reference_document, work_order_id, notes, created_at
+  id, part_id, transaction_type, quantity, source_location, destination_location, 
+  reference_work_order_id, performed_by, remarks, created_at
 )
 SELECT 
   t.id, 
   sp.id, 
-  t.txn_type::inventory_transaction_type, 
+  t.txn_type, 
   t.qty, 
-  t.performed_by, 
-  t.ref, 
+  t.src, 
+  t.dst, 
   t.wo_id, 
-  t.notes, 
+  t.performed_by, 
+  t.remarks, 
   t.created_at
 FROM (
   VALUES
-${invTrans.map(t => `    ('${t.id}'::uuid, '${t.part_no}', '${t.txn_type}', ${t.qty}, '${t.performed_by}'::uuid, '${t.ref}', '${t.wo_id}'::uuid, '${t.notes}', ${t.created_at})`).join(',\n')}
-) AS t(id, part_no, txn_type, qty, performed_by, ref, wo_id, notes, created_at)
+${invTrans.map(t => `    ('${t.id}'::uuid, '${t.part_no}', '${t.txn_type}', ${t.qty}, '${t.src}', '${t.dst}', '${t.wo_id}'::uuid, '${t.performed_by}'::uuid, '${t.remarks}', ${t.created_at})`).join(',\n')}
+) AS t(id, part_no, txn_type, qty, src, dst, wo_id, performed_by, remarks, created_at)
 JOIN spare_parts sp ON sp.part_number = t.part_no
 ON CONFLICT (id) DO NOTHING;
 
 -- 12. 30 Active Operator-Machine Shift Assignments & Permanent Sign-Ins
+-- First ensure table exists if migration 015 was not yet applied
+CREATE TABLE IF NOT EXISTS operator_machine_assignments (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  operator_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  machine_id UUID NOT NULL REFERENCES machines(id) ON DELETE CASCADE,
+  shop_id UUID NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+  plant_id UUID NOT NULL REFERENCES plants(id) ON DELETE CASCADE,
+  shift VARCHAR(50) DEFAULT 'Shift A',
+  status VARCHAR(50) NOT NULL DEFAULT 'pending',
+  approved_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  approved_at TIMESTAMPTZ,
+  signed_in_at TIMESTAMPTZ,
+  assignment_type VARCHAR(50) NOT NULL DEFAULT 'temporary',
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 `;
 
 const assignments = [];
@@ -547,7 +567,6 @@ for (let i = 1; i <= 30; i++) {
   const oprId = userIds[oprIdx];
   const mid = machineIds[i - 1];
   const shop = shops[(i - 1) % shops.length];
-  // Approved by Managers (indices 2 to 5)
   const mgrIdx = 2 + ((i - 1) % 4);
   const mgrId = userIds[mgrIdx];
   const daysAgo = (30 - i) % 7;
@@ -575,26 +594,30 @@ ${assignments.map(a => `  ('${a.id}', '${a.operator_id}', '${a.machine_id}', '${
 ON CONFLICT (id) DO NOTHING;
 
 -- 13. Backfill Current Operator and Assignment References on Machines
-UPDATE machines m
-SET 
-  current_operator_id = a.operator_id,
-  assignment_status = 'occupied',
-  current_assignment_id = a.id
-FROM operator_machine_assignments a
-WHERE a.machine_id = m.id AND a.status = 'approved' AND a.signed_out_at IS NULL;
+IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'machines' AND column_name = 'current_operator_id') THEN
+  UPDATE machines m
+  SET 
+    current_operator_id = a.operator_id,
+    assignment_status = 'occupied',
+    current_assignment_id = a.id
+  FROM operator_machine_assignments a
+  WHERE a.machine_id = m.id AND a.status = 'approved';
+END IF;
 
 -- 14. Backfill Permanent Machine Assignment on Operators
-UPDATE users u
-SET permanent_machine_id = a.machine_id
-FROM operator_machine_assignments a
-WHERE a.operator_id = u.id AND a.assignment_type = 'permanent';
+IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'permanent_machine_id') THEN
+  UPDATE users u
+  SET permanent_machine_id = a.machine_id
+  FROM operator_machine_assignments a
+  WHERE a.operator_id = u.id AND a.assignment_type = 'permanent';
+END IF;
 
 END $$;
 `;
 
 const targetPath = path.join(__dirname, '..', 'seeds', '002_maharashtra_enterprise_seed.sql');
 fs.writeFileSync(targetPath, sql);
-console.log('Successfully generated complete 30-record Maharashtra dataset in 002_maharashtra_enterprise_seed.sql:', sql.length, 'bytes');
+console.log('Successfully updated 002_maharashtra_enterprise_seed.sql:', sql.length, 'bytes');
 
 // Also update COMPLETE_SETUP_ALL_IN_ONE.sql
 const masterSetupFile = path.join(__dirname, '..', 'COMPLETE_SETUP_ALL_IN_ONE.sql');
